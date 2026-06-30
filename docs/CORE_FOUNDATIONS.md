@@ -19,9 +19,9 @@
 | `domain/scope` | 03 | Knowledge-scoping deterministic floor: `this/selected/all`, verbatim↔prioritized-truncation assembly, the budget meter, "what's included / what was cut" (pins survive). + the inheritance chain (global→project→conversation, with the deciding `ScopeSource` legible) and saved selected-sets. | logic ✅ tests ✅ · wiring ⏳ |
 | `domain/search` | 02 §5 | Sovereign on-device lexical search: script-aware (Devanagari/Japanese/RTL) normalization, legible recency-weighted ranking. | logic ✅ tests ✅ · wiring ⏳ |
 | `domain/provenance` | 00 §3.6 / 01 §6.5 | Four-state watched-object model (icon+label, never colour-alone) + the legible routing decision `{model, tier, why, cost, provenance}` with override + a heuristic baseline router (not the closed engine). | logic ✅ tests ✅ · wiring ⏳ |
-| `domain/ledger` | 01 §10 / 07 | `LedgerEntry` + on-device aggregations: by provider/model/provenance, time buckets, **sovereignty ratio**, budget rings, reconciliation Δ, estimated-flag honesty. | logic ✅ tests ✅ · wiring ⏳ (capture writer exists in `domain/cost`; aggregations feed the Doc 07 "Myself" views) |
+| `domain/ledger` | 01 §10 / 07 | `LedgerEntry` + on-device aggregations: by provider/model/provenance, time buckets, **sovereignty ratio**, budget rings, reconciliation Δ, estimated-flag honesty. | logic ✅ tests ✅ · **wired ✅** (Room `LedgerStore` → `MyselfPresenter` → `MeScreen` cards; see "Wired vertical slices" below) |
 | `domain/library` | 02 | Conversations-room logic: filter (All/Text/Image/Starred, contains-semantics), sort (recency/created/title-collated/most-used/most-branched), group-by-project, model-flair derivation from the ledger. | logic ✅ tests ✅ · wiring ⏳ |
-| `domain/markdown` | 01 §2.3 | Streaming-safe markdown reconciliation: closes an open code fence, trims a half-written table row, so a strict renderer doesn't thrash mid-stream. Idempotent on complete markdown. | logic ✅ tests ✅ · wiring ⏳ (wrap the markdown render call) |
+| `domain/markdown` | 01 §2.3 | Streaming-safe markdown reconciliation: closes an open code fence, trims a half-written table row, so a strict renderer doesn't thrash mid-stream. Idempotent on complete markdown. | logic ✅ tests ✅ · **wired ✅** (`ChatScreen.MessageBubble` renders persisted turns through `reconcile`; a turn stopped mid-fence renders clean) |
 | `domain/state` | 00 §3.8 | The enterprise state-matrix contract: `sealed UiState<T>` (Loading/Empty/Partial/Ready/Error/Offline/PermissionBlocked) + map/fold/fromResult. The shape every surface's ViewModel should expose. | logic ✅ tests ✅ · wiring ⏳ |
 | `domain/bridge` | 01 §4.3 | Branch-on-change summary bridge: the "Switched {A}→{B}" node + honest carry-forward selection (anchors the original objective, recency-fills, token-capped) for a downstream summarizer; threads author provenance. | logic ✅ tests ✅ · wiring ⏳ |
 
@@ -50,13 +50,41 @@ These consume the domain primitives. CI never launches the app, so they are comp
 | `ScopeComponents` | `domain/scope` | `ScopeChip` (scope · mode pill) · `ScopeInspector` (the attributed included/cut ledger — "what does the model know now?") |
 | `LedgerComponents` | `domain/ledger`, `domain/format` | The Doc 07 "Myself" cards: input/output, sovereignty split, by-provider, budget ring (text-forward + TalkBack) |
 
+## Wired vertical slices (done — but Compose is compile-verified only)
+Each is a complete domain → data → presenter/VM → Compose slice, gate-green. CI never launches
+the app, so render/behaviour is **owner-verified on device**; the domain + mapper layers are
+JVM-tested.
+
+1. **Usage ledger → Myself.** `LedgerEntryEntity`/`LedgerDao` (Room, append-only) →
+   `LedgerStore` (implements the `LedgerSource` seam) → `AppContainer.ledgerStore` →
+   `MeScreen` collects the flow and renders `MyselfPresenter` → `StatePane` → input/output,
+   sovereignty, by-provider and budget-ring cards. Shows the honest **Empty** state until the
+   per-turn capture writer lands (that writer touches the generation path — owner-scope).
+2. **Streaming markdown → render path.** `ChatScreen.MessageBubble` runs persisted model turns
+   through `StreamingMarkdown.reconcile` before the markdown renderer, so a turn stopped
+   mid-fence (a dangling ```` ``` ````) renders clean instead of swallowing the bubble.
+   Idempotent on well-formed markdown — a complete turn passes through unchanged. The live
+   stream is untouched (per-token entropy colouring, not markdown).
+
+### Conversations seam — built, blocked on honest counts
+The data-source seam (`ConversationsSource`), the JVM-tested `ConversationsPresenter` /
+`ConversationsViewModel`, and the `ConversationRow` component all exist. The seam is **not yet
+wired to a live data source** because `domain/library.ConversationSummary` wants
+`branchCount`, `useCount`, and `createdMillis`, and the tree's `Conversations.Summary` carries
+none of them. `createdMillis` and `branchCount` are derivable from the subtree (min `createdAt`;
+fork/leaf count); **`useCount` (chat opens) is genuinely not tracked anywhere** — wiring the
+source would mean fabricating it, which the honesty rule forbids. Next honest step: extend
+`Conversations.summarize` to compute `createdMillis`/`branchCount` from the tree and add a small
+on-device open-counter for `useCount`, *then* map into the library model. (The shipping
+`ChatsRoom` keeps driving the room off the tree model meanwhile — no regression.)
+
 ## Next phase (not done here)
-1. **Wire each primitive into its surface** — ViewModels exposing `UiState<…>`, Compose
-   components consuming `domain/provenance` (the four-state indicator), `domain/scope` (the
-   budget meter + scope inspector), `LocaleFormat` (every number/date/token in the UI),
-   `domain/library` (the Conversations list), `domain/markdown` (the streaming render path),
-   `domain/ledger` (the Doc 07 "Myself" views). Compose is **compile-verified only** here
-   (CI never launches the app) — owner-verified on device.
+1. **Wire the remaining primitives into their surfaces** — ViewModels exposing `UiState<…>`,
+   Compose components consuming `domain/provenance` (the four-state indicator), `domain/scope`
+   (the budget meter + scope inspector), `LocaleFormat` (every number/date/token in the UI),
+   `domain/library` (the Conversations list — see the honest blocker above). Ledger and the
+   streaming markdown path are **done** (see "Wired vertical slices"). Compose is
+   **compile-verified only** here (CI never launches the app) — owner-verified on device.
 2. **Pseudolocalization in CI** — add a string-sweep step asserting `isPlaceholderSafe` and
    no truncation across the priority locales.
 3. **Retrieval ceiling** for scoping — lights up when the real on-device embedder replaces
