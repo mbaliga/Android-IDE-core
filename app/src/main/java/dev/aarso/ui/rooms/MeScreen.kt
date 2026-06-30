@@ -24,8 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aarso.AarsoApp
+import dev.aarso.ui.components.ByProviderList
+import dev.aarso.ui.components.BudgetRingView
+import dev.aarso.ui.components.InputOutputCard
+import dev.aarso.ui.components.SovereigntyCard
+import dev.aarso.ui.components.StatePane
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleTitle
+import dev.aarso.ui.state.MyselfPresenter
 import dev.aarso.ui.wire.WireBox
 
 /**
@@ -46,6 +52,9 @@ fun MeScreen(onClose: () -> Unit) {
     val imageProviders by container.imageProviderStore.providers.collectAsState()
     val hosts by container.gitHostStore.hosts.collectAsState()
     val usage by container.freeTierUsageStore.usage.collectAsState()
+    // The on-device usage ledger (Doc 07 "Myself"); empty until the per-turn capture writer
+    // lands — the StatePane renders the honest empty state meanwhile.
+    val ledgerEntries by container.ledgerStore.entries().collectAsState(initial = emptyList())
 
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
@@ -117,6 +126,23 @@ fun MeScreen(onClose: () -> Unit) {
                     "Tracked, not faked.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            HorizontalDivider()
+
+            // ── Usage — detailed (the Myself ledger, Doc 07) ──────────────────
+            // Driven by the on-device ledger through the JVM-tested MyselfPresenter; renders
+            // the input/output, sovereignty (on-device vs cloud), by-provider, and budget-ring
+            // cards. Empty until the per-turn capture writer lands — shown honestly.
+            Text("Usage — detailed", style = MaterialTheme.typography.titleMedium)
+            val locale = java.util.Locale.getDefault()
+            StatePane(MyselfPresenter.present(ledgerEntries)) { view ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    InputOutputCard(view.totals, locale, "USD")
+                    SovereigntyCard(view.provenanceSplit, locale)
+                    ByProviderList(view.byProvider, locale, "USD")
+                    view.budgetRings.forEach { ring -> BudgetRingView(ring, "Budget", locale) }
+                }
+            }
         }
     }
 }
