@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Full (sideload) flavor overlay: the §7 tiers Play reviews hardest — the
+  always-on overlay bubble and screen-capture OCR. The play flavor ships
+  without these permissions, services, or the ML Kit dependency.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- §7: the always-reachable floating bubble (fallback summon). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- §7: screen-capture + on-device OCR content tier. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- In-app APK install (BuildsRepo/ApkInstaller): sideload only — Play policy
+         §3.4 forbids REQUEST_INSTALL_PACKAGES, so it lives in the full overlay. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Direct-USB Arduino flashing (agentic-ide #4): USB-host/OTG. Full flavor only; optional
+         so phones without OTG still install. Owner-verified — no board in CI. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <application>
+        <service
+            android:name=".service.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating assistant bubble" />
+        </service>
+
+        <activity
+            android:name=".ui.ScreenCaptureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name=".service.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+    </application>
+
+</manifest>

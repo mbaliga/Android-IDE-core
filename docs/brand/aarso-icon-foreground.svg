@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-label="Aarso adaptive icon foreground">
+  <!-- Adaptive-icon FOREGROUND layer (108dp canvas, 72dp safe zone centred). Pair with
+       a solid #0E0F12 background layer. The mark stays inside the safe zone so launcher
+       masks never clip it. Same mirror motif as the full logo, simplified for small sizes. -->
+  <defs>
+    <linearGradient id="v" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A99BFF"/>
+      <stop offset="1" stop-color="#8E7BFF"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path d="M54 30 L31 71 L52 71 Z" fill="url(#v)"/>
+    <path d="M54 30 L77 71 L56 71 Z" fill="#8E7BFF" fill-opacity="0.5"/>
+    <rect x="29" y="73" width="50" height="4" rx="2" fill="url(#v)"/>
+  </g>
+</svg>

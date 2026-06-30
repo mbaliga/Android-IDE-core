@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider paths for ApkInstaller (full flavor).
+  Covers Context.cacheDir/apk-install/ where downloaded APKs are staged before
+  the system install intent. The play flavor never reaches this provider.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="apk_install" path="apk-install/" />
+</paths>

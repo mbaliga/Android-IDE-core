@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Aarso logo">
+  <!-- Aarso = "mirror". A symmetric mark split at a central seam: a solid form and
+       its lighter twin, sitting above their own faint reflection. Clean-room: no
+       borrowed marks. Violet #8E7BFF on field #0E0F12 (the app's own tokens). -->
+  <defs>
+    <linearGradient id="violet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A99BFF"/>
+      <stop offset="1" stop-color="#8E7BFF"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8E7BFF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#8E7BFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="#0E0F12"/>
+
+  <!-- the mark -->
+  <g>
+    <!-- left form (solid) -->
+    <path d="M256 132 L150 360 L244 360 Z" fill="url(#violet)"/>
+    <!-- right form (the reflected twin, lighter) -->
+    <path d="M256 132 L362 360 L268 360 Z" fill="#8E7BFF" fill-opacity="0.5"/>
+    <!-- the mirror line -->
+    <rect x="146" y="368" width="220" height="10" rx="5" fill="url(#violet)"/>
+    <!-- the reflection below the mirror, fading out -->
+    <g transform="translate(0,756) scale(1,-1)" opacity="0.9">
+      <path d="M256 132 L150 360 L244 360 Z" fill="url(#fade)"/>
+      <path d="M256 132 L362 360 L268 360 Z" fill="url(#fade)"/>
+    </g>
+  </g>
+</svg>

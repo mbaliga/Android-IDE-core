@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose drives the actual theming; this is the base platform theme the
+         Activity inflates before Compose takes over. -->
+    <style name="Theme.Aarso" parent="android:Theme.Material.NoActionBar" />
+</resources>
