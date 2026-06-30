@@ -29,6 +29,27 @@
 ~390 new JVM tests added on top of the 858 carried in (≈1250 total). Public CI (free Actions)
 runs this gate on every push.
 
+## Additional domain packages (later batches)
+
+| Package | Doc | What | State |
+|---|---|---|---|
+| `domain/library/BulkSelection` | 02 §8 | Multi-select + bulk actions; select-all scoped to view; partial-failure honesty; destructive undo window. | logic ✅ tests ✅ · wiring ⏳ |
+| `domain/inspect` | 01 §7 | Logprob/entropy inspector: entropy→heatmap (discrete bucket, non-colour-alone), highest-uncertainty, availability-honest summary. | logic ✅ tests ✅ · wiring (TokenHeatmap) ⏳ |
+| `domain/a11y` | 00 §3.5 | Spatial→linear TalkBack reading order (room announce → header → nav → content), compass adjacency + Back-to-origin, RTL mirror. | logic ✅ tests ✅ · wiring ⏳ |
+
+## UI component layer (`ui/components/`) — Compose, **compile-verified only**
+
+These consume the domain primitives. CI never launches the app, so they are compiled but
+**not runtime-verified** — owner verifies render/behaviour on device.
+
+| Component file | Consumes | Renders |
+|---|---|---|
+| `ProvenanceComponents` | `domain/provenance` | `ProvenanceBadge` (glyph+label, never colour-alone, TalkBack) · `RoutingDecisionStrip` (the legible `{model,tier,why,cost,provenance}` line + override) |
+| `StateComponents` | `domain/state`, `domain/scope` | `StatePane<T>` (all 7 `UiState` cases) · `BudgetMeter` |
+| `ConversationRow` | `domain/library`, `domain/format` | Dense conversation row: title, relative time, branch pip, type, model flairs (+k more), star toggle |
+| `ScopeComponents` | `domain/scope` | `ScopeChip` (scope · mode pill) · `ScopeInspector` (the attributed included/cut ledger — "what does the model know now?") |
+| `LedgerComponents` | `domain/ledger`, `domain/format` | The Doc 07 "Myself" cards: input/output, sovereignty split, by-provider, budget ring (text-forward + TalkBack) |
+
 ## Next phase (not done here)
 1. **Wire each primitive into its surface** — ViewModels exposing `UiState<…>`, Compose
    components consuming `domain/provenance` (the four-state indicator), `domain/scope` (the
