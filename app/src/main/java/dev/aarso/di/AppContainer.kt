@@ -48,6 +48,11 @@ class AppContainer(context: Context) {
         embeddings = database.embeddingDao(),
     )
 
+    /** Usage ledger (Doc 01 §10 / Doc 07): on-device, append-only; backs the Myself views.
+     *  Implements [dev.aarso.ui.state.LedgerSource]; capture writer hooks in later. */
+    val ledgerStore: dev.aarso.data.LedgerStore =
+        dev.aarso.data.LedgerStore(database.ledgerDao())
+
     // Placeholder until the Phase 2 local embedder lands (§5b). Cold-start
     // logging is live regardless (§5c).
     val embedder: Embedder = PlaceholderEmbedder()
