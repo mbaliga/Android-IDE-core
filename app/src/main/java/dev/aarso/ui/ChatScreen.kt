@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
+import dev.aarso.domain.markdown.StreamingMarkdown
 import dev.aarso.R
 import dev.aarso.domain.GeneratedToken
 import dev.aarso.domain.Role
@@ -1061,8 +1062,12 @@ private fun MessageBubble(
                     )
                     fromUser || role == Role.SYSTEM -> Text(content)
                     // Persisted model turns render as markdown (legibility); the
-                    // live stream keeps per-token entropy colouring instead.
-                    else -> Markdown(content = content)
+                    // live stream keeps per-token entropy colouring instead. We run
+                    // the text through the JVM-tested StreamingMarkdown.reconcile so a
+                    // turn that was stopped mid-fence (a dangling ``` that would swallow
+                    // the rest of the bubble) renders cleanly; it's idempotent on
+                    // well-formed markdown, so a complete turn passes through unchanged.
+                    else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
                 }
                 if (stopped) {
                     Text(
