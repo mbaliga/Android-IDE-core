@@ -1,0 +1,117 @@
+{
+  "lastUpdated": "2026-06-21",
+  "_note": "External facts that drift. Each entry carries its own sourceUrl; always verify on the provider's site before relying on a number. Refreshed by scripts/update_free_tiers.py (see .github/workflows/update-free-tiers.yml), primary upstream github.com/cheahjs/free-llm-api-resources.",
+  "providers": [
+    {
+      "id": "google_gemini",
+      "name": "Google Gemini (AI Studio)",
+      "providerKind": "gemini",
+      "kind": "ONGOING_FREE",
+      "summary": "Free tier in Google AI Studio. Gemini 2.5 Flash ~1,500 req/day; 2.5 Pro ~50 req/day. No card.",
+      "requestsPerDay": 1500,
+      "requiresCard": false,
+      "sourceUrl": "https://ai.google.dev/gemini-api/docs/rate-limits"
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "providerKind": "openai",
+      "kind": "ONGOING_FREE",
+      "summary": "Fast inference free tier. llama-3.3-70b ~1,000 req/day, ~100K tokens/day, 30 req/min. No card.",
+      "requestsPerDay": 1000,
+      "tokensPerDay": 100000,
+      "requiresCard": false,
+      "sourceUrl": "https://console.groq.com/docs/rate-limits"
+    },
+    {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "providerKind": "openai",
+      "kind": "ONGOING_FREE",
+      "summary": "Free tier ~1M tokens/day on Llama 3.3 70B and others. No card.",
+      "tokensPerDay": 1000000,
+      "requiresCard": false,
+      "sourceUrl": "https://inference-docs.cerebras.ai/support/rate-limits"
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter (free models)",
+      "providerKind": "openai",
+      "kind": "ONGOING_FREE",
+      "summary": "28+ free models. 20 req/min, ~50 req/day (raised to ~1,000/day permanently after a one-time $10 top-up).",
+      "requestsPerDay": 50,
+      "requiresCard": false,
+      "sourceUrl": "https://openrouter.ai/docs/api-reference/limits"
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral (Experiment tier)",
+      "providerKind": "openai",
+      "kind": "ONGOING_FREE",
+      "summary": "Experiment tier ~1B tokens/month — generous, but you must opt into data training to use it.",
+      "tokensPerMonth": 1000000000,
+      "requiresCard": false,
+      "sourceUrl": "https://docs.mistral.ai/deployment/laplateforme/tier/"
+    },
+    {
+      "id": "github_models",
+      "name": "GitHub Models",
+      "providerKind": "openai",
+      "kind": "ONGOING_FREE",
+      "summary": "Free during preview; rate-limited per model tier. Uses your GitHub token.",
+      "requiresCard": false,
+      "sourceUrl": "https://docs.github.com/github-models/prototyping-with-ai-models"
+    },
+    {
+      "id": "cohere",
+      "name": "Cohere",
+      "providerKind": "openai",
+      "kind": "TRIAL_CREDIT",
+      "summary": "Trial API key ~100 req/day, no card. Production keys are paid.",
+      "requestsPerDay": 100,
+      "trialCredit": "trial key (~100 req/day)",
+      "requiresCard": false,
+      "sourceUrl": "https://docs.cohere.com/docs/rate-limits"
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "providerKind": "openai",
+      "kind": "TRIAL_CREDIT",
+      "summary": "Trial grant ~10M tokens before paying. OpenAI-compatible endpoint.",
+      "trialCredit": "~10M tokens",
+      "requiresCard": false,
+      "sourceUrl": "https://platform.deepseek.com"
+    },
+    {
+      "id": "together",
+      "name": "Together AI",
+      "providerKind": "openai",
+      "kind": "TRIAL_CREDIT",
+      "summary": "Small trial credit (~$1) to evaluate; OpenAI-compatible.",
+      "trialCredit": "~$1 credit",
+      "requiresCard": false,
+      "sourceUrl": "https://docs.together.ai"
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic (Claude)",
+      "providerKind": "anthropic",
+      "kind": "TRIAL_CREDIT",
+      "summary": "No ongoing free tier; new accounts get a small one-time evaluation credit.",
+      "trialCredit": "one-time eval credit",
+      "requiresCard": false,
+      "sourceUrl": "https://docs.anthropic.com/en/api/rate-limits"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "providerKind": "openai",
+      "kind": "TRIAL_CREDIT",
+      "summary": "No reliable ongoing free tier; limited free daily tokens have been offered via data-sharing opt-in.",
+      "trialCredit": "varies / data-sharing",
+      "requiresCard": true,
+      "sourceUrl": "https://platform.openai.com/docs/guides/rate-limits"
+    }
+  ]
+}

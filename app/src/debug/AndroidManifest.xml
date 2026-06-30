@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only: a separate "Hyle Probe" launcher icon for running shader probes on a
+     real device. Merged only into debug builds, so it never reaches release / Play. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="dev.aarso.hyleprobe.HyleProbeActivity"
+            android:exported="true"
+            android:label="Hyle Probe"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

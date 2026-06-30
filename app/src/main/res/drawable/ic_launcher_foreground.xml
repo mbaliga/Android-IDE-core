@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aarso = mirror: a violet crescent (a circle carved by an offset circle). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- full violet disc -->
+    <path android:fillColor="#8E7BFF"
+        android:pathData="M54,28 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0" />
+    <!-- carve an offset disc in the background colour to leave a crescent -->
+    <path android:fillColor="#14171D"
+        android:pathData="M64,24 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0" />
+    <!-- teal seam (the mirror line) -->
+    <path android:fillColor="#4FD6C2"
+        android:pathData="M52,58 h4 v22 h-4 z" />
+</vector>

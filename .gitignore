@@ -1,0 +1,37 @@
+# --- Android / Gradle ---
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build/
+**/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+
+
+# --- Model weights (large) and runtime state — never commit ---
+models/
+*.gguf
+
+# --- Misc ---
+*.log
+
+# --- Termux prototype runtime env (written on-device) ---
+.mobile-llm-env
+
+keystore.properties
+.kotlin/
+
+# --- Local design-render scratch (Playwright mocks, not part of the app) ---
+.hyle-preview/
+
+# --- Claude Code internal state ---
+.claude/
+
+# module build outputs
+build/
