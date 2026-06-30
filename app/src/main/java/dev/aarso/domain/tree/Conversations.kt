@@ -21,6 +21,14 @@ object Conversations {
         val latestLeafId: String,
         /** True if any turn in the conversation is a generated image (for the Text-only filter). */
         val hasImage: Boolean = false,
+        /** Epoch millis of the earliest turn — the chat's creation time (drives a CREATED sort). */
+        val createdMillis: Long = 0L,
+        /** Number of leaf tips in the subtree — a linear chat is 1; each live fork adds one
+         *  (drives a MOST_BRANCHED sort). Computed from the tree, never fabricated. */
+        val branchCount: Int = 1,
+        /** True if any non-image turn carries text — for contains-semantics kind filtering
+         *  (a chat can be BOTH text and image). */
+        val hasText: Boolean = true,
     )
 
     /** One summary per root, newest activity first. */
@@ -35,6 +43,9 @@ object Conversations {
                 nodeCount = nodes.size,
                 latestLeafId = tree.descendToLeaf(root.id) ?: root.id,
                 hasImage = nodes.any { it.metadata.containsKey(IMAGE_KEY) },
+                createdMillis = nodes.minOf { it.createdAt },
+                branchCount = nodes.count { tree.childrenOf(it.id).isEmpty() }.coerceAtLeast(1),
+                hasText = nodes.any { !it.metadata.containsKey(IMAGE_KEY) },
             )
         }.sortedByDescending { it.lastUpdatedAt }
 

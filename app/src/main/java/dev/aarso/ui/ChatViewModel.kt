@@ -496,6 +496,9 @@ class ChatViewModel(
     /** Open a conversation from the map: land on the tip of its newest branch. */
     fun openConversation(rootId: String) {
         if (transient.value.genPhase != GenPhase.IDLE) return
+        // Honest "most used" signal for the Conversations room: count the open here, where the
+        // user actually opens a chat (on-device only; nothing leaves the device).
+        session.recordConversationOpen(rootId)
         viewModelScope.launch {
             val tree = repository.tree()
             moveLeaf(tree.descendToLeaf(rootId) ?: return@launch)
