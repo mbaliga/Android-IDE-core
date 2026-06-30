@@ -66,17 +66,24 @@ JVM-tested.
    Idempotent on well-formed markdown — a complete turn passes through unchanged. The live
    stream is untouched (per-token entropy colouring, not markdown).
 
-### Conversations seam — built, blocked on honest counts
+### Conversations seam — data-complete, screen swap is the owner-verified step
 The data-source seam (`ConversationsSource`), the JVM-tested `ConversationsPresenter` /
-`ConversationsViewModel`, and the `ConversationRow` component all exist. The seam is **not yet
-wired to a live data source** because `domain/library.ConversationSummary` wants
-`branchCount`, `useCount`, and `createdMillis`, and the tree's `Conversations.Summary` carries
-none of them. `createdMillis` and `branchCount` are derivable from the subtree (min `createdAt`;
-fork/leaf count); **`useCount` (chat opens) is genuinely not tracked anywhere** — wiring the
-source would mean fabricating it, which the honesty rule forbids. Next honest step: extend
-`Conversations.summarize` to compute `createdMillis`/`branchCount` from the tree and add a small
-on-device open-counter for `useCount`, *then* map into the library model. (The shipping
-`ChatsRoom` keeps driving the room off the tree model meanwhile — no regression.)
+`ConversationsViewModel`, and the `ConversationRow` component all exist — and the seam is now
+**wired to a live on-device source** with no fabricated metrics:
+- `Conversations.summarize` computes `createdMillis` (earliest turn), `branchCount` (leaf-tip
+  count), and `hasText` (any non-image turn) straight from the tree (additive — the shipping
+  `ChatsRoom` is unaffected).
+- `SessionStore.recordConversationOpen` + `conversationOpens` give `useCount` an honest source
+  (the metric that *was* missing); `ChatViewModel.openConversation` records each open.
+- `ConversationProjection` (pure, JVM-tested) maps a tree summary + session facts into the row
+  model; `ConversationsStore` implements the seam (tree + session + ledger → rows, ledger
+  grouped by `chatId`) and is wired into `AppContainer.conversationsSource`.
+
+What's left is the **screen swap** — mounting a `ConversationsViewModel` over `conversationsSource`
+in place of `ChatsRoom`'s ad-hoc filtering, which adds the sort options (RECENT / CREATED / TITLE
+/ MOST_USED / MOST_BRANCHED) and ledger-derived flairs. That changes a shipping surface, so it's
+the **owner-verified-on-device** step. The model-flair strip stays empty until the per-turn ledger
+capture writer lands (same honest Empty as the Myself ledger).
 
 ## Next phase (not done here)
 1. **Wire the remaining primitives into their surfaces** — ViewModels exposing `UiState<…>`,
