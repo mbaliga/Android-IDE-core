@@ -64,6 +64,12 @@ class SessionStore(context: Context) {
     private val _conversationProjects = MutableStateFlow(loadConversationProjects())
     val conversationProjects: StateFlow<Map<String, String>> = _conversationProjects.asStateFlow()
 
+    // Per-conversation open count (how many times the chat was opened) — the honest source for
+    // the Conversations room's "most used" sort. Persisted as "rootId\u0001count" entries; absent
+    // = never opened. Local only; nothing leaves the device (binding rule 1).
+    private val _conversationOpens = MutableStateFlow(loadConversationOpens())
+    val conversationOpens: StateFlow<Map<String, Int>> = _conversationOpens.asStateFlow()
+
     // Default council mode for new conversations: "SINGLE" / "PERSONAS" / "MODELS".
     private val _councilDefault = MutableStateFlow(prefs.getString(KEY_COUNCIL_DEFAULT, "SINGLE") ?: "SINGLE")
     val councilDefault: StateFlow<String> = _councilDefault.asStateFlow()
@@ -166,6 +172,27 @@ class SessionStore(context: Context) {
             .mapNotNull { e -> e.split('\u0001', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
             .toMap()
 
+    /** Record that a conversation was opened; increments its open count. Feeds the Conversations
+     *  room's "most used" sort honestly — no fabricated usage. */
+    fun recordConversationOpen(rootId: String) {
+        if (rootId.isBlank()) return
+        val next = _conversationOpens.value.toMutableMap()
+        next[rootId] = (next[rootId] ?: 0) + 1
+        prefs.edit().putStringSet(
+            KEY_CONV_OPENS,
+            next.entries.map { "${it.key}\u0001${it.value}" }.toSet(),
+        ).apply()
+        _conversationOpens.value = next
+    }
+
+    private fun loadConversationOpens(): Map<String, Int> =
+        prefs.getStringSet(KEY_CONV_OPENS, emptySet()).orEmpty()
+            .mapNotNull { e ->
+                e.split('\u0001', limit = 2).takeIf { it.size == 2 }
+                    ?.let { parts -> parts[1].toIntOrNull()?.let { parts[0] to it } }
+            }
+            .toMap()
+
     fun setCouncilDefault(mode: String) {
         prefs.edit().putString(KEY_COUNCIL_DEFAULT, mode).apply()
         _councilDefault.value = mode
@@ -200,6 +227,7 @@ class SessionStore(context: Context) {
         private const val KEY_GRADIENT = "gradientColor"
         private const val KEY_BOOKMARKS = "bookmarkedRoots"
         private const val KEY_CONV_PROJECTS = "conversationProjects"
+        private const val KEY_CONV_OPENS = "conversationOpens"
         private const val KEY_COUNCIL_DEFAULT = "councilDefault"
         private const val KEY_DISCLOSURE = "disclosureTier"
     }

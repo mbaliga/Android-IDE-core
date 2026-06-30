@@ -91,6 +91,12 @@ class AppContainer(context: Context) {
     /** Where the user was (leaf/model) + small UI prefs — survives process death. */
     val sessionStore: SessionStore = SessionStore(context)
 
+    /** Conversations room source (Doc 02): folds the tree + session (stars/projects/opens) +
+     *  ledger into the room's row model. Implements [dev.aarso.ui.state.ConversationsSource];
+     *  consumed by a [dev.aarso.ui.state.ConversationsViewModel] once the room is mounted. */
+    val conversationsSource: dev.aarso.data.ConversationsStore =
+        dev.aarso.data.ConversationsStore(repository, sessionStore, ledgerStore)
+
     /** User-set per-model prices (Cost epic G1/P2). Reads price a finished cloud turn. */
     val pricingStore: dev.aarso.data.PricingStore = dev.aarso.data.PricingStore(context)
 

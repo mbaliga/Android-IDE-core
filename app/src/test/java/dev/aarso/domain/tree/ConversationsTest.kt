@@ -3,7 +3,9 @@ package dev.aarso.domain.tree
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.Role
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConversationsTest {
@@ -86,6 +88,42 @@ class ConversationsTest {
         assertEquals("r2", Conversations.rootOf(tree, "c1"))
         assertEquals("r1", Conversations.rootOf(tree, "r1"))
         assertNull(Conversations.rootOf(tree, "nope"))
+    }
+
+    @Test
+    fun createdMillisIsEarliestTurnInSubtree() {
+        val summaries = Conversations.summarize(forest())
+        assertEquals(0, summaries[0].createdMillis) // r1 opened at t=0
+        assertEquals(3, summaries[1].createdMillis) // r2 opened at t=3
+    }
+
+    @Test
+    fun branchCountIsLeafTipCount() {
+        val summaries = Conversations.summarize(forest())
+        // r1 has two leaf tips (a2 and b1); r2 is linear (one tip, c1).
+        assertEquals(2, summaries[0].branchCount)
+        assertEquals(1, summaries[1].branchCount)
+    }
+
+    @Test
+    fun hasTextWhenAnyNonImageTurnPresent() {
+        val summaries = Conversations.summarize(forest())
+        assertTrue(summaries[0].hasText)
+        assertFalse(summaries[0].hasImage)
+    }
+
+    @Test
+    fun imageOnlyChatHasImageNotText() {
+        val tree = MessageTree(
+            listOf(
+                node("img", null, Role.ASSISTANT, "a sunset", 0)
+                    .copy(metadata = mapOf(Conversations.IMAGE_KEY to "/p/sunset.png")),
+            ),
+        )
+        val s = Conversations.summarize(tree).single()
+        assertTrue(s.hasImage)
+        assertFalse(s.hasText)
+        assertEquals(1, s.branchCount)
     }
 
     @Test
