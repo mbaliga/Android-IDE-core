@@ -79,11 +79,15 @@ The data-source seam (`ConversationsSource`), the JVM-tested `ConversationsPrese
   model; `ConversationsStore` implements the seam (tree + session + ledger → rows, ledger
   grouped by `chatId`) and is wired into `AppContainer.conversationsSource`.
 
-What's left is the **screen swap** — mounting a `ConversationsViewModel` over `conversationsSource`
-in place of `ChatsRoom`'s ad-hoc filtering, which adds the sort options (RECENT / CREATED / TITLE
-/ MOST_USED / MOST_BRANCHED) and ledger-derived flairs. That changes a shipping surface, so it's
-the **owner-verified-on-device** step. The model-flair strip stays empty until the per-turn ledger
-capture writer lands (same honest Empty as the Myself ledger).
+**Mounted (first increment):** `ChatsRoom` now carries a **sort control** backed by the tested
+`Conversations.sort` (Recent / Created / A–Z / Most used / Most branched), applied through
+`ConversationProjection` so it sorts on the honest open/branch counts. It's surgical — the tabs,
+project grouping, image tab, dialogs and FAB are untouched, and RECENT (default) preserves the
+existing order. Compose is compile-verified only — owner-verified on device.
+
+**Still optional:** a fuller swap to the `ConversationsViewModel`/`ConversationRow` path would add
+the ledger-derived **model-flair strips** to each row; those stay empty until the per-turn ledger
+capture writer lands (same honest Empty as the Myself ledger), so there's little gained until then.
 
 ## Next phase (not done here)
 1. **Wire the remaining primitives into their surfaces** — ViewModels exposing `UiState<…>`,
