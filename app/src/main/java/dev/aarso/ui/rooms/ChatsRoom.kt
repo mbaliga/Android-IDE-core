@@ -40,9 +40,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.aarso.AarsoApp
 import dev.aarso.domain.MessageNode
+import dev.aarso.domain.library.ConvSort
+import dev.aarso.domain.library.ConversationProjection
 import dev.aarso.domain.tree.Bookmarks
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.ui.ChatViewModel
+import dev.aarso.domain.library.Conversations as LibConversations
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleTitle
@@ -52,6 +55,15 @@ import dev.aarso.ui.theme.LocalHyleColors
 private enum class ChatsTab(val label: String) {
     ALL("All"), TEXT("Text"), IMAGE("Image"), STARRED("Starred"), PROJECTS("Projects")
 }
+
+/** The user-facing sort options, backed by the JVM-tested [LibConversations.sort]. */
+private val SORT_LABELS: List<Pair<ConvSort, String>> = listOf(
+    ConvSort.RECENT to "Recent",
+    ConvSort.CREATED to "Created",
+    ConvSort.TITLE to "A–Z",
+    ConvSort.MOST_USED to "Most used",
+    ConvSort.MOST_BRANCHED to "Most branched",
+)
 
 /**
  * The room parked off the LEFT edge (IA §A): every conversation, newest first.
@@ -73,8 +85,24 @@ fun ChatsRoom(
     val state by viewModel.uiState.collectAsState()
     val bookmarked by session.bookmarkedRoots.collectAsState()
     val projects by session.conversationProjects.collectAsState()
+    val opens by session.conversationOpens.collectAsState()
     var tab by remember { mutableStateOf(ChatsTab.ALL) }
+    var sort by remember { mutableStateOf(ConvSort.RECENT) }
     var projectDialogFor by remember { mutableStateOf<Conversations.Summary?>(null) }
+
+    // Reorder a list of tree summaries by the chosen sort, through the JVM-tested library path:
+    // project each summary into the library model (carrying the honest open count / branch count),
+    // sort, then map the order back onto the tree summaries the cards render. RECENT is the
+    // default and matches the list's natural newest-first order, so this is purely additive.
+    fun sorted(list: List<Conversations.Summary>): List<Conversations.Summary> {
+        if (sort == ConvSort.RECENT) return list
+        val projected = list.map { s ->
+            ConversationProjection.from(s, s.rootId in bookmarked, projects[s.rootId], opens[s.rootId] ?: 0)
+        }
+        val order = LibConversations.sort(projected, sort)
+        val byId = list.associateBy { it.rootId }
+        return order.mapNotNull { byId[it.id] }
+    }
 
     Box(Modifier.fillMaxSize().background(c.ink)) {
         Column(Modifier.fillMaxSize()) {
@@ -87,6 +115,22 @@ fun ChatsRoom(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ChatsTab.entries.forEach { t -> HyleChip(tab == t, { tab = t }, t.label) }
+            }
+
+            // Sort control (Doc 02): backed by the tested LibConversations.sort. Hidden on the
+            // Image tab (image turns are browsed newest-first) and Projects (grouped by its own
+            // most-recent order), where a conversation sort wouldn't apply.
+            if (tab != ChatsTab.IMAGE && tab != ChatsTab.PROJECTS) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Sort", style = MaterialTheme.typography.labelMedium, color = c.textMid)
+                    SORT_LABELS.forEach { (key, label) -> HyleChip(sort == key, { sort = key }, label) }
+                }
             }
 
             val activeIds = state.steps.map { it.node.id }.toSet()
@@ -115,7 +159,7 @@ fun ChatsRoom(
                         else -> "No conversations yet. Start one — every turn becomes a node on the tree, " +
                             "and every fork stays visible."
                     }
-                    ConversationList(listProps(list, empty))
+                    ConversationList(listProps(sorted(list), empty))
                 }
             }
         }
