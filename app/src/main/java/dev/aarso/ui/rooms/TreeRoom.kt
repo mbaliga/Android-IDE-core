@@ -39,6 +39,7 @@ import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.TreeOutline
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleTitle
 import kotlinx.coroutines.launch
 import dev.aarso.ui.theme.LocalHyleColors
@@ -72,62 +73,92 @@ fun TreeRoom(
             modifier = Modifier.padding(horizontal = 20.dp),
         )
 
-        // Git-sync indicator + manual export + handoff summary (IA §F).
-        val host = hosts.firstOrNull()
+        // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
+        // commits branch, builds branch. Builds moved here from Develop.
+        var treeTab by remember { mutableStateOf(0) }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                if (host == null) "⊘ not synced" else "⟳ ${host.owner}/${host.repo}",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (host == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.weight(1f))
-            if (host != null) {
-                HyleButton("Back up", onClick = {
-                    scope.launch {
-                        val token = container.gitHostStore.token(host.id)
-                        note = if (token == null) "No token — reconnect in Settings."
-                        else container.gitBackup.backUp(host, token).fold({ "Backed up to ${host.repo}." }, { "Backup failed: ${it.message}" })
-                    }
-                })
+            listOf("Conversation", "Commits", "Builds").forEachIndexed { i, label ->
+                HyleChip(treeTab == i, { treeTab = i }, label)
             }
-            HyleButton("Export", onClick = {
-                scope.launch {
-                    val files = dev.aarso.domain.sync.TreeArchive.write(container.repository.tree().allNodes())
-                    val blob = files.entries.joinToString("\n\n") { "// ${it.key}\n${it.value}" }
-                    shareText(context, "Aarso tree export", blob)
+        }
+
+        when (treeTab) {
+            0 -> {
+                // Git-sync indicator + manual export + handoff summary (IA §F).
+                val host = hosts.firstOrNull()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        if (host == null) "⊘ not synced" else "⟳ ${host.owner}/${host.repo}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (host == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (host != null) {
+                        HyleButton("Back up", onClick = {
+                            scope.launch {
+                                val token = container.gitHostStore.token(host.id)
+                                note = if (token == null) "No token — reconnect in Settings."
+                                else container.gitBackup.backUp(host, token).fold({ "Backed up to ${host.repo}." }, { "Backup failed: ${it.message}" })
+                            }
+                        })
+                    }
+                    HyleButton("Export", onClick = {
+                        scope.launch {
+                            val files = dev.aarso.domain.sync.TreeArchive.write(container.repository.tree().allNodes())
+                            val blob = files.entries.joinToString("\n\n") { "// ${it.key}\n${it.value}" }
+                            shareText(context, "Aarso tree export", blob)
+                        }
+                    })
+                    HyleButton("Handoff", onClick = { handoff = buildHandoff(rows) })
                 }
-            })
-            HyleButton("Handoff", onClick = { handoff = buildHandoff(rows) })
-        }
-        note?.let {
-            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 20.dp))
-        }
-        if (rows.isEmpty()) {
-            Text(
-                "Nothing here yet — this conversation has no turns.",
+                note?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 20.dp))
+                }
+                if (rows.isEmpty()) {
+                    Text(
+                        "Nothing here yet — this conversation has no turns.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(20.dp),
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp),
+                    ) {
+                        items(rows, key = { it.node.id }) { row ->
+                            TreeNodeRow(
+                                row = row,
+                                enabled = !state.isGenerating,
+                                onTap = {
+                                    viewModel.branchFrom(row.node.id)
+                                    onNodeChosen()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            1 -> Text(
+                "Commits — soon. Commits from accepted changes (Develop → Files review) and manual " +
+                    "commits will branch here, each linked to its diff, the conversation that produced " +
+                    "it, and the builds it triggers. Nothing is fabricated until that plumbing lands.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(20.dp),
             )
-            return@Column
-        }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(vertical = 12.dp),
-        ) {
-            items(rows, key = { it.node.id }) { row ->
-                TreeNodeRow(
-                    row = row,
-                    enabled = !state.isGenerating,
-                    onTap = {
-                        viewModel.branchFrom(row.node.id)
-                        onNodeChosen()
-                    },
-                )
+            else -> Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            ) {
+                // Builds live in the Tree now (§6.1): the build branch, tied to its commit.
+                dev.aarso.ui.develop.BuildsFacet()
             }
         }
     }

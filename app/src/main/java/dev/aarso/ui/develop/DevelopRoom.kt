@@ -36,22 +36,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.aarso.AarsoApp
-import dev.aarso.domain.cost.CostForecast
-import dev.aarso.domain.cost.CostVector
-import dev.aarso.domain.cost.Decision
-import dev.aarso.domain.cost.DecisionCost
-import dev.aarso.domain.cost.RiskedOutcome
 import kotlinx.coroutines.launch
 
 /**
  * The "develop on your repo" room — deliberately **wireframe fidelity** (boxy, text +
  * rectangles, no design-system styling) so the structure can be reviewed before a
- * design system lands. The open core ships the free facets:
+ * design system lands. Per brief §7 the free-core facets are exactly:
  *
- *  - **Builds**  → your CI's APK artifacts + sideload install (the free dev loop)
- *  - **Cost**    → cloud pricing + the risk-adjusted decision forecast
- *  - **Agent**   → the agentic repo loop (read → propose → review → commit)
- *  - **Devices** → Pi/Arduino/ESP/USB hardware control
+ *  - **Hardware** → supported boards + detect/troubleshoot + the four control paths
+ *                   (Pi/Arduino/ESP/on-phone USB flash)
+ *  - **Files**    → review changes to your repo per-hunk and commit (the agentic-coding
+ *                   review path; there is no separate "Agent" mode)
+ *  - **Terminal** → run a shell command over SSH on your homelab runner
+ *  - **Audit**    → a to-do list of checks; "Run" fires a prompt that runs the test
+ *
+ * Builds moved to the Tree (§6.1) and Cost to Loops (§6.2), so neither is a tab here.
  *
  * The paid Studio layer contributes **Launch** (store-publish) through the [DevelopTabs]
  * seam (S2; see StudioDevelopFacets), so core never references that code directly.
@@ -60,13 +59,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun DevelopRoom(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    // IA §D + agentic-ide: Launch / Builds / Cost / Agent / Devices.
+    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    // Brief §7: Develop's tabs are exactly Hardware / Files / Terminal / Audit.
+    //  - Cost moved to Loops (a per-loop budget boundary, §6.2) — no Cost tab here.
+    //  - Builds moved to the Tree (§6.1) — the Tree's Builds tab owns build history.
+    //  - "Agent" is gone: agentic changes are reviewed in the Files explorer (§7.2).
     var tab by remember { mutableStateOf(0) }
-    // Builds/Cost/Agent/Devices are the free core tabs; Launch (store-publish) is the
-    // paid Studio tab, contributed via DevelopTabs (S2 seam). Builds — viewing your CI
-    // artifacts and installing an APK — is part of the free dev loop, so it's core.
+    // The paid Studio tab (Launch / store-publish) is contributed via DevelopTabs (S2 seam),
+    // so core never references it directly.
     val studioTabs = remember { DevelopTabs.provider() }
-    val tabs = listOf("Builds", "Cost", "Agent", "Devices") + studioTabs.map { it.label }
+    val tabs = listOf("Hardware", "Files", "Terminal", "Audit") + studioTabs.map { it.label }
 
     Column(
         Modifier
@@ -91,16 +93,18 @@ fun DevelopRoom(onClose: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         when {
-            tab == 0 -> BuildsFacet()
-            tab == 1 -> CostFacet()
-            tab == 2 -> AgentFacet()
-            tab == 3 -> DevicesFacet()
+            tab == 0 -> HardwareFacet()
+            tab == 1 -> FilesFacet()
+            tab == 2 -> TerminalFacet()
+            tab == 3 -> AuditFacet(onRunPrompt = { prompt ->
+                // Audit is a to-do list: "Run" fires the check as a prompt in Chat (§7.4).
+                container.sharedIntake.offer(dev.aarso.data.Intake(text = prompt, source = "audit"))
+                onClose()
+            })
             else -> studioTabs[tab - 4].content()
         }
     }
 }
-
-/* ------------------------------------------------------------------- Cost */
 
 /* ----------------------------------------------------------------- Builds */
 
@@ -110,7 +114,7 @@ fun DevelopRoom(onClose: () -> Unit) {
  * the paid Studio layer. Reads through [dev.aarso.data.BuildsRepo]; install is sideload-only.
  */
 @Composable
-private fun BuildsFacet() {
+internal fun BuildsFacet() {
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val hosts by container.gitHostStore.hosts.collectAsState()
     val host = hosts.firstOrNull()
@@ -175,114 +179,6 @@ private fun BuildsFacet() {
     }
 }
 
-/* ------------------------------------------------------------------- Cost */
-
-@Composable
-private fun CostFacet() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
-    val book by container.pricingStore.book.collectAsState()
-
-    // Cloud pricing (G1/P2): the per-1k-token rates that price each watched-cloud turn.
-    // Prices are yours to set — we never bake in a vendor's number (binding rule 8).
-    var inRate by remember(book) { mutableStateOf(book.fallback.centsPer1kInput.toString()) }
-    var outRate by remember(book) { mutableStateOf(book.fallback.centsPer1kOutput.toString()) }
-    var pricingNote by remember { mutableStateOf<String?>(null) }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Cloud pricing (per 1k tokens)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-        dev.aarso.ui.guide.HelpIcon(dev.aarso.domain.guide.Guides.SET_PRICING)
-    }
-    Text(
-        "Your prices, in whatever minor unit you choose (e.g. paise/cents). Applied to every " +
-            "watched-cloud turn; shown inline on each reply. On-device turns are free.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(8.dp))
-    NumField("Input / 1k tokens", inRate) { inRate = it }
-    NumField("Output / 1k tokens", outRate) { outRate = it }
-    WireButton("Save pricing") {
-        container.pricingStore.setFallback(
-            dev.aarso.domain.cost.UsagePricing(
-                centsPer1kInput = inRate.toLongOrNull() ?: 0,
-                centsPer1kOutput = outRate.toLongOrNull() ?: 0,
-            ),
-        )
-        pricingNote = "saved — new cloud turns will show this cost"
-    }
-    pricingNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
-    Spacer(Modifier.height(16.dp))
-
-    var price by remember { mutableStateOf("1000") }
-    var perAttempt by remember { mutableStateOf("250") }
-    var chance by remember { mutableStateOf("0.5") }
-    var riskChance by remember { mutableStateOf("0.3") }
-    var riskImpact by remember { mutableStateOf("3000") }
-    var advice by remember { mutableStateOf("0") }
-    var attempts by remember { mutableStateOf("3") }
-    var forecast by remember { mutableStateOf<CostForecast?>(null) }
-
-    Text("True cost of a decision", style = MaterialTheme.typography.titleSmall)
-    Text(
-        "Multi-dimensional + risk-adjusted. A point estimate lies; reality is a band. " +
-            "Defaults below are the BlackBerry-keyboard case (money units).",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(8.dp))
-    NumField("Price on success", price) { price = it }
-    NumField("Cost per attempt (recurs — e.g. travel)", perAttempt) { perAttempt = it }
-    NumField("Success chance per attempt (0–1)", chance) { chance = it }
-    NumField("Max attempts", attempts) { attempts = it }
-    NumField("Error chance (0–1)", riskChance) { riskChance = it }
-    NumField("Error impact if it goes wrong", riskImpact) { riskImpact = it }
-    NumField("Advice cost (the model's own price)", advice) { advice = it }
-    WireButton("Forecast") {
-        val d = Decision(
-            label = "decision",
-            onSuccess = CostVector.money(price.toLongOrNull() ?: 0),
-            perAttempt = CostVector.money(perAttempt.toLongOrNull() ?: 0),
-            successChance = chance.toDoubleOrNull() ?: 1.0,
-            risks = (riskImpact.toLongOrNull())?.let {
-                listOf(RiskedOutcome("error", riskChance.toDoubleOrNull() ?: 0.0, CostVector.money(it)))
-            } ?: emptyList(),
-            adviceCost = CostVector.money(advice.toLongOrNull() ?: 0),
-        )
-        forecast = DecisionCost.forecast(d, attempts.toIntOrNull() ?: 3)
-    }
-    Spacer(Modifier.height(10.dp))
-
-    forecast?.let { f ->
-        WireBox {
-            Text("Expected cost:  ${f.expected.moneyMinor}", style = MaterialTheme.typography.bodyMedium)
-            Text("Worst case:  ${f.worst.moneyMinor}", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "expected attempts ${"%.2f".format(f.expectedAttempts)}  ·  " +
-                    "succeed ${(f.successProbability * 100).toInt()}%  ·  " +
-                    "cost-of-being-wrong (EV) ${f.riskContribution.moneyMinor}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Hint("The naive point estimate is usually nowhere near this band — that gap is the point.")
-    }
-}
-
-@Composable
-private fun NumField(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Spacer(Modifier.height(6.dp))
-}
-
-/* ----------------------------------------------------------- wire atoms */
-
 /** A bordered rectangle — the only "component" this wireframe needs. */
 @Composable
 internal fun WireBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
@@ -337,17 +233,30 @@ internal fun Hint(text: String) {
  * in CI. (Direct phone↔board over USB is the device-gated #4, not here.)
  */
 @Composable
-private fun DevicesFacet() {
+private fun HardwareFacet() {
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()
 
+    // Supported boards + quick troubleshooting — the Arduino-IDE-grade framing (§7.1). All local
+    // and sovereign; the four control paths below are Pi-over-SSH, Arduino-via-Pi, ESP-OTA, and
+    // on-phone USB flash (CDC/Stk500/IntelHex). Device interaction is owner-verified on hardware.
+    Text("Hardware", style = MaterialTheme.typography.titleSmall)
+    Hint(
+        "Supported: Raspberry Pi (SSH) · Arduino AVR (via Pi or on-phone USB) · ESP32/8266 (OTA) · " +
+            "USB-flashable MCUs. Troubleshooting: no port → check the cable/OTG + driver (CH340/CP210x " +
+            "clones need a vendor driver); permission denied → re-trust the Pi in Settings; flash fails " +
+            "mid-way → it's flagged, re-run before power-cycling.",
+    )
+    Spacer(Modifier.height(8.dp))
+
     if (hosts.isEmpty()) {
         Hint(
             "No SSH host yet. Add one in Settings → Global → your machines and connect once to " +
-                "trust it — then a Pi (or an Arduino plugged into it) shows up here.",
+                "trust it — then a Pi (or an Arduino plugged into it) shows up here. On-phone USB " +
+                "flash works without a host.",
         )
         return
     }
@@ -548,7 +457,7 @@ private fun uploadSummary(out: String): String {
  * are owner-verified.
  */
 @Composable
-private fun AgentFacet() {
+private fun FilesFacet() {
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val runner = container.agentRepoRunner
     val scope = rememberCoroutineScope()
@@ -566,8 +475,12 @@ private fun AgentFacet() {
         Hint("Connect a Git host (Settings → Global → Git & coding) — the agent reads and commits to your repo.")
         return
     }
-    Text("Work a task with the agent", style = MaterialTheme.typography.titleSmall)
-    Hint("Objective + the files to read as context → the model proposes changes → you review → commit.")
+    Text("Files & changes", style = MaterialTheme.typography.titleSmall)
+    Hint(
+        "Review changes to your repo and commit them. Ask for a change here or in Chat → the model " +
+            "proposes edits → you review per-hunk → commit. Nothing commits without review; a " +
+            "cloud-proposed change is a watched object. (Accepted changes land as commits in the Tree.)",
+    )
     if (runnable.isEmpty()) {
         Spacer(Modifier.height(6.dp))
         Hint("No runnable model. Download one (Models) or add a cloud provider (Settings → Text).")
