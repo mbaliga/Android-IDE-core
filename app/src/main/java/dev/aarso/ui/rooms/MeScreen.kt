@@ -123,9 +123,9 @@ fun MeScreen(onClose: () -> Unit) {
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                "Cost per model, savings (on-device & free-tier vs Claude/GPT), and which model you " +
-                    "use for which task are computed as more usage accrues and the drift baseline lands. " +
-                    "Tracked, not faked.",
+                "Which model you use for which task is computed as more usage accrues and the drift " +
+                    "baseline lands. Tracked, not faked. Cost isn't shown here — it lives on each Loop " +
+                    "as a per-run budget boundary, where spend actually happens.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
@@ -139,9 +139,12 @@ fun MeScreen(onClose: () -> Unit) {
             val locale = java.util.Locale.getDefault()
             StatePane(MyselfPresenter.present(ledgerEntries)) { view ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    InputOutputCard(view.totals, locale, "USD")
+                    // Cost is a per-loop execution boundary, not a profile headline (brief §9):
+                    // the Myself views are token/usage-only, so the cards render showCost = false.
+                    // Budget rings here are usage/token budgets (the profile passes no cost budgets).
+                    InputOutputCard(view.totals, locale, "USD", showCost = false)
                     SovereigntyCard(view.provenanceSplit, locale)
-                    ByProviderList(view.byProvider, locale, "USD")
+                    ByProviderList(view.byProvider, locale, "USD", showCost = false)
                     view.budgetRings.forEach { ring -> BudgetRingView(ring, "Budget", locale) }
                 }
             }
