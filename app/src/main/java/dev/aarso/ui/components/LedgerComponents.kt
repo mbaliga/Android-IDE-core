@@ -133,6 +133,7 @@ fun InputOutputCard(
     totals: LedgerAggregations.Totals,
     locale: Locale,
     currencyCode: String,
+    showCost: Boolean = true,
 ) {
     val total = totals.totalTokens
     val inputFraction = if (total == 0L) 0.0 else totals.inputTokens.toDouble() / total.toDouble()
@@ -142,8 +143,11 @@ fun InputOutputCard(
     val totalText = LocaleFormat.tokens(total, locale)
     val costText = LocaleFormat.currencyMinor(totals.estCostMinor, currencyCode, locale)
 
-    val summary = "Tokens this period: $totalText total, $inputText in, $outputText out. " +
-        "Estimated cost $costText."
+    // Cost is a per-loop execution boundary, not a profile headline (brief §9): the Myself
+    // views pass showCost = false. The card keeps the cost row for cost-bearing surfaces
+    // (a loop's run trace, the reconciliation overlay).
+    val summary = "Tokens this period: $totalText total, $inputText in, $outputText out." +
+        if (showCost) " Estimated cost $costText." else ""
 
     LedgerCard {
         Column(Modifier.fillMaxWidth().semantics { contentDescription = summary }) {
@@ -167,14 +171,16 @@ fun InputOutputCard(
                 leadingColor = MaterialTheme.colorScheme.primary,
                 trailingColor = MaterialTheme.colorScheme.secondaryContainer,
             )
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    "Estimated cost",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(costText, style = MaterialTheme.typography.bodyMedium)
+            if (showCost) {
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        "Estimated cost",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(costText, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }
@@ -270,6 +276,7 @@ fun ByProviderList(
     rollups: Map<String, LedgerAggregations.ProviderRollup>,
     locale: Locale,
     currencyCode: String,
+    showCost: Boolean = true,
 ) {
     LedgerCard {
         Text("By provider", style = MaterialTheme.typography.titleSmall)
@@ -285,7 +292,7 @@ fun ByProviderList(
         rollups.forEach { (provider, rollup) ->
             val tokensText = LocaleFormat.tokens(rollup.totalTokens, locale)
             val costText = LocaleFormat.currencyMinor(rollup.estCostMinor, currencyCode, locale)
-            val rowSummary = "$provider: $tokensText tokens, $costText"
+            val rowSummary = "$provider: $tokensText tokens" + if (showCost) ", $costText" else ""
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -300,12 +307,14 @@ fun ByProviderList(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(tokensText, style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    costText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (showCost) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        costText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
