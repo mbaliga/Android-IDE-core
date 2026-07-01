@@ -24,9 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aarso.AarsoApp
+import dev.aarso.domain.provenance.ProvenanceState
 import dev.aarso.ui.components.ByProviderList
 import dev.aarso.ui.components.BudgetRingView
 import dev.aarso.ui.components.InputOutputCard
+import dev.aarso.ui.components.ProvenanceBadge
 import dev.aarso.ui.components.SovereigntyCard
 import dev.aarso.ui.components.StatePane
 import dev.aarso.ui.hyle.HyleButton
@@ -150,8 +152,15 @@ fun MeScreen(onClose: () -> Unit) {
 @Composable
 private fun AccountRow(title: String, subtitle: String) {
     WireBox {
-        Text(title, style = MaterialTheme.typography.titleSmall)
-        Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // Every linked account is off-device — a watched object (binding rule 2). The badge
+            // is the four-state model's glyph+label (never colour-alone, TalkBack-labelled).
+            ProvenanceBadge(ProvenanceState.CLOUD)
+        }
     }
     Spacer(Modifier.height(6.dp))
 }

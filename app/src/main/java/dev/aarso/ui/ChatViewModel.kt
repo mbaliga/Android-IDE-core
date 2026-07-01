@@ -174,6 +174,7 @@ class ChatViewModel(
     private val pricingStore: dev.aarso.data.PricingStore,
     private val freeTierUsage: dev.aarso.data.FreeTierUsageStore,
     private val councilStore: dev.aarso.data.CouncilStore,
+    private val ledgerStore: dev.aarso.data.LedgerStore,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -593,6 +594,7 @@ class ChatViewModel(
                 genPhase = GenPhase.GENERATING,
             )
             val path = repository.path(userNode.id)
+            val genStart = System.currentTimeMillis()
             val tokens = mutableListOf<GeneratedToken>()
             collectCancellable {
                 engine.generate(path, SamplingParams(), loadPath, savePath).collect { token ->
@@ -613,18 +615,22 @@ class ChatViewModel(
             // Cost (G1): price a finished cloud turn from the provider-reported usage the
             // engine captured this turn (UsageAccumulator). On-device turns report no usage,
             // so they carry no cost line — the honest "no money changed hands" state.
-            val costMeta = (engine as? dev.aarso.inference.cloud.CloudEngine)?.lastUsage
+            val cloudUsage = (engine as? dev.aarso.inference.cloud.CloudEngine)?.lastUsage
                 ?.takeIf { it.totalTokens > 0 }
-                ?.let { usage ->
-                    // Count this turn against the provider's free-tier usage (owner ask).
-                    spec.providerId?.let { freeTierUsage.record(it, usage.inputTokens.toLong(), usage.outputTokens.toLong()) }
-                    val cost = usage.toAdviceCost(pricingStore.book.value.priceFor(engine.tokenizerId))
-                    mapOf(
-                        "costMinor" to cost.moneyMinor.toString(),
-                        "tokensIn" to usage.inputTokens.toString(),
-                        "tokensOut" to usage.outputTokens.toString(),
-                    )
-                }.orEmpty()
+            val cloudCostMinor: Long? = cloudUsage?.let { usage ->
+                // Count this turn against the provider's free-tier usage (owner ask).
+                spec.providerId?.let { freeTierUsage.record(it, usage.inputTokens.toLong(), usage.outputTokens.toLong()) }
+                usage.toAdviceCost(pricingStore.book.value.priceFor(engine.tokenizerId)).moneyMinor
+            }
+            val costMeta = if (cloudUsage != null) {
+                mapOf(
+                    "costMinor" to cloudCostMinor.toString(),
+                    "tokensIn" to cloudUsage.inputTokens.toString(),
+                    "tokensOut" to cloudUsage.outputTokens.toString(),
+                )
+            } else {
+                emptyMap()
+            }
             val assistantNode = Nodes.child(
                 parent = userNode,
                 role = Role.ASSISTANT,
@@ -635,11 +641,37 @@ class ChatViewModel(
                 idGen = { assistantId }, // so the KV snapshot is keyed to this node
             )
             repository.insert(assistantNode)
-            repository.setTokenCount(
-                assistantNode.id, spec.tokenizerId,
-                runCatching { engine.countTokens(assistantText) }.getOrDefault(0),
-            )
+            val outCount = runCatching { engine.countTokens(assistantText) }.getOrDefault(0)
+            repository.setTokenCount(assistantNode.id, spec.tokenizerId, outCount)
             moveLeaf(assistantNode.id)
+
+            // Usage ledger (Doc 07 "Myself"): one honest entry per turn. A cloud turn carries the
+            // provider-reported tokens + cost; an on-device turn is counted with the model's own
+            // tokenizer (flagged estimated — the prompt count approximates the templated prompt)
+            // and costs nothing — the sovereignty record. On-device only; never leaves the device.
+            // Guarded so a ledger write can never fail the turn itself.
+            runCatching {
+                val chatId = path.firstOrNull()?.id ?: userNode.id
+                val inCount = cloudUsage?.inputTokens?.toLong()
+                    ?: runCatching { engine.countTokens(path.joinToString("\n") { it.content }).toLong() }.getOrDefault(0L)
+                ledgerStore.append(
+                    dev.aarso.domain.ledger.LedgerCapture.singleTurn(
+                        timestampMillis = System.currentTimeMillis(),
+                        chatId = chatId,
+                        nodeId = assistantNode.id,
+                        projectId = session.conversationProjects.value[chatId],
+                        model = spec.id,
+                        provider = spec.providerId ?: "on-device",
+                        tier = if (isLocal) dev.aarso.domain.ledger.Tier.ON_DEVICE else dev.aarso.domain.ledger.Tier.CLOUD,
+                        inputTokens = inCount,
+                        outputTokens = outCount.toLong(),
+                        estCostMinor = cloudCostMinor ?: 0L,
+                        latencyMs = System.currentTimeMillis() - genStart,
+                        status = if (stopRequested) dev.aarso.domain.ledger.Status.STOPPED else dev.aarso.domain.ledger.Status.COMPLETE,
+                        estimated = cloudUsage == null,
+                    ),
+                )
+            }
             transient.value = transient.value.copy(stream = StreamState(), genPhase = GenPhase.IDLE)
             recomputeStatus(spec, assistantNode.id)
         } catch (t: Throwable) {
@@ -1035,6 +1067,7 @@ class ChatViewModel(
                     c.pricingStore,
                     c.freeTierUsageStore,
                     c.councilStore,
+                    c.ledgerStore,
                     app.applicationContext,
                 )
             }
