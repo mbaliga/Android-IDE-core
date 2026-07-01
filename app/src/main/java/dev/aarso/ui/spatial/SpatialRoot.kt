@@ -49,6 +49,14 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import dev.aarso.domain.a11y.Depth
+import dev.aarso.domain.a11y.Room
+import dev.aarso.domain.a11y.SpatialLinearization
+import dev.aarso.domain.a11y.SpatialPosition
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aarso.AarsoApp
 import dev.aarso.data.DownloadCenter
@@ -218,6 +226,21 @@ fun SpatialRoot() {
 
     BackHandler(enabled = anyRoom || zProgress > 0.001f) { controller.closeAll() }
 
+    // a11y (Doc 00 §3.5): the spatial model is invisible to a screen reader, so announce the
+    // settled room as a polite live region. We map the gesture progress to the pure
+    // domain Room/Depth and let SpatialLinearization phrase the announcement; the string only
+    // changes when a room actually settles (|progress| > 0.5), so TalkBack isn't spammed mid-drag.
+    val spatialPos = SpatialPosition(
+        room = when {
+            hProgress > 0.5f -> Room.CONVERSATIONS
+            hProgress < -0.5f -> Room.SETTINGS
+            vProgress > 0.5f -> Room.PROJECT
+            vProgress < -0.5f -> Room.DEVELOP
+            else -> Room.CHAT
+        },
+        depth = if (zProgress > 0.5f) Depth.TREE else Depth.ORIGIN,
+    )
+
     val density = androidx.compose.ui.platform.LocalDensity.current
     val bandPx = with(density) { 72.dp.toPx() }
     val edgePx = with(density) { 56.dp.toPx() }
@@ -231,6 +254,15 @@ fun SpatialRoot() {
             .onSizeChanged { controller.viewport = it }
             .spatialEdgeDrag(controller, edgePx),
     ) {
+        // Screen-reader room announcer: an invisible polite live region whose description is
+        // the linearized room announcement. It re-announces only when [spatialPos] settles.
+        Box(
+            Modifier.size(1.dp).semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = SpatialLinearization.announce(spatialPos)
+            },
+        )
+
         val w = controller.viewport.width.toFloat()
         val hgt = controller.viewport.height.toFloat()
         val scale = 1f - 0.10f * max(abs(hProgress), vProgress)

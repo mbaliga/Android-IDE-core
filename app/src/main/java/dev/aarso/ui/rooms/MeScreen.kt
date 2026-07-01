@@ -165,8 +165,7 @@ private fun AccountRow(title: String, subtitle: String) {
     Spacer(Modifier.height(6.dp))
 }
 
-private fun fmtTokens(t: Long): String = when {
-    t >= 1_000_000 -> "%.1fM".format(t / 1_000_000.0)
-    t >= 1_000 -> "${t / 1_000}K"
-    else -> t.toString()
-}
+// Token counts are grouped locale-correctly via the JVM-tested LocaleFormat (e.g. Indian lakh
+// grouping where the locale calls for it) rather than an ad-hoc K/M abbreviation.
+private fun fmtTokens(t: Long): String =
+    dev.aarso.domain.format.LocaleFormat.tokens(t, java.util.Locale.getDefault())
