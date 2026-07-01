@@ -429,13 +429,12 @@ private fun ImageNodeCard(node: MessageNode, enabled: Boolean, onOpen: () -> Uni
     }
 }
 
-internal fun relativeTime(millis: Long): String {
-    val delta = System.currentTimeMillis() - millis
-    val minutes = delta / 60_000
-    return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        minutes < 60 * 24 -> "${minutes / 60}h ago"
-        else -> "${minutes / (60 * 24)}d ago"
-    }
-}
+// Relative time through the JVM-tested LocaleFormat: "just now / N minutes ago / …" with
+// locale-localized digits, falling back to the locale's absolute date past a week.
+internal fun relativeTime(millis: Long): String =
+    dev.aarso.domain.format.LocaleFormat.relativeOrAbsolute(
+        epochMillis = millis,
+        nowMillis = System.currentTimeMillis(),
+        zone = java.time.ZoneId.systemDefault(),
+        locale = java.util.Locale.getDefault(),
+    )
