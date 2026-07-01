@@ -55,12 +55,20 @@ Each is a complete domain → data → presenter/VM → Compose slice, gate-gree
 the app, so render/behaviour is **owner-verified on device**; the domain + mapper layers are
 JVM-tested.
 
-1. **Usage ledger → Myself.** `LedgerEntryEntity`/`LedgerDao` (Room, append-only) →
+1. **Usage ledger → Myself (now writing).** `LedgerEntryEntity`/`LedgerDao` (Room, append-only) →
    `LedgerStore` (implements the `LedgerSource` seam) → `AppContainer.ledgerStore` →
-   `MeScreen` collects the flow and renders `MyselfPresenter` → `StatePane` → input/output,
-   sovereignty, by-provider and budget-ring cards. Shows the honest **Empty** state until the
-   per-turn capture writer lands (that writer touches the generation path — owner-scope).
-2. **Streaming markdown → render path.** `ChatScreen.MessageBubble` runs persisted model turns
+   `MeScreen` renders `MyselfPresenter` → `StatePane` → input/output, sovereignty, by-provider and
+   budget-ring cards. The **per-turn capture writer has landed**: `ChatViewModel` appends one
+   `LedgerCapture.singleTurn(...)` entry as each turn completes — cloud turns carry the
+   provider-reported tokens + cost (authoritative), on-device turns are counted with the model's
+   own tokenizer (flagged `estimated`) at cost 0 (the sovereignty record). The write is guarded so
+   it can never fail a turn. So the Myself cards and the Conversations model-flairs now fill with
+   real data as you chat (they showed the honest Empty state before the writer existed). `LedgerCapture`
+   is pure + JVM-tested; the Council fan-out writer (one entry per member) is the remaining case.
+2. **Provenance badges → Myself.** `MeScreen`'s linked-account rows carry a `ProvenanceBadge`
+   (the four-state watched-object model — glyph+label, never colour-alone, TalkBack-labelled):
+   every linked account is an off-device watched object (`CLOUD`).
+3. **Streaming markdown → render path.** `ChatScreen.MessageBubble` runs persisted model turns
    through `StreamingMarkdown.reconcile` before the markdown renderer, so a turn stopped
    mid-fence (a dangling ```` ``` ````) renders clean instead of swallowing the bubble.
    Idempotent on well-formed markdown — a complete turn passes through unchanged. The live
@@ -86,15 +94,19 @@ project grouping, image tab, dialogs and FAB are untouched, and RECENT (default)
 existing order. Compose is compile-verified only — owner-verified on device.
 
 **Still optional:** a fuller swap to the `ConversationsViewModel`/`ConversationRow` path would add
-the ledger-derived **model-flair strips** to each row; those stay empty until the per-turn ledger
-capture writer lands (same honest Empty as the Myself ledger), so there's little gained until then.
+the ledger-derived **model-flair strips** to each row. Now that the capture writer lands entries,
+those flairs would populate as usage accrues — the remaining gain is cosmetic (the strip widget),
+so it stays optional against the shipping `ChatsRoom`.
 
 ## Next phase (not done here)
 1. **Wire the remaining primitives into their surfaces** — ViewModels exposing `UiState<…>`,
-   Compose components consuming `domain/provenance` (the four-state indicator), `domain/scope`
-   (the budget meter + scope inspector), `LocaleFormat` (every number/date/token in the UI),
-   `domain/library` (the Conversations list — see the honest blocker above). Ledger and the
-   streaming markdown path are **done** (see "Wired vertical slices"). Compose is
+   `LocaleFormat` (every number/date/token in the UI), and the `ScopeInspector`. **Done so far:**
+   ledger (+ per-turn capture writer), streaming markdown, provenance badge (Myself), and the
+   Conversations sort (see "Wired vertical slices"). **`domain/scope` budget meter — deliberately
+   not mounted:** its honest data (context-window fill) is *already* surfaced natively in the chat
+   bar (`ctx used/window` + bar), and its other mode (knowledge-corpus budget) has no real source
+   until `ContextAssembly` is wired into the composer — mounting the component now would be either
+   redundant or a fake gauge, so it waits for the scope-assembly wiring. Compose is
    **compile-verified only** here (CI never launches the app) — owner-verified on device.
 2. **Pseudolocalization in CI** — add a string-sweep step asserting `isPlaceholderSafe` and
    no truncation across the priority locales.
