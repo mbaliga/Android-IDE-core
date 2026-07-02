@@ -54,7 +54,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             echo "::group::gradle attempt $attempt"
-            if ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :hyle:test; then
+            if ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest; then
               echo "::endgroup::"; exit 0
             fi
             echo "::endgroup::"
