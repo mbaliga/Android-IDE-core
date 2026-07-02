@@ -4,3 +4,6 @@
 [submodule "sdengine/src/main/cpp/stable-diffusion.cpp"]
 	path = sdengine/src/main/cpp/stable-diffusion.cpp
 	url = https://github.com/leejet/stable-diffusion.cpp.git
+[submodule "hyle-design-system"]
+	path = hyle-design-system
+	url = https://github.com/mbaliga/Hyle-Design-System.git
