@@ -61,8 +61,10 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
   src/main/cpp/             llama_jni.cpp + CMake + llama.cpp submodule → libaarso_llama.so
   src/test/                 400+ JVM unit tests (domain/ + data-layer) — keep green
 sdengine/                   stable-diffusion.cpp submodule + sd_jni.cpp → libaarso_sd.so
-hyle/                       design-system module (dev.aarso.hyle); publishable dev.aarso:hyle:0.1.0
-hyle-probe/                 on-device render harness app for Hyle
+hyle-design-system/         git submodule (mbaliga/Hyle-Design-System) — the SINGLE source of
+                            dev.aarso:hyle:0.2.0, composited via includeBuild (settings.gradle.kts).
+                            No vendored :hyle module here anymore.
+hyle-probe/                 on-device render harness app for Hyle (depends on dev.aarso:hyle)
 ```
 
 ### Architecture spine (don't violate)
@@ -85,7 +87,9 @@ hyle-probe/                 on-device render harness app for Hyle
   16 KB-page-aligned libs).
 - Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.aarso.full`, default) /
   **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.aarso`).
-- Gate: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :hyle:test` (keep green).
+- Gate: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest` (keep green). Hyle's own
+  `:hyle:test` now runs in the Hyle repo's CI; core consumes Hyle via the includeBuild'd submodule
+  (`git submodule update --init --recursive` first, so the composite build resolves `dev.aarso:hyle`).
 - `./gradlew :app:assembleFullDebug` → sideload APK (slow native cross-compile).
   `:app:bundlePlayRelease` → Play AAB.
 - **Compose ↔ markdown pin (do not regress):** the mikepenz markdown renderer (`0.35.0`) needs
@@ -116,7 +120,7 @@ A family of cooperating apps, not a monolith. Dependency direction sinks toward 
 | Component | What | Source | Status |
 |---|---|---|---|
 | **Aarso/Workbench** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
-| **Hyle** | design system | **open** | module here; **repo split pending owner** (prep done) |
+| **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
 | **PM + authoring** | the paid "Studio" layer | **closed** | repo pending owner; code in main, to carve out |
 | **Sound & haptics** | companion authoring app | **open** | not started |
 | **Routing engine** | on-device + cloud LLM router (any app) | **closed today; rec = open-core** | not started |
@@ -144,13 +148,16 @@ detail in `docs/STATE.md`.
   execution, BPMN save/load).
 - **Reliability:** **crash-recovery harness** in the final app (captures the trace, shows a
   Recovery screen, never bricks); **fixed the launch/send crash** (Compose BoM → Foundation 1.8).
-- **Design system:** `:hyle` made independently publishable (`dev.aarso:hyle:0.1.0`).
+- **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
+  (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
+  copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
 - Versions this stage: v0.9.0 IA → v0.13.0 (current). See STATE.md §3 for the per-version list.
 
 **PLANNED / PENDING**
-- *Owner-blocked (need an owner action):* create the **Hyle**, **PM/authoring**, **sound/haptics**,
-  **routing-engine** repos + grant access; then carve them out (Hyle prep is done — clean subtree
-  split). Wire **monetization** (task #1). Confirm **routing-engine** open-core.
+- *Owner-blocked (need an owner action):* create the **PM/authoring**, **sound/haptics**,
+  **routing-engine** repos + grant access; then carve them out. (**Hyle is done** — its own repo
+  `mbaliga/Hyle-Design-System`, consumed via submodule + includeBuild.) Wire **monetization**
+  (task #1). Confirm **routing-engine** open-core.
 - *Engineering follow-ups:* Chat §B4 per-member **files** (needs file→context plumbing); **live
   per-step streaming in the graph Loop run** (`GraphRunner` progress callback); **video/3D**
   engines; **AI-assisted config** (parked); **drag-a-wire** Loop connect; **USB** on-device verify
@@ -169,7 +176,7 @@ app-store push pipeline, branding playbooks). One-time **Lifetime ~$20** spine +
 fully-open + supporter flag.
 
 ## Open owner decisions
-1. Create the four new repos + grant access (Hyle / PM / sound-haptics / routing engine).
+1. Create the new repos + grant access (PM / sound-haptics / routing engine). *(Hyle done — `mbaliga/Hyle-Design-System`.)*
 2. Monetization seam: closed `:power` vs open + supporter flag.
 3. Routing engine: confirm open-core (STATE.md §7).
 4. PM free/paid line (rec: PM paid).
@@ -180,6 +187,7 @@ fully-open + supporter flag.
 1. Read **`docs/STATE.md`** (the living index), then this file's binding rules + building.
 2. `docs/monetization.md` for the business; `docs/design/*` for per-surface specs
    (`agentic-ide.md`, `information-architecture.md`, `workflow-builder.md`); `docs/handoff/
-   hyle-extraction.md` for the split plan.
+   hyle-extraction.md` — the split plan, now **executed** (Hyle lives in `mbaliga/Hyle-Design-System`;
+   kept as historical record).
 3. Keep the gate green, ship small legible PRs to `main`, refresh `aarso-sd.apk` on `apk-dist`,
    and be honest that on-device behaviour is owner-verified.
