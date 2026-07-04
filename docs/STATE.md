@@ -35,7 +35,7 @@ the dependency direction sinks toward the routing engine.
 | Component | What it is | Source | Status |
 |---|---|---|---|
 | **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.13.0) |
-| **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | Module exists, publishable as `dev.aarso:hyle:0.1.0`; **repo split pending owner** |
+| **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | **Done** — its own repo `mbaliga/Hyle-Design-System`, single source of `dev.aarso:hyle:0.2.0`, consumed here via git submodule + includeBuild (vendored copy deleted; `0.1.0` retired) |
 | **PM + authoring** | The monetized **"Studio" layer** — project-management UX, app-store push pipeline, branding playbooks | **Closed (paid)** | New repo pending owner; code mostly lives in main today, to be carved out |
 | **Sound & haptics authoring** | A companion authoring app | **Open** | Not started here |
 | **Routing engine** | On-device + cloud LLM **router/orchestrator** — picks model for max-impact/least-cost, manages keys; offered as a service to *any* app | **Closed today; recommendation = open-core** (see §7) | Not started; strategy proposed, owner to confirm |
@@ -112,9 +112,9 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 
 ## 4. What's PENDING
 ### Tracked as owner-blocked (need an owner action)
-- **Hyle repo split** (task #2): owner creates the `hyle` repo → then subtree-split `:hyle` +
-  `:hyle-probe` with history, switch app to `includeBuild`/published coord. *Prep done: module is
-  independently publishable.*
+- ~~**Hyle repo split** (task #2)~~ **DONE (2026-07-02):** Hyle lives in its own repo
+  `mbaliga/Hyle-Design-System` (`dev.aarso:hyle:0.2.0`); core consumes it via git submodule
+  (`hyle-design-system/`) + `includeBuild`, and the vendored `:hyle` module is deleted.
 - **PM/authoring repo**: owner creates the closed repo → carve the Studio layer (Project room,
   Develop→Launch pipeline, playbooks) out of main.
 - **Monetization implementation** (task #1, `docs/monetization.md`): wire the one-time Play
