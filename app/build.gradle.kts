@@ -137,6 +137,9 @@ dependencies {
     // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts);
     // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
     implementation("dev.aarso:hyle:0.2.0")
+    // Shared crash-recovery utility (same submodule, separate coordinate — deliberately
+    // independent of :hyle so non-Hyle apps can also depend on it; see that repo's README).
+    implementation("dev.aarso:crash-recovery:1.0.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)

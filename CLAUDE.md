@@ -51,7 +51,7 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
                             IntelHex+Stk500), git (GitContentsApi/GitTreeApi), ide (RepoWorkLoop),
                             remote (SSH session/term), disclosure, instruments, mirror (inert)
     data/                   Room (append-only tree), stores, repos, transports; AgentRepoRunner,
-                            DeviceRepo, CrashLog, GitEdit/GitBackup/GitBrowse, RemoteHostStore
+                            DeviceRepo, GitEdit/GitBackup/GitBrowse, RemoteHostStore
     inference/              InferenceEngine; LlamaCppEngine (JNI), Echo (dev), EngineGenerator,
                             cloud/ (Anthropic, OpenAI-compat, Gemini — SSE), image/
     service/                GenerationService (FGS), OverlayService, ScreenCapture (+OCR), Voice
@@ -146,8 +146,10 @@ detail in `docs/STATE.md`.
   Arduino-via-Pi / ESP-OTA / **This phone USB** with tested STK500+IntelHex core); **Loop editor**
   is now a **full free-form graph editor** (add/move/connect/delete, per-node model, GraphRunner
   execution, BPMN save/load).
-- **Reliability:** **crash-recovery harness** in the final app (captures the trace, shows a
-  Recovery screen, never bricks); **fixed the launch/send crash** (Compose BoM → Foundation 1.8).
+- **Reliability:** crash recovery via the shared `dev.aarso:crash-recovery` module (same
+  submodule as Hyle, separate coordinate — captures the trace, shows a recovery screen,
+  never bricks; used across the constellation, not just here — see that repo's README);
+  **fixed the launch/send crash** (Compose BoM → Foundation 1.8).
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
   (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
