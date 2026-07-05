@@ -147,7 +147,9 @@ detail in `docs/STATE.md`.
 - **Reliability:** crash recovery via the shared `dev.aarso:crash-recovery` module (same
   submodule as Hyle, separate coordinate — captures the trace, shows a recovery screen,
   never bricks; used across the constellation, not just here — see that repo's README);
-  **fixed the launch/send crash** (Compose BoM → Foundation 1.8).
+  **fixed the launch/send crash** (Compose BoM → Foundation 1.8). **Preview the recovery
+  screen without a real crash:** Settings → Global → About, long-press the version line
+  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Aarso")`.
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
   (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
