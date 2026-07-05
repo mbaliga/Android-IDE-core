@@ -127,5 +127,28 @@ jobs:
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platforms;android-36" "build-tools;36.0.0" \
                      "ndk;28.2.13676358" "cmake;3.31.6"
+      - name: Add swap space (native llama.cpp + SD cross-compile is memory-heavy)
+        # The full native cross-compile can OOM ubuntu-latest's ~16 GB — that's exactly
+        # why the per-push build-test keeps assembleFullDebug disabled. Adding ~12 GB of
+        # swap lets the parallel C++ compile finish (slower, but inside the 120-min
+        # timeout) instead of the runner being killed mid-build. Ephemeral runner —
+        # nothing to undo. If the build still OOMs, move this job to a larger runner.
+        run: |
+          sudo fallocate -l 12G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=12288
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
       - name: Assemble sideload APK (native)
         run: ./gradlew --no-daemon :app:assembleFullDebug
+      - name: Upload sideload APK (download this to install on a device)
+        # The installable artifact: `full` flavor + debug build → app-full-debug.apk
+        # (appId dev.aarso.full). Appears under "Artifacts" on the Actions run summary
+        # page. `error` on no-files so a wrong output path fails loudly instead of
+        # silently producing an empty artifact.
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarso-full-debug-apk
+          path: app/build/outputs/apk/full/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
