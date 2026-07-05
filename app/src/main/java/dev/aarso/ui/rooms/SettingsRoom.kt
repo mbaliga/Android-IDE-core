@@ -501,7 +501,6 @@ private fun GlobalSettings(
     HorizontalDivider()
 
     Text("About", style = MaterialTheme.typography.titleMedium)
-    val context = LocalContext.current
     Text(
         "Aarso ${dev.aarso.BuildConfig.VERSION_NAME} — Konkani for “mirror”.\n\n" +
             "Local-first by design: conversations, models, and keys live on this " +
