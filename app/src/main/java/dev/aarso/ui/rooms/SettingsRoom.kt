@@ -2,8 +2,10 @@ package dev.aarso.ui.rooms
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -297,6 +299,7 @@ private fun PlannedProvider(label: String, scope: ProviderScope) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GlobalSettings(
     onShowSpatialMap: () -> Unit,
@@ -498,6 +501,7 @@ private fun GlobalSettings(
     HorizontalDivider()
 
     Text("About", style = MaterialTheme.typography.titleMedium)
+    val context = LocalContext.current
     Text(
         "Aarso ${dev.aarso.BuildConfig.VERSION_NAME} — Konkani for “mirror”.\n\n" +
             "Local-first by design: conversations, models, and keys live on this " +
@@ -505,6 +509,19 @@ private fun GlobalSettings(
             "invoke them, and only against the provider you configured.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Debug-only: long-press the version to preview the crash-recovery screen without
+        // actually crashing (dev.aarso:crash-recovery — see that repo's README). Never
+        // reachable from a release build.
+        modifier = if (dev.aarso.BuildConfig.DEBUG) {
+            Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    context.startActivity(dev.aarso.crashrecovery.CrashRecovery.previewIntent(context, appLabel = "Aarso"))
+                },
+            )
+        } else {
+            Modifier
+        },
     )
 }
 
