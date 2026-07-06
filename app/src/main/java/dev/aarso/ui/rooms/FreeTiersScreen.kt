@@ -140,10 +140,16 @@ fun FreeTiersScreen(onClose: () -> Unit) {
                         color = MaterialTheme.colorScheme.primary,
                     )
                     tier?.let { t ->
+                        // Bind the nullable tier fields to locals first: Kotlin won't smart-cast
+                        // a public property across module boundaries (FreeTier now lives in
+                        // :core-engine), so the null-checks must run against stable locals.
+                        val reqPerDay = t.requestsPerDay
+                        val tokPerDay = t.tokensPerDay
+                        val tokPerMonth = t.tokensPerMonth
                         val limitText = when {
-                            t.requestsPerDay != null -> "of ~${t.requestsPerDay} req/day (${t.name})"
-                            t.tokensPerDay != null -> "of ~${t.tokensPerDay / 1000}K tok/day (${t.name})"
-                            t.tokensPerMonth != null -> "of ~${t.tokensPerMonth / 1_000_000}M tok/month (${t.name})"
+                            reqPerDay != null -> "of ~$reqPerDay req/day (${t.name})"
+                            tokPerDay != null -> "of ~${tokPerDay / 1000}K tok/day (${t.name})"
+                            tokPerMonth != null -> "of ~${tokPerMonth / 1_000_000}M tok/month (${t.name})"
                             else -> "free tier: ${t.name}"
                         }
                         Text(limitText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
