@@ -71,10 +71,14 @@ jobs:
         # Maven Central / the Gradle plugin portal intermittently 403 GitHub runners
         # during dependency resolution (a transient, IP-level block — not a code error).
         # Retry a few times with backoff so a flake doesn't red a sound build.
+        #
+        # :core-engine:testDebugUnitTest runs the domain/ tests (89 files) that moved out
+        # of :app in the §5 de-fork slice 1 — without it those tests would silently stop
+        # running. Keep it in the gate as more layers migrate into :core-engine.
         run: |
           for attempt in 1 2 3; do
             echo "::group::gradle attempt $attempt"
-            if ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest; then
+            if ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :core-engine:testDebugUnitTest; then
               echo "::endgroup::"; exit 0
             fi
             echo "::endgroup::"

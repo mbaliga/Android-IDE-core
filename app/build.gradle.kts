@@ -166,6 +166,11 @@ dependencies {
     // full flavor only; the play build ships without screen capture.
     "fullImplementation"(libs.mlkit.text)
 
+    // Shared engine library (§5 de-fork). Holds the domain/ layer today; app's
+    // data/inference/service/ui code references it (public domain types resolve through
+    // this project dependency). Grows to absorb more layers in later de-fork slices.
+    implementation(project(":core-engine"))
+
     // On-device image generation native library (libaarso_sd.so).
     implementation(project(":sdengine"))
 

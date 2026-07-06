@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Empty by design: :core-engine contributes no components/permissions of its own.
+     The namespace comes from build.gradle.kts (dev.aarso.engine); the app manifest
+     (dev.aarso) declares all activities/services. -->
+<manifest />

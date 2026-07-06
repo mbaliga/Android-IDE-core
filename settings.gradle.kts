@@ -35,5 +35,9 @@ includeBuild("hyle-design-system")
 // Aarso ("mirror"); design thesis: legibility + cognitive sovereignty.
 rootProject.name = "Aarso"
 include(":app")
+// :core-engine — extractable engine library (§5 de-fork). Holds the shared domain
+// layer today; grows to hold data/inference/service/ui/native slice by slice so a
+// future Studio build can consume it instead of forking :app. See its build.gradle.kts.
+include(":core-engine")
 include(":sdengine")
 include(":hyle-probe")
