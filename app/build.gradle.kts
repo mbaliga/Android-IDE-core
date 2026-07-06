@@ -1,16 +1,20 @@
 import java.util.Properties
 
+// Thin application shell (§5 de-fork). All Kotlin/UI/resources/manifest-components live
+// in :core-engine (a com.android.library); this module only carries what an application
+// must: the applicationId + signing, the `dist` flavors, the native llama.cpp build, and
+// the dependency on :core-engine. A future Studio :app is the same shell over the same
+// (submodule'd) :core-engine — that's what collapses the fork.
+//
+// namespace is dev.aarso.app (must differ from :core-engine's dev.aarso); applicationId
+// stays dev.aarso so installed identity is unchanged.
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.ksp)
 }
 
-// Release signing: gitignored keystore.properties, overridable via environment
-// (AARSO_KEYSTORE_FILE/_PASSWORD/_ALIAS/_KEY_PASSWORD). The upload key never
-// enters the repo; Play App Signing holds the app key. Builds without either
-// stay unsigned so CI/agent environments still assemble.
+// Release signing: gitignored keystore.properties, overridable via environment. The upload
+// key never enters the repo; builds without either stay unsigned so CI/agents still assemble.
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -19,28 +23,25 @@ fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
 android {
-    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.aarso.
-    namespace = "dev.aarso"
+    namespace = "dev.aarso.app"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.aarso"
-        minSdk = 31          // pragmatic floor; adjustable as system-integration lands
-        targetSdk = 36       // recent Android (the target device)
-        // +1 per Play upload (docs/play/release-process.md); also bumped for sideload
-        // refreshes so a new APK always installs over the previous one.
+        minSdk = 31
+        targetSdk = 36
         versionCode = 17
         versionName = "0.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // arm64 is the only ABI the target device (and most modern phones) needs;
-        // restricting it keeps the llama.cpp build and APK small.
+        // arm64 is the only ABI the target device needs; keeps the llama.cpp build + APK small.
         ndk { abiFilters += "arm64-v8a" }
     }
 
-    // Native llama.cpp engine (CPU-only first cut). The submodule lives at
-    // src/main/cpp/llama.cpp; the JNI shim + CMake build it into libaarso_llama.so.
+    // Native llama.cpp engine. The submodule lives at src/main/cpp/llama.cpp; the JNI shim +
+    // CMake build it into libaarso_llama.so. The Kotlin `external` bindings are in :core-engine
+    // (package dev.aarso.inference), resolved by FQN at runtime — package unchanged by the move.
     ndkVersion = "28.2.13676358"
     externalNativeBuild {
         cmake {
@@ -63,11 +64,8 @@ android {
 
     buildTypes {
         release {
-            // Deliberately NOT minified: llama_jni.cpp resolves the streaming
-            // sink by name (GetMethodID("onToken")) — R8 renaming would kill
-            // token streaming silently; sdengine has the same shape. Turning R8
-            // on later needs -keep rules for the JNI surfaces plus an on-device
-            // regression pass. Size is dominated by the native libs anyway.
+            // Deliberately NOT minified: llama_jni.cpp resolves the streaming sink by name
+            // (GetMethodID("onToken")) — R8 renaming would kill token streaming silently.
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -79,12 +77,8 @@ android {
         }
     }
 
-    // Distribution split (owner decision 2026-06-12):
-    //  - play: Google Play build. Policy-safe catalog (official instruct GGUFs),
-    //    no overlay bubble / screen-capture OCR (the heaviest review surface),
-    //    in-app output flagging (Play GenAI policy).
-    //  - full: the sideload build (apk-dist) — current catalog and all §7 tiers.
-    //    Suffixed appId so both can live on one phone side by side.
+    // Distribution split — must match :core-engine's `dist` dimension so AGP flavor-matches
+    // app→library. appId suffix + isDefault are application-only, so they live here.
     flavorDimensions += "dist"
     productFlavors {
         create("full") {
@@ -104,21 +98,15 @@ android {
     kotlin {
         jvmToolchain(17)
     }
-    buildFeatures {
-        compose = true
-        // BuildConfig.DEBUG gates the echo dev stand-ins (no fake engine in release).
-        buildConfig = true
-    }
 
-    // Compress the native library inside the APK (extracted at install). Cuts the
-    // download size substantially with no effect on runtime behaviour.
+    // Compress the native lib inside the APK (extracted at install); exclude the duplicate
+    // BouncyCastle/sshj metadata (sshj comes in transitively via :core-engine) that R8
+    // packaging otherwise rejects. None affect runtime.
     packaging {
         jniLibs {
             useLegacyPackaging = true
         }
         resources {
-            // sshj pulls BouncyCastle, which ships duplicate/irrelevant metadata that
-            // R8 packaging otherwise rejects. None affect runtime.
             excludes += setOf(
                 "META-INF/*.kotlin_module",
                 "META-INF/versions/**",
@@ -134,49 +122,7 @@ android {
 }
 
 dependencies {
-    // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts);
-    // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
-    implementation("dev.aarso:hyle:0.2.0")
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
-
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.activity.compose)
-
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    // Markdown rendering for assistant turns (legibility); pure rendering, no IO.
-    implementation(libs.markdown.renderer.m3)
-
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.sse)
-    // SSH/SFTP transport for the remote-exec spine (data/remote). Runtime owner-verified.
-    implementation(libs.sshj)
-    // On-device OCR (offline, bundled) for the screen-capture content tier (§7) —
-    // full flavor only; the play build ships without screen capture.
-    "fullImplementation"(libs.mlkit.text)
-
-    // Shared engine library (§5 de-fork). Holds the domain/ layer today; app's
-    // data/inference/service/ui code references it (public domain types resolve through
-    // this project dependency). Grows to absorb more layers in later de-fork slices.
+    // Everything (code, resources, manifest components, flavors) lives in :core-engine;
+    // its transitive deps become this APK's runtime classpath.
     implementation(project(":core-engine"))
-
-    // On-device image generation native library (libaarso_sd.so).
-    implementation(project(":sdengine"))
-
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
-    // Real org.json for JVM tests (the app uses Android's bundled org.json; the
-    // stub in unit tests isn't functional). Lets us round-trip the tree archive.
-    testImplementation("org.json:json:20231013")
 }
