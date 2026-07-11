@@ -1,6 +1,9 @@
 package dev.aarso.data
 
 import androidx.room.TypeConverter
+import dev.aarso.domain.tasks.TaskSource
+import dev.aarso.domain.tasks.TaskState
+import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -29,6 +32,34 @@ class Converters {
         for (key in obj.keys()) out[key] = obj.getString(key)
         return out
     }
+
+    /** String list <-> JSON array string (Task's [dependsOn]/[tags]). */
+    @TypeConverter
+    fun fromStringList(values: List<String>?): String? {
+        if (values.isNullOrEmpty()) return null
+        val arr = JSONArray()
+        for (v in values) arr.put(v)
+        return arr.toString()
+    }
+
+    @TypeConverter
+    fun toStringList(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        val arr = JSONArray(json)
+        return List(arr.length()) { arr.getString(it) }
+    }
+
+    @TypeConverter
+    fun fromTaskState(state: TaskState): String = state.name
+
+    @TypeConverter
+    fun toTaskState(name: String): TaskState = TaskState.valueOf(name)
+
+    @TypeConverter
+    fun fromTaskSource(source: TaskSource): String = source.name
+
+    @TypeConverter
+    fun toTaskSource(name: String): TaskSource = TaskSource.valueOf(name)
 
     companion object {
         /** float32 array -> little-endian BLOB, for embedding vectors. */
