@@ -105,6 +105,10 @@ class AppContainer(context: Context) {
     val incidentsStore: dev.aarso.data.IncidentsStore = dev.aarso.data.IncidentsStore(context)
     val councilStore: dev.aarso.data.CouncilStore = dev.aarso.data.CouncilStore(context)
 
+    /** The Task substrate (free floor's To-do; paid Board/List/Waterfall lenses read the
+     *  same table, CORE_PHASES.md P1). */
+    val taskStore: dev.aarso.data.TaskStore = dev.aarso.data.TaskStore(database.taskDao())
+
     /** The free-tier guide (bundled JSON, pipeline-refreshed) + per-provider free-tier usage. */
     val freeTierStore: dev.aarso.data.FreeTierStore = dev.aarso.data.FreeTierStore(context)
     val freeTierUsageStore: dev.aarso.data.FreeTierUsageStore = dev.aarso.data.FreeTierUsageStore(context)
