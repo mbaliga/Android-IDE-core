@@ -1,3 +1,8 @@
+import com.github.jk1.license.filter.LicenseBundleNormalizer
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.attributes.Bundling
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.Usage
 import java.util.Properties
 
 plugins {
@@ -5,6 +10,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.license.report)
 }
 
 // Release signing: gitignored keystore.properties, overridable via environment
@@ -174,4 +180,54 @@ dependencies {
     // Real org.json for JVM tests (the app uses Android's bundled org.json; the
     // stub in unit tests isn't functional). Lets us round-trip the tree archive.
     testImplementation("org.json:json:20231013")
+}
+
+// §1.8 license gate: scans what actually ships and fails `checkLicense` on anything off
+// `config/allowed-licenses.json`. Test-only deps like JUnit are a different configuration
+// and never scanned. Every borrow is still verify-at-build (§1.8) — this only catches
+// licenses the repo hasn't already had a human look at.
+//
+// Two purpose-built resolvable configurations, NOT the real fullDebug/playDebug/fullRelease/
+// playReleaseRuntimeClasspath: asking the license-report plugin to resolve those directly
+// (it uses the legacy `Configuration.resolvedConfiguration` API, bypassing AGP's own task
+// graph) hits a composite-build variant-selection ambiguity — :hyle-design-system:hyle
+// (consumed via `includeBuild("hyle-design-system")`, substituted for `dev.aarso:hyle`)
+// publishes many secondary artifactType-tagged variants of its runtime configuration
+// (android-classes-jar, android-jni, android-res, plain jar, ...), and AGP's own
+// disambiguation rule for picking among them apparently doesn't cross the included-build
+// boundary — Gradle refuses to guess. AGP's real task graph resolves the exact same
+// dependency fine (proved by :app:testFullDebugUnitTest/:testPlayDebugUnitTest passing),
+// it just requests a specific artifactType the plugin's bare API call doesn't. Working
+// around it: mirror the real classpath's declared dependencies (extendsFrom the same
+// implementation buckets AGP's own RuntimeClasspath configurations extend) on a fresh
+// configuration that requests plain Usage=java-runtime/Category=library/artifactType=jar —
+// enough to disambiguate without needing AGP's flavor/build-type attributes at all, since
+// this is only for reading licenses off the resolved graph, not for compiling/packaging.
+val licenseScanAttrs: (org.gradle.api.attributes.AttributeContainer) -> Unit = { attrs ->
+    attrs.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
+    attrs.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category::class.java, Category.LIBRARY))
+    attrs.attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class.java, Bundling.EXTERNAL))
+    attrs.attribute(Attribute.of("artifactType", String::class.java), "jar")
+}
+listOf("full", "play").forEach { flavor ->
+    configurations.create("${flavor}LicenseScan") {
+        isCanBeResolved = true
+        isCanBeConsumed = false
+        extendsFrom(configurations.getByName("implementation"), configurations.getByName("${flavor}Implementation"))
+        attributes { licenseScanAttrs(this) }
+    }
+}
+//
+// config/allowed-licenses.json carries two narrow name-scoped overrides for
+// com.google.android.gms / com.google.mlkit / com.google.android.odml (the on-device
+// OCR chain behind `libs.mlkit.text`, `full` flavor only — see the dependency below).
+// Those report as "Android Software Development Kit License" / "ML Kit Terms of
+// Service", Google's own SDK-distribution terms rather than an OSS license string —
+// outside the §1.8 OSS allowlist by nature, not because they're a copyleft/attribution
+// risk (what §1.8 actually guards against). Pre-existing dependency, verified
+// 2026-07-11, scoped by name regex so the override can't silently cover anything else.
+licenseReport {
+    configurations = arrayOf("fullLicenseScan", "playLicenseScan")
+    filters = arrayOf(LicenseBundleNormalizer())
+    allowedLicensesFile = rootProject.file("config/allowed-licenses.json")
 }
