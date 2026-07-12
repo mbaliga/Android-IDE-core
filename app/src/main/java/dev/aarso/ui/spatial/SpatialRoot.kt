@@ -65,6 +65,7 @@ import dev.aarso.ui.ChatViewModel
 import dev.aarso.ui.ModelsViewModel
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.rooms.ChatsRoom
+import dev.aarso.ui.rooms.ProductRoomFree
 import dev.aarso.ui.rooms.SettingsRoom
 import dev.aarso.ui.rooms.TreeRoom
 import androidx.compose.foundation.border
@@ -302,8 +303,8 @@ fun SpatialRoot() {
                     .padding(bottom = 72.dp),
             ) {
                 // S6 seam: the paid Studio installs the real Project room; the open core
-                // shows the locked placeholder. Core never references ProjectRoom directly.
-                (ProjectRoomSlot.content ?: { onClose -> ProjectRoomLocked(onClose) })(
+                // shows the free To-do floor. Core never references ProjectRoom directly.
+                (ProjectRoomSlot.content ?: { onClose -> ProductRoomFree(onClose) })(
                     { controller.closeAll() },
                 )
             }

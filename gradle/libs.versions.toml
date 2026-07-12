@@ -20,6 +20,9 @@ markdownRenderer = "0.35.0"
 # SSH/SFTP for the remote-exec spine (data/remote). Actively maintained, modern
 # algorithms (ed25519, modern KEX/ciphers). Pulls BouncyCastle + eddsa transitively.
 sshj = "0.39.0"
+# §1.8 license gate: com.github.jk1's dependency-license-report — generates a report of
+# every runtime dependency's license and fails the build on anything off the allowlist.
+licenseReport = "3.1.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -57,3 +60,4 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+license-report = { id = "com.github.jk1.dependency-license-report", version.ref = "licenseReport" }
