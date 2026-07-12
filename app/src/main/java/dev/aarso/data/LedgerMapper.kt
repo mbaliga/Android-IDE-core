@@ -41,6 +41,8 @@ object LedgerMapper {
         tier = enumValueOf<Tier>(e.tier),
         status = enumValueOf<Status>(e.status),
         estimated = e.estimated,
+        surface = e.surface,
+        loopId = e.loopId,
     )
 
     /** Domain entry → persistable row. Writes each enum's stable `.name`; id left for Room. */
@@ -61,5 +63,7 @@ object LedgerMapper {
         tier = d.tier.name,
         status = d.status.name,
         estimated = d.estimated,
+        surface = d.surface,
+        loopId = d.loopId,
     )
 }

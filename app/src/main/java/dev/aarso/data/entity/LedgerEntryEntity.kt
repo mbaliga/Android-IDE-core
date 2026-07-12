@@ -59,4 +59,8 @@ data class LedgerEntryEntity(
     val status: String,
     /** `true` if [estCostMinor] is a guess; `false` if it came from real provider usage. */
     val estimated: Boolean,
+    /** [dev.aarso.domain.ledger.LedgerEntry.surface]`.` `"chat"` (default) or `"loop"`. */
+    val surface: String = "chat",
+    /** [dev.aarso.domain.ledger.LedgerEntry.loopId] — null for chat entries and ad-hoc runs. */
+    val loopId: String? = null,
 )
