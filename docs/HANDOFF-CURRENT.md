@@ -33,6 +33,41 @@
 > render, the Watch tab's touch/expand feel, and the v3→v4 Room bump — it still rides
 > `fallbackToDestructiveMigration()` like every prior bump (no real `Migration` object exists in
 > this codebase; none of the JVM tests can exercise one).
+>
+> **P3 — Engine extension + Loops run UI (added P3, 2026-07-12):** landed — `GraphRunner.run`
+> gains `${key}` **params** (`LoopParams` scans the graph, substitutes, and *refuses to
+> start* rather than silently blanking an unresolved key), an optional per-run **`LoopBudget`**
+> (`maxTokensTotal`/`maxSteps`/`maxWallMs` — user intent, checked between steps so the step that
+> would exceed it is never started; distinct from the existing `hardCap` engine safety net,
+> which still always applies), and a live **`onStep`** callback. `GraphStep` gains
+> `tokensIn`/`tokensOut`/`durationMs`/`estimated`; `GraphRunResult` gains
+> `totalTokensIn`/`totalTokensOut`/`elapsedMs`. Cancellation is graceful, not thrown — like every
+> other stop reason it comes back as a normal `GraphRunResult` (`stoppedBecause = "cancelled"`)
+> carrying whatever steps completed, checked via the caller's own coroutine `Job` (no cancel-flag
+> parameter added — matches the spec signature exactly). New **`GraphRunLedger`** maps a run to
+> one `LedgerEntry` per completed step, tagged `surface = "loop"` (`LedgerEntry`/
+> `LedgerEntryEntity` gain `surface`/`loopId`, both defaulted so every prior Chat entry is
+> unaffected; `AppDatabase` v4→v5). `LoopRoom`'s Run button now opens a **run sheet** (an
+> auto-generated field per `${key}`, refuse-to-start listed inline, optional step/wall
+> budget fields), streams live steps with role/model/tokens("est." marker)/duration, shows a
+> running-totals **violet bar with a cyan cap tick** (never red, §1.4) once a budget is set, adds
+> a **Stop** control, and on any outcome (reached end, budget-stopped, or cancelled) tree-logs the
+> run (`GraphRunLog`) and writes its ledger rows (`GraphRunLedger`). **Honesty note:** no
+> `tokenCounter` is wired into `LoopRoom`'s real run yet (it would need per-node, per-model local
+> tokenization plumbed through `EngineGenerator`) — the run sheet does not offer a token budget
+> field for that reason; `maxTokensTotal` is fully built and JVM-tested at the engine layer, just
+> not yet reachable from this UI. **verified-JVM** (all named, CORE_PHASES.md P3 DoD): param
+> substitution incl. refuse-to-start; budget stop on each of steps/wall/tokens with the correct
+> `stoppedBecause` and no over-run step (plus `hardCap` still applying with no budget set);
+> `onStep` ordering + cancellation (a cooperative, non-throwing check between steps — no coroutine
+> ever needs to swallow a real `CancellationException` in the test); totals math incl. `estimated`
+> propagation (mixed authoritative/estimated/uncounted steps in one run); one `GraphRunLedger` row
+> per completed step correlated to its tree node by id; `GraphRunLog` still builds a valid partial
+> sub-tree for a cancelled/budget-stopped run; every pre-P3 `GraphRunner` caller (`LoopRoom.kt`,
+> the pre-existing `GraphRunnerTest` cases) compiles and behaves unchanged. Full gate green.
+> **owner-verify:** the run sheet's feel, the live step stream/Stop control, the totals bar
+> render, and the v4→v5 Room bump (same `fallbackToDestructiveMigration()` caveat as every prior
+> bump).
 
 ---
 
@@ -197,11 +232,16 @@ Tabs over one git-like tree:
 - ✅ Free-form graph editor (Task/Gateway/End; add/move/connect/delete; per-node model ⌂/☁;
   approve/refine/else gateway labels; **GraphRunner** execution; **BPMN 2.0** round-trip
   JVM-tested; Drafts/Running/Retired; git push/pull of `.bpmn`).
-- ⛔ **Per-loop cost boundary/gate** (where Cost moved from the profile/Develop) — **not built**.
-  This is the piece that completes "cost lives on Loops."
-- 🟡 **Live per-step streaming** (GraphRunner progress callback; animated active edges;
-  node run-state) — pending. Drag-a-wire connect — pending. Run-trace ledger writes — pending.
-- 🟡 Parameterization = visual variables (the Studio publish-pipeline seam).
+- ✅ **P3 landed** (see the dated pointer above): `${key}` params + refuse-to-start; a
+  `LoopBudget` (steps/wall — token axis built but not yet UI-reachable, see the honesty note);
+  live per-step streaming via `onStep` (text step list, not yet animated active edges/node
+  run-state on the canvas itself); Stop control; run-trace **tree** logging (`GraphRunLog`) and
+  **ledger** logging (`GraphRunLedger`, `surface = "loop"`) on every outcome. Drag-a-wire connect
+  is still tap-to-connect, not drag — pending.
+- ⛔ **Per-loop *dollar*-cost boundary/gate** (where Cost moved from the profile/Develop) — **not
+  built**. P3 built the token/step/wall **budget**, deliberately not a $-cost matrix (rule 5 keeps
+  `CostEstimator.kt` Council-escalation-scoped) — this is the piece still missing to fully
+  complete "cost lives on Loops."
 
 ---
 

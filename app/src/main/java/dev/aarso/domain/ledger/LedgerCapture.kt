@@ -54,4 +54,48 @@ object LedgerCapture {
         status = status,
         estimated = estimated,
     )
+
+    /**
+     * Build the ledger entry for one completed loop-run step (CORE_PHASES.md P3) — tagged
+     * `surface = "loop"` so it's legible apart from a Chat turn, never mixed in silently.
+     * [chatId] carries [runId] (the same grouping key `GraphRunLog`/`RunLog` tag their tree
+     * nodes with), so a run's steps share one thread the way Council members share a chat.
+     *
+     * [estCostMinor] is always 0: the per-loop **dollar**-cost boundary isn't built yet (rule 5
+     * keeps `CostEstimator.kt` Council-escalation-scoped) — this only ever counts tokens, never
+     * invents a price. Every row that reaches here already completed (a [GraphRunResult]'s
+     * `steps` list only ever holds finished steps), so [Status] is always [Status.COMPLETE].
+     */
+    fun loopStep(
+        timestampMillis: Long,
+        runId: String,
+        loopId: String?,
+        nodeId: String,
+        projectId: String?,
+        model: String,
+        tier: Tier,
+        inputTokens: Long,
+        outputTokens: Long,
+        latencyMs: Long,
+        estimated: Boolean,
+    ): LedgerEntry = LedgerEntry(
+        timestampMillis = timestampMillis,
+        projectId = projectId,
+        chatId = runId,
+        nodeId = nodeId,
+        model = model,
+        provider = if (tier == Tier.ON_DEVICE) "on-device" else "cloud",
+        provenance = provenanceFor(tier),
+        interactionModel = InteractionModel.SINGLE,
+        councilMemberId = null,
+        inputTokens = inputTokens.coerceAtLeast(0),
+        outputTokens = outputTokens.coerceAtLeast(0),
+        estCostMinor = 0,
+        latencyMs = latencyMs.coerceAtLeast(0),
+        tier = tier,
+        status = Status.COMPLETE,
+        estimated = estimated,
+        surface = "loop",
+        loopId = loopId,
+    )
 }
