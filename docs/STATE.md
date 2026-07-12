@@ -187,7 +187,7 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 ## 10. Where things live (map)
 - `app/src/main/java/dev/aarso/` — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
   device, git, ide, remote), `data/` (Room tree, stores, repos, transports, AgentRepoRunner,
-  DeviceRepo, CrashLog), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
+  DeviceRepo), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
   ide, remote, theme, aeon, spatial), `service/`, `security/`.
 - `hyle/` design-system module · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),

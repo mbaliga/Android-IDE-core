@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.aarso.AarsoApp
+import dev.aarso.crashrecovery.CrashRecovery
 import dev.aarso.data.Intake
 import dev.aarso.ui.theme.AarsoTheme
 import dev.aarso.ui.theme.DefaultAccent
@@ -18,27 +19,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // If the previous run crashed (or the container failed to build during Application.onCreate,
+        // which also lands a report via CrashRecovery.captureInitError), show the shared recovery
+        // screen — NOT the app — instead of touching the (possibly uninitialised) container. This
+        // finishes this Activity, so a device-only launch crash can't brick the install.
+        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Aarso")) return
+
         val app = application as AarsoApp
-
-        // If the previous run crashed (or the container failed to build), show the recovery screen
-        // — NOT the app — so a device-only launch crash can't brick the install, and its trace is
-        // visible/shareable. The flag is cleared only after a clean first frame (below).
-        val crash = app.initError?.let { stackString(it) } ?: dev.aarso.CrashLog.read(this)
-        if (crash != null) {
-            setContent {
-                dev.aarso.ui.RecoveryScreen(
-                    trace = crash,
-                    onContinue = { dev.aarso.CrashLog.clear(this); recreate() },
-                    onShare = { shareReport(crash) },
-                    onReset = {
-                        dev.aarso.CrashLog.clear(this)
-                        runCatching { (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).clearApplicationUserData() }
-                    },
-                )
-            }
-            return
-        }
-
         handleIntake(intent)
         val session = app.container.sessionStore
         setContent {
@@ -54,21 +42,7 @@ class MainActivity : ComponentActivity() {
             }
             // Reached only if the theme + AppRoot composed without throwing → clear the crash flag
             // so the next launch is normal. A composition crash skips this, keeping the flag set.
-            androidx.compose.runtime.LaunchedEffect(Unit) { dev.aarso.CrashLog.clear(applicationContext) }
-        }
-    }
-
-    private fun stackString(t: Throwable): String =
-        java.io.StringWriter().also { t.printStackTrace(java.io.PrintWriter(it)) }.toString()
-
-    private fun shareReport(text: String) {
-        runCatching {
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "Aarso crash report")
-                putExtra(Intent.EXTRA_TEXT, text.take(60_000))
-            }
-            startActivity(Intent.createChooser(send, "Share crash report"))
+            androidx.compose.runtime.LaunchedEffect(Unit) { CrashRecovery.clear(applicationContext) }
         }
     }
 
