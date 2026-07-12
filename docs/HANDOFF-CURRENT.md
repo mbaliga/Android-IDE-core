@@ -12,6 +12,14 @@
 > 🟡 partial/in-works · ⛔ pending/not-started · 🔒 owner-gated. **CI never launches the app** —
 > pure domain logic is JVM-tested; all runtime/render/gesture/hardware behaviour is **owner-verified
 > on the RedMagic**. Package `dev.aarso.*`; Kotlin + Compose; manual DI (`AppContainer`, no Hilt).
+>
+> **Studio Suite brief pointer (added P0-core, 2026-07-11):** the free-tier work driving this
+> repo's next phases (P1 Task substrate + free floor, P2 Watchlist, P3 loop-engine extension) is
+> specified in **`docs/CORE_PHASES.md`** — the public-safe excerpt of
+> `Android-IDE-Studio/docs/STUDIO_SUITE_BRIEF.md` (private repo; brand string ruled **"FoneBru,"**
+> S3). **`docs/STATE.md` is stale as of this pointer** — it predates the brief and the Hyle
+> single-source split; treat this file + `docs/CORE_PHASES.md` as current, not `STATE.md`, until
+> someone refreshes it.
 
 ---
 

@@ -1,6 +1,9 @@
 package dev.aarso.ui.develop
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 /**
  * S2 seam — the extension point that keeps the open core's Develop room from
@@ -22,10 +25,12 @@ class DevelopTab(
     val content: @Composable () -> Unit,
 )
 
-/** Holds the (optional) above-core contribution of extra Develop tabs. */
+/** Holds the (optional) above-core contribution of extra Develop tabs. Compose snapshot
+ *  state (not a plain `var`) so a mid-session install recomposes the Develop room in
+ *  place — same rationale as [dev.aarso.ui.spatial.ProjectRoomSlot.content]. */
 object DevelopTabs {
     /** Empty in the bare open core; the Studio layer installs Launch/Builds via [install]. */
-    var provider: () -> List<DevelopTab> = { emptyList() }
+    var provider: () -> List<DevelopTab> by mutableStateOf({ emptyList() })
         private set
 
     /** Install the contributed tabs. Idempotent; replaces any prior provider. */
