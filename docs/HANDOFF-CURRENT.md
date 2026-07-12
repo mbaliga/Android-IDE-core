@@ -20,6 +20,19 @@
 > S3). **`docs/STATE.md` is stale as of this pointer** — it predates the brief and the Hyle
 > single-source split; treat this file + `docs/CORE_PHASES.md` as current, not `STATE.md`, until
 > someone refreshes it.
+>
+> **P2 — Watchlist (added P2, 2026-07-12):** landed — `WatchedItemEntity`/`WatchDao`/`WatchStore`
+> substrate (`AppDatabase` v3→v4, `WatchKind` RENEWAL/EXPIRY/STATUS) plus `ProductRoomFree`'s new
+> Watch tab (kind glyph, days-remaining chip that scales toward due — never red —, seed
+> ghost-rows that insert only on tap, snooze/edit/delete in an inline overflow). Also added
+> `SettingsRoom`'s `extraGlobalRows` seam, mirroring `ProductRoomFree`'s `extraTabs`, so an
+> above-core layer can append an entitlement row without touching this file. **verified-JVM:**
+> `WatchStoreTest` (CRUD, dueAt sort with nulls last, seed insert-on-tap-only, edit/snooze/delete)
+> and `WatchDueTest` (due/overdue/near-due math against a fixed clock); full gate
+> (`:app:testFullDebugUnitTest :app:testPlayDebugUnitTest`) green. **owner-verify:** on-device
+> render, the Watch tab's touch/expand feel, and the v3→v4 Room bump — it still rides
+> `fallbackToDestructiveMigration()` like every prior bump (no real `Migration` object exists in
+> this codebase; none of the JVM tests can exercise one).
 
 ---
 

@@ -97,11 +97,16 @@ private enum class ProviderScope { LOCAL, CLOUD }
  * Full-screen sub-surfaces (Models, Free tiers, Remote, Git…) render in a hoisted [overlay] slot
  * at the room root, OUTSIDE the scrolling content — a scrollable child measured inside a
  * verticalScroll parent gets an infinite height constraint and crashes (the PR #39 fix).
+ *
+ * [extraGlobalRows] mirrors [dev.aarso.ui.rooms.ProductRoomFree]'s `extraTabs` seam: it lets an
+ * above-core layer append rows to the bottom of the Global tab (e.g. an entitlement/unlock
+ * status row) without this file referencing that code.
  */
 @Composable
 fun SettingsRoom(
     onShowSpatialMap: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
+    extraGlobalRows: List<@Composable () -> Unit> = emptyList(),
 ) {
     var tab by remember { mutableStateOf(SettingsTab.GLOBAL) }
     var overlay by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
@@ -122,6 +127,7 @@ fun SettingsRoom(
                         onShowSpatialMap = onShowSpatialMap,
                         openOverlay = { overlay = it },
                         closeOverlay = { overlay = null },
+                        extraGlobalRows = extraGlobalRows,
                     )
                     else -> ProviderTab(
                         tab = tab,
@@ -305,6 +311,7 @@ private fun GlobalSettings(
     onShowSpatialMap: () -> Unit,
     openOverlay: (@Composable () -> Unit) -> Unit,
     closeOverlay: () -> Unit,
+    extraGlobalRows: List<@Composable () -> Unit> = emptyList(),
 ) {
     val container = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container
     val session = container.sessionStore
@@ -522,6 +529,11 @@ private fun GlobalSettings(
             Modifier
         },
     )
+
+    if (extraGlobalRows.isNotEmpty()) {
+        HorizontalDivider()
+        for (row in extraGlobalRows) row()
+    }
 }
 
 @Composable
