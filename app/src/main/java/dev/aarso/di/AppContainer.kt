@@ -109,6 +109,10 @@ class AppContainer(context: Context) {
      *  same table, CORE_PHASES.md P1). */
     val taskStore: dev.aarso.data.TaskStore = dev.aarso.data.TaskStore(database.taskDao())
 
+    /** The Watchlist substrate (free floor's Watch tab — renewals/expiries/status,
+     *  CORE_PHASES.md P2). */
+    val watchStore: dev.aarso.data.WatchStore = dev.aarso.data.WatchStore(database.watchDao())
+
     /** The free-tier guide (bundled JSON, pipeline-refreshed) + per-provider free-tier usage. */
     val freeTierStore: dev.aarso.data.FreeTierStore = dev.aarso.data.FreeTierStore(context)
     val freeTierUsageStore: dev.aarso.data.FreeTierUsageStore = dev.aarso.data.FreeTierUsageStore(context)

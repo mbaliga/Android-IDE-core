@@ -3,6 +3,7 @@ package dev.aarso.data
 import androidx.room.TypeConverter
 import dev.aarso.domain.tasks.TaskSource
 import dev.aarso.domain.tasks.TaskState
+import dev.aarso.domain.watch.WatchKind
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
@@ -60,6 +61,12 @@ class Converters {
 
     @TypeConverter
     fun toTaskSource(name: String): TaskSource = TaskSource.valueOf(name)
+
+    @TypeConverter
+    fun fromWatchKind(kind: WatchKind): String = kind.name
+
+    @TypeConverter
+    fun toWatchKind(name: String): WatchKind = WatchKind.valueOf(name)
 
     companion object {
         /** float32 array -> little-endian BLOB, for embedding vectors. */
