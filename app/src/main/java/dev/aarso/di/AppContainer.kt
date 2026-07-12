@@ -113,11 +113,18 @@ class AppContainer(context: Context) {
      *  CORE_PHASES.md P2). */
     val watchStore: dev.aarso.data.WatchStore = dev.aarso.data.WatchStore(database.watchDao())
 
-    /** The free-tier guide (bundled JSON, pipeline-refreshed) + per-provider free-tier usage. */
+    /** The free-tier guide (bundled JSON, Nooz-refreshed) + per-provider free-tier usage. */
     val freeTierStore: dev.aarso.data.FreeTierStore = dev.aarso.data.FreeTierStore(context)
     val freeTierUsageStore: dev.aarso.data.FreeTierUsageStore = dev.aarso.data.FreeTierUsageStore(context)
     /** Consented online refresh of the free-tier guide (never automatic without opt-in). */
     val freeTierUpdater: dev.aarso.data.FreeTierUpdater = dev.aarso.data.FreeTierUpdater(context)
+
+    /** The shared model catalog (bundled JSON, Nooz-refreshed — see docs/STATE.md): one-click
+     *  download entries for chat GGUFs and SD checkpoints alike. Aarso no longer hand-maintains
+     *  its own model list. */
+    val modelCatalogStore: dev.aarso.data.ModelCatalogStore = dev.aarso.data.ModelCatalogStore(context)
+    /** Consented online refresh of the model catalog (never automatic without opt-in). */
+    val modelCatalogUpdater: dev.aarso.data.ModelCatalogUpdater = dev.aarso.data.ModelCatalogUpdater(context)
 
     /** Saved Loops (visual-editor definitions as BPMN + lifecycle envelope). */
     val loopStore: dev.aarso.data.LoopStore = dev.aarso.data.LoopStore(context)

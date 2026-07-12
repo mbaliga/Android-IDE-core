@@ -20,8 +20,9 @@ import dev.aarso.data.SdModelStore
 import dev.aarso.data.SessionStore
 import dev.aarso.data.SharedIntake
 import dev.aarso.domain.catalog.CatalogModel
-import dev.aarso.domain.catalog.ModelCatalog
+import dev.aarso.domain.catalog.ModelCatalogMapper
 import dev.aarso.domain.catalog.StarterModels
+import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.domain.device.ModelFit
 import dev.aarso.domain.GeneratedToken
 import dev.aarso.domain.MessageNode
@@ -175,6 +176,7 @@ class ChatViewModel(
     private val freeTierUsage: dev.aarso.data.FreeTierUsageStore,
     private val councilStore: dev.aarso.data.CouncilStore,
     private val ledgerStore: dev.aarso.data.LedgerStore,
+    private val catalogStore: dev.aarso.data.ModelCatalogStore,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -261,7 +263,9 @@ class ChatViewModel(
     // model for this device, and its download state. The init collector above
     // auto-activates it the moment the file lands.
     val device = DeviceInfo.read(appContext)
-    val starter: CatalogModel? = StarterModels.recommend(ModelCatalog.models, device)
+    private val catalog: List<CatalogModel> =
+        ModelCatalogMapper.chatModels(catalogStore.catalog(), InvocationFeatures.CATALOG_POLICY_SAFE_ONLY)
+    val starter: CatalogModel? = StarterModels.recommend(catalog, device)
     val starterFitReason: String? = starter?.let { ModelFit.check(it.sizeBytes, device).reason }
 
     val starterDownload: StateFlow<ModelDownloader.Progress?> =
@@ -269,9 +273,11 @@ class ChatViewModel(
             .map { active -> starter?.let { active[it.id]?.progress } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** No-op when the catalog has no verified mirror for the starter yet (null downloadUrl). */
     fun downloadStarter() {
         val model = starter ?: return
-        downloadCenter.enqueue(model.id, model.downloadUrl, model.hfFile, downloader)
+        val url = model.downloadUrl ?: return
+        downloadCenter.enqueue(model.id, url, model.fileName, downloader)
     }
 
     fun retryStarter() {
@@ -1068,6 +1074,7 @@ class ChatViewModel(
                     c.freeTierUsageStore,
                     c.councilStore,
                     c.ledgerStore,
+                    c.modelCatalogStore,
                     app.applicationContext,
                 )
             }
