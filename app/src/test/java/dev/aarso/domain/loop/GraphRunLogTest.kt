@@ -43,4 +43,29 @@ class GraphRunLogTest {
         assertTrue(nodes.all { it.metadata[GraphRunLog.TAG_RUN] == "run-1" })
         assertTrue(nodes.drop(1).all { it.metadata[GraphRunLog.TAG_LOOP] == "loop-7" })
     }
+
+    /** CORE_PHASES.md P3 DoD: "GraphRunLog for partial/cancelled runs" — a run that stopped
+     *  early (budget, cancellation) still tree-logs cleanly: only the steps that actually
+     *  completed appear, chained under the objective root, tagged with the real stop reason. */
+    @Test fun `a partial cancelled run still maps to a valid sub-tree of just its completed steps`() {
+        val partial = GraphRunResult(
+            steps = listOf(GraphStep(0, "prop", "proposer", "qwen", "half-finished draft")),
+            stoppedBecause = "cancelled",
+            reachedEnd = false,
+        )
+        var i = 0
+        val nodes = GraphRunLog.toNodes(
+            objective = "tighten it",
+            result = partial,
+            loopRunId = "run-2",
+            loopId = "loop-9",
+            now = 2000L,
+            idGen = { "p${i++}" },
+        )
+        assertEquals(2, nodes.size) // root + exactly the one completed step, nothing invented
+        assertEquals("cancelled", nodes[0].metadata[GraphRunLog.TAG_STOPPED])
+        assertEquals(nodes[0].id, nodes[1].parentId)
+        assertEquals("proposer", nodes[1].metadata[GraphRunLog.TAG_ROLE])
+        assertTrue(nodes.all { it.metadata[GraphRunLog.TAG_RUN] == "run-2" })
+    }
 }

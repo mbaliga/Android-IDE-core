@@ -25,13 +25,13 @@ import dev.aarso.data.entity.WatchedItemEntity
         TaskEntity::class,
         WatchedItemEntity::class,
     ],
-    version = 4,
+    version = 5,
     // Schema export is off in Phase 0 (no migrations yet). Turn on with a
-    // room.schemaLocation KSP arg once the schema needs to be versioned. v3->v4
-    // (Watchlist substrate, CORE_PHASES.md P2) rides the same fallbackToDestructiveMigration()
-    // every prior bump has — no real Migration object exists anywhere in this codebase yet
-    // (none of the JVM tests can exercise one: Room's migration testing needs Robolectric
-    // or an instrumented test, neither of which this gate has).
+    // room.schemaLocation KSP arg once the schema needs to be versioned. v4->v5
+    // (loop-surface ledger columns, CORE_PHASES.md P3) rides the same
+    // fallbackToDestructiveMigration() every prior bump has — no real Migration object exists
+    // anywhere in this codebase yet (none of the JVM tests can exercise one: Room's migration
+    // testing needs Robolectric or an instrumented test, neither of which this gate has).
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
