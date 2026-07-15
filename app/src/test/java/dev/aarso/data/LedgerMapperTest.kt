@@ -163,4 +163,21 @@ class LedgerMapperTest {
     fun `toEntity leaves id defaulted for Room to assign`() {
         assertEquals(0L, LedgerMapper.toEntity(domainEntry).id)
     }
+
+    @Test
+    fun `surface defaults to chat with a null loopId for every entry before P3`() {
+        val e = LedgerMapper.toEntity(domainEntry)
+        assertEquals("chat", e.surface)
+        assertNull(e.loopId)
+        assertEquals(domainEntry, LedgerMapper.toDomain(e))
+    }
+
+    @Test
+    fun `a loop-surface entry round-trips its surface and loopId`() {
+        val loopEntry = domainEntry.copy(surface = "loop", loopId = "loop-7", chatId = "run-1")
+        val entity = LedgerMapper.toEntity(loopEntry)
+        assertEquals("loop", entity.surface)
+        assertEquals("loop-7", entity.loopId)
+        assertEquals(loopEntry, LedgerMapper.toDomain(entity))
+    }
 }

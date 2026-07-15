@@ -56,6 +56,14 @@ data class LedgerEntry(
     val status: Status,
     /** `true` if [estCostMinor] is a guess; `false` if it came from real provider usage. */
     val estimated: Boolean,
+    /** Which room this entry came from — `"chat"` (default, every entry before CORE_PHASES.md
+     *  P3) or `"loop"` (a [dev.aarso.domain.loop.GraphRunner] step, via
+     *  [dev.aarso.domain.loop.GraphRunLedger]). Additive: existing chat entries are unaffected. */
+    val surface: String = "chat",
+    /** The saved [dev.aarso.domain.loop.Loop] a loop-surface entry ran from, or `null` for an
+     *  ad-hoc/unsaved graph run. Always `null` for `surface = "chat"`. [chatId] doubles as the
+     *  run id for loop entries — the same grouping key `GraphRunLog`/`RunLog` already use. */
+    val loopId: String? = null,
 ) {
     /** Input + output tokens for this single turn. */
     val totalTokens: Long get() = inputTokens + outputTokens

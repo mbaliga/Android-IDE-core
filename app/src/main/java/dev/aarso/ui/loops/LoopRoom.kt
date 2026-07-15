@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,9 +60,14 @@ import dev.aarso.domain.bpmn.BpmnGraph
 import dev.aarso.domain.bpmn.BpmnNode
 import dev.aarso.domain.bpmn.BpmnNodeKind
 import dev.aarso.domain.bpmn.Bounds
+import dev.aarso.domain.loop.GraphRunLedger
+import dev.aarso.domain.loop.GraphRunLog
 import dev.aarso.domain.loop.GraphRunResult
 import dev.aarso.domain.loop.GraphRunner
+import dev.aarso.domain.loop.GraphStep
 import dev.aarso.domain.loop.Loop
+import dev.aarso.domain.loop.LoopBudget
+import dev.aarso.domain.loop.LoopParams
 import dev.aarso.domain.loop.LoopState
 import dev.aarso.domain.model.ModelSpec
 import dev.aarso.inference.EngineGenerator
@@ -70,6 +76,7 @@ import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleDropdownField
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.theme.LocalHyleColors
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.atan2
@@ -82,6 +89,34 @@ private const val DEFAULT_PROPOSER_PROMPT =
     "You are the proposer. Produce the best possible attempt at the objective."
 private const val DEFAULT_CRITIC_PROMPT =
     "You are the critic. Find concrete flaws against the objective; begin your reply with APPROVE only if it fully meets it."
+
+/** CORE_PHASES.md §1.3's cyan accent (`#08FED5`) — the budget bar's cap-tick colour. Not yet a
+ *  vendored Hyle token (only the violet ramp exists there today), so it's a one-off literal
+ *  here rather than a fabricated addition to the design-system module (rule 4). */
+private val LoopCyan = Color(0xFF08FED5)
+
+/** Icon+label for a run's stop reason (CORE_PHASES.md P3 "summary row") — never red (§1.4). */
+private fun stopLabel(reason: String): Pair<String, String> = when {
+    reason == "reached end" -> "✓" to "Reached end"
+    reason == "cancelled" -> "⏹" to "Stopped"
+    reason.startsWith("hit step cap") -> "⏹" to "Step cap"
+    reason == "budget:tokens" -> "⏸" to "Token budget reached"
+    reason == "budget:steps" -> "⏸" to "Step budget reached"
+    reason == "budget:wall" -> "⏸" to "Time budget reached"
+    reason.startsWith("missing params:") -> "⚠" to reason.removePrefix("missing params:").trim().let { "Missing: $it" }
+    else -> "⚠" to reason
+}
+
+/** Role/model, tokens (with an "est." marker when not provider-authoritative), and duration —
+ *  the live step list's per-row metadata (CORE_PHASES.md P3 "Live run view"). */
+private fun stepMeta(step: GraphStep): String = buildString {
+    append(step.model ?: step.role)
+    val tokens = step.tokensIn?.let { tin -> step.tokensOut?.let { tout -> tin + tout } }
+    if (tokens != null) {
+        append(" · ").append(tokens).append(if (step.estimated) " tok (est.)" else " tok")
+    }
+    append(" · ").append(step.durationMs).append("ms")
+}
 
 /** An editor node: a BPMN kind + free position + (for tasks) its own instructions and model. */
 private data class LoopNode(
@@ -184,6 +219,12 @@ fun LoopRoom(onClose: () -> Unit) {
     var ranNodeIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var runError by remember { mutableStateOf<String?>(null) }
     var savedNote by remember { mutableStateOf<String?>(null) }
+    // P3: run sheet (params + budget) + live streaming step list + a cancellable run job.
+    var showRunSheet by remember { mutableStateOf(false) }
+    var liveSteps by remember { mutableStateOf<List<GraphStep>>(emptyList()) }
+    var runBudget by remember { mutableStateOf<LoopBudget?>(null) }
+    var runJob by remember { mutableStateOf<Job?>(null) }
+    var loggedNote by remember { mutableStateOf<String?>(null) }
 
     var configNodeId by remember { mutableStateOf<String?>(null) }
     var menuNodeId by remember { mutableStateOf<String?>(null) }
@@ -224,6 +265,59 @@ fun LoopRoom(onClose: () -> Unit) {
         }
     }
 
+    /** Starts the run (CORE_PHASES.md P3): streams each [GraphStep] into [liveSteps] via
+     *  `onStep`, then — win, budget-stopped, or cancelled alike — tree-logs the run
+     *  ([GraphRunLog]) and writes its ledger rows ([GraphRunLedger]), tagged `surface = "loop"`
+     *  so they're legible apart from Chat usage. A refuse-to-start (missing params) or an
+     *  immediate structural stop (no start event) writes nothing — there's no step to log. */
+    fun startRun(params: Map<String, String>, budget: LoopBudget?) {
+        running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
+        liveSteps = emptyList(); runBudget = budget; loggedNote = null
+        runJob = scope.launch {
+            runCatching {
+                val cache = HashMap<String, EngineGenerator>()
+                fun genFor(spec: ModelSpec) = cache.getOrPut(spec.id) {
+                    EngineGenerator(container.engineProvider.engineFor(spec)!!, spec.modelPath)
+                }
+                val fallback = runnable.first()
+                val graph = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
+                GraphRunner(generatorFor = { bn ->
+                    val spec = bn.ext["model"]?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback
+                    genFor(spec)
+                }).run(
+                    graph = graph,
+                    objective = objective,
+                    params = params,
+                    budget = budget,
+                    onStep = { step -> liveSteps = liveSteps + step },
+                )
+            }.fold(
+                { result ->
+                    graphResult = result
+                    ranNodeIds = result.steps.map { it.nodeId }.toSet()
+                    liveSteps = result.steps
+                    if (result.steps.isNotEmpty()) {
+                        val runId = UUID.randomUUID().toString()
+                        val treeNodes = GraphRunLog.toNodes(
+                            objective = objective, result = result, loopRunId = runId, loopId = loopId,
+                            now = System.currentTimeMillis(), idGen = { UUID.randomUUID().toString() },
+                        )
+                        treeNodes.forEach { container.repository.insert(it) }
+                        val entries = GraphRunLedger.toEntries(
+                            result = result, treeNodes = treeNodes, loopId = loopId, runId = runId,
+                            projectId = null, timestampMillis = System.currentTimeMillis(),
+                        )
+                        entries.forEach { container.ledgerStore.append(it) }
+                        loggedNote = "Logged ${result.steps.size} step(s) to Tree · run $runId"
+                    }
+                },
+                { runError = it.message },
+            )
+            running = false
+            runJob = null
+        }
+    }
+
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize()) {
@@ -241,32 +335,13 @@ fun LoopRoom(onClose: () -> Unit) {
                         if (running) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
+                            TextButton(onClick = { runJob?.cancel() }) { Text("Stop") }
                         }
                         HyleButton(
-                            "Run",
+                            "Run…",
                             enabled = !running && objective.isNotBlank() && runnable.isNotEmpty() &&
                                 nodes.any { it.kind == BpmnNodeKind.START_EVENT },
-                            onClick = {
-                                running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
-                                scope.launch {
-                                    runCatching {
-                                        val cache = HashMap<String, EngineGenerator>()
-                                        fun genFor(spec: ModelSpec) = cache.getOrPut(spec.id) {
-                                            EngineGenerator(container.engineProvider.engineFor(spec)!!, spec.modelPath)
-                                        }
-                                        val fallback = runnable.first()
-                                        val graph = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
-                                        GraphRunner(generatorFor = { bn ->
-                                            val spec = bn.ext["model"]?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback
-                                            genFor(spec)
-                                        }).run(graph = graph, objective = objective)
-                                    }.fold(
-                                        { graphResult = it; ranNodeIds = it.steps.map { s -> s.nodeId }.toSet() },
-                                        { runError = it.message },
-                                    )
-                                    running = false
-                                }
-                            },
+                            onClick = { showRunSheet = true },
                         )
                     }
                 }
@@ -306,8 +381,8 @@ fun LoopRoom(onClose: () -> Unit) {
                         )
                         val caption = when {
                             connectingFrom != null -> "tap a node to connect from “${nodeById(connectingFrom!!)?.label}” · tap empty to cancel"
-                            running -> "running…"
-                            graphResult != null -> "ran ${graphResult!!.steps.size} step(s) · ${graphResult!!.stoppedBecause}"
+                            running -> "running… ${liveSteps.size} step(s)"
+                            graphResult != null -> "ran ${graphResult!!.steps.size} step(s) · ${stopLabel(graphResult!!.stoppedBecause).second}"
                             else -> "long-press canvas to add · tap a node to edit · long-press for menu"
                         }
                         Text(
@@ -326,22 +401,54 @@ fun LoopRoom(onClose: () -> Unit) {
                     }
                 }
 
-                if (graphResult != null || runError != null) {
+                // Running totals vs budget: a luminance-filling violet bar with a cyan cap
+                // tick (never a red ramp — CORE_PHASES.md §1.4). Only shown when a budget is set.
+                runBudget?.let { b ->
+                    val used = liveSteps.sumOf { (it.tokensIn ?: 0L) + (it.tokensOut ?: 0L) }
+                    val fraction = when {
+                        b.maxTokensTotal != null && b.maxTokensTotal > 0 -> used.toFloat() / b.maxTokensTotal
+                        b.maxSteps != null && b.maxSteps > 0 -> liveSteps.size.toFloat() / b.maxSteps
+                        else -> null
+                    }
+                    if (fraction != null) {
+                        BudgetBar(fraction, Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                    }
+                }
+
+                if (liveSteps.isNotEmpty() || runError != null || graphResult != null) {
                     HorizontalDivider()
                     Column(
                         Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         runError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
-                        graphResult?.steps?.forEach { step ->
+                        liveSteps.forEach { step ->
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        "${step.index + 1}. ${nodeById(step.nodeId)?.label ?: step.role}",
-                                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
-                                    )
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(
+                                            "${step.index + 1}. ${nodeById(step.nodeId)?.label ?: step.role}",
+                                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        Text(
+                                            stepMeta(step),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                     Text(step.output, style = MaterialTheme.typography.bodySmall)
                                 }
+                            }
+                        }
+                        // Summary row: stop reason as icon+label, plus the tree/ledger log note.
+                        graphResult?.let { r ->
+                            val (glyph, label) = stopLabel(r.stoppedBecause)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(glyph, color = LocalHyleColors.current.violet, modifier = Modifier.padding(end = 6.dp))
+                                Text(label, style = MaterialTheme.typography.labelMedium, color = LocalHyleColors.current.textHigh)
+                            }
+                            loggedNote?.let {
+                                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -364,6 +471,19 @@ fun LoopRoom(onClose: () -> Unit) {
                 nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
                 addAt = null
                 if (kind == BpmnNodeKind.TASK) configNodeId = id
+            },
+        )
+    }
+
+    // ── Run sheet (P3): auto-generated params form + optional budget, refuse-to-start ────
+    if (showRunSheet) {
+        val graphForScan = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
+        RunSheetDialog(
+            paramKeys = LoopParams.scan(graphForScan, objective),
+            onDismiss = { showRunSheet = false },
+            onRun = { params, budget ->
+                showRunSheet = false
+                startRun(params, budget)
             },
         )
     }
@@ -563,6 +683,103 @@ private fun LoopCanvas(
                             GatewayDiamond(node.label, st)
                         else -> TaskCard(node, nodeWidthDp, st)
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Running totals vs. budget (CORE_PHASES.md P3): a luminance-filling violet bar with a cyan
+ *  cap tick at the ceiling — never a red ramp (§1.4). [usedFraction] is clamped to [0,1]. */
+@Composable
+private fun BudgetBar(usedFraction: Float, modifier: Modifier = Modifier) {
+    val colors = LocalHyleColors.current
+    Canvas(modifier.fillMaxWidth().height(6.dp)) {
+        val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
+        drawRoundRect(colors.hairline, cornerRadius = r)
+        val w = size.width * usedFraction.coerceIn(0f, 1f)
+        if (w > 0f) {
+            drawRoundRect(colors.violet, size = androidx.compose.ui.geometry.Size(w, size.height), cornerRadius = r)
+        }
+        val tickX = size.width - 1.dp.toPx()
+        drawLine(LoopCyan, Offset(tickX, 0f), Offset(tickX, size.height), strokeWidth = 2.dp.toPx())
+    }
+}
+
+/**
+ * Run sheet (CORE_PHASES.md P3): an auto-generated field per `${key}` the graph references,
+ * plus optional budget fields. Refuse-to-start is inline — missing keys are listed and Run
+ * stays disabled, so a run either has everything it needs or the sheet says exactly what's
+ * absent (mirrors [GraphRunner.run]'s own refusal, before ever starting the coroutine).
+ */
+@Composable
+private fun RunSheetDialog(
+    paramKeys: List<String>,
+    onDismiss: () -> Unit,
+    onRun: (params: Map<String, String>, budget: LoopBudget?) -> Unit,
+) {
+    var values by remember { mutableStateOf(paramKeys.associateWith { "" }) }
+    var stepsText by remember { mutableStateOf("") }
+    var wallSecText by remember { mutableStateOf("") }
+    val missing = paramKeys.filter { values[it].isNullOrBlank() }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
+            Column(
+                Modifier.padding(16.dp).fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Run", style = MaterialTheme.typography.titleMedium)
+                if (paramKeys.isNotEmpty()) {
+                    Text(
+                        "This loop uses \${…} placeholders — fill them in below.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    for (key in paramKeys) {
+                        HyleField(
+                            values[key].orEmpty(),
+                            { values = values + (key to it) },
+                            label = key,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (missing.isNotEmpty()) {
+                        Text(
+                            "Missing: ${missing.joinToString(", ")}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = LocalHyleColors.current.violet, // never red (§1.4)
+                        )
+                    }
+                    HorizontalDivider()
+                }
+                Text("Budget (optional)", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "The step that would exceed a limit is never started. Token budgets " +
+                        "arrive once on-device token counting is wired to Loops — steps and " +
+                        "wall time work today.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                HyleField(stepsText, { stepsText = it.filter(Char::isDigit) }, label = "Max steps", modifier = Modifier.fillMaxWidth())
+                HyleField(wallSecText, { wallSecText = it.filter(Char::isDigit) }, label = "Max wall time (seconds)", modifier = Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    HyleButton(
+                        "Run",
+                        enabled = missing.isEmpty(),
+                        onClick = {
+                            val budget = LoopBudget(
+                                maxSteps = stepsText.toIntOrNull(),
+                                maxWallMs = wallSecText.toLongOrNull()?.times(1000L),
+                            )
+                            onRun(
+                                values.filterValues { it.isNotBlank() },
+                                budget.takeIf { it.maxSteps != null || it.maxWallMs != null },
+                            )
+                        },
+                    )
                 }
             }
         }
