@@ -876,7 +876,7 @@ private fun SetupCard(viewModel: ChatViewModel, onOpenModels: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Text("Run a model on this phone", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Aarso is on-device first: pick a model once and chat privately, offline.",
+                "Fonebrew is on-device first: pick a model once and chat privately, offline.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),

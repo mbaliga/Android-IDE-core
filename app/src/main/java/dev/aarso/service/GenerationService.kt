@@ -25,7 +25,7 @@ class GenerationService : Service() {
         ensureChannel()
         val notification: Notification =
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Aarso")
+                .setContentTitle("Fonebrew")
                 .setContentText("Running a model on-device…")
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setOngoing(true)

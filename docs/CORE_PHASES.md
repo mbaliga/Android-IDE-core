@@ -16,7 +16,10 @@
 4. **Hyle + type.** Vendored `:hyle` tokens as-is (do not switch to the published artifact). AMOLED black ground, ~300ms cubic-bezier motion. Plus Jakarta Sans.
 5. **Fenced-off code.** `domain/council/CostEstimator.kt` is Council-escalation-scoped; do not refactor, generalize, or reuse it for Loops budgets. The message tree is append-only; `GraphRunLog.toNodes` semantics don't change.
 6. **License policy.** Linked/vendored dependencies: Apache-2.0 / MIT / BSD / ISC only (MPL-2.0 case-by-case, flagged). All copyleft incl. LGPL banned for linking. Every borrow: version-pinned, LICENSE → `NOTICE`, license-report CI gate must pass. Runner-invoked tools may carry any license.
-7. **Brand string is "FoneBru"** (owner ruling 2026-07-11). Package rename stays deferred (Sprint R) — do not touch Gradle identifiers.
+7. **Brand string is "Fonebrew"** (owner ruling 2026-07-16 — supersedes the earlier "FoneBru"
+   ruling from 2026-07-11: owner legal research found "Bru" is HUL-owned and litigious in India;
+   "Fonebrew" chosen instead, domains `fonebrew.dev` + `fonebrew.app` secured). Package rename
+   stays deferred (Sprint R) — do not touch Gradle identifiers.
 
 ---
 

@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         // which also lands a report via CrashRecovery.captureInitError), show the shared recovery
         // screen — NOT the app — instead of touching the (possibly uninitialised) container. This
         // finishes this Activity, so a device-only launch crash can't brick the install.
-        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Aarso")) return
+        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Fonebrew")) return
 
         val app = application as AarsoApp
         handleIntake(intent)

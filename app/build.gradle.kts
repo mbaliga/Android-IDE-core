@@ -33,10 +33,11 @@ android {
         applicationId = "dev.aarso"
         minSdk = 31          // pragmatic floor; adjustable as system-integration lands
         targetSdk = 36       // recent Android (the target device)
-        // +1 per Play upload (docs/play/release-process.md); also bumped for sideload
+        // Fonebrew launch build (2026-07-16): resets the version spine for this brand's first
+        // ship. +1 per Play upload (docs/play/release-process.md); also bumped for sideload
         // refreshes so a new APK always installs over the previous one.
-        versionCode = 17
-        versionName = "0.13.0"
+        versionCode = 1
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
