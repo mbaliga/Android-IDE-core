@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Aarso — "mirror"; the app renders the user's own interaction
-         legible back to them (handoff §5c/§11). -->
-    <string name="app_name">Aarso</string>
+    <!-- Fonebrew — display brand (owner ruling 2026-07-16, supersedes "FoneBru";
+         "Bru" is HUL-owned and litigious in India). Internally still Aarso —
+         "mirror"; the app renders the user's own interaction legible back to
+         them (handoff §5c/§11). Package stays dev.aarso (deferred rename). -->
+    <string name="app_name">Fonebrew</string>
 </resources>

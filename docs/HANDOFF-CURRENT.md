@@ -21,6 +21,12 @@
 > single-source split; treat this file + `docs/CORE_PHASES.md` as current, not `STATE.md`, until
 > someone refreshes it.
 >
+> **Brand supersedes "FoneBru" (2026-07-16):** the display brand is **"Fonebrew"** — owner legal
+> research found "Bru" is HUL-owned and litigious in India; "Fonebrew" (coffee-evocative) was
+> chosen instead, domains `fonebrew.dev` + `fonebrew.app` secured. This supersedes the "FoneBru"
+> ruling above and in `docs/CORE_PHASES.md` §Invariants 7. `applicationId`/package stay `dev.aarso`
+> (unaffected — display-only rename); this build establishes `dev.aarso` as canonical.
+>
 > **P2 — Watchlist (added P2, 2026-07-12):** landed — `WatchedItemEntity`/`WatchDao`/`WatchStore`
 > substrate (`AppDatabase` v3→v4, `WatchKind` RENEWAL/EXPIRY/STATUS) plus `ProductRoomFree`'s new
 > Watch tab (kind glyph, days-remaining chip that scales toward due — never red —, seed
