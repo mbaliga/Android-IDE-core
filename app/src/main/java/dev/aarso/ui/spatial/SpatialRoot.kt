@@ -266,7 +266,7 @@ fun SpatialRoot() {
 
         val w = controller.viewport.width.toFloat()
         val hgt = controller.viewport.height.toFloat()
-        val scale = 1f - 0.10f * max(abs(hProgress), vProgress)
+        val scale = 1f - 0.10f * max(abs(hProgress), abs(vProgress))
         // Park distance leaves exactly the grabbable band on-screen at p=1.
         fun parkDistance(extent: Float) = extent * (1f + scale) / 2f - bandPx
 

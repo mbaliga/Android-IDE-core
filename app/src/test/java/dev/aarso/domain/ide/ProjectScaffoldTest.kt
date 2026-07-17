@@ -70,6 +70,6 @@ class ProjectScaffoldTest {
 
     @Test fun `blank idea falls back to a default home line`() {
         val files = ProjectScaffold.generate(spec.copy(idea = "")).associateBy { it.path }
-        assertTrue(files.getValue("app/src/main/java/com/example/tasklet/MainActivity.kt").content.contains("conceived on Aarso"))
+        assertTrue(files.getValue("app/src/main/java/com/example/tasklet/MainActivity.kt").content.contains("conceived on Fonebrew"))
     }
 }

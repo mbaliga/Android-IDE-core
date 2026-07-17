@@ -509,8 +509,7 @@ private fun GlobalSettings(
 
     Text("About", style = MaterialTheme.typography.titleMedium)
     Text(
-        "Fonebrew ${dev.aarso.BuildConfig.VERSION_NAME} (${dev.aarso.BuildConfig.VERSION_CODE}) — " +
-            "Aarso, Konkani for “mirror”.\n\n" +
+        "Fonebrew ${dev.aarso.BuildConfig.VERSION_NAME} (${dev.aarso.BuildConfig.VERSION_CODE})\n\n" +
             "Local-first by design: conversations, models, and keys live on this " +
             "device. No analytics, no telemetry. Cloud models run only when you " +
             "invoke them, and only against the provider you configured.",
