@@ -48,7 +48,9 @@ class SessionStore(context: Context) {
     val accentColor: StateFlow<String> = _accentColor.asStateFlow()
 
     // Ambient grain texture intensity, 0f (off) … 1f. Applied to the base surface only.
-    private val _textureIntensity = MutableStateFlow(prefs.getFloat(KEY_TEXTURE, 0f))
+    // Defaults on (not 0f) so the "rough surface" register is part of the shipped look, not an
+    // opt-in a new user has to go find in Settings — still a user-adjustable, turn-off-able knob.
+    private val _textureIntensity = MutableStateFlow(prefs.getFloat(KEY_TEXTURE, 0.6f))
     val textureIntensity: StateFlow<Float> = _textureIntensity.asStateFlow()
 
     // Second stop of the ambient background gradient ("#RRGGBB"); blank = no gradient.

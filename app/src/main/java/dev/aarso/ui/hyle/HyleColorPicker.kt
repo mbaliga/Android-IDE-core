@@ -59,6 +59,7 @@ fun HyleColorPicker(
     onColorChange: (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = rememberHyleHaptics()
     val argb = color.toArgb()
     val incoming = remember(argb) {
         FloatArray(3).also { android.graphics.Color.colorToHSV(argb, it) }
@@ -108,9 +109,12 @@ fun HyleColorPicker(
             }
             Box(
                 Modifier.fillMaxSize()
-                    .pointerInput(Unit) { detectTapGestures { setFromOffset(it.x, it.y) } }
+                    .pointerInput(Unit) { detectTapGestures { setFromOffset(it.x, it.y); haptics.settle() } }
                     .pointerInput(Unit) {
-                        detectDragGestures { change, _ -> setFromOffset(change.position.x, change.position.y) }
+                        detectDragGestures(
+                            onDragEnd = { haptics.settle() },
+                            onDrag = { change, _ -> setFromOffset(change.position.x, change.position.y) },
+                        )
                     },
             )
             // Thumb at (sat, value).
@@ -145,8 +149,13 @@ fun HyleColorPicker(
             }
             Box(
                 Modifier.fillMaxSize()
-                    .pointerInput(Unit) { detectTapGestures { setHue(it.x) } }
-                    .pointerInput(Unit) { detectDragGestures { change, _ -> setHue(change.position.x) } },
+                    .pointerInput(Unit) { detectTapGestures { setHue(it.x); haptics.settle() } }
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragEnd = { haptics.settle() },
+                            onDrag = { change, _ -> setHue(change.position.x) },
+                        )
+                    },
             )
             val thumbX = (maxWidth - 8.dp) * (hue / 360f).coerceIn(0f, 1f)
             Box(
