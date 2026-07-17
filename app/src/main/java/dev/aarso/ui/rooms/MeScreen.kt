@@ -73,8 +73,8 @@ fun MeScreen(onClose: () -> Unit) {
             WireBox {
                 Text("Paused by design.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    "The Aarso mirror reflects your idiolect back to you and tracks drift over time. " +
-                        "It stays inert until you set the baseline yourself (GitHub Issue #2) — Aarso " +
+                    "The mirror reflects your idiolect back to you and tracks drift over time. " +
+                        "It stays inert until you set the baseline yourself (GitHub Issue #2) — Fonebrew " +
                         "won't infer who you are. On-device only; no profiling.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

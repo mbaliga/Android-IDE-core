@@ -51,7 +51,7 @@ fun FlagOutputDialog(
         text = {
             Column {
                 Text(
-                    "Prepare a report you send yourself — Aarso transmits nothing on its own.",
+                    "Prepare a report you send yourself — Fonebrew transmits nothing on its own.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -45,7 +45,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 when (page) {
                     0 -> OnboardingPage(
                         title = "Fonebrew",
-                        subtitle = "“mirror” — Konkani, Aarso",
+                        subtitle = "“mirror” — Konkani",
                         body = "AI models run on this phone. Your words stay on it.\n\n" +
                             "No accounts. No analytics. No telemetry — ever.",
                     )

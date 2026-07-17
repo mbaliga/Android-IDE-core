@@ -117,7 +117,7 @@ fun FreeTiersScreen(onClose: () -> Unit) {
                 )
             }
             if (autoUpdate) Text(
-                "On — Aarso will fetch this list online each time you open this screen, until you turn it off.",
+                "On — Fonebrew will fetch this list online each time you open this screen, until you turn it off.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
