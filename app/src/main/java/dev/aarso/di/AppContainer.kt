@@ -176,9 +176,10 @@ class AppContainer(context: Context) {
         providerStore,
         localModelStore,
         devSpecs = if (BuildConfig.DEBUG) echoDevSpecs() else emptyList(),
+        aiCoreEnabled = { sessionStore.aiCoreEnabled.value },
     )
 
-    val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore)
+    val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore, context.applicationContext)
 
     // Agentic repo loop (IA: agentic-ide #1): read repo → model proposes a ChangeSet → review → commit.
     val agentRepoRunner: dev.aarso.data.AgentRepoRunner =

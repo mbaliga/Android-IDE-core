@@ -214,6 +214,15 @@ class ChatViewModel(
                 }
             }
         }
+        // Same adoption, for the moment the onboarding wizard confirms on-device Gemini Nano.
+        viewModelScope.launch {
+            session.aiCoreEnabled.collect {
+                if (activeModelId.value == null) {
+                    DefaultModelPolicy.resolveActive(registry.allSpecs(), session.activeModelId.value)
+                        ?.let { spec -> setActiveModel(spec.id) }
+                }
+            }
+        }
     }
 
     // The in-flight token collection; cancelling it is how Stop works. The local
