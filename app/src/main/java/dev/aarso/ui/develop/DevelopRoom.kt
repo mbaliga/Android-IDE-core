@@ -185,8 +185,11 @@ internal fun BuildsFacet() {
 
 /** A grouped-content box — delegates to [dev.aarso.ui.hyle.HyleCard]. */
 @Composable
-internal fun WireBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    dev.aarso.ui.hyle.HyleCard(Modifier.padding(vertical = 4.dp), content = content)
+internal fun WireBox(
+    modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    dev.aarso.ui.hyle.HyleCard(modifier.padding(vertical = 4.dp), content = content)
 }
 
 /** A tappable label; [selected] marks tab/segment/toggle state — delegates to [dev.aarso.ui.hyle.HyleChip]. */
