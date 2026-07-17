@@ -57,6 +57,12 @@ class SessionStore(context: Context) {
     private val _gradientColor = MutableStateFlow(prefs.getString(KEY_GRADIENT, "") ?: "")
     val gradientColor: StateFlow<String> = _gradientColor.asStateFlow()
 
+    // Set once, by the onboarding wizard, after AiCoreAvailability confirms the phone's
+    // on-device Gemini Nano actually works — never assumed true just because the device
+    // looks capable. ModelRegistry only lists an AICORE_NANO spec while this is true.
+    private val _aiCoreEnabled = MutableStateFlow(prefs.getBoolean(KEY_AICORE, false))
+    val aiCoreEnabled: StateFlow<Boolean> = _aiCoreEnabled.asStateFlow()
+
     // Bookmarked conversation roots (the "Starred" filter in Chats).
     private val _bookmarkedRoots = MutableStateFlow(prefs.getStringSet(KEY_BOOKMARKS, emptySet())?.toSet() ?: emptySet())
     val bookmarkedRoots: StateFlow<Set<String>> = _bookmarkedRoots.asStateFlow()
@@ -151,6 +157,11 @@ class SessionStore(context: Context) {
         _gradientColor.value = hex
     }
 
+    fun setAiCoreEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AICORE, enabled).apply()
+        _aiCoreEnabled.value = enabled
+    }
+
     fun toggleBookmark(rootId: String) {
         val next = Bookmarks.toggle(_bookmarkedRoots.value, rootId)
         prefs.edit().putStringSet(KEY_BOOKMARKS, next).apply()
@@ -227,6 +238,7 @@ class SessionStore(context: Context) {
         private const val KEY_ACCENT = "accentColor"
         private const val KEY_TEXTURE = "textureIntensity"
         private const val KEY_GRADIENT = "gradientColor"
+        private const val KEY_AICORE = "aiCoreEnabled"
         private const val KEY_BOOKMARKS = "bookmarkedRoots"
         private const val KEY_CONV_PROJECTS = "conversationProjects"
         private const val KEY_CONV_OPENS = "conversationOpens"
