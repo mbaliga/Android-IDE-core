@@ -3,7 +3,6 @@ package dev.aarso.data
 import androidx.room.TypeConverter
 import dev.aarso.domain.tasks.TaskSource
 import dev.aarso.domain.tasks.TaskState
-import dev.aarso.domain.watch.WatchKind
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
@@ -16,10 +15,12 @@ import java.nio.ByteOrder
  */
 class Converters {
 
-    /** metadata map <-> JSON object string. */
+    /** metadata map <-> JSON object string. Only a genuinely null map converts to null — an
+     *  empty map still needs a real value ("{}"), or a NOT NULL column (a non-nullable Kotlin
+     *  Map property, e.g. Task.dependsOn/tags) fails its constraint on every insert. */
     @TypeConverter
     fun fromMetadata(map: Map<String, String>?): String? {
-        if (map.isNullOrEmpty()) return null
+        if (map == null) return null
         val obj = JSONObject()
         for ((k, v) in map) obj.put(k, v)
         return obj.toString()
@@ -34,10 +35,13 @@ class Converters {
         return out
     }
 
-    /** String list <-> JSON array string (Task's [dependsOn]/[tags]). */
+    /** String list <-> JSON array string (Task's [dependsOn]/[tags]). Only a genuinely null list
+     *  converts to null — an empty list still needs a real value ("[]"), or a NOT NULL column
+     *  (dependsOn/tags are non-nullable `List<String>`, default emptyList()) fails its
+     *  constraint on every insert of a task with no dependencies/tags — i.e. every task. */
     @TypeConverter
     fun fromStringList(values: List<String>?): String? {
-        if (values.isNullOrEmpty()) return null
+        if (values == null) return null
         val arr = JSONArray()
         for (v in values) arr.put(v)
         return arr.toString()
@@ -61,12 +65,6 @@ class Converters {
 
     @TypeConverter
     fun toTaskSource(name: String): TaskSource = TaskSource.valueOf(name)
-
-    @TypeConverter
-    fun fromWatchKind(kind: WatchKind): String = kind.name
-
-    @TypeConverter
-    fun toWatchKind(name: String): WatchKind = WatchKind.valueOf(name)
 
     companion object {
         /** float32 array -> little-endian BLOB, for embedding vectors. */
