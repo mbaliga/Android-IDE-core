@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -372,6 +373,7 @@ fun HyleButton(
     secondary: Boolean = false,
 ) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val shape = RoundedCornerShape(6.dp)
@@ -396,13 +398,29 @@ fun HyleButton(
                 enabled = enabled,
                 interactionSource = interaction,
                 indication = LocalIndication.current,
-                onClick = onClick,
+                onClick = { haptics.tap(); onClick() },
             )
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1)
     }
+}
+
+/** Aeon card: raised fill, hairline edge, 10dp corners — the box register for grouped content. */
+@Composable
+fun HyleCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = LocalHyleColors.current
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.raised, shape)
+            .border(1.dp, c.hairline, shape)
+            .padding(14.dp),
+        content = content,
+    )
 }
 
 /** Aeon chip: the selection register — violet on dim violet, 6dp corners. */
@@ -415,6 +433,7 @@ fun HyleChip(
     enabled: Boolean = true,
 ) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val shape = RoundedCornerShape(6.dp)
     Box(
         modifier = modifier
@@ -422,7 +441,7 @@ fun HyleChip(
             .clip(shape)
             .background(if (selected) c.violetDim else Color.Transparent)
             .border(1.dp, if (selected) c.violet else c.hairline, shape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, onClick = { haptics.tap(); onClick() })
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -453,6 +472,7 @@ fun HyleNavChip(
     contentDescription: String? = null,
 ) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val shape = if (slantLeft) HyleFieldShape else HyleRightSlantShape
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -462,7 +482,7 @@ fun HyleNavChip(
             .clip(shape)
             .background(if (pressed) c.inset else c.raised, shape)
             .border(1.dp, c.hairline, shape)
-            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = { haptics.tap(); onClick() })
             .padding(horizontal = 14.dp)
             .then(
                 if (contentDescription != null) {

@@ -25,8 +25,9 @@ fun Modifier.hyleTexture(intensity: Float, tint: Color): Modifier {
         val shader = BitmapShader(noiseTile(96, tint), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         val paint = Paint().apply {
             this.shader = shader
-            // Cap at ~6% so the grain stays ambient and AA-safe.
-            alpha = (strength * 0.06f * 255f).toInt().coerceIn(0, 16)
+            // Cap at ~14% — enough to actually read as a textured surface at a glance while
+            // staying well clear of a contrast hazard (still ambient, never legibility-affecting).
+            alpha = (strength * 0.14f * 255f).toInt().coerceIn(0, 36)
         }
         onDrawWithContent {
             drawContent()

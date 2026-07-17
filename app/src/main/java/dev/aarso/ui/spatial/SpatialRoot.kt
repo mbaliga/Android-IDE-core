@@ -93,7 +93,7 @@ import kotlinx.coroutines.launch
 /** Which room a settle should land in. The four edges + the two z-axis depths. */
 enum class SpatialTarget { HOME, CHATS, SETTINGS, PROJECT, DEVELOP, TREE, LOOPS }
 
-class SpatialController(private val scope: CoroutineScope) {
+class SpatialController(private val scope: CoroutineScope, private val onSettle: () -> Unit = {}) {
 
     /** -1 = Settings (right) … 0 = home … +1 = Chats (left). */
     val h = Animatable(0f)
@@ -146,6 +146,7 @@ class SpatialController(private val scope: CoroutineScope) {
         }
         val clamped = if (value in -0.001f..0.001f) 0f else target
         scope.launch { h.animateTo(clamped, settleSpec) }
+        onSettle()
     }
 
     fun dragV(deltaPx: Float, min: Float, max: Float) {
@@ -172,6 +173,7 @@ class SpatialController(private val scope: CoroutineScope) {
         }
         val clamped = if (value in -0.001f..0.001f) 0f else target
         scope.launch { v.animateTo(clamped, settleSpec) }
+        onSettle()
     }
 
     fun dragZTo(value: Float) {
@@ -186,6 +188,7 @@ class SpatialController(private val scope: CoroutineScope) {
             else -> 0f
         }
         scope.launch { z.animateTo(target, settleSpec) }
+        onSettle()
     }
 
     fun open(target: SpatialTarget) {
@@ -214,7 +217,8 @@ fun SpatialRoot() {
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val scope = rememberCoroutineScope()
-    val controller = remember { SpatialController(scope) }
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val controller = remember { SpatialController(scope, onSettle = haptics::settle) }
 
     // §7: content shared/selected into the app lands in the composer — go home.
     val intake by chatViewModel.intake.collectAsState()

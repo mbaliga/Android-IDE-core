@@ -4,6 +4,7 @@ package dev.aarso.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -31,6 +32,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,6 +84,7 @@ import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
 import dev.aarso.domain.tree.Conversations
+import dev.aarso.ui.hyle.hylePulse
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.ui.hyle.HyleButton
@@ -231,6 +234,7 @@ fun ChatScreen(
                                 tokens = state.streamingTokens,
                                 entropyColoring = entropyColoring,
                                 imageMode = state.imageMode,
+                                watched = state.models.find { it.id == state.activeModelId }?.watched ?: false,
                             )
                         }
                     }
@@ -402,6 +406,12 @@ fun ChatScreen(
         }
 
         SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
+
+        // Loading a GGUF into memory is genuinely obstructive — typing or switching rooms
+        // mid-load races the engine's init, so the surface goes untouchable until it settles.
+        if (state.genPhase == GenPhase.LOADING) {
+            dev.aarso.ui.hyle.HyleBlockingOverlay("Loading model…")
+        }
     }
 
     if (showModelSheet) {
@@ -820,6 +830,7 @@ private fun StreamingBubble(
     tokens: List<GeneratedToken>,
     entropyColoring: Boolean,
     imageMode: Boolean,
+    watched: Boolean,
 ) {
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
     val uncertain = MaterialTheme.colorScheme.error
@@ -828,6 +839,11 @@ private fun StreamingBubble(
 
     Row(modifier = Modifier.fillMaxWidth()) {
         Card(
+            // Hyle's material language (dev.aarso.hyle.Finish): a watched, from-elsewhere
+            // generation is Radiant — it emits its own light, breathing on the "heartbeat, not
+            // weather" cycle (dev.aarso.hyle.Pulse.WATCHED); local work is Reflective and stays
+            // still. Motion is never the only provenance signal — the "☁"/"⌂" glyph carries it too.
+            modifier = if (watched) Modifier.hylePulse() else Modifier,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
             Row(
@@ -842,9 +858,9 @@ private fun StreamingBubble(
                     imageMode ->
                         Text("rendering image… (on-device SD takes a minute)")
                     phase == GenPhase.LOADING ->
-                        Text("loading model… (first load can take a while)")
+                        Text((if (watched) "☁ " else "⌂ ") + "loading model… (first load can take a while)")
                     tokens.isEmpty() ->
-                        Text("generating…")
+                        Text((if (watched) "☁ " else "⌂ ") + "generating…")
                     else -> {
                         val annotated: AnnotatedString = buildAnnotatedString {
                             for (t in tokens) {
@@ -977,19 +993,15 @@ private fun MessageTurn(
             content = step.node.content,
             imagePath = step.node.metadata[Conversations.IMAGE_KEY],
             stopped = step.node.metadata["stopped"] == "true",
+            // costMinor is only ever recorded for a watched-cloud turn that reported usage
+            // (LedgerComponents.kt) — reuse it as the provenance signal rather than adding a
+            // second source of truth for the same fact.
+            watched = step.node.metadata["costMinor"] != null,
+            costMinor = step.node.metadata["costMinor"],
+            tokensIn = step.node.metadata["tokensIn"],
+            tokensOut = step.node.metadata["tokensOut"],
             onLongPress = onLongPress,
         )
-        // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
-        step.node.metadata["costMinor"]?.let { minor ->
-            val tin = step.node.metadata["tokensIn"] ?: "?"
-            val tout = step.node.metadata["tokensOut"] ?: "?"
-            Text(
-                costLine(minor, tin, tout),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
-            )
-        }
         if (step.isBranchPoint) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1041,51 +1053,74 @@ private fun CouncilCardView(card: CouncilCard, enabled: Boolean, onContinue: () 
     }
 }
 
+/**
+ * A turn reads as a **file**: a small header line (who wrote it, and — for a watched-cloud
+ * turn — the "☁" glyph, never colour alone, per Hyle's [dev.aarso.hyle.Provenance] rule), the
+ * body, and a metadata footer below a hairline divider (cost/tokens, or "stopped here") —
+ * the same three-part shape as a file card elsewhere in the app, instead of a bare chat bubble.
+ */
 @Composable
 private fun MessageBubble(
     role: Role,
     content: String,
     imagePath: String?,
     stopped: Boolean,
+    watched: Boolean,
+    costMinor: String?,
+    tokensIn: String?,
+    tokensOut: String?,
     onLongPress: () -> Unit,
 ) {
     val fromUser = role == Role.USER
+    val c = dev.aarso.ui.theme.LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val shape = RoundedCornerShape(10.dp)
+    val headerLabel = when {
+        fromUser -> "You"
+        role == Role.SYSTEM -> "System"
+        watched -> "☁ Assistant · watched"
+        else -> "⌂ Assistant"
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
     ) {
-        Card(
-            modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress),
-            colors = CardDefaults.cardColors(
-                containerColor = if (fromUser) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-            ),
+        Column(
+            modifier = Modifier
+                .clip(shape)
+                .background(if (fromUser) c.violetDim else c.raised, shape)
+                .border(1.dp, c.hairline, shape)
+                .combinedClickable(onClick = {}, onLongClick = { haptics.tap(); onLongPress() })
+                .padding(12.dp),
         ) {
-            Column(Modifier.padding(12.dp)) {
-                when {
-                    // An image turn: the node's payload is the generated file (§6).
-                    imagePath != null -> FileImage(
-                        path = imagePath,
-                        modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+            Text(headerLabel, style = MaterialTheme.typography.labelSmall, color = c.textMid)
+            Spacer(Modifier.height(4.dp))
+            when {
+                // An image turn: the node's payload is the generated file (§6).
+                imagePath != null -> FileImage(
+                    path = imagePath,
+                    modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+                )
+                fromUser || role == Role.SYSTEM -> Text(content)
+                // Persisted model turns render as markdown (legibility); the
+                // live stream keeps per-token entropy colouring instead. We run
+                // the text through the JVM-tested StreamingMarkdown.reconcile so a
+                // turn that was stopped mid-fence (a dangling ``` that would swallow
+                // the rest of the bubble) renders cleanly; it's idempotent on
+                // well-formed markdown, so a complete turn passes through unchanged.
+                else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
+            }
+            if (stopped || costMinor != null) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = c.hairline)
+                if (costMinor != null) {
+                    Text(
+                        costLine(costMinor, tokensIn ?: "?", tokensOut ?: "?"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = c.textMid,
                     )
-                    fromUser || role == Role.SYSTEM -> Text(content)
-                    // Persisted model turns render as markdown (legibility); the
-                    // live stream keeps per-token entropy colouring instead. We run
-                    // the text through the JVM-tested StreamingMarkdown.reconcile so a
-                    // turn that was stopped mid-fence (a dangling ``` that would swallow
-                    // the rest of the bubble) renders cleanly; it's idempotent on
-                    // well-formed markdown, so a complete turn passes through unchanged.
-                    else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
                 }
                 if (stopped) {
-                    Text(
-                        "· stopped here",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                    Text("· stopped here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                 }
             }
         }

@@ -522,7 +522,13 @@ private fun GlobalSettings(
             Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
-                    context.startActivity(dev.aarso.crashrecovery.CrashRecovery.previewIntent(context, appLabel = "Fonebrew"))
+                    context.startActivity(
+                        dev.aarso.crashrecovery.CrashRecovery.previewIntent(
+                            context,
+                            appLabel = "Fonebrew",
+                            style = dev.aarso.ui.theme.AarsoCrashRecoveryStyle,
+                        ),
+                    )
                 },
             )
         } else {

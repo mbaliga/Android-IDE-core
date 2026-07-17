@@ -39,9 +39,11 @@ import dev.aarso.AarsoApp
 import kotlinx.coroutines.launch
 
 /**
- * The "develop on your repo" room — deliberately **wireframe fidelity** (boxy, text +
- * rectangles, no design-system styling) so the structure can be reviewed before a
- * design system lands. Per brief §7 the free-core facets are exactly:
+ * The "develop on your repo" room — reskinned to Hyle. The header/tabs call
+ * [dev.aarso.ui.hyle.HyleButton]/[dev.aarso.ui.hyle.HyleChip] directly; every facet below still
+ * calls the same-named [WireBox]/[WireButton]/[Hint] atoms it always has, but those now delegate
+ * to [dev.aarso.ui.hyle.HyleCard]/[dev.aarso.ui.hyle.HyleChip] so the whole room picks up the
+ * design system without a per-call-site rewrite. Per brief §7 the free-core facets are exactly:
  *
  *  - **Hardware** → supported boards + detect/troubleshoot + the four control paths
  *                   (Pi/Arduino/ESP/on-phone USB flash)
@@ -78,16 +80,18 @@ fun DevelopRoom(onClose: () -> Unit) {
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            WireButton("‹ Close", onClick = onClose)
+            dev.aarso.ui.hyle.HyleButton("‹ Close", onClick = onClose, secondary = true)
             Spacer(Modifier.width(12.dp))
             Text("Develop", style = MaterialTheme.typography.headlineSmall)
         }
         Spacer(Modifier.height(12.dp))
 
-        // Boxy tab strip.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             tabs.forEachIndexed { i, label ->
-                WireButton(label, selected = i == tab, onClick = { tab = i })
+                dev.aarso.ui.hyle.HyleChip(selected = i == tab, onClick = { tab = i }, label = label)
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -179,20 +183,13 @@ internal fun BuildsFacet() {
     }
 }
 
-/** A bordered rectangle — the only "component" this wireframe needs. */
+/** A grouped-content box — delegates to [dev.aarso.ui.hyle.HyleCard]. */
 @Composable
 internal fun WireBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .border(1.dp, MaterialTheme.colorScheme.outline)
-            .padding(10.dp),
-        content = content,
-    )
+    dev.aarso.ui.hyle.HyleCard(Modifier.padding(vertical = 4.dp), content = content)
 }
 
-/** A boxy text button; [selected] inverts it so tab/segment state is legible. */
+/** A tappable label; [selected] marks tab/segment/toggle state — delegates to [dev.aarso.ui.hyle.HyleChip]. */
 @Composable
 internal fun WireButton(
     label: String,
@@ -200,27 +197,12 @@ internal fun WireButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    val border = MaterialTheme.colorScheme.outline
-    val fg = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        selected -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    val bg = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-    Box(
-        Modifier
-            .border(1.dp, border)
-            .background(bg)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = fg)
-    }
+    dev.aarso.ui.hyle.HyleChip(selected = selected, onClick = onClick, label = label, enabled = enabled)
 }
 
 @Composable
 internal fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(text, style = MaterialTheme.typography.bodySmall, color = dev.aarso.ui.theme.LocalHyleColors.current.textMid)
 }
 
 /* ---------------------------------------------------------------- Devices */
