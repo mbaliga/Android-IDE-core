@@ -39,9 +39,11 @@ class SessionStore(context: Context) {
     val spatialMapSeen: StateFlow<Boolean> = _spatialMapSeen.asStateFlow()
 
     // Appearance (theme engine): mode is "SYSTEM" / "LIGHT" / "DARK"; accent is "#RRGGBB".
-    // Default is a clean, neutral light Material 3 look (owner: "generic, neat and well spaced");
-    // the dark Aeon palette + violet remain selectable in Appearance.
-    private val _themeMode = MutableStateFlow(prefs.getString(KEY_THEME_MODE, "LIGHT") ?: "LIGHT")
+    // Default is the dark Hyle/Aeon AMOLED palette (CLAUDE.md invariant: "AMOLED black ground";
+    // superseded 2026-07-18 — the prior "clean, neutral light" default meant the app shipped
+    // with none of the Hyle glass-pane/texture/haptic effects visible out of the box, since
+    // those are designed against the dark palette). Light stays selectable in Appearance.
+    private val _themeMode = MutableStateFlow(prefs.getString(KEY_THEME_MODE, "DARK") ?: "DARK")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
     private val _accentColor = MutableStateFlow(prefs.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT)

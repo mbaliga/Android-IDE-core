@@ -1,7 +1,9 @@
 package dev.aarso.ui.rooms
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
@@ -9,8 +11,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,8 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,11 +39,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.cos
+import kotlin.math.sin
 import dev.aarso.AarsoApp
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.library.ConvSort
@@ -88,6 +102,9 @@ fun ChatsRoom(
     val opens by session.conversationOpens.collectAsState()
     var tab by remember { mutableStateOf(ChatsTab.ALL) }
     var sort by remember { mutableStateOf(ConvSort.RECENT) }
+    // Filters (the Sort row) default to collapsed — a funnel icon on the tab bar reveals them,
+    // decoupling the always-visible category tabs from tucked-away sort options.
+    var sortExpanded by remember { mutableStateOf(false) }
     var projectDialogFor by remember { mutableStateOf<Conversations.Summary?>(null) }
 
     // Reorder a list of tree summaries by the chosen sort, through the JVM-tested library path:
@@ -107,20 +124,20 @@ fun ChatsRoom(
     Box(Modifier.fillMaxSize().background(c.ink)) {
         Column(Modifier.fillMaxSize()) {
             HyleTitle("Chats")
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ChatsTab.entries.forEach { t -> HyleChip(tab == t, { tab = t }, t.label) }
-            }
+            val sortEligible = tab != ChatsTab.IMAGE && tab != ChatsTab.PROJECTS
+            ChatsTabBar(
+                selected = tab,
+                onSelect = { tab = it },
+                sortExpanded = sortExpanded,
+                showFilterToggle = sortEligible,
+                onToggleSort = { sortExpanded = !sortExpanded },
+            )
 
             // Sort control (Doc 02): backed by the tested LibConversations.sort. Hidden on the
             // Image tab (image turns are browsed newest-first) and Projects (grouped by its own
-            // most-recent order), where a conversation sort wouldn't apply.
-            if (tab != ChatsTab.IMAGE && tab != ChatsTab.PROJECTS) {
+            // most-recent order), where a conversation sort wouldn't apply — and, per the owner's
+            // "filters behind an icon" request, collapsed by default behind the tab bar's funnel.
+            if (sortEligible && sortExpanded) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
@@ -189,6 +206,142 @@ fun ChatsRoom(
     }
 }
 
+/**
+ * The Chats-room tab bar, styled to match [SettingsRoom]'s [SettingsTabBar]: five fixed-width
+ * tabs (a hand-drawn glyph + label + underline indicator), not a scrolling chip row, plus a
+ * trailing funnel icon that reveals the Sort row (the owner's "filters behind an icon" request).
+ */
+@Composable
+private fun ChatsTabBar(
+    selected: ChatsTab,
+    onSelect: (ChatsTab) -> Unit,
+    sortExpanded: Boolean,
+    showFilterToggle: Boolean,
+    onToggleSort: () -> Unit,
+) {
+    val c = LocalHyleColors.current
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ChatsTab.entries.forEach { t ->
+                val on = t == selected
+                val tint = if (on) c.violet else c.textMid
+                Column(
+                    modifier = Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    ChatsTabGlyph(t, tint)
+                    Spacer(Modifier.height(5.dp))
+                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.height(2.dp).width(22.dp).background(if (on) c.violet else Color.Transparent))
+                }
+            }
+            if (showFilterToggle) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onToggleSort)
+                        .semantics {
+                            contentDescription = if (sortExpanded) "Hide sort options" else "Show sort options"
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FilterGlyph(if (sortExpanded) c.violet else c.textMid)
+                }
+            }
+        }
+        HorizontalDivider()
+    }
+}
+
+/** Small hand-drawn line glyphs for the Chats tabs — same technique as Settings' TabGlyph. */
+@Composable
+private fun ChatsTabGlyph(tab: ChatsTab, tint: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        val stroke = Stroke(width = sw)
+        fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
+            drawLine(tint, Offset(x0, y0), Offset(x1, y1), strokeWidth = sw)
+        when (tab) {
+            ChatsTab.ALL -> {
+                // A stack of 3 lines of differing width — "everything", not one fixed shape.
+                line(w * 0.16f, h * 0.28f, w * 0.68f, h * 0.28f)
+                line(w * 0.16f, h * 0.50f, w * 0.84f, h * 0.50f)
+                line(w * 0.16f, h * 0.72f, w * 0.56f, h * 0.72f)
+            }
+            ChatsTab.TEXT -> {
+                line(w * 0.16f, h * 0.30f, w * 0.84f, h * 0.30f)
+                line(w * 0.16f, h * 0.50f, w * 0.72f, h * 0.50f)
+                line(w * 0.16f, h * 0.70f, w * 0.80f, h * 0.70f)
+            }
+            ChatsTab.IMAGE -> {
+                drawRoundRect(
+                    tint, topLeft = Offset(w * 0.10f, h * 0.18f),
+                    size = Size(w * 0.80f, h * 0.64f),
+                    cornerRadius = CornerRadius(w * 0.10f), style = stroke,
+                )
+                drawCircle(tint, radius = w * 0.07f, center = Offset(w * 0.34f, h * 0.38f))
+                val p = Path().apply {
+                    moveTo(w * 0.16f, h * 0.74f); lineTo(w * 0.42f, h * 0.50f)
+                    lineTo(w * 0.60f, h * 0.66f); lineTo(w * 0.72f, h * 0.56f); lineTo(w * 0.84f, h * 0.74f)
+                }
+                drawPath(p, tint, style = stroke)
+            }
+            ChatsTab.STARRED -> {
+                val cx = w * 0.5f; val cy = h * 0.54f
+                val outerR = w * 0.42f; val innerR = outerR * 0.42f
+                val star = Path().apply {
+                    for (i in 0 until 10) {
+                        val r = if (i % 2 == 0) outerR else innerR
+                        val a = -Math.PI / 2.0 + i * Math.PI / 5.0
+                        val x = cx + (r * cos(a)).toFloat()
+                        val y = cy + (r * sin(a)).toFloat()
+                        if (i == 0) moveTo(x, y) else lineTo(x, y)
+                    }
+                    close()
+                }
+                drawPath(star, tint, style = stroke)
+            }
+            ChatsTab.PROJECTS -> {
+                // A folder-tab outline: a body rect with a small raised tab at top-left.
+                val p = Path().apply {
+                    moveTo(w * 0.12f, h * 0.30f)
+                    lineTo(w * 0.40f, h * 0.30f)
+                    lineTo(w * 0.48f, h * 0.20f)
+                    lineTo(w * 0.88f, h * 0.20f)
+                    lineTo(w * 0.88f, h * 0.78f)
+                    lineTo(w * 0.12f, h * 0.78f)
+                    close()
+                }
+                drawPath(p, tint, style = stroke)
+            }
+        }
+    }
+}
+
+/** Funnel glyph for the "filters hidden behind an icon" affordance. */
+@Composable
+private fun FilterGlyph(tint: Color) {
+    Canvas(Modifier.size(18.dp)) {
+        val w = size.width; val h = size.height
+        val p = Path().apply {
+            moveTo(w * 0.10f, h * 0.16f)
+            lineTo(w * 0.90f, h * 0.16f)
+            lineTo(w * 0.58f, h * 0.54f)
+            lineTo(w * 0.58f, h * 0.86f)
+            lineTo(w * 0.42f, h * 0.74f)
+            lineTo(w * 0.42f, h * 0.54f)
+            close()
+        }
+        drawPath(p, tint, style = Stroke(width = w * 0.12f))
+    }
+}
+
 /** Bundles the shared list inputs so the All/Text/Starred/Projects views stay in sync. */
 private class ConversationListProps(
     val conversations: List<Conversations.Summary>,
@@ -223,7 +376,13 @@ private fun ConversationList(p: ConversationListProps) {
     }
 }
 
-/** Projects view: conversations grouped by their assigned project, Unassigned last. */
+/**
+ * Projects view: conversations grouped by their assigned project, Unassigned last — styled as
+ * tactile "hanging folder" tabs (per the owner's Hyle demo reference): each group renders as one
+ * physical [FolderBody] — a single bordered container (the folder header, label + chat count)
+ * enclosing its numbered, slightly staggered tab rows. The open conversation renders as a solid
+ * violet-filled tab; the rest are outlined/ghost, same as every other list's active state.
+ */
 @Composable
 private fun ProjectGroupedList(p: ConversationListProps, projects: Map<String, String>) {
     if (p.conversations.isEmpty()) {
@@ -239,19 +398,120 @@ private fun ProjectGroupedList(p: ConversationListProps, projects: Map<String, S
     val ordered = groups.keys.filterNotNull().sorted() + if (groups.containsKey(null)) listOf<String?>(null) else emptyList()
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
     ) {
         ordered.forEach { label ->
-            item(key = "hdr-${label ?: "_unassigned"}") {
-                Text(
-                    label ?: "Unassigned",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+            val members = groups[label].orEmpty()
+            item(key = "folder-${label ?: "_unassigned"}") {
+                FolderBody(label = label, members = members, p = p)
+            }
+        }
+    }
+}
+
+/**
+ * A single project's "hanging folder" body: a bordered, rounded container — the folder itself —
+ * enclosing its header (label + chat count) and numbered [FolderTabRow]s, so a group reads as one
+ * physical folder rather than a bare header-plus-list (the fidelity gap the plain header/rows
+ * layout left open against the owner's Hyle demo reference).
+ */
+@Composable
+private fun FolderBody(label: String?, members: List<Conversations.Summary>, p: ConversationListProps) {
+    val c = LocalHyleColors.current
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.ink, shape)
+            .border(1.dp, c.hairline, shape)
+            .padding(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                (label ?: "Unassigned").uppercase(),
+                style = MaterialTheme.typography.titleSmall,
+                color = c.violet,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "${members.size} ${if (members.size == 1) "chat" else "chats"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textMid,
+            )
+        }
+        members.forEachIndexed { idx, conv ->
+            FolderTabRow(p, conv, idx + 1)
+            if (idx != members.lastIndex) Spacer(Modifier.height(6.dp))
+        }
+    }
+}
+
+/**
+ * A single "hanging folder tab" row: a small left-edge tab-flag flourish, then a numbered index
+ * prefix ahead of the shared conversation content, in a tab-shaped pill that alternates a slight
+ * left/right inset (the reference's loose brick pattern). The open conversation is a solid violet
+ * fill (flag included); everything else is outlined/ghost (raised fill + hairline border, outline
+ * flag), matching the rest of this room's active-state language.
+ */
+@Composable
+private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, index: Int) {
+    val c = LocalHyleColors.current
+    val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
+    val shape = RoundedCornerShape(10.dp)
+    val leaning = index % 2 == 0
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(
+            start = if (leaning) 18.dp else 0.dp,
+            end = if (leaning) 0.dp else 18.dp,
+        ),
+    ) {
+        // A small hanging-folder "tab flag" on the row's leading edge — the reference's tab-flag
+        // flourish along the folder body's left edge.
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(5.dp)
+                .clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp))
+                .background(if (active) c.violet else c.outline),
+        )
+        Spacer(Modifier.width(4.dp))
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(shape)
+                .then(
+                    if (active) {
+                        Modifier.background(c.violet, shape)
+                    } else {
+                        Modifier.background(c.raised, shape).border(1.dp, c.hairline, shape)
+                    },
+                )
+                .clickable(enabled = p.enabled, onClick = { p.onOpen(conv) })
+                .padding(14.dp),
+        ) {
+            Text(
+                "%02d".format(index),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (active) c.onViolet.copy(alpha = 0.7f) else c.textMid,
+                modifier = Modifier.padding(end = 10.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                ConversationCardContent(
+                    p, conv,
+                    titleColor = if (active) c.onViolet else c.textHigh,
+                    mutedColor = if (active) c.onViolet.copy(alpha = 0.75f) else c.textMid,
+                    accentColor = if (active) c.onViolet else c.violet,
                 )
             }
-            items(groups[label].orEmpty(), key = { it.rootId }) { conv -> ConversationCard(p, conv) }
         }
     }
 }
@@ -282,8 +542,6 @@ private fun ImageList(imageNodes: List<MessageNode>, enabled: Boolean, onOpen: (
 private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary) {
     val c = LocalHyleColors.current
     val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
-    val bookmarked = conv.rootId in p.bookmarked
-    val project = p.projects[conv.rootId]
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -297,75 +555,98 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
         ),
         border = BorderStroke(1.dp, c.hairline),
     ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+        Box(Modifier.padding(14.dp)) {
+            ConversationCardContent(p, conv)
+        }
+    }
+}
+
+/**
+ * The shared conversation row content — title, project tag, relative time, turn count, and the
+ * star/project-assign buttons. Used by both the plain [ConversationCard] (All/Text/Starred) and
+ * the folder-tab rows in [ProjectGroupedList], so neither loses functionality. Colors default to
+ * this room's normal palette; the folder-tab's solid-violet "open conversation" pill overrides
+ * them with [titleColor]/[mutedColor]/[accentColor] so the text stays legible on the fill.
+ */
+@Composable
+private fun ConversationCardContent(
+    p: ConversationListProps,
+    conv: Conversations.Summary,
+    titleColor: Color = Color.Unspecified,
+    mutedColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    accentColor: Color = LocalHyleColors.current.violet,
+) {
+    val bookmarked = conv.rootId in p.bookmarked
+    val project = p.projects[conv.rootId]
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                conv.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = titleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (project != null) {
                 Text(
-                    conv.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    "▸ $project",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (project != null) {
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    relativeTime(conv.lastUpdatedAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = mutedColor,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "${conv.nodeCount} turns",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = mutedColor,
+                )
+                if (conv.modelIds.isNotEmpty()) {
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        "▸ $project",
+                        conv.modelIds.joinToString(" · ") { it.substringAfter(':') },
                         style = MaterialTheme.typography.labelSmall,
-                        color = c.violet,
+                        color = mutedColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        relativeTime(conv.lastUpdatedAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "${conv.nodeCount} turns",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (conv.modelIds.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            conv.modelIds.joinToString(" · ") { it.substringAfter(':') },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
             }
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = { p.onSetProject(conv) })
-                    .semantics { contentDescription = "Assign to a project" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "⊞",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (project != null) c.violet else c.textMid,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = { p.onToggleBookmark(conv) })
-                    .semantics { contentDescription = if (bookmarked) "Remove star" else "Star" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    if (bookmarked) "★" else "☆",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (bookmarked) c.violet else c.textMid,
-                )
-            }
+        }
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .clickable(onClick = { p.onSetProject(conv) })
+                .semantics { contentDescription = "Assign to a project" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "⊞",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (project != null) accentColor else mutedColor,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .clickable(onClick = { p.onToggleBookmark(conv) })
+                .semantics { contentDescription = if (bookmarked) "Remove star" else "Star" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                if (bookmarked) "★" else "☆",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (bookmarked) accentColor else mutedColor,
+            )
         }
     }
 }
