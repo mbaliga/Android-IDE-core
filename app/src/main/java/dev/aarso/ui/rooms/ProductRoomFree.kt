@@ -6,7 +6,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -59,7 +57,6 @@ import dev.aarso.data.entity.TaskEntity
 import dev.aarso.domain.tasks.TaskDue
 import dev.aarso.domain.tasks.TaskState
 import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.theme.LocalHyleColors
@@ -83,7 +80,6 @@ fun ProductRoomFree(
     BackHandler(onBack = onClose)
     val c = LocalHyleColors.current
     var tab by remember { mutableStateOf(0) }
-    val tabs = listOf("To-do") + extraTabs.map { it.first }
 
     Column(
         Modifier
@@ -96,28 +92,10 @@ fun ProductRoomFree(
             // the way, hiding the rest of a list behind it.
             .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "‹",
-                style = MaterialTheme.typography.headlineSmall,
-                color = c.textHigh,
-                modifier = Modifier.clickable(onClick = onClose).padding(end = 12.dp),
-            )
-            HyleTitle("Product", modifier = Modifier.padding(0.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
+            HyleButton("‹ Back", onClick = onClose)
         }
-        if (tabs.size > 1) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                tabs.forEachIndexed { i, label ->
-                    HyleChip(selected = i == tab, onClick = { tab = i }, label = label)
-                }
-            }
-        }
+        HyleTitle("Product")
         when {
             tab == 0 -> TodoTab()
             else -> extraTabs[tab - 1].second()

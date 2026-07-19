@@ -1,6 +1,5 @@
 package dev.aarso.ui.ide
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -13,8 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -32,6 +29,7 @@ import dev.aarso.domain.diff.FileChange
 import dev.aarso.domain.diff.LineDiff
 import dev.aarso.domain.diff.ReviewSession
 import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.ui.hyle.HyleCard
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.theme.LocalHyleColors
 
@@ -114,36 +112,30 @@ fun ReviewSheet(
 @Composable
 private fun FileHunks(fc: FileChange, session: ReviewSession, approved: MutableList<Boolean>) {
     val c = LocalHyleColors.current
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, c.hairline),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(10.dp)) {
-            Text(fc.path, style = MaterialTheme.typography.titleSmall, fontFamily = FontFamily.Monospace, maxLines = 1)
-            Text(
-                "${fc.op.name.lowercase()} · +${fc.stat.added} −${fc.stat.removed} · ${session.hunks.size} hunk(s)",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (session.hunks.isEmpty()) {
-                Text("(no textual hunks — whole-file change)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    HyleCard(modifier = Modifier.fillMaxWidth()) {
+        Text(fc.path, style = MaterialTheme.typography.titleSmall, fontFamily = FontFamily.Monospace, maxLines = 1)
+        Text(
+            "${fc.op.name.lowercase()} · +${fc.stat.added} −${fc.stat.removed} · ${session.hunks.size} hunk(s)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (session.hunks.isEmpty()) {
+            Text("(no textual hunks — whole-file change)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        session.hunks.forEachIndexed { j, hunk ->
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = c.violet,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(if (approved[j]) "apply" else "skip", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Switch(checked = approved[j], onCheckedChange = { approved[j] = it })
             }
-            session.hunks.forEachIndexed { j, hunk ->
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = c.violet,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(if (approved[j]) "apply" else "skip", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Switch(checked = approved[j], onCheckedChange = { approved[j] = it })
-                }
-                HunkLines(hunk)
-            }
+            HunkLines(hunk)
         }
     }
 }
