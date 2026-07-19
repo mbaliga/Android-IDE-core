@@ -49,6 +49,13 @@ class SessionStore(context: Context) {
     private val _accentColor = MutableStateFlow(prefs.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT)
     val accentColor: StateFlow<String> = _accentColor.asStateFlow()
 
+    // Chat home's header status chip (replaces the fixed Me·Myself·I avatar entry point, which
+    // remains reachable from Settings): "NONE" / "SOVEREIGNTY" / "QUOTA" / "TIME". Defaults to
+    // NONE — the header shows nothing until the user opts a fact into view, matching the
+    // minimalism direction from the 2026-07-19 UX audit rather than presuming what's useful.
+    private val _headerIndicator = MutableStateFlow(prefs.getString(KEY_HEADER_INDICATOR, "NONE") ?: "NONE")
+    val headerIndicator: StateFlow<String> = _headerIndicator.asStateFlow()
+
     // Ambient grain texture intensity, 0f (off) … 1f. Applied to the base surface only.
     // Defaults on (not 0f) so the "rough surface" register is part of the shipped look, not an
     // opt-in a new user has to go find in Settings — still a user-adjustable, turn-off-able knob.
@@ -148,6 +155,11 @@ class SessionStore(context: Context) {
         _accentColor.value = hex
     }
 
+    fun setHeaderIndicator(mode: String) {
+        prefs.edit().putString(KEY_HEADER_INDICATOR, mode).apply()
+        _headerIndicator.value = mode
+    }
+
     fun setTextureIntensity(value: Float) {
         val v = value.coerceIn(0f, 1f)
         prefs.edit().putFloat(KEY_TEXTURE, v).apply()
@@ -237,6 +249,7 @@ class SessionStore(context: Context) {
         private const val KEY_ENTROPY = "entropyColoring"
         private const val KEY_SPATIAL_MAP = "spatialMapSeen"
         private const val KEY_THEME_MODE = "themeMode"
+        private const val KEY_HEADER_INDICATOR = "headerIndicator"
         private const val KEY_ACCENT = "accentColor"
         private const val KEY_TEXTURE = "textureIntensity"
         private const val KEY_GRADIENT = "gradientColor"

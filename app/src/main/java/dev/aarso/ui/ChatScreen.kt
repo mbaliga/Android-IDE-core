@@ -92,6 +92,7 @@ import dev.aarso.ui.hyle.HyleNavChip
 import dev.aarso.ui.hyle.FileImage
 import dev.aarso.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * The home room of the spatial shell: the active thread. No app chrome beyond a
@@ -115,7 +116,6 @@ fun ChatScreen(
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
     var showParticipants by remember { mutableStateOf(false) }
-    var showMe by remember { mutableStateOf(false) }
     var actionStep by remember { mutableStateOf<PathView.Step?>(null) }
     var flagStep by remember { mutableStateOf<PathView.Step?>(null) }
     // D1: dismissible "Connect your repos" home card (session-scoped dismissal).
@@ -161,7 +161,6 @@ fun ChatScreen(
                 onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
                 onOpenChats = onOpenChats,
                 onOpenSettings = onOpenSettings,
-                onOpenMe = { showMe = true },
             )
             InstrumentsStrip(
                 state = state,
@@ -441,17 +440,6 @@ fun ChatScreen(
         }
     }
 
-    if (showMe) {
-        Dialog(
-            onDismissRequest = { showMe = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.aarso.ui.rooms.MeScreen(onClose = { showMe = false })
-            }
-        }
-    }
-
     // Interaction model is locked once a chat starts (IA §B4): changing it branches with a summary.
     val pendingMode by viewModel.pendingInteractionChange.collectAsState()
     pendingMode?.let { mode ->
@@ -504,7 +492,6 @@ private fun HomeHeader(
     onBadgeTap: () -> Unit,
     onOpenChats: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenMe: () -> Unit = {},
 ) {
     val c = LocalHyleColors.current
     Row(
@@ -524,19 +511,61 @@ private fun HomeHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        // Right: Settings, then the profile avatar → Me · Myself · I.
+        // Right: the user-selectable status chip (Settings -> Global -> Header status), then Settings.
+        // Replaces the fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings,
+        // this slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
+        HeaderIndicator(state)
         HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(c.violet, CircleShape)
-                .clickable(onClick = onOpenMe)
-                .semantics { contentDescription = "Open your profile — Me, Myself, I" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("☺", style = MaterialTheme.typography.titleSmall, color = c.onViolet)
+    }
+}
+
+/**
+ * The user-selectable status chip that replaced the fixed Me·Myself·I avatar: a single fact,
+ * chosen in Settings -> Global -> "Header status" ([dev.aarso.data.SessionStore.headerIndicator]),
+ * about the CURRENT conversation only — never a claim about the whole account/device, matching
+ * this header's existing "quiet, per-conversation" scope (the title text beside it works the
+ * same way). Renders nothing for "NONE" (the default) or before there's anything to say yet.
+ */
+@Composable
+private fun HeaderIndicator(state: ChatUiState) {
+    val context = LocalContext.current
+    val container = (context.applicationContext as dev.aarso.AarsoApp).container
+    val mode by container.sessionStore.headerIndicator.collectAsState()
+    if (mode == "NONE") return
+    val c = LocalHyleColors.current
+    val rootId = state.steps.firstOrNull()?.node?.id ?: return
+
+    val label = when (mode) {
+        "SOVEREIGNTY" -> {
+            val entries by container.ledgerStore.entries().collectAsState(initial = emptyList())
+            val split = remember(entries, rootId) {
+                dev.aarso.domain.ledger.LedgerAggregations.provenanceSplit(
+                    entries.filter { it.chatId == rootId },
+                )
+            }
+            if (split.onDeviceTokens + split.cloudTokens <= 0L) return
+            "⌂ ${(split.sovereigntyRatio * 100).roundToInt()}%"
         }
+        "QUOTA" -> {
+            val usage by container.freeTierUsageStore.usage.collectAsState()
+            val requestsToday = usage.values.sumOf { it.requestsToday }
+            if (requestsToday <= 0) return
+            "$requestsToday today"
+        }
+        "TIME" -> {
+            val startedAt = state.steps.firstOrNull()?.node?.createdAt ?: return
+            dev.aarso.ui.rooms.relativeTime(startedAt)
+        }
+        else -> return
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.inset, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = c.textMid, maxLines = 1)
     }
 }
 
