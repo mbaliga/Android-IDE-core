@@ -145,43 +145,17 @@ fun SettingsRoom(
     }
 }
 
-@Composable
-private fun SettingsTabBar(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
-    Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            SettingsTab.entries.forEach { t ->
-                val on = t == selected
-                val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                Column(
-                    modifier = Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    TabGlyph(t, tint)
-                    Spacer(Modifier.height(5.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier.height(2.dp).width(22.dp).background(
-                            if (on) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                    )
-                }
-            }
-        }
-        HorizontalDivider()
-    }
-}
-
-/** Small Aeon-style line glyphs drawn in code (the app ships no icon font). */
-@Composable
-private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color) {
-    androidx.compose.foundation.Canvas(Modifier.size(22.dp)) {
+// One HyleTabSpec per SettingsTab, glyphs unchanged from the original hand-rolled TabGlyph —
+// this IS the bar HyleTabBar (Aeon.kt) was extracted from; now it consumes the shared component
+// instead of keeping its own parallel copy (2026-07-19 tab-bar consolidation).
+private val SettingsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = SettingsTab.entries.map { t ->
+    dev.aarso.ui.hyle.HyleTabSpec(t.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
         fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
             drawLine(tint, androidx.compose.ui.geometry.Offset(x0, y0), androidx.compose.ui.geometry.Offset(x1, y1), strokeWidth = sw)
-        when (tab) {
+        when (t) {
             SettingsTab.GLOBAL -> {
                 drawCircle(tint, radius = w * 0.42f, style = stroke)
                 drawOval(
@@ -228,6 +202,15 @@ private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color)
             }
         }
     }
+}
+
+@Composable
+private fun SettingsTabBar(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
+    dev.aarso.ui.hyle.HyleTabBar(
+        tabs = SettingsTabSpecs,
+        selected = SettingsTab.entries.indexOf(selected),
+        onSelect = { onSelect(SettingsTab.entries[it]) },
+    )
 }
 
 /**

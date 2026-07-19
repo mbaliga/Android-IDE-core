@@ -229,66 +229,11 @@ fun ChatsRoom(
     }
 }
 
-/**
- * The Chats-room tab bar, styled to match [SettingsRoom]'s [SettingsTabBar]: five fixed-width
- * tabs (a hand-drawn glyph + label + underline indicator), not a scrolling chip row, plus a
- * trailing funnel icon that reveals the Sort row (the owner's "filters behind an icon" request).
- */
-@Composable
-private fun ChatsTabBar(
-    selected: ChatsTab,
-    onSelect: (ChatsTab) -> Unit,
-    sortExpanded: Boolean,
-    showFilterToggle: Boolean,
-    onToggleSort: () -> Unit,
-) {
-    val c = LocalHyleColors.current
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ChatsTab.entries.forEach { t ->
-                val on = t == selected
-                val tint = if (on) c.violet else c.textMid
-                Column(
-                    modifier = Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    ChatsTabGlyph(t, tint)
-                    Spacer(Modifier.height(5.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.height(2.dp).width(22.dp).background(if (on) c.violet else Color.Transparent))
-                }
-            }
-            // Always reserve this 36dp slot — even when the funnel isn't shown — so the five
-            // weighted tabs ahead of it never resize between tabs. A conditionally-present
-            // sibling in this Row was the "tab bar fluctuates" bug: Compose redistributes the
-            // weighted tabs' width whenever this Box enters/leaves the tree, which reads as the
-            // whole bar jittering every time the Image/Projects tab (no sort) is selected.
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .alpha(if (showFilterToggle) 1f else 0f)
-                    .clip(CircleShape)
-                    .clickable(enabled = showFilterToggle, onClick = onToggleSort)
-                    .semantics {
-                        contentDescription = if (sortExpanded) "Hide sort options" else "Show sort options"
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                FilterGlyph(if (sortExpanded) c.violet else c.textMid)
-            }
-        }
-        HorizontalDivider()
-    }
-}
-
-/** Small hand-drawn line glyphs for the Chats tabs — same technique as Settings' TabGlyph. */
-@Composable
-private fun ChatsTabGlyph(tab: ChatsTab, tint: Color) {
-    Canvas(Modifier.size(22.dp)) {
+// One HyleTabSpec per ChatsTab, glyphs unchanged from the original hand-rolled ChatsTabGlyph —
+// this bar now consumes the shared HyleTabBar (Aeon.kt) instead of keeping its own parallel copy
+// (2026-07-19 tab-bar consolidation).
+private val ChatsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = ChatsTab.entries.map { tab ->
+    dev.aarso.ui.hyle.HyleTabSpec(tab.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = Stroke(width = sw)
@@ -349,6 +294,45 @@ private fun ChatsTabGlyph(tab: ChatsTab, tint: Color) {
             }
         }
     }
+}
+
+/**
+ * The Chats-room tab bar: the shared [dev.aarso.ui.hyle.HyleTabBar], plus a trailing funnel icon
+ * (via [dev.aarso.ui.hyle.HyleTabBar]'s own `trailing` slot) that reveals the Sort row (the
+ * owner's "filters behind an icon" request). The 36dp slot stays reserved even when the funnel
+ * isn't interactive — a conditionally-present trailing composable was the original "tab bar
+ * fluctuates" bug (Compose redistributes the weighted tabs' width whenever a sibling enters/
+ * leaves the tree); `alpha`+`enabled = false` keeps the space without the jitter.
+ */
+@Composable
+private fun ChatsTabBar(
+    selected: ChatsTab,
+    onSelect: (ChatsTab) -> Unit,
+    sortExpanded: Boolean,
+    showFilterToggle: Boolean,
+    onToggleSort: () -> Unit,
+) {
+    val c = LocalHyleColors.current
+    dev.aarso.ui.hyle.HyleTabBar(
+        tabs = ChatsTabSpecs,
+        selected = ChatsTab.entries.indexOf(selected),
+        onSelect = { onSelect(ChatsTab.entries[it]) },
+        trailing = {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .alpha(if (showFilterToggle) 1f else 0f)
+                    .clip(CircleShape)
+                    .clickable(enabled = showFilterToggle, onClick = onToggleSort)
+                    .semantics {
+                        contentDescription = if (sortExpanded) "Hide sort options" else "Show sort options"
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                FilterGlyph(if (sortExpanded) c.violet else c.textMid)
+            }
+        },
+    )
 }
 
 /** Funnel glyph for the "filters hidden behind an icon" affordance. */
