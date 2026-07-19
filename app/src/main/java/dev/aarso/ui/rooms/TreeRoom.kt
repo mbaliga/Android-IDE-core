@@ -67,19 +67,14 @@ fun TreeRoom(
     var note by remember { mutableStateOf<String?>(null) }
     var handoff by remember { mutableStateOf<String?>(null) }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        HyleTitle("Tree")
-        Text(
-            "Every turn is a node; every fork stays visible. Tap a node to continue " +
-                "from it — pinch out to return.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
+    // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
+    // commits branch, builds branch. Builds moved here from Develop.
+    var treeTab by remember { mutableStateOf(0) }
+    val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["tree"] ?: universalTabBarPosition
 
-        // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
-        // commits branch, builds branch. Builds moved here from Develop.
-        var treeTab by remember { mutableStateOf(0) }
+    val tabBarBlock: @Composable () -> Unit = {
         HyleTabBar(
             tabs = listOf(
                 HyleTabSpec("Conversation") { tint ->
@@ -117,8 +112,11 @@ fun TreeRoom(
             selected = treeTab,
             onSelect = { treeTab = it },
             modifier = Modifier.fillMaxWidth(),
+            position = tabBarPosition,
         )
+    }
 
+    val contentBlock: @Composable () -> Unit = {
         when (treeTab) {
             0 -> {
                 // Git-sync indicator + manual export + handoff summary (IA §F).
@@ -204,6 +202,24 @@ fun TreeRoom(
                 // Builds live in the Tree now (§6.1): the build branch, tied to its commit.
                 dev.aarso.ui.develop.BuildsFacet()
             }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        HyleTitle("Tree")
+        Text(
+            "Every turn is a node; every fork stays visible. Tap a node to continue " +
+                "from it — pinch out to return.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        if (tabBarPosition == "BOTTOM") {
+            Box(Modifier.weight(1f)) { contentBlock() }
+            tabBarBlock()
+        } else {
+            tabBarBlock()
+            Box(Modifier.weight(1f)) { contentBlock() }
         }
     }
 

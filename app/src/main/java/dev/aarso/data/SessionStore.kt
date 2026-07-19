@@ -56,6 +56,17 @@ class SessionStore(context: Context) {
     private val _headerIndicator = MutableStateFlow(prefs.getString(KEY_HEADER_INDICATOR, "NONE") ?: "NONE")
     val headerIndicator: StateFlow<String> = _headerIndicator.asStateFlow()
 
+    // A room's HyleTabBar can sit at the top or bottom of its own Column: "TOP" / "BOTTOM".
+    // Universal default here; a per-room override (below) wins when set. Defaults to TOP —
+    // unchanged from every room's shipped layout today.
+    private val _tabBarPosition = MutableStateFlow(prefs.getString(KEY_TAB_BAR_POSITION, "TOP") ?: "TOP")
+    val tabBarPosition: StateFlow<String> = _tabBarPosition.asStateFlow()
+
+    // Per-room tab-bar position override, same "roomIdvalue" persisted-set shape as
+    // conversationProjects. A room absent here just follows the universal default above.
+    private val _roomTabBarPosition = MutableStateFlow(loadRoomTabBarPosition())
+    val roomTabBarPosition: StateFlow<Map<String, String>> = _roomTabBarPosition.asStateFlow()
+
     // Ambient grain texture intensity, 0f (off) … 1f. Applied to the base surface only.
     // Defaults on (not 0f) so the "rough surface" register is part of the shipped look, not an
     // opt-in a new user has to go find in Settings — still a user-adjustable, turn-off-able knob.
@@ -160,6 +171,30 @@ class SessionStore(context: Context) {
         _headerIndicator.value = mode
     }
 
+    fun setTabBarPosition(position: String) {
+        prefs.edit().putString(KEY_TAB_BAR_POSITION, position).apply()
+        _tabBarPosition.value = position
+    }
+
+    /** [position] "TOP"/"BOTTOM", or null to clear the override and fall back to the universal default. */
+    fun setRoomTabBarPosition(roomId: String, position: String?) {
+        val next = _roomTabBarPosition.value.toMutableMap()
+        if (position == null) next.remove(roomId) else next[roomId] = position
+        prefs.edit().putStringSet(
+            KEY_ROOM_TAB_BAR_POSITION,
+            next.entries.map { "${it.key}${it.value}" }.toSet(),
+        ).apply()
+        _roomTabBarPosition.value = next
+    }
+
+    /** The effective position for [roomId]: its own override if set, else the universal default. */
+    fun tabBarPositionFor(roomId: String): String = _roomTabBarPosition.value[roomId] ?: _tabBarPosition.value
+
+    private fun loadRoomTabBarPosition(): Map<String, String> =
+        prefs.getStringSet(KEY_ROOM_TAB_BAR_POSITION, emptySet()).orEmpty()
+            .mapNotNull { e -> e.split('', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+            .toMap()
+
     fun setTextureIntensity(value: Float) {
         val v = value.coerceIn(0f, 1f)
         prefs.edit().putFloat(KEY_TEXTURE, v).apply()
@@ -250,6 +285,8 @@ class SessionStore(context: Context) {
         private const val KEY_SPATIAL_MAP = "spatialMapSeen"
         private const val KEY_THEME_MODE = "themeMode"
         private const val KEY_HEADER_INDICATOR = "headerIndicator"
+        private const val KEY_TAB_BAR_POSITION = "tabBarPosition"
+        private const val KEY_ROOM_TAB_BAR_POSITION = "roomTabBarPosition"
         private const val KEY_ACCENT = "accentColor"
         private const val KEY_TEXTURE = "textureIntensity"
         private const val KEY_GRADIENT = "gradientColor"

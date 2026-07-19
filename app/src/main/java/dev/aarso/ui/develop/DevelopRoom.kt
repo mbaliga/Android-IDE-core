@@ -85,6 +85,26 @@ fun DevelopRoom(onClose: () -> Unit) {
         dev.aarso.ui.hyle.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
     ) + studioTabs.map { st -> dev.aarso.ui.hyle.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
 
+    val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["develop"] ?: universalTabBarPosition
+    val tabBarBlock: @Composable () -> Unit = {
+        dev.aarso.ui.hyle.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
+    }
+    val contentBlock: @Composable () -> Unit = {
+        when {
+            tab == 0 -> HardwareFacet(onOpenTerminal = { tab = 2 })
+            tab == 1 -> FilesFacet()
+            tab == 2 -> TerminalFacet()
+            tab == 3 -> AuditFacet(onRunPrompt = { prompt ->
+                // Audit is a to-do list: "Run" fires the check as a prompt in Chat (§7.4).
+                container.sharedIntake.offer(dev.aarso.data.Intake(text = prompt, source = "audit"))
+                onClose()
+            })
+            else -> studioTabs[tab - 4].content()
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -99,19 +119,14 @@ fun DevelopRoom(onClose: () -> Unit) {
         }
         Spacer(Modifier.height(12.dp))
 
-        dev.aarso.ui.hyle.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it })
-        Spacer(Modifier.height(16.dp))
-
-        when {
-            tab == 0 -> HardwareFacet(onOpenTerminal = { tab = 2 })
-            tab == 1 -> FilesFacet()
-            tab == 2 -> TerminalFacet()
-            tab == 3 -> AuditFacet(onRunPrompt = { prompt ->
-                // Audit is a to-do list: "Run" fires the check as a prompt in Chat (§7.4).
-                container.sharedIntake.offer(dev.aarso.data.Intake(text = prompt, source = "audit"))
-                onClose()
-            })
-            else -> studioTabs[tab - 4].content()
+        if (tabBarPosition == "BOTTOM") {
+            contentBlock()
+            Spacer(Modifier.height(16.dp))
+            tabBarBlock()
+        } else {
+            tabBarBlock()
+            Spacer(Modifier.height(16.dp))
+            contentBlock()
         }
     }
 }

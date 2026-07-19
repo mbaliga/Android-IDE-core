@@ -130,69 +130,87 @@ fun ChatsRoom(
         return order.mapNotNull { byId[it.id] }
     }
 
+    val universalTabBarPosition by session.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by session.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["chats"] ?: universalTabBarPosition
+    val sortEligible = tab != ChatsTab.IMAGE && tab != ChatsTab.PROJECTS
+
+    // The tab bar and its Sort row travel together, top or bottom, per the owner's layout
+    // preference (Settings → Global → Tab bar position, or a per-room override).
+    val tabBarBlock: @Composable () -> Unit = {
+        ChatsTabBar(
+            selected = tab,
+            onSelect = { tab = it },
+            sortExpanded = sortExpanded,
+            showFilterToggle = sortEligible,
+            onToggleSort = { sortExpanded = !sortExpanded },
+        )
+
+        // Sort control (Doc 02): backed by the tested LibConversations.sort. Hidden on the
+        // Image tab (image turns are browsed newest-first) and Projects (grouped by its own
+        // most-recent order), where a conversation sort wouldn't apply — and, per the owner's
+        // "filters behind an icon" request, collapsed by default behind the tab bar's funnel.
+        if (sortEligible && sortExpanded) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Sort", style = MaterialTheme.typography.labelMedium, color = c.textMid)
+                SORT_LABELS.forEach { (key, label) -> HyleChip(sort == key, { sort = key }, label) }
+            }
+        }
+    }
+
+    val contentBlock: @Composable () -> Unit = {
+        val activeIds = state.steps.map { it.node.id }.toSet()
+        val firstNodeId = state.steps.firstOrNull()?.node?.id
+        fun listProps(list: List<Conversations.Summary>, empty: String) = ConversationListProps(
+            conversations = list, emptyMessage = empty, activeIds = activeIds, firstNodeId = firstNodeId,
+            bookmarked = bookmarked, projects = projects, enabled = !state.isGenerating,
+            onOpen = { viewModel.openConversation(it.rootId); onClose() },
+            onToggleBookmark = { session.toggleBookmark(it.rootId) },
+            onSetProject = { projectDialogFor = it },
+        )
+        when (tab) {
+            ChatsTab.IMAGE -> ImageList(
+                imageNodes = imageNodes,
+                bookmarked = bookmarked,
+                projects = projects,
+                enabled = !state.isGenerating,
+                onOpen = { viewModel.branchFrom(it.id); onClose() },
+                onToggleBookmark = { session.toggleBookmark(it.id) },
+                onSetProject = { imageProjectDialogFor = it },
+            )
+            ChatsTab.PROJECTS -> ProjectGroupedList(listProps(conversations, ""), projects)
+            else -> {
+                val list = when (tab) {
+                    ChatsTab.STARRED -> Bookmarks.filter(conversations, bookmarked)
+                    ChatsTab.TEXT -> conversations.filter { !it.hasImage }
+                    else -> conversations
+                }
+                val empty = when (tab) {
+                    ChatsTab.STARRED -> "No starred chats yet. Tap the star on a conversation to keep it here."
+                    ChatsTab.TEXT -> "No text-only conversations yet."
+                    else -> "No conversations yet. Start one — every turn becomes a node on the tree, " +
+                        "and every fork stays visible."
+                }
+                ConversationList(listProps(sorted(list), empty))
+            }
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(c.ink)) {
         Column(Modifier.fillMaxSize()) {
             HyleTitle("Chats")
-            val sortEligible = tab != ChatsTab.IMAGE && tab != ChatsTab.PROJECTS
-            ChatsTabBar(
-                selected = tab,
-                onSelect = { tab = it },
-                sortExpanded = sortExpanded,
-                showFilterToggle = sortEligible,
-                onToggleSort = { sortExpanded = !sortExpanded },
-            )
-
-            // Sort control (Doc 02): backed by the tested LibConversations.sort. Hidden on the
-            // Image tab (image turns are browsed newest-first) and Projects (grouped by its own
-            // most-recent order), where a conversation sort wouldn't apply — and, per the owner's
-            // "filters behind an icon" request, collapsed by default behind the tab bar's funnel.
-            if (sortEligible && sortExpanded) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Sort", style = MaterialTheme.typography.labelMedium, color = c.textMid)
-                    SORT_LABELS.forEach { (key, label) -> HyleChip(sort == key, { sort = key }, label) }
-                }
-            }
-
-            val activeIds = state.steps.map { it.node.id }.toSet()
-            val firstNodeId = state.steps.firstOrNull()?.node?.id
-            fun listProps(list: List<Conversations.Summary>, empty: String) = ConversationListProps(
-                conversations = list, emptyMessage = empty, activeIds = activeIds, firstNodeId = firstNodeId,
-                bookmarked = bookmarked, projects = projects, enabled = !state.isGenerating,
-                onOpen = { viewModel.openConversation(it.rootId); onClose() },
-                onToggleBookmark = { session.toggleBookmark(it.rootId) },
-                onSetProject = { projectDialogFor = it },
-            )
-            when (tab) {
-                ChatsTab.IMAGE -> ImageList(
-                    imageNodes = imageNodes,
-                    bookmarked = bookmarked,
-                    projects = projects,
-                    enabled = !state.isGenerating,
-                    onOpen = { viewModel.branchFrom(it.id); onClose() },
-                    onToggleBookmark = { session.toggleBookmark(it.id) },
-                    onSetProject = { imageProjectDialogFor = it },
-                )
-                ChatsTab.PROJECTS -> ProjectGroupedList(listProps(conversations, ""), projects)
-                else -> {
-                    val list = when (tab) {
-                        ChatsTab.STARRED -> Bookmarks.filter(conversations, bookmarked)
-                        ChatsTab.TEXT -> conversations.filter { !it.hasImage }
-                        else -> conversations
-                    }
-                    val empty = when (tab) {
-                        ChatsTab.STARRED -> "No starred chats yet. Tap the star on a conversation to keep it here."
-                        ChatsTab.TEXT -> "No text-only conversations yet."
-                        else -> "No conversations yet. Start one — every turn becomes a node on the tree, " +
-                            "and every fork stays visible."
-                    }
-                    ConversationList(listProps(sorted(list), empty))
-                }
+            if (tabBarPosition == "BOTTOM") {
+                Box(Modifier.weight(1f)) { contentBlock() }
+                tabBarBlock()
+            } else {
+                tabBarBlock()
+                Box(Modifier.weight(1f)) { contentBlock() }
             }
         }
         projectDialogFor?.let { conv ->

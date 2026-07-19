@@ -86,24 +86,14 @@ fun ModelsRoom(
     var tab by remember { mutableStateOf(ModelsTab.CHAT) }
     var source by remember { mutableStateOf(ModelSource.ON_DEVICE) }
     val cloudProviders by (LocalContext.current.applicationContext as AarsoApp).container.providerStore.providers.collectAsState()
+    val session = (LocalContext.current.applicationContext as AarsoApp).container.sessionStore
+    val universalTabBarPosition by session.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by session.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["models"] ?: universalTabBarPosition
 
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if (onClose != null) {
-            TextButton(onClick = onClose, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
-                Text("‹ Settings")
-            }
-        }
-        HyleTitle("Models")
-        val ramGb = "%.1f".format(modelsViewModel.device.totalRamBytes / 1_000_000_000.0)
-        Text(
-            "This device: $ramGb GB RAM · " +
-                (if (modelsViewModel.device.arm64) "arm64-v8a" else modelsViewModel.device.abis.joinToString()) +
-                "  ·  fit is a RAM safety check, not a speed promise.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Spacer(Modifier.height(12.dp))
+    // The tab bar and its Chat-only source filter travel together, top or bottom, per the
+    // owner's layout preference (Settings → Global → Tab bar position, or a per-room override).
+    val tabBarBlock: @Composable () -> Unit = {
         HyleTabBar(
             tabs = listOf(
                 HyleTabSpec("Chat") { tint ->
@@ -133,6 +123,7 @@ fun ModelsRoom(
             ),
             selected = tab.ordinal,
             onSelect = { tab = ModelsTab.entries[it] },
+            position = tabBarPosition,
         )
         // Source filter (Chat tab): on-device vs watched-cloud (owner ask).
         if (tab == ModelsTab.CHAT) {
@@ -145,8 +136,9 @@ fun ModelsRoom(
                 HyleChip(source == ModelSource.CLOUD, { source = ModelSource.CLOUD }, "Cloud · watched")
             }
         }
-        Spacer(Modifier.height(16.dp))
+    }
 
+    val contentBlock: @Composable () -> Unit = {
         when (tab) {
             ModelsTab.CHAT -> if (source == ModelSource.CLOUD) {
                 CloudProvidersList(cloudProviders)
@@ -227,6 +219,32 @@ fun ModelsRoom(
                     }
                 }
             }
+        }
+    }
+
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (onClose != null) {
+            TextButton(onClick = onClose, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
+                Text("‹ Settings")
+            }
+        }
+        HyleTitle("Models")
+        val ramGb = "%.1f".format(modelsViewModel.device.totalRamBytes / 1_000_000_000.0)
+        Text(
+            "This device: $ramGb GB RAM · " +
+                (if (modelsViewModel.device.arm64) "arm64-v8a" else modelsViewModel.device.abis.joinToString()) +
+                "  ·  fit is a RAM safety check, not a speed promise.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        Spacer(Modifier.height(12.dp))
+        if (tabBarPosition == "BOTTOM") {
+            Box(Modifier.weight(1f)) { contentBlock() }
+            tabBarBlock()
+        } else {
+            tabBarBlock()
+            Box(Modifier.weight(1f)) { contentBlock() }
         }
     }
 }
