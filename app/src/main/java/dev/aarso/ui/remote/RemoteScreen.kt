@@ -202,10 +202,7 @@ fun RemoteScreen(onClose: () -> Unit) {
             } else {
                 // The rendered screen — keyed on screenVersion so each VT update recomposes.
                 key(screenVersion) {
-                    WireBox(Modifier.heightIn(min = 120.dp)) {
-                        val text = (0 until pty.screen.rows).joinToString("\n") { pty.screen.lineText(it) }.trimEnd('\n')
-                        Text(text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                    }
+                    TerminalView(screen = pty.screen, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 WireField("input (sent with Enter)", shellInput, { shellInput = it })
