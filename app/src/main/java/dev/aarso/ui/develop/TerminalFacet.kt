@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.aarso.AarsoApp
-import dev.aarso.data.remote.LocalShellSession
+import dev.aarso.data.remote.PtyShellSession
 import dev.aarso.domain.remote.term.PtyChannel
 import dev.aarso.ui.wire.WireField
 import kotlinx.coroutines.launch
@@ -34,8 +34,9 @@ private const val THIS_PHONE = "This phone"
 
 /**
  * The Develop room's **Terminal** tab. **This phone** is a real, always-available interactive
- * shell — `/system/bin/sh` inside this app's own sandbox (no root, no pairing, like Termux's
- * shell but without its bundled userland; see [LocalShellSession]) — alongside the existing
+ * shell with a genuine controlling terminal — `/system/bin/sh` forked onto a real pty inside
+ * this app's own sandbox (no root, no pairing, like Termux's shell but without its bundled
+ * userland; see [PtyShellSession]) — alongside the existing
  * one-command-at-a-time SSH prompt for a paired homelab machine (mirrors [DevicesFacet]'s
  * Raspberry-Pi shell mode). Either way, the machine's raw stdout/stderr is shown verbatim (a
  * **watched object** for a remote host — never paraphrased). Owner-verified — there is no
@@ -146,38 +147,47 @@ fun TerminalFacet() {
 
 /**
  * A real interactive shell on this phone — same PTY→VtParser→ScreenBuffer core the SSH
- * interactive shell in `RemoteScreen.kt` uses (see [PtyChannel]), fed by [LocalShellSession]
- * instead of an SSH channel. Opens lazily on first use and stays open across tab switches
- * within this composition (closed when the composable leaves it).
+ * interactive shell in `RemoteScreen.kt` uses (see [PtyChannel]), fed by a genuine pty via
+ * [PtyShellSession] instead of an SSH channel. Because it's a real pty (not a bare pipe), the
+ * kernel's own line discipline handles LF->CRLF translation, echo, and job-control signals —
+ * no manual byte-munging needed here, unlike the ProcessBuilder-based first cut. Opens lazily
+ * on first use and stays open across tab switches within this composition (closed when the
+ * composable leaves it).
  */
 @Composable
 private fun LocalTerminal(scope: kotlinx.coroutines.CoroutineScope, filesDir: java.io.File) {
     val pty = remember { PtyChannel(rows = 24, cols = 80) }
-    var shell by remember { mutableStateOf<LocalShellSession?>(null) }
+    var shell by remember { mutableStateOf<PtyShellSession?>(null) }
     var screenVersion by remember { mutableStateOf(0) }
     var input by remember { mutableStateOf("") }
     var opening by remember { mutableStateOf(false) }
+    var openError by remember { mutableStateOf<String?>(null) }
 
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { scope.launch { runCatching { shell?.close() } } }
     }
 
-    Hint("⌂ on-device — a real shell in this app's own sandbox. No root, no pairing, no network.")
+    Hint("⌂ on-device — a real shell with a real terminal, in this app's own sandbox. No root, no pairing, no network.")
     Spacer(Modifier.height(8.dp))
 
     if (shell == null) {
         WireButton(if (opening) "Opening…" else "Open shell", enabled = !opening, onClick = {
             opening = true
+            openError = null
             scope.launch {
                 runCatching {
-                    LocalShellSession.open(filesDir) { chunk ->
+                    PtyShellSession.open(filesDir, rows = pty.screen.rows, cols = pty.screen.cols) { chunk ->
                         pty.onOutput(String(chunk.bytes, Charsets.UTF_8))
                         screenVersion++
                     }
-                }.onSuccess { shell = it }
+                }.onSuccess { shell = it }.onFailure { openError = it.message ?: "couldn't open a shell" }
                 opening = false
             }
         })
+        openError?.let {
+            Spacer(Modifier.height(6.dp))
+            Hint("Couldn't open a shell: $it")
+        }
         return
     }
 

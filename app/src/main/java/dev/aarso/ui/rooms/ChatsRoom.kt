@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package dev.aarso.ui.rooms
 
 import androidx.compose.foundation.BorderStroke
@@ -5,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
@@ -38,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -239,19 +243,23 @@ private fun ChatsTabBar(
                     Box(Modifier.height(2.dp).width(22.dp).background(if (on) c.violet else Color.Transparent))
                 }
             }
-            if (showFilterToggle) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onToggleSort)
-                        .semantics {
-                            contentDescription = if (sortExpanded) "Hide sort options" else "Show sort options"
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    FilterGlyph(if (sortExpanded) c.violet else c.textMid)
-                }
+            // Always reserve this 36dp slot — even when the funnel isn't shown — so the five
+            // weighted tabs ahead of it never resize between tabs. A conditionally-present
+            // sibling in this Row was the "tab bar fluctuates" bug: Compose redistributes the
+            // weighted tabs' width whenever this Box enters/leaves the tree, which reads as the
+            // whole bar jittering every time the Image/Projects tab (no sort) is selected.
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .alpha(if (showFilterToggle) 1f else 0f)
+                    .clip(CircleShape)
+                    .clickable(enabled = showFilterToggle, onClick = onToggleSort)
+                    .semantics {
+                        contentDescription = if (sortExpanded) "Hide sort options" else "Show sort options"
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                FilterGlyph(if (sortExpanded) c.violet else c.textMid)
             }
         }
         HorizontalDivider()
@@ -457,9 +465,14 @@ private fun FolderBody(label: String?, members: List<Conversations.Summary>, p: 
 
 /**
  * A single "hanging folder tab" row: a small left-edge tab-flag flourish, then a numbered index
- * prefix ahead of the shared conversation content, in a tab-shaped pill that alternates a slight
- * left/right inset (the reference's loose brick pattern). The open conversation is a solid violet
- * fill (flag included); everything else is outlined/ghost (raised fill + hairline border, outline
+ * prefix ahead of a lean, single-line title + timestamp (the reference's rows are just an index
+ * and a title — deliberately NOT the full metadata block the flat list shows, since cramming
+ * two 44dp icon buttons into a small tab is exactly what stops a row from reading as "a filed
+ * tab" and turns it back into "a card"). Star/assign-to-project move to long-press, matching the
+ * long-press-for-actions language chat turns already use ([dev.aarso.ui.ChatScreen]'s
+ * TurnActionsSheet) instead of inventing a second pattern. Alternates a slight left/right inset
+ * per row (the reference's loose brick pattern). The open conversation is a solid violet fill
+ * (flag included); everything else is outlined/ghost (raised fill + hairline border, outline
  * flag), matching the rest of this room's active-state language.
  */
 @Composable
@@ -468,6 +481,8 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
     val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
     val shape = RoundedCornerShape(10.dp)
     val leaning = index % 2 == 0
+    var showActions by remember { mutableStateOf(false) }
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     Row(
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(
             start = if (leaning) 18.dp else 0.dp,
@@ -495,8 +510,13 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
                         Modifier.background(c.raised, shape).border(1.dp, c.hairline, shape)
                     },
                 )
-                .clickable(enabled = p.enabled, onClick = { p.onOpen(conv) })
+                .combinedClickable(
+                    enabled = p.enabled,
+                    onClick = { p.onOpen(conv) },
+                    onLongClick = { haptics.tap(); showActions = true },
+                )
                 .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 "%02d".format(index),
@@ -505,12 +525,65 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
                 modifier = Modifier.padding(end = 10.dp),
             )
             Column(Modifier.weight(1f)) {
-                ConversationCardContent(
-                    p, conv,
-                    titleColor = if (active) c.onViolet else c.textHigh,
-                    mutedColor = if (active) c.onViolet.copy(alpha = 0.75f) else c.textMid,
-                    accentColor = if (active) c.onViolet else c.violet,
+                Text(
+                    conv.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (active) c.onViolet else c.textHigh,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                Text(
+                    relativeTime(conv.lastUpdatedAt) + "  ·  ${conv.nodeCount} turns",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (active) c.onViolet.copy(alpha = 0.75f) else c.textMid,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (conv.rootId in p.bookmarked) {
+                Text(
+                    "★",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (active) c.onViolet else c.violet,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+        }
+    }
+    if (showActions) {
+        FolderTabActionsSheet(
+            conv = conv,
+            bookmarked = conv.rootId in p.bookmarked,
+            onToggleBookmark = { p.onToggleBookmark(conv); showActions = false },
+            onSetProject = { p.onSetProject(conv); showActions = false },
+            onDismiss = { showActions = false },
+        )
+    }
+}
+
+/** Long-press actions for a [FolderTabRow] — star and project-assignment, off the tab itself. */
+@Composable
+private fun FolderTabActionsSheet(
+    conv: Conversations.Summary,
+    bookmarked: Boolean,
+    onToggleBookmark: () -> Unit,
+    onSetProject: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text(
+                conv.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            androidx.compose.material3.TextButton(onClick = onToggleBookmark, modifier = Modifier.fillMaxWidth()) {
+                Text(if (bookmarked) "☆ Remove star" else "★ Star")
+            }
+            androidx.compose.material3.TextButton(onClick = onSetProject, modifier = Modifier.fillMaxWidth()) {
+                Text("⊞ Assign to a project")
             }
         }
     }
