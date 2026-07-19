@@ -19,7 +19,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +30,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -70,7 +75,15 @@ fun DevelopRoom(onClose: () -> Unit) {
     // The paid Studio tab (Launch / store-publish) is contributed via DevelopTabs (S2 seam),
     // so core never references it directly.
     val studioTabs = remember { DevelopTabs.provider() }
-    val tabs = listOf("Hardware", "Files", "Terminal", "Audit") + studioTabs.map { it.label }
+    // Core four tabs get purpose-drawn glyphs (chip/board, folder-tab, prompt mark, check-in-circle);
+    // any Studio-contributed tab past those four gets a neutral diamond so this room never needs to
+    // know Studio's icon set.
+    val tabSpecs = listOf(
+        dev.aarso.ui.hyle.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
+        dev.aarso.ui.hyle.HyleTabSpec("Files") { tint -> filesTabGlyph(tint) },
+        dev.aarso.ui.hyle.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
+        dev.aarso.ui.hyle.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
+    ) + studioTabs.map { st -> dev.aarso.ui.hyle.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
 
     Column(
         Modifier
@@ -86,18 +99,11 @@ fun DevelopRoom(onClose: () -> Unit) {
         }
         Spacer(Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            tabs.forEachIndexed { i, label ->
-                dev.aarso.ui.hyle.HyleChip(selected = i == tab, onClick = { tab = i }, label = label)
-            }
-        }
+        dev.aarso.ui.hyle.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it })
         Spacer(Modifier.height(16.dp))
 
         when {
-            tab == 0 -> HardwareFacet()
+            tab == 0 -> HardwareFacet(onOpenTerminal = { tab = 2 })
             tab == 1 -> FilesFacet()
             tab == 2 -> TerminalFacet()
             tab == 3 -> AuditFacet(onRunPrompt = { prompt ->
@@ -108,6 +114,86 @@ fun DevelopRoom(onClose: () -> Unit) {
             else -> studioTabs[tab - 4].content()
         }
     }
+}
+
+/* ------------------------------------------------------------- Tab glyphs */
+
+/** Hardware: a chip/board outline with pins — simple line-drawn shapes, [SettingsRoom]'s TabGlyph style. */
+private fun DrawScope.hardwareTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    drawRoundRect(
+        tint,
+        topLeft = Offset(w * 0.24f, h * 0.24f),
+        size = Size(w * 0.52f, h * 0.52f),
+        cornerRadius = CornerRadius(w * 0.06f),
+        style = Stroke(width = sw),
+    )
+    listOf(h * 0.38f, h * 0.62f).forEach { y ->
+        drawLine(tint, Offset(w * 0.06f, y), Offset(w * 0.24f, y), strokeWidth = sw)
+        drawLine(tint, Offset(w * 0.76f, y), Offset(w * 0.94f, y), strokeWidth = sw)
+    }
+    listOf(w * 0.38f, w * 0.62f).forEach { x ->
+        drawLine(tint, Offset(x, h * 0.06f), Offset(x, h * 0.24f), strokeWidth = sw)
+        drawLine(tint, Offset(x, h * 0.76f), Offset(x, h * 0.94f), strokeWidth = sw)
+    }
+}
+
+/** Files: a folder-tab shape. */
+private fun DrawScope.filesTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    val path = Path().apply {
+        moveTo(w * 0.10f, h * 0.30f)
+        lineTo(w * 0.10f, h * 0.80f)
+        lineTo(w * 0.90f, h * 0.80f)
+        lineTo(w * 0.90f, h * 0.38f)
+        lineTo(w * 0.46f, h * 0.38f)
+        lineTo(w * 0.36f, h * 0.22f)
+        lineTo(w * 0.10f, h * 0.22f)
+        close()
+    }
+    drawPath(path, tint, style = Stroke(width = sw))
+}
+
+/** Terminal: a `>` prompt mark plus a line, like a shell cursor. */
+private fun DrawScope.terminalTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    val chevron = Path().apply {
+        moveTo(w * 0.16f, h * 0.26f)
+        lineTo(w * 0.42f, h * 0.50f)
+        lineTo(w * 0.16f, h * 0.74f)
+    }
+    drawPath(chevron, tint, style = Stroke(width = sw))
+    drawLine(tint, Offset(w * 0.50f, h * 0.74f), Offset(w * 0.86f, h * 0.74f), strokeWidth = sw)
+}
+
+/** Audit: a checkmark inside a circle. */
+private fun DrawScope.auditTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    drawCircle(tint, radius = w * 0.42f, style = Stroke(width = sw))
+    val check = Path().apply {
+        moveTo(w * 0.30f, h * 0.52f)
+        lineTo(w * 0.44f, h * 0.66f)
+        lineTo(w * 0.72f, h * 0.34f)
+    }
+    drawPath(check, tint, style = Stroke(width = sw))
+}
+
+/** Neutral placeholder glyph for any Studio-contributed tab (this room doesn't know its icon). */
+private fun DrawScope.genericTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    val diamond = Path().apply {
+        moveTo(w * 0.5f, h * 0.10f)
+        lineTo(w * 0.90f, h * 0.5f)
+        lineTo(w * 0.5f, h * 0.90f)
+        lineTo(w * 0.10f, h * 0.5f)
+        close()
+    }
+    drawPath(diamond, tint, style = Stroke(width = sw))
 }
 
 /* ----------------------------------------------------------------- Builds */
@@ -218,7 +304,7 @@ internal fun Hint(text: String) {
  * in CI. (Direct phone↔board over USB is the device-gated #4, not here.)
  */
 @Composable
-private fun HardwareFacet() {
+private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val repo = container.deviceRepo
     val store = container.remoteHostStore
@@ -250,7 +336,6 @@ private fun HardwareFacet() {
     var output by remember { mutableStateOf("") }
     var summary by remember { mutableStateOf<String?>(null) }
     var running by remember { mutableStateOf(false) }
-    var cmd by remember { mutableStateOf("uname -a") }
     var fqbn by remember { mutableStateOf("arduino:avr:uno") }
     var port by remember { mutableStateOf("/dev/ttyACM0") }
     var sketch by remember { mutableStateOf("~/sketches/blink") }
@@ -277,7 +362,6 @@ private fun HardwareFacet() {
         }
     }
     val host = hosts.first { it.alias == selected }
-    val remoteTarget = dev.aarso.domain.device.DeployTarget.Remote(host)
     fun arduinoTarget(): dev.aarso.domain.device.DeployTarget.Arduino? = runCatching {
         dev.aarso.domain.device.DeployTarget.Arduino(
             via = host,
@@ -300,21 +384,30 @@ private fun HardwareFacet() {
         WireButton("ESP-OTA", selected = mode == 2, onClick = { mode = 2 })
         WireButton("This phone (USB)", selected = mode == 3, onClick = { mode = 3 })
     }
+    Spacer(Modifier.height(6.dp))
+    Hint(
+        if (mode == 3) {
+            "⌂ on-device — flashes a board plugged into this phone. No network, no pairing."
+        } else {
+            "☁ watched — controls a paired host over SSH; credentials stay in the Keystore."
+        },
+    )
     Spacer(Modifier.height(8.dp))
     when (mode) {
         0 -> {
-            OutlinedTextField(cmd, { cmd = it }, label = { Text("Shell command") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Hint(
+                "Running one-off shell commands on a paired host now lives in the Terminal tab, so " +
+                    "every command shares one running transcript instead of clearing per run.",
+            )
             Spacer(Modifier.height(6.dp))
-            WireButton(if (running) "Running…" else "Run", enabled = !running && cmd.isNotBlank(), onClick = {
-                runRecipe(dev.aarso.domain.device.recipe.DeviceRecipes.shell(remoteTarget, cmd.trim()), null)
-            })
+            WireButton("Open Terminal ▸", onClick = onOpenTerminal)
         }
         1 -> {
-            OutlinedTextField(fqbn, { fqbn = it }, label = { Text("FQBN (packager:arch:board)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            dev.aarso.ui.hyle.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            OutlinedTextField(port, { port = it }, label = { Text("Serial port on the host") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            dev.aarso.ui.hyle.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            OutlinedTextField(sketch, { sketch = it }, label = { Text("Sketch path on the host") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            dev.aarso.ui.hyle.HyleField(sketch, { sketch = it }, label = "Sketch path on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 WireButton("List boards", enabled = !running, onClick = {
@@ -338,9 +431,9 @@ private fun HardwareFacet() {
             }
         }
         2 -> {
-            OutlinedTextField(espIp, { espIp = it }, label = { Text("ESP device IP") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            dev.aarso.ui.hyle.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            OutlinedTextField(espBin, { espBin = it }, label = { Text("Firmware .bin path on the host") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            dev.aarso.ui.hyle.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             WireButton(if (running) "Flashing…" else "Flash over network", enabled = !running && espIp.isNotBlank() && espBin.isNotBlank(), onClick = {
                 runRecipe(dev.aarso.domain.device.recipe.DeviceRecipes.espOta(espIp.trim(), espBin.trim()), null)
@@ -400,7 +493,7 @@ private fun UsbFlashPanel() {
         }
     }
     Spacer(Modifier.height(6.dp))
-    OutlinedTextField(hexPath, { hexPath = it }, label = { Text(".hex file path on this phone") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    dev.aarso.ui.hyle.HyleField(hexPath, { hexPath = it }, label = ".hex file path on this phone", modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(6.dp))
     WireButton(if (busy) "Flashing…" else "Flash over USB", enabled = !busy && selected != null && hexPath.isNotBlank(), onClick = {
         val board = boards.firstOrNull { it.device.deviceName == selected }?.device ?: return@WireButton
@@ -472,11 +565,12 @@ private fun FilesFacet() {
         return
     }
     Spacer(Modifier.height(8.dp))
-    OutlinedTextField(objective, { objective = it }, label = { Text("Objective") }, modifier = Modifier.fillMaxWidth())
+    dev.aarso.ui.hyle.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(6.dp))
-    OutlinedTextField(
+    dev.aarso.ui.hyle.HyleField(
         pathsText, { pathsText = it },
-        label = { Text("Context files — one path per line") },
+        label = "Context files — one path per line",
+        singleLine = false,
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(6.dp))

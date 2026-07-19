@@ -35,7 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
@@ -48,8 +52,11 @@ import dev.aarso.ui.hyle.HyleButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.HorizontalDivider
 import dev.aarso.AarsoApp
+import dev.aarso.ui.hyle.HyleCard
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
+import dev.aarso.ui.hyle.HyleTabBar
+import dev.aarso.ui.hyle.HyleTabSpec
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.theme.LocalHyleColors
 import kotlin.math.absoluteValue
@@ -97,14 +104,36 @@ fun ModelsRoom(
             modifier = Modifier.padding(horizontal = 20.dp),
         )
         Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            HyleChip(tab == ModelsTab.CHAT, { tab = ModelsTab.CHAT }, "Chat")
-            HyleChip(tab == ModelsTab.IMAGE, { tab = ModelsTab.IMAGE }, "Image")
-            HyleChip(tab == ModelsTab.BYO, { tab = ModelsTab.BYO }, "Bring your own")
-        }
+        HyleTabBar(
+            tabs = listOf(
+                HyleTabSpec("Chat") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawLine(tint, Offset(w * 0.16f, h * 0.30f), Offset(w * 0.84f, h * 0.30f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.16f, h * 0.50f), Offset(w * 0.72f, h * 0.50f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.16f, h * 0.70f), Offset(w * 0.56f, h * 0.70f), strokeWidth = sw)
+                },
+                HyleTabSpec("Image") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawRoundRect(
+                        tint, topLeft = Offset(w * 0.10f, h * 0.18f),
+                        size = Size(w * 0.80f, h * 0.64f),
+                        cornerRadius = CornerRadius(w * 0.10f), style = Stroke(width = sw),
+                    )
+                    drawCircle(tint, radius = w * 0.09f, center = Offset(w * 0.36f, h * 0.40f))
+                },
+                HyleTabSpec("Bring your own") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawCircle(tint, radius = w * 0.38f, style = Stroke(width = sw))
+                    drawLine(tint, Offset(w * 0.5f, h * 0.32f), Offset(w * 0.5f, h * 0.68f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.32f, h * 0.5f), Offset(w * 0.68f, h * 0.5f), strokeWidth = sw)
+                },
+            ),
+            selected = tab.ordinal,
+            onSelect = { tab = ModelsTab.entries[it] },
+        )
         // Source filter (Chat tab): on-device vs watched-cloud (owner ask).
         if (tab == ModelsTab.CHAT) {
             Spacer(Modifier.height(10.dp))
@@ -382,13 +411,9 @@ private fun DownloadAction(
 
 @Composable
 private fun LocalRow(name: String, size: Long, onDelete: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+    HyleCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.contentDescription
@@ -88,7 +87,6 @@ import dev.aarso.ui.hyle.hylePulse
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.hyle.HyleNavChip
 import dev.aarso.ui.hyle.FileImage
@@ -202,7 +200,7 @@ fun ChatScreen(
                                         Spacer(Modifier.size(8.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             HyleButton("Connect", onClick = onOpenSettings)
-                                            TextButton(onClick = { connectDismissed = true }) { Text("Not now") }
+                                            HyleButton("Not now", onClick = { connectDismissed = true }, secondary = true)
                                         }
                                     }
                                 }
@@ -373,14 +371,16 @@ fun ChatScreen(
                     },
                     enabled = state.genPhase == GenPhase.IDLE && (state.engineAvailable || imageMode),
                 )
-                if (!imageMode) {
-                    TextButton(
-                        onClick = { viewModel.refinePrompt(input) },
-                        enabled = input.isNotBlank() && !state.rewriting &&
-                            state.genPhase == GenPhase.IDLE && state.engineAvailable,
-                    ) {
-                        Text(if (state.rewriting) "…" else "Refine")
-                    }
+                // Always in the tree (never conditionally included) so the field/Send button
+                // beside it never shifts position entering/exiting image mode — reserve the
+                // space and fade + disable instead (same jitter class already fixed elsewhere).
+                TextButton(
+                    onClick = { viewModel.refinePrompt(input) },
+                    enabled = !imageMode && input.isNotBlank() && !state.rewriting &&
+                        state.genPhase == GenPhase.IDLE && state.engineAvailable,
+                    modifier = Modifier.alpha(if (!imageMode) 1f else 0f),
+                ) {
+                    Text(if (state.rewriting) "…" else "Refine")
                 }
                 if (state.genPhase != GenPhase.IDLE) {
                     // An in-flight image render has no cancel point (§6) — the
@@ -688,22 +688,62 @@ private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Bool
     }
 }
 
+// The interaction model (IA §B4): one model, a council of personas, or a council of different
+// models — a fixed 3-item set, never scrolling, and MORE consequential than Settings' tabs (the
+// interaction model is immutable once a chat starts), so it gets the shared HyleTabBar rather
+// than a scrolling chip row. Image/video/3D are NOT modes here — they live behind the composer's
+// "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
+private val ComposerModeTabs = listOf(
+    dev.aarso.ui.hyle.HyleTabSpec("Single") { tint ->
+        val w = size.width; val h = size.height
+        drawCircle(tint, radius = w * 0.30f, center = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.5f))
+    },
+    dev.aarso.ui.hyle.HyleTabSpec("Council · personas") { tint ->
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        val r = w * 0.16f
+        drawCircle(
+            tint, radius = r,
+            center = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.5f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+        drawCircle(
+            tint, radius = r,
+            center = androidx.compose.ui.geometry.Offset(w * 0.70f, h * 0.5f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+        drawLine(
+            tint,
+            androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.5f),
+            androidx.compose.ui.geometry.Offset(w * 0.56f, h * 0.5f),
+            strokeWidth = sw,
+        )
+    },
+    dev.aarso.ui.hyle.HyleTabSpec("Council · models") { tint ->
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        drawCircle(
+            tint, radius = w * 0.16f,
+            center = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.5f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+        drawRect(
+            tint,
+            topLeft = androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.34f),
+            size = androidx.compose.ui.geometry.Size(w * 0.28f, h * 0.32f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+    },
+)
+
 @Composable
 private fun ComposerModeRow(mode: ComposerMode, enabled: Boolean, onMode: (ComposerMode) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // The interaction model (IA §B4): one model, a council of personas, or a council of
-        // different models. Image/video/3D are NOT modes here — they live behind the composer's
-        // "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
-        HyleChip(mode == ComposerMode.SINGLE, { onMode(ComposerMode.SINGLE) }, "Single", enabled = enabled)
-        HyleChip(mode == ComposerMode.PERSONAS, { onMode(ComposerMode.PERSONAS) }, "Council · personas", enabled = enabled)
-        HyleChip(mode == ComposerMode.MODELS, { onMode(ComposerMode.MODELS) }, "Council · models", enabled = enabled)
-    }
+    dev.aarso.ui.hyle.HyleTabBar(
+        tabs = ComposerModeTabs,
+        selected = ComposerMode.entries.indexOf(mode).coerceAtLeast(0),
+        onSelect = { onMode(ComposerMode.entries[it]) },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**
@@ -833,8 +873,10 @@ private fun StreamingBubble(
     watched: Boolean,
 ) {
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    val uncertain = MaterialTheme.colorScheme.error
-    val onRails = MaterialTheme.colorScheme.primary
+    // Colorblind-safe: a single luminance/opacity ramp toward the existing violet, never a
+    // red-to-violet hue lerp (Hyle's hard rule — state is never encoded in hue alone).
+    val low = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val high = MaterialTheme.colorScheme.primary
     val showSpinner = phase == GenPhase.LOADING || tokens.isEmpty()
 
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -865,7 +907,7 @@ private fun StreamingBubble(
                         val annotated: AnnotatedString = buildAnnotatedString {
                             for (t in tokens) {
                                 val confidence = if (entropyColoring) Confidence.fromEntropy(t.entropy) else null
-                                val color = if (confidence == null) neutral else lerp(uncertain, onRails, confidence)
+                                val color = if (confidence == null) neutral else lerp(low, high, confidence)
                                 withStyle(SpanStyle(color = color)) { append(t.text) }
                             }
                         }
@@ -1021,7 +1063,7 @@ private fun MessageTurn(
 
 /**
  * The per-turn cost line. [minor] is in the user's own price denomination (we never invent a
- * currency — binding rule 8), so it's shown as a plain value alongside the real token counts.
+ * currency), so it's shown as a plain value alongside the real token counts.
  */
 private fun costLine(minor: String, tokensIn: String, tokensOut: String): String {
     val m = minor.toLongOrNull() ?: 0L

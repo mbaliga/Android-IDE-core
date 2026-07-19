@@ -55,7 +55,14 @@ fun AuditFacet(onRunPrompt: (String) -> Unit) {
         WireBox {
             Text(check.title, style = MaterialTheme.typography.bodyMedium)
             Text(
-                "${check.category.name.lowercase()} · ${check.status.name.lowercase()}",
+                // Pass/Fail/Skip already show their state via the highlighted button below —
+                // repeating the word here would double-encode the same fact as label + fill.
+                // Only PENDING/RUNNING have no matching button, so only they need the word.
+                if (check.status == AuditStatus.PENDING || check.status == AuditStatus.RUNNING) {
+                    "${check.category.name.lowercase()} · ${check.status.name.lowercase()}"
+                } else {
+                    check.category.name.lowercase()
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

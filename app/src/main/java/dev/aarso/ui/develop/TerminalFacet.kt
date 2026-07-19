@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -100,11 +99,10 @@ fun TerminalFacet() {
     Hint("Run a shell command on your machine over SSH. Output is shown verbatim.")
     Spacer(Modifier.height(8.dp))
 
-    OutlinedTextField(
+    dev.aarso.ui.hyle.HyleField(
         cmd,
         { cmd = it },
-        label = { Text("Shell command") },
-        singleLine = true,
+        label = "Shell command",
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(6.dp))

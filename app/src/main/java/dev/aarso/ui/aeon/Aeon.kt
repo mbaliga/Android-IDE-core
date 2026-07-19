@@ -1,6 +1,7 @@
 package dev.aarso.ui.hyle
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -25,6 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -407,20 +410,86 @@ fun HyleButton(
     }
 }
 
-/** Aeon card: raised fill, hairline edge, 10dp corners — the box register for grouped content. */
+/**
+ * Aeon card: raised fill, hairline edge, 10dp corners — the box register for grouped content.
+ * Optionally clickable/selectable (e.g. a picker row) — [onClick] makes it tappable, and
+ * [selected] swaps the fill to a violet-dim tint with a violet border so a selected card reads
+ * distinctly without touching hue outside the violet/cyan axis.
+ */
 @Composable
-fun HyleCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun HyleCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    selected: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val shape = RoundedCornerShape(10.dp)
     Column(
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(c.raised, shape)
-            .border(1.dp, c.hairline, shape)
+            .background(if (selected) c.violetDim else c.raised, shape)
+            .border(1.dp, if (selected) c.violet else c.hairline, shape)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = { haptics.tap(); onClick() })
+                } else {
+                    Modifier
+                },
+            )
             .padding(14.dp),
         content = content,
     )
+}
+
+/** One entry in a [HyleTabBar]: a label and a small hand-drawn Canvas glyph, tinted by the bar. */
+class HyleTabSpec(val label: String, val glyph: DrawScope.(tint: Color) -> Unit)
+
+/**
+ * The app's one fixed-width tab bar: an icon glyph, a label, and a 2dp underline indicator per
+ * tab, laid out with equal weight (never scrolling) — first built for [dev.aarso.ui.rooms.
+ * SettingsRoom]'s SettingsTabBar and pulled out here so every screen with a small, fixed set of
+ * top-level categories uses the same widget instead of an ad hoc horizontalScroll chip row (the
+ * single most repeated inconsistency an app-wide UX audit found this session). [trailing] is an
+ * optional fixed-width slot after the tabs (e.g. a filter-toggle icon) — always reserve its
+ * space in the caller rather than conditionally including it, or the tabs will visibly resize
+ * when it appears/disappears (the exact "tab bar jitter" bug this bar's callers have already hit
+ * once).
+ */
+@Composable
+fun HyleTabBar(
+    tabs: List<HyleTabSpec>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            tabs.forEachIndexed { i, tab ->
+                val on = i == selected
+                val tint = if (on) c.violet else c.textMid
+                Column(
+                    modifier = Modifier.weight(1f)
+                        .clickable { haptics.tap(); onSelect(i) }
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Canvas(Modifier.size(22.dp)) { tab.glyph(this, tint) }
+                    Spacer(Modifier.height(5.dp))
+                    Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.height(2.dp).width(22.dp).background(if (on) c.violet else Color.Transparent))
+                }
+            }
+            trailing?.invoke()
+        }
+        HorizontalDivider()
+    }
 }
 
 /** Aeon chip: the selection register — violet on dim violet, 6dp corners. */

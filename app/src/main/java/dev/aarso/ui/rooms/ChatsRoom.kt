@@ -65,6 +65,7 @@ import dev.aarso.domain.tree.Conversations
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.domain.library.Conversations as LibConversations
 import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.ui.hyle.HyleCard
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.hyle.FileImage
@@ -110,6 +111,10 @@ fun ChatsRoom(
     // decoupling the always-visible category tabs from tucked-away sort options.
     var sortExpanded by remember { mutableStateOf(false) }
     var projectDialogFor by remember { mutableStateOf<Conversations.Summary?>(null) }
+    // Image nodes aren't conversations — they key their own star/project state off the node's
+    // own id (session.bookmarkedRoots/conversationProjects are plain String-keyed maps, not
+    // strictly root-only), so this dialog is separate from projectDialogFor above.
+    var imageProjectDialogFor by remember { mutableStateOf<MessageNode?>(null) }
 
     // Reorder a list of tree summaries by the chosen sort, through the JVM-tested library path:
     // project each summary into the library model (carrying the honest open count / branch count),
@@ -164,9 +169,15 @@ fun ChatsRoom(
                 onSetProject = { projectDialogFor = it },
             )
             when (tab) {
-                ChatsTab.IMAGE -> ImageList(imageNodes, !state.isGenerating) {
-                    viewModel.branchFrom(it.id); onClose()
-                }
+                ChatsTab.IMAGE -> ImageList(
+                    imageNodes = imageNodes,
+                    bookmarked = bookmarked,
+                    projects = projects,
+                    enabled = !state.isGenerating,
+                    onOpen = { viewModel.branchFrom(it.id); onClose() },
+                    onToggleBookmark = { session.toggleBookmark(it.id) },
+                    onSetProject = { imageProjectDialogFor = it },
+                )
                 ChatsTab.PROJECTS -> ProjectGroupedList(listProps(conversations, ""), projects)
                 else -> {
                     val list = when (tab) {
@@ -190,6 +201,14 @@ fun ChatsRoom(
                 existing = projects.values.distinct().sorted(),
                 onDismiss = { projectDialogFor = null },
                 onSet = { session.setConversationProject(conv.rootId, it); projectDialogFor = null },
+            )
+        }
+        imageProjectDialogFor?.let { node ->
+            ProjectDialog(
+                current = projects[node.id].orEmpty(),
+                existing = projects.values.distinct().sorted(),
+                onDismiss = { imageProjectDialogFor = null },
+                onSet = { session.setConversationProject(node.id, it); imageProjectDialogFor = null },
             )
         }
 
@@ -427,15 +446,7 @@ private fun ProjectGroupedList(p: ConversationListProps, projects: Map<String, S
 @Composable
 private fun FolderBody(label: String?, members: List<Conversations.Summary>, p: ConversationListProps) {
     val c = LocalHyleColors.current
-    val shape = RoundedCornerShape(14.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(c.ink, shape)
-            .border(1.dp, c.hairline, shape)
-            .padding(12.dp),
-    ) {
+    HyleCard {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -551,8 +562,8 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
         }
     }
     if (showActions) {
-        FolderTabActionsSheet(
-            conv = conv,
+        ConversationActionsSheet(
+            title = conv.title,
             bookmarked = conv.rootId in p.bookmarked,
             onToggleBookmark = { p.onToggleBookmark(conv); showActions = false },
             onSetProject = { p.onSetProject(conv); showActions = false },
@@ -561,10 +572,15 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
     }
 }
 
-/** Long-press actions for a [FolderTabRow] — star and project-assignment, off the tab itself. */
+/**
+ * Long-press actions shared by every entry in this room — star and project-assignment, off the
+ * row/card itself so the default list stays a lean title+time line. Used by [FolderTabRow],
+ * [ConversationCard], and [ImageNodeCard] alike (generalized off a single [title] rather than a
+ * [Conversations.Summary] so the Image tab's [dev.aarso.domain.MessageNode] rows can share it).
+ */
 @Composable
-private fun FolderTabActionsSheet(
-    conv: Conversations.Summary,
+private fun ConversationActionsSheet(
+    title: String,
     bookmarked: Boolean,
     onToggleBookmark: () -> Unit,
     onSetProject: () -> Unit,
@@ -573,7 +589,7 @@ private fun FolderTabActionsSheet(
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             Text(
-                conv.title,
+                title,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -590,7 +606,15 @@ private fun FolderTabActionsSheet(
 }
 
 @Composable
-private fun ImageList(imageNodes: List<MessageNode>, enabled: Boolean, onOpen: (MessageNode) -> Unit) {
+private fun ImageList(
+    imageNodes: List<MessageNode>,
+    bookmarked: Set<String>,
+    projects: Map<String, String>,
+    enabled: Boolean,
+    onOpen: (MessageNode) -> Unit,
+    onToggleBookmark: (MessageNode) -> Unit,
+    onSetProject: (MessageNode) -> Unit,
+) {
     if (imageNodes.isEmpty()) {
         Text(
             "No image turns yet. Tap + in the composer → Image, then describe one.",
@@ -606,7 +630,15 @@ private fun ImageList(imageNodes: List<MessageNode>, enabled: Boolean, onOpen: (
         contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
     ) {
         items(imageNodes, key = { it.id }) { node ->
-            ImageNodeCard(node = node, enabled = enabled, onOpen = { onOpen(node) })
+            ImageNodeCard(
+                node = node,
+                enabled = enabled,
+                bookmarked = node.id in bookmarked,
+                project = projects[node.id],
+                onOpen = { onOpen(node) },
+                onToggleBookmark = { onToggleBookmark(node) },
+                onSetProject = { onSetProject(node) },
+            )
         }
     }
 }
@@ -615,10 +647,16 @@ private fun ImageList(imageNodes: List<MessageNode>, enabled: Boolean, onOpen: (
 private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary) {
     val c = LocalHyleColors.current
     val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
+    var showActions by remember { mutableStateOf(false) }
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = p.enabled, onClick = { p.onOpen(conv) }),
+            .combinedClickable(
+                enabled = p.enabled,
+                onClick = { p.onOpen(conv) },
+                onLongClick = { haptics.tap(); showActions = true },
+            ),
         colors = CardDefaults.cardColors(
             containerColor = if (active) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -632,14 +670,25 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
             ConversationCardContent(p, conv)
         }
     }
+    if (showActions) {
+        ConversationActionsSheet(
+            title = conv.title,
+            bookmarked = conv.rootId in p.bookmarked,
+            onToggleBookmark = { p.onToggleBookmark(conv); showActions = false },
+            onSetProject = { p.onSetProject(conv); showActions = false },
+            onDismiss = { showActions = false },
+        )
+    }
 }
 
 /**
- * The shared conversation row content — title, project tag, relative time, turn count, and the
- * star/project-assign buttons. Used by both the plain [ConversationCard] (All/Text/Starred) and
- * the folder-tab rows in [ProjectGroupedList], so neither loses functionality. Colors default to
- * this room's normal palette; the folder-tab's solid-violet "open conversation" pill overrides
- * them with [titleColor]/[mutedColor]/[accentColor] so the text stays legible on the fill.
+ * [ConversationCard]'s row content — title, project tag, relative time, turn count, and a
+ * passive star indicator (no longer a tap target: star/project-assign now live in the
+ * long-press [ConversationActionsSheet], matching [FolderTabRow]'s pattern). [FolderTabRow]
+ * builds its own row content rather than calling this one — a tab row and a flat card read
+ * differently enough that sharing this function would fight both layouts — but they share the
+ * same long-press sheet. [titleColor]/[mutedColor]/[accentColor] remain overridable for a future
+ * non-default caller; [ConversationCard] is the only caller today and uses the defaults.
  */
 @Composable
 private fun ConversationCardContent(
@@ -693,32 +742,12 @@ private fun ConversationCardContent(
                 }
             }
         }
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .clickable(onClick = { p.onSetProject(conv) })
-                .semantics { contentDescription = "Assign to a project" },
-            contentAlignment = Alignment.Center,
-        ) {
+        if (bookmarked) {
             Text(
-                "⊞",
-                style = MaterialTheme.typography.titleMedium,
-                color = if (project != null) accentColor else mutedColor,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .clickable(onClick = { p.onToggleBookmark(conv) })
-                .semantics { contentDescription = if (bookmarked) "Remove star" else "Star" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                if (bookmarked) "★" else "☆",
-                style = MaterialTheme.typography.titleMedium,
-                color = if (bookmarked) accentColor else mutedColor,
+                "★",
+                style = MaterialTheme.typography.titleSmall,
+                color = accentColor,
+                modifier = Modifier.padding(start = 6.dp),
             )
         }
     }
@@ -761,11 +790,28 @@ private fun ProjectDialog(
     )
 }
 
+/** A long-press reveals [ConversationActionsSheet] (star + assign-to-project), keyed off this
+ *  image turn's own node id — image nodes aren't grouped into a conversation summary here, so
+ *  they can't key off a rootId the way [ConversationCard]/[FolderTabRow] do. */
 @Composable
-private fun ImageNodeCard(node: MessageNode, enabled: Boolean, onOpen: () -> Unit) {
+private fun ImageNodeCard(
+    node: MessageNode,
+    enabled: Boolean,
+    bookmarked: Boolean,
+    project: String?,
+    onOpen: () -> Unit,
+    onToggleBookmark: () -> Unit,
+    onSetProject: () -> Unit,
+) {
     val c = LocalHyleColors.current
+    var showActions by remember { mutableStateOf(false) }
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpen),
+        modifier = Modifier.fillMaxWidth().combinedClickable(
+            enabled = enabled,
+            onClick = onOpen,
+            onLongClick = { haptics.tap(); showActions = true },
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         border = BorderStroke(1.dp, c.hairline),
     ) {
@@ -773,13 +819,37 @@ private fun ImageNodeCard(node: MessageNode, enabled: Boolean, onOpen: () -> Uni
             node.metadata[Conversations.IMAGE_KEY]?.let {
                 FileImage(it, Modifier.fillMaxWidth().heightIn(max = 220.dp))
             }
-            Text(
-                relativeTime(node.createdAt) + (node.modelId?.let { " · ${it.substringAfter(':')}" } ?: ""),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+            if (project != null) {
+                Text(
+                    "▸ $project",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.violet,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    relativeTime(node.createdAt) + (node.modelId?.let { " · ${it.substringAfter(':')}" } ?: ""),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp).weight(1f),
+                )
+                if (bookmarked) {
+                    Text("★", style = MaterialTheme.typography.titleSmall, color = c.violet)
+                }
+            }
         }
+    }
+    if (showActions) {
+        ConversationActionsSheet(
+            title = relativeTime(node.createdAt),
+            bookmarked = bookmarked,
+            onToggleBookmark = { onToggleBookmark(); showActions = false },
+            onSetProject = { onSetProject(); showActions = false },
+            onDismiss = { showActions = false },
+        )
     }
 }
 

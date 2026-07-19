@@ -20,7 +20,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -42,7 +42,9 @@ import dev.aarso.domain.device.FitVerdict
 import dev.aarso.domain.device.ModelFit
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleCard
+import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.onboarding.AiCoreAvailability
+import dev.aarso.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 
 /**
@@ -77,6 +79,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 }
             }
 
+            val hyleColors = LocalHyleColors.current
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -91,22 +94,36 @@ fun OnboardingScreen(onDone: () -> Unit) {
                                     if (pager.currentPage == i) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        MaterialTheme.colorScheme.surfaceVariant
+                                        hyleColors.hairline
                                     },
                                 ),
                         )
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (pager.currentPage < 2) {
-                    TextButton(onClick = onDone) { Text("Skip") }
+                // Reserve this row's space on every page (rather than including/excluding the
+                // buttons outright) so the dot row never shifts vertically as the user swipes —
+                // on page 2 (model setup) it goes invisible/disabled because that page draws its
+                // own Begin/Skip further down inside ModelSetupPage.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.alpha(if (pager.currentPage < 2) 1f else 0f),
+                ) {
+                    HyleButton(
+                        "Skip",
+                        secondary = true,
+                        enabled = pager.currentPage < 2,
+                        // Skip on page 1 or 2 must still land on model setup (page 3) — a fresh
+                        // install must never end onboarding with no model confirmed or
+                        // downloading. Only that final page's own Skip actually exits.
+                        onClick = { scope.launch { pager.animateScrollToPage(2) } },
+                    )
                     HyleButton(
                         "Continue",
+                        enabled = pager.currentPage < 2,
                         onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },
                     )
                 }
-                // Page 2 (model setup) carries its own Begin/Skip inside ModelSetupPage — its
-                // choice determines whether Begin is even offered yet.
             }
         }
     }
@@ -147,6 +164,7 @@ private fun ModelSetupPage(onReady: () -> Unit) {
     val container = (context.applicationContext as AarsoApp).container
     val session = container.sessionStore
     val scope = rememberCoroutineScope()
+    val c = LocalHyleColors.current
 
     var checking by remember { mutableStateOf(true) }
     var aiCoreAvailable by remember { mutableStateOf(false) }
@@ -167,8 +185,7 @@ private fun ModelSetupPage(onReady: () -> Unit) {
     val active by container.downloadCenter.active.collectAsState()
 
     Column(Modifier.fillMaxSize()) {
-        Text("Pick a model", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
+        HyleTitle("Pick a model")
         Text(
             "So you start chatting with a real model, not a placeholder.",
             style = MaterialTheme.typography.bodyMedium,
@@ -236,10 +253,18 @@ private fun ModelSetupPage(onReady: () -> Unit) {
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    progress.error != null -> HyleButton("Retry", onClick = {
-                        container.downloadCenter.retry(m.id)
-                        ready = true
-                    })
+                    progress.error != null -> Column {
+                        Text(
+                            "failed: ${progress.error}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = c.error,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        HyleButton("Retry", onClick = {
+                            container.downloadCenter.retry(m.id)
+                            ready = true
+                        })
+                    }
                     else -> Column {
                         LinearProgressIndicator(progress = { progress.fraction }, modifier = Modifier.fillMaxWidth())
                         Text(
@@ -254,7 +279,7 @@ private fun ModelSetupPage(onReady: () -> Unit) {
 
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onReady) { Text("Skip for now") }
+            HyleButton("Skip for now", secondary = true, onClick = onReady)
             Spacer(Modifier.width(8.dp))
             HyleButton("Begin", enabled = ready, onClick = onReady)
         }
