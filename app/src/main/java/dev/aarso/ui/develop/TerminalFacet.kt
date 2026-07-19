@@ -192,15 +192,11 @@ private fun LocalTerminal(scope: kotlinx.coroutines.CoroutineScope, filesDir: ja
     }
 
     key(screenVersion) {
-        WireBox(Modifier.heightIn(min = 160.dp)) {
-            val text = (0 until pty.screen.rows).joinToString("\n") { pty.screen.lineText(it) }.trimEnd('\n')
-            Text(
-                if (text.isBlank()) "(no output yet)" else text,
-                fontFamily = FontFamily.Monospace,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
-            )
-        }
+        dev.aarso.ui.remote.TerminalView(
+            screen = pty.screen,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 320.dp)
+                .verticalScroll(rememberScrollState()),
+        )
     }
     Spacer(Modifier.height(8.dp))
     WireField("input (sent with Enter)", input, { input = it })
