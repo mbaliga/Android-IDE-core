@@ -16,7 +16,10 @@
 4. **Hyle + type.** Vendored `:hyle` tokens as-is (do not switch to the published artifact). AMOLED black ground, ~300ms cubic-bezier motion. Plus Jakarta Sans.
 5. **Fenced-off code.** `domain/council/CostEstimator.kt` is Council-escalation-scoped; do not refactor, generalize, or reuse it for Loops budgets. The message tree is append-only; `GraphRunLog.toNodes` semantics don't change.
 6. **License policy.** Linked/vendored dependencies: Apache-2.0 / MIT / BSD / ISC only (MPL-2.0 case-by-case, flagged). All copyleft incl. LGPL banned for linking. Every borrow: version-pinned, LICENSE → `NOTICE`, license-report CI gate must pass. Runner-invoked tools may carry any license.
-7. **Brand string is "FoneBru"** (owner ruling 2026-07-11). Package rename stays deferred (Sprint R) — do not touch Gradle identifiers.
+7. **Brand string is "Fonebrew"** (owner ruling 2026-07-16 — supersedes the earlier "FoneBru"
+   ruling from 2026-07-11: owner legal research found "Bru" is HUL-owned and litigious in India;
+   "Fonebrew" chosen instead, domains `fonebrew.dev` + `fonebrew.app` secured). Package rename
+   stays deferred (Sprint R) — do not touch Gradle identifiers.
 
 ---
 
@@ -43,7 +46,14 @@
 ```
 Free UI reads/writes only: `title, notes, state(TODO↔DONE), orderKey, dueAt`. `TaskStore` (DAO + repository) in core; JVM tests: CRUD, ordering, migration.
 
-### WatchedItem — `AppDatabase` (free)
+### WatchedItem — REMOVED (2026-07-17)
+The Watch/Watchlist substrate specified below was built (P2) then **pulled from this repo's free
+floor** — owner call, after on-device testing surfaced a keyboard/list-collapse bug on the Watch
+tab; the owner decided Watch belongs in the paid Studio layer, not free core. `WatchedItemEntity`,
+`WatchDao`, `WatchStore`, `WatchKind`, `WatchDue`, `WatchSeeds`, and the Watch tab in
+`ProductRoomFree` are deleted from source; `AppDatabase` bumped v5→v6. Kept below as historical
+spec record only — do not re-implement against this section without confirming with the owner
+that Watch is re-entering the free core (it may instead land in Studio).
 ```kotlin
 @Entity data class WatchedItem(
   @PrimaryKey val id: String,
@@ -94,8 +104,10 @@ Loops-room UI (free): Run sheet = auto-generated params form + optional budget f
 ### To-do (free floor)
 Single scrolling list replacing the current `ProjectRoomLocked` screen. Composer row pinned top (text + Add; enter adds). Row: circle checkbox (outline → filled violet + strike, ~300ms), title, overflow (notes, due, delete). Long-press drag reorder (fractional `orderKey`); done items sink to a collapsed "Done" section. Due renders relative ("in 3d"/"overdue"; overdue = high-luminance violet + filled-alert glyph + label — never red). Swipe → done with undo. No projects, tags, or filters in free — flatness is the feature. `ProductRoomFree(extraTabs: List<Pair<String, @Composable () -> Unit>> = emptyList())` so an above-core layer can append tabs.
 
-### Watch
-WatchedItem rows: kind glyph (RENEWAL ↻ / EXPIRY ⌛ / STATUS ◉), label, days-remaining chip (luminance scales toward due; overdue = filled glyph + "overdue" label), amountText as quiet secondary, snooze/edit in overflow. Sorted by dueAt, nulls last. Empty state = tappable seed ghost rows. Header microcopy: "Legibility, not automation — nothing here acts on your accounts."
+### Watch — REMOVED (2026-07-17)
+Was: WatchedItem rows: kind glyph (RENEWAL ↻ / EXPIRY ⌛ / STATUS ◉), label, days-remaining chip (luminance scales toward due; overdue = filled glyph + "overdue" label), amountText as quiet secondary, snooze/edit in overflow. Sorted by dueAt, nulls last. Empty state = tappable seed ghost rows. Header microcopy: "Legibility, not automation — nothing here acts on your accounts."
+
+Pulled from the free floor per owner call — see the WatchedItem note above. Not present in `ProductRoomFree` anymore.
 
 ### Observable seams (2-line change)
 Back `ProjectRoomSlot.content` and `DevelopTabs.provider` with `mutableStateOf` (setters stay install-only) so a mid-session install recomposes; JVM test asserts install triggers snapshot invalidation.
@@ -107,11 +119,10 @@ Back `ProjectRoomSlot.content` and `DevelopTabs.provider` with `mutableStateOf` 
 **P0-core (docs + config only).** Append a pointer to the Studio Suite brief in `docs/HANDOFF-CURRENT.md`; note beside it that `docs/STATE.md` is stale. Commit this file as `docs/CORE_PHASES.md`. Install a dependency-license-report Gradle plugin + allowlist CI gate; scaffold `NOTICE`.
 DoD: gate green on current tree; license report runs; no source semantics changed.
 
-**P1 — Task substrate + free floor shell + observable slots.** Task entity/DAO/store + migration; `ProductRoomFree` with [To-do] tab per above (Watch arrives P2); observable seams change.
+**P1 — Task substrate + free floor shell + observable slots.** Task entity/DAO/store + migration; `ProductRoomFree` with [To-do] tab per above (Watch was planned for P2, since removed — see below); observable seams change.
 DoD: store CRUD/order/migration tests; bare core renders To-do, not the lock text [code-complete + verified-JVM]; reorder/undo/done-section gestures [owner-verify]; slot-invalidation test passes.
 
-**P2 — Watchlist.** WatchedItem + store + migration; Watch tab per above incl. seeds.
-DoD: store tests; seeds insert-on-tap only; due/overdue math tested with fixed clock; render [owner-verify].
+**P2 — Watchlist — REMOVED (2026-07-17).** Was: WatchedItem + store + migration; Watch tab per above incl. seeds. Built, then pulled from the free floor per owner call (on-device bug + Watch reassigned to the paid Studio layer). Source deleted; `AppDatabase` v5→v6.
 
 **P3 — Engine extension + Loops run UI.** Exactly the spec above.
 DoD (each as a named JVM test): param substitution incl. refuse-to-start; budget stop on each axis with correct `stoppedBecause` and no over-run step; `onStep` ordering + cancellation; totals math incl. `estimated` propagation; ledger rows per step; `GraphRunLog` for partial/cancelled runs; existing `GraphRunner` callers compile unchanged. UI stream/cancel feel [owner-verify].

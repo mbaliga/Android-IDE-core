@@ -33,10 +33,11 @@ android {
         applicationId = "dev.aarso"
         minSdk = 31          // pragmatic floor; adjustable as system-integration lands
         targetSdk = 36       // recent Android (the target device)
-        // +1 per Play upload (docs/play/release-process.md); also bumped for sideload
+        // Fonebrew launch build (2026-07-16): resets the version spine for this brand's first
+        // ship. +1 per Play upload (docs/play/release-process.md); also bumped for sideload
         // refreshes so a new APK always installs over the previous one.
-        versionCode = 17
-        versionName = "0.13.0"
+        versionCode = 1
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -146,6 +147,10 @@ dependencies {
     // Shared crash-recovery utility (same submodule, separate coordinate — deliberately
     // independent of :hyle so non-Hyle apps can also depend on it; see that repo's README).
     implementation("dev.aarso:crash-recovery:1.0.0")
+    // On-device Gemini Nano via Android's AICore system service — an experimental preview SDK
+    // (0.0.1-exp01) that only runs on a narrow device set (Pixel 8+/9 class, a Galaxy S24
+    // subset); AiCoreEngine/AiCoreAvailability gate and fail closed everywhere else.
+    implementation("com.google.ai.edge.aicore:aicore:0.0.1-exp01")
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)

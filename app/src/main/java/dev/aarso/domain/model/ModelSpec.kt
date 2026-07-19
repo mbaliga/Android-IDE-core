@@ -29,7 +29,8 @@ data class ModelSpec(
     /** A "watched object" (§5c) — every cloud model is one; on-device models are not. */
     val watched: Boolean = false,
 ) {
-    val isOnDevice: Boolean get() = runtime == Runtime.ECHO_DEV || runtime == Runtime.LOCAL_GGUF
+    val isOnDevice: Boolean get() =
+        runtime == Runtime.ECHO_DEV || runtime == Runtime.LOCAL_GGUF || runtime == Runtime.AICORE_NANO
 }
 
 enum class Runtime {
@@ -38,6 +39,11 @@ enum class Runtime {
 
     /** Real local GGUF via llama.cpp — not loadable until the native build. */
     LOCAL_GGUF,
+
+    /** The phone's own on-device Gemini Nano via Android's AICore system service — only on a
+     *  narrow device set; [dev.aarso.ui.onboarding.AiCoreAvailability] gates before this is ever
+     *  offered. On-device, never watched — same footing as [LOCAL_GGUF]. */
+    AICORE_NANO,
 
     /** A user-configured cloud provider (opt-in, watched, never a default). */
     CLOUD,

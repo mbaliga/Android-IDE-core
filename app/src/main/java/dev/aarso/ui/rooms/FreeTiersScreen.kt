@@ -98,7 +98,7 @@ fun FreeTiersScreen(onClose: () -> Unit) {
             Text("Updating the list", style = MaterialTheme.typography.titleSmall)
             Text(
                 "Updating fetches the latest list ONLINE from the source below — the only time " +
-                    "Aarso reaches out for this, and never without your say-so.",
+                    "Fonebrew reaches out for this, and never without your say-so.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -117,7 +117,7 @@ fun FreeTiersScreen(onClose: () -> Unit) {
                 )
             }
             if (autoUpdate) Text(
-                "On — Aarso will fetch this list online each time you open this screen, until you turn it off.",
+                "On — Fonebrew will fetch this list online each time you open this screen, until you turn it off.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -176,7 +176,7 @@ fun FreeTiersScreen(onClose: () -> Unit) {
                 Text(
                     "This connects to the internet and fetches the latest free-tier list from:\n\n" +
                         "$sourceUrl\n\n" +
-                        "Aarso is on-device by default; this is the only time it reaches out for this list." +
+                        "Fonebrew is on-device by default; this is the only time it reaches out for this list." +
                         if (consent == FtConsent.ENABLE_AUTO)
                             " Auto-update will then do this each time you open this screen, until you turn it off."
                         else "",

@@ -4,9 +4,9 @@ package dev.aarso.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,19 +14,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.contentDescription
@@ -78,15 +83,16 @@ import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
 import dev.aarso.domain.tree.Conversations
+import dev.aarso.ui.hyle.hylePulse
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.hyle.HyleNavChip
 import dev.aarso.ui.hyle.FileImage
 import dev.aarso.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * The home room of the spatial shell: the active thread. No app chrome beyond a
@@ -110,7 +116,6 @@ fun ChatScreen(
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
     var showParticipants by remember { mutableStateOf(false) }
-    var showMe by remember { mutableStateOf(false) }
     var actionStep by remember { mutableStateOf<PathView.Step?>(null) }
     var flagStep by remember { mutableStateOf<PathView.Step?>(null) }
     // D1: dismissible "Connect your repos" home card (session-scoped dismissal).
@@ -143,13 +148,19 @@ fun ChatScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        // SpatialRoot's outer Box already reserves the nav-bar with systemBarsPadding();
+        // a plain imePadding() here would stack on top of that and leave a nav-bar-sized
+        // gap between the composer and the keyboard, so exclude what's already reserved.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+        ) {
             HomeHeader(
                 state = state,
                 onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
                 onOpenChats = onOpenChats,
                 onOpenSettings = onOpenSettings,
-                onOpenMe = { showMe = true },
             )
             InstrumentsStrip(
                 state = state,
@@ -188,7 +199,7 @@ fun ChatScreen(
                                         Spacer(Modifier.size(8.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             HyleButton("Connect", onClick = onOpenSettings)
-                                            TextButton(onClick = { connectDismissed = true }) { Text("Not now") }
+                                            HyleButton("Not now", onClick = { connectDismissed = true }, secondary = true)
                                         }
                                     }
                                 }
@@ -220,6 +231,7 @@ fun ChatScreen(
                                 tokens = state.streamingTokens,
                                 entropyColoring = entropyColoring,
                                 imageMode = state.imageMode,
+                                watched = state.models.find { it.id == state.activeModelId }?.watched ?: false,
                             )
                         }
                     }
@@ -358,14 +370,16 @@ fun ChatScreen(
                     },
                     enabled = state.genPhase == GenPhase.IDLE && (state.engineAvailable || imageMode),
                 )
-                if (!imageMode) {
-                    TextButton(
-                        onClick = { viewModel.refinePrompt(input) },
-                        enabled = input.isNotBlank() && !state.rewriting &&
-                            state.genPhase == GenPhase.IDLE && state.engineAvailable,
-                    ) {
-                        Text(if (state.rewriting) "…" else "Refine")
-                    }
+                // Always in the tree (never conditionally included) so the field/Send button
+                // beside it never shifts position entering/exiting image mode — reserve the
+                // space and fade + disable instead (same jitter class already fixed elsewhere).
+                TextButton(
+                    onClick = { viewModel.refinePrompt(input) },
+                    enabled = !imageMode && input.isNotBlank() && !state.rewriting &&
+                        state.genPhase == GenPhase.IDLE && state.engineAvailable,
+                    modifier = Modifier.alpha(if (!imageMode) 1f else 0f),
+                ) {
+                    Text(if (state.rewriting) "…" else "Refine")
                 }
                 if (state.genPhase != GenPhase.IDLE) {
                     // An in-flight image render has no cancel point (§6) — the
@@ -391,6 +405,12 @@ fun ChatScreen(
         }
 
         SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
+
+        // Loading a GGUF into memory is genuinely obstructive — typing or switching rooms
+        // mid-load races the engine's init, so the surface goes untouchable until it settles.
+        if (state.genPhase == GenPhase.LOADING) {
+            dev.aarso.ui.hyle.HyleBlockingOverlay("Loading model…")
+        }
     }
 
     if (showModelSheet) {
@@ -416,17 +436,6 @@ fun ChatScreen(
         ) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 dev.aarso.ui.rooms.ParticipantsScreen(onClose = { showParticipants = false })
-            }
-        }
-    }
-
-    if (showMe) {
-        Dialog(
-            onDismissRequest = { showMe = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.aarso.ui.rooms.MeScreen(onClose = { showMe = false })
             }
         }
     }
@@ -483,7 +492,6 @@ private fun HomeHeader(
     onBadgeTap: () -> Unit,
     onOpenChats: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenMe: () -> Unit = {},
 ) {
     val c = LocalHyleColors.current
     Row(
@@ -503,19 +511,61 @@ private fun HomeHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        // Right: Settings, then the profile avatar → Me · Myself · I.
+        // Right: the user-selectable status chip (Settings -> Global -> Header status), then Settings.
+        // Replaces the fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings,
+        // this slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
+        HeaderIndicator(state)
         HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(c.violet, CircleShape)
-                .clickable(onClick = onOpenMe)
-                .semantics { contentDescription = "Open your profile — Me, Myself, I" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("☺", style = MaterialTheme.typography.titleSmall, color = c.onViolet)
+    }
+}
+
+/**
+ * The user-selectable status chip that replaced the fixed Me·Myself·I avatar: a single fact,
+ * chosen in Settings -> Global -> "Header status" ([dev.aarso.data.SessionStore.headerIndicator]),
+ * about the CURRENT conversation only — never a claim about the whole account/device, matching
+ * this header's existing "quiet, per-conversation" scope (the title text beside it works the
+ * same way). Renders nothing for "NONE" (the default) or before there's anything to say yet.
+ */
+@Composable
+private fun HeaderIndicator(state: ChatUiState) {
+    val context = LocalContext.current
+    val container = (context.applicationContext as dev.aarso.AarsoApp).container
+    val mode by container.sessionStore.headerIndicator.collectAsState()
+    if (mode == "NONE") return
+    val c = LocalHyleColors.current
+    val rootId = state.steps.firstOrNull()?.node?.id ?: return
+
+    val label = when (mode) {
+        "SOVEREIGNTY" -> {
+            val entries by container.ledgerStore.entries().collectAsState(initial = emptyList())
+            val split = remember(entries, rootId) {
+                dev.aarso.domain.ledger.LedgerAggregations.provenanceSplit(
+                    entries.filter { it.chatId == rootId },
+                )
+            }
+            if (split.onDeviceTokens + split.cloudTokens <= 0L) return
+            "⌂ ${(split.sovereigntyRatio * 100).roundToInt()}%"
         }
+        "QUOTA" -> {
+            val usage by container.freeTierUsageStore.usage.collectAsState()
+            val requestsToday = usage.values.sumOf { it.requestsToday }
+            if (requestsToday <= 0) return
+            "$requestsToday today"
+        }
+        "TIME" -> {
+            val startedAt = state.steps.firstOrNull()?.node?.createdAt ?: return
+            dev.aarso.ui.rooms.relativeTime(startedAt)
+        }
+        else -> return
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.inset, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = c.textMid, maxLines = 1)
     }
 }
 
@@ -667,22 +717,62 @@ private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Bool
     }
 }
 
+// The interaction model (IA §B4): one model, a council of personas, or a council of different
+// models — a fixed 3-item set, never scrolling, and MORE consequential than Settings' tabs (the
+// interaction model is immutable once a chat starts), so it gets the shared HyleTabBar rather
+// than a scrolling chip row. Image/video/3D are NOT modes here — they live behind the composer's
+// "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
+private val ComposerModeTabs = listOf(
+    dev.aarso.ui.hyle.HyleTabSpec("Single") { tint ->
+        val w = size.width; val h = size.height
+        drawCircle(tint, radius = w * 0.30f, center = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.5f))
+    },
+    dev.aarso.ui.hyle.HyleTabSpec("Council · personas") { tint ->
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        val r = w * 0.16f
+        drawCircle(
+            tint, radius = r,
+            center = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.5f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+        drawCircle(
+            tint, radius = r,
+            center = androidx.compose.ui.geometry.Offset(w * 0.70f, h * 0.5f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+        drawLine(
+            tint,
+            androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.5f),
+            androidx.compose.ui.geometry.Offset(w * 0.56f, h * 0.5f),
+            strokeWidth = sw,
+        )
+    },
+    dev.aarso.ui.hyle.HyleTabSpec("Council · models") { tint ->
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        drawCircle(
+            tint, radius = w * 0.16f,
+            center = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.5f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+        drawRect(
+            tint,
+            topLeft = androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.34f),
+            size = androidx.compose.ui.geometry.Size(w * 0.28f, h * 0.32f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
+        )
+    },
+)
+
 @Composable
 private fun ComposerModeRow(mode: ComposerMode, enabled: Boolean, onMode: (ComposerMode) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // The interaction model (IA §B4): one model, a council of personas, or a council of
-        // different models. Image/video/3D are NOT modes here — they live behind the composer's
-        // "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
-        HyleChip(mode == ComposerMode.SINGLE, { onMode(ComposerMode.SINGLE) }, "Single", enabled = enabled)
-        HyleChip(mode == ComposerMode.PERSONAS, { onMode(ComposerMode.PERSONAS) }, "Council · personas", enabled = enabled)
-        HyleChip(mode == ComposerMode.MODELS, { onMode(ComposerMode.MODELS) }, "Council · models", enabled = enabled)
-    }
+    dev.aarso.ui.hyle.HyleTabBar(
+        tabs = ComposerModeTabs,
+        selected = ComposerMode.entries.indexOf(mode).coerceAtLeast(0),
+        onSelect = { onMode(ComposerMode.entries[it]) },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**
@@ -809,14 +899,22 @@ private fun StreamingBubble(
     tokens: List<GeneratedToken>,
     entropyColoring: Boolean,
     imageMode: Boolean,
+    watched: Boolean,
 ) {
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    val uncertain = MaterialTheme.colorScheme.error
-    val onRails = MaterialTheme.colorScheme.primary
+    // Colorblind-safe: a single luminance/opacity ramp toward the existing violet, never a
+    // red-to-violet hue lerp (Hyle's hard rule — state is never encoded in hue alone).
+    val low = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val high = MaterialTheme.colorScheme.primary
     val showSpinner = phase == GenPhase.LOADING || tokens.isEmpty()
 
     Row(modifier = Modifier.fillMaxWidth()) {
         Card(
+            // Hyle's material language (dev.aarso.hyle.Finish): a watched, from-elsewhere
+            // generation is Radiant — it emits its own light, breathing on the "heartbeat, not
+            // weather" cycle (dev.aarso.hyle.Pulse.WATCHED); local work is Reflective and stays
+            // still. Motion is never the only provenance signal — the "☁"/"⌂" glyph carries it too.
+            modifier = if (watched) Modifier.hylePulse() else Modifier,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
             Row(
@@ -831,14 +929,14 @@ private fun StreamingBubble(
                     imageMode ->
                         Text("rendering image… (on-device SD takes a minute)")
                     phase == GenPhase.LOADING ->
-                        Text("loading model… (first load can take a while)")
+                        Text((if (watched) "☁ " else "⌂ ") + "loading model… (first load can take a while)")
                     tokens.isEmpty() ->
-                        Text("generating…")
+                        Text((if (watched) "☁ " else "⌂ ") + "generating…")
                     else -> {
                         val annotated: AnnotatedString = buildAnnotatedString {
                             for (t in tokens) {
                                 val confidence = if (entropyColoring) Confidence.fromEntropy(t.entropy) else null
-                                val color = if (confidence == null) neutral else lerp(uncertain, onRails, confidence)
+                                val color = if (confidence == null) neutral else lerp(low, high, confidence)
                                 withStyle(SpanStyle(color = color)) { append(t.text) }
                             }
                         }
@@ -876,7 +974,7 @@ private fun SetupCard(viewModel: ChatViewModel, onOpenModels: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Text("Run a model on this phone", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Aarso is on-device first: pick a model once and chat privately, offline.",
+                "Fonebrew is on-device first: pick a model once and chat privately, offline.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -966,19 +1064,15 @@ private fun MessageTurn(
             content = step.node.content,
             imagePath = step.node.metadata[Conversations.IMAGE_KEY],
             stopped = step.node.metadata["stopped"] == "true",
+            // costMinor is only ever recorded for a watched-cloud turn that reported usage
+            // (LedgerComponents.kt) — reuse it as the provenance signal rather than adding a
+            // second source of truth for the same fact.
+            watched = step.node.metadata["costMinor"] != null,
+            costMinor = step.node.metadata["costMinor"],
+            tokensIn = step.node.metadata["tokensIn"],
+            tokensOut = step.node.metadata["tokensOut"],
             onLongPress = onLongPress,
         )
-        // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
-        step.node.metadata["costMinor"]?.let { minor ->
-            val tin = step.node.metadata["tokensIn"] ?: "?"
-            val tout = step.node.metadata["tokensOut"] ?: "?"
-            Text(
-                costLine(minor, tin, tout),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
-            )
-        }
         if (step.isBranchPoint) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -998,7 +1092,7 @@ private fun MessageTurn(
 
 /**
  * The per-turn cost line. [minor] is in the user's own price denomination (we never invent a
- * currency — binding rule 8), so it's shown as a plain value alongside the real token counts.
+ * currency), so it's shown as a plain value alongside the real token counts.
  */
 private fun costLine(minor: String, tokensIn: String, tokensOut: String): String {
     val m = minor.toLongOrNull() ?: 0L
@@ -1030,51 +1124,74 @@ private fun CouncilCardView(card: CouncilCard, enabled: Boolean, onContinue: () 
     }
 }
 
+/**
+ * A turn reads as a **file**: a small header line (who wrote it, and — for a watched-cloud
+ * turn — the "☁" glyph, never colour alone, per Hyle's [dev.aarso.hyle.Provenance] rule), the
+ * body, and a metadata footer below a hairline divider (cost/tokens, or "stopped here") —
+ * the same three-part shape as a file card elsewhere in the app, instead of a bare chat bubble.
+ */
 @Composable
 private fun MessageBubble(
     role: Role,
     content: String,
     imagePath: String?,
     stopped: Boolean,
+    watched: Boolean,
+    costMinor: String?,
+    tokensIn: String?,
+    tokensOut: String?,
     onLongPress: () -> Unit,
 ) {
     val fromUser = role == Role.USER
+    val c = dev.aarso.ui.theme.LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val shape = RoundedCornerShape(10.dp)
+    val headerLabel = when {
+        fromUser -> "You"
+        role == Role.SYSTEM -> "System"
+        watched -> "☁ Assistant · watched"
+        else -> "⌂ Assistant"
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
     ) {
-        Card(
-            modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress),
-            colors = CardDefaults.cardColors(
-                containerColor = if (fromUser) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-            ),
+        Column(
+            modifier = Modifier
+                .clip(shape)
+                .background(if (fromUser) c.violetDim else c.raised, shape)
+                .border(1.dp, c.hairline, shape)
+                .combinedClickable(onClick = {}, onLongClick = { haptics.tap(); onLongPress() })
+                .padding(12.dp),
         ) {
-            Column(Modifier.padding(12.dp)) {
-                when {
-                    // An image turn: the node's payload is the generated file (§6).
-                    imagePath != null -> FileImage(
-                        path = imagePath,
-                        modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+            Text(headerLabel, style = MaterialTheme.typography.labelSmall, color = c.textMid)
+            Spacer(Modifier.height(4.dp))
+            when {
+                // An image turn: the node's payload is the generated file (§6).
+                imagePath != null -> FileImage(
+                    path = imagePath,
+                    modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+                )
+                fromUser || role == Role.SYSTEM -> Text(content)
+                // Persisted model turns render as markdown (legibility); the
+                // live stream keeps per-token entropy colouring instead. We run
+                // the text through the JVM-tested StreamingMarkdown.reconcile so a
+                // turn that was stopped mid-fence (a dangling ``` that would swallow
+                // the rest of the bubble) renders cleanly; it's idempotent on
+                // well-formed markdown, so a complete turn passes through unchanged.
+                else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
+            }
+            if (stopped || costMinor != null) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = c.hairline)
+                if (costMinor != null) {
+                    Text(
+                        costLine(costMinor, tokensIn ?: "?", tokensOut ?: "?"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = c.textMid,
                     )
-                    fromUser || role == Role.SYSTEM -> Text(content)
-                    // Persisted model turns render as markdown (legibility); the
-                    // live stream keeps per-token entropy colouring instead. We run
-                    // the text through the JVM-tested StreamingMarkdown.reconcile so a
-                    // turn that was stopped mid-fence (a dangling ``` that would swallow
-                    // the rest of the bubble) renders cleanly; it's idempotent on
-                    // well-formed markdown, so a complete turn passes through unchanged.
-                    else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
                 }
                 if (stopped) {
-                    Text(
-                        "· stopped here",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                    Text("· stopped here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                 }
             }
         }

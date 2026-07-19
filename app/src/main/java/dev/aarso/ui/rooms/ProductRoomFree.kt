@@ -6,17 +6,20 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,27 +54,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.aarso.AarsoApp
 import dev.aarso.data.entity.TaskEntity
-import dev.aarso.data.entity.WatchedItemEntity
 import dev.aarso.domain.tasks.TaskDue
 import dev.aarso.domain.tasks.TaskState
-import dev.aarso.domain.watch.WatchDue
-import dev.aarso.domain.watch.WatchKind
-import dev.aarso.domain.watch.WatchSeed
-import dev.aarso.domain.watch.WatchSeeds
 import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 
 /**
- * The free floor's Product room (CORE_PHASES.md P1/P2 / brief §4.1): a flat To-do list plus
- * a Watch tab — no projects, tags, or filters, flatness is the feature. Replaces
- * [dev.aarso.ui.spatial.ProjectRoomSlot]'s prior [dev.aarso.ui.spatial.ProjectRoomLocked]
- * fallback. [extraTabs] lets an above-core layer append tabs (e.g. Studio's pitch tab,
- * brief §8.3) without core referencing that code — the S6 seam installs a *variant* of this
- * composable rather than replacing it outright while unentitled (brief §7.2).
+ * The free floor's Product room (CORE_PHASES.md P1 / brief §4.1): a flat To-do list — no
+ * projects, tags, or filters, flatness is the feature. (The Watchlist/Watch tab that used to
+ * live here, CORE_PHASES.md P2, was pulled — owner call: it belongs in the paid Studio layer,
+ * not the free floor.) Replaces [dev.aarso.ui.spatial.ProjectRoomSlot]'s prior
+ * [dev.aarso.ui.spatial.ProjectRoomLocked] fallback. [extraTabs] lets an above-core layer append
+ * tabs (e.g. Studio's pitch tab, brief §8.3) without core referencing that code — the S6 seam
+ * installs a *variant* of this composable rather than replacing it outright while unentitled
+ * (brief §7.2).
  */
 @Composable
 fun ProductRoomFree(
@@ -81,35 +80,25 @@ fun ProductRoomFree(
     BackHandler(onBack = onClose)
     val c = LocalHyleColors.current
     var tab by remember { mutableStateOf(0) }
-    val tabs = listOf("To-do", "Watch") + extraTabs.map { it.first }
 
-    Column(Modifier.fillMaxSize().background(c.ink)) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "‹",
-                style = MaterialTheme.typography.headlineSmall,
-                color = c.textHigh,
-                modifier = Modifier.clickable(onClick = onClose).padding(end = 12.dp),
-            )
-            HyleTitle("Product", modifier = Modifier.padding(0.dp))
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(c.ink)
+            // SpatialRoot's outer Box already reserves the nav-bar with systemBarsPadding();
+            // a plain imePadding() would stack on top of that (same bug fixed in ChatScreen.kt)
+            // and, worse, this room had NO ime handling at all — an editing field's keyboard
+            // simply drew over the bottom of the screen with nothing to push content out of
+            // the way, hiding the rest of a list behind it.
+            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
+            HyleButton("‹ Back", onClick = onClose)
         }
-        if (tabs.size > 1) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                tabs.forEachIndexed { i, label ->
-                    HyleChip(selected = i == tab, onClick = { tab = i }, label = label)
-                }
-            }
-        }
+        HyleTitle("Product")
         when {
             tab == 0 -> TodoTab()
-            tab == 1 -> WatchTab()
-            else -> extraTabs[tab - 2].second()
+            else -> extraTabs[tab - 1].second()
         }
     }
 }
@@ -357,166 +346,3 @@ private fun TaskCheckbox(checked: Boolean, onClick: () -> Unit) {
     }
 }
 
-/**
- * §8.2 "Watch": WatchedItem rows sorted by dueAt (nulls last, handled by [WatchDao.observeAll]).
- * Empty state offers tappable seed ghost rows ([WatchSeeds]) that insert on tap only — never
- * on screen load. Header microcopy makes the "never automation" stance explicit.
- */
-@Composable
-private fun WatchTab() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
-    val store = container.watchStore
-    val watchItems by store.items.collectAsState(initial = emptyList())
-    val scope = rememberCoroutineScope()
-
-    Column(Modifier.fillMaxSize()) {
-        Text(
-            "Legibility, not automation — nothing here acts on your accounts.",
-            style = MaterialTheme.typography.bodySmall,
-            color = LocalHyleColors.current.textMid,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-        )
-        if (watchItems.isEmpty()) {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(WatchSeeds.TEMPLATES, key = { it.label }) { seed ->
-                    WatchSeedRow(seed, onTap = { scope.launch { store.createFromSeed(seed) } })
-                    HorizontalDivider(color = LocalHyleColors.current.hairline)
-                }
-            }
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(watchItems, key = { it.id }) { item ->
-                    WatchRow(
-                        item = item,
-                        onSnooze = {
-                            scope.launch {
-                                store.snooze(item, System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L)
-                            }
-                        },
-                        onEdit = { label, amountText ->
-                            scope.launch { store.edit(item, label = label, amountText = amountText) }
-                        },
-                        onDelete = { scope.launch { store.delete(item) } },
-                    )
-                    HorizontalDivider(color = LocalHyleColors.current.hairline)
-                }
-            }
-        }
-    }
-}
-
-/** RENEWAL ↻ / EXPIRY ⌛ / STATUS ◉ — plain Unicode glyphs (no icon-font dependency). */
-private fun watchKindGlyph(kind: WatchKind): String = when (kind) {
-    WatchKind.RENEWAL -> "↻"
-    WatchKind.EXPIRY -> "⌛"
-    WatchKind.STATUS -> "◉"
-}
-
-@Composable
-private fun WatchRow(
-    item: WatchedItemEntity,
-    onSnooze: () -> Unit,
-    onEdit: (label: String, amountText: String?) -> Unit,
-    onDelete: () -> Unit,
-) {
-    val c = LocalHyleColors.current
-    var expanded by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf(false) }
-    var labelField by remember(item.id) { mutableStateOf(item.label) }
-    var amountField by remember(item.id) { mutableStateOf(item.amountText.orEmpty()) }
-
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
-        Row(
-            Modifier.fillMaxWidth().clickable { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(watchKindGlyph(item.kind), color = c.textMid, modifier = Modifier.padding(end = 10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(item.label, style = MaterialTheme.typography.bodyLarge, color = c.textHigh)
-                item.amountText?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall, color = c.textMid)
-                }
-            }
-            item.dueAt?.let { due ->
-                // Luminance scales toward the due date; never red (§1.4) — overdue is the
-                // brightest violet + a filled-alert glyph, near-due a dimmer violet, else neutral.
-                val dueLabel = WatchDue.label(due, System.currentTimeMillis())
-                val chipColor = when {
-                    dueLabel.overdue -> c.violet
-                    dueLabel.daysRemaining in 0..3 -> c.violet.copy(alpha = 0.7f)
-                    else -> c.textMid
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-                    if (dueLabel.overdue) {
-                        Text("▲ ", color = chipColor, style = MaterialTheme.typography.labelSmall)
-                    }
-                    Text(dueLabel.text, color = chipColor, style = MaterialTheme.typography.labelSmall)
-                }
-            }
-            Text("⋯", color = c.textMid)
-        }
-        if (expanded) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                Text(
-                    "Edit",
-                    color = c.violet,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.clickable { editing = !editing },
-                )
-                Text(
-                    "Snooze 1w",
-                    color = c.violet,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.clickable { onSnooze(); expanded = false },
-                )
-                Text(
-                    "Delete",
-                    color = c.violet,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.clickable { onDelete(); expanded = false },
-                )
-            }
-            if (editing) {
-                Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                    HyleField(labelField, { labelField = it }, label = "Label", modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(6.dp))
-                    HyleField(
-                        amountField, { amountField = it },
-                        label = "Amount (freeform — check current figure)",
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    HyleButton(
-                        text = "Save",
-                        enabled = labelField.isNotBlank(),
-                        onClick = {
-                            onEdit(labelField, amountField.ifBlank { null })
-                            editing = false
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** A tappable seed ghost row — inserts the real, fully-editable item only on tap. */
-@Composable
-private fun WatchSeedRow(seed: WatchSeed, onTap: () -> Unit) {
-    val c = LocalHyleColors.current
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onTap).padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(watchKindGlyph(seed.kind), color = c.textMid, modifier = Modifier.padding(end = 10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(seed.label, style = MaterialTheme.typography.bodyLarge, color = c.textMid)
-            seed.amountHint?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = c.textMid) }
-        }
-        Text("+", color = c.violet, style = MaterialTheme.typography.titleMedium)
-    }
-}

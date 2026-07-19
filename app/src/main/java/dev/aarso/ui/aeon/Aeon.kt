@@ -1,6 +1,7 @@
 package dev.aarso.ui.hyle
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -11,6 +12,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -372,6 +376,7 @@ fun HyleButton(
     secondary: Boolean = false,
 ) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val shape = RoundedCornerShape(6.dp)
@@ -396,12 +401,112 @@ fun HyleButton(
                 enabled = enabled,
                 interactionSource = interaction,
                 indication = LocalIndication.current,
-                onClick = onClick,
+                onClick = { haptics.tap(); onClick() },
             )
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1)
+    }
+}
+
+/**
+ * Aeon card: raised fill, hairline edge, 10dp corners — the box register for grouped content.
+ * Optionally clickable/selectable (e.g. a picker row) — [onClick] makes it tappable, and
+ * [selected] swaps the fill to a violet-dim tint with a violet border so a selected card reads
+ * distinctly without touching hue outside the violet/cyan axis.
+ */
+@Composable
+fun HyleCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    selected: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (selected) c.violetDim else c.raised, shape)
+            .border(1.dp, if (selected) c.violet else c.hairline, shape)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = { haptics.tap(); onClick() })
+                } else {
+                    Modifier
+                },
+            )
+            .padding(14.dp),
+        content = content,
+    )
+}
+
+/** One entry in a [HyleTabBar]: a label and a small hand-drawn Canvas glyph, tinted by the bar. */
+class HyleTabSpec(val label: String, val glyph: DrawScope.(tint: Color) -> Unit)
+
+/**
+ * The app's one fixed-width tab bar: an icon glyph, a label, and a 2dp underline indicator per
+ * tab, laid out with equal weight (never scrolling) — first built for [dev.aarso.ui.rooms.
+ * SettingsRoom]'s SettingsTabBar and pulled out here so every screen with a small, fixed set of
+ * top-level categories uses the same widget instead of an ad hoc horizontalScroll chip row (the
+ * single most repeated inconsistency an app-wide UX audit found this session). [trailing] is an
+ * optional fixed-width slot after the tabs (e.g. a filter-toggle icon) — always reserve its
+ * space in the caller rather than conditionally including it, or the tabs will visibly resize
+ * when it appears/disappears (the exact "tab bar jitter" bug this bar's callers have already hit
+ * once).
+ *
+ * [position] is `"TOP"` or `"BOTTOM"` (matching every other string-enum preference in
+ * [dev.aarso.data.SessionStore], e.g. `themeMode`) — it only flips the divider to the edge that
+ * faces away from this bar's own content (top: divider below the tabs; bottom: divider above
+ * them), so the bar reads correctly wherever it's placed. It does NOT move the bar within the
+ * caller's layout — a room wanting its tab bar to sit at the screen's bottom edge, not just have
+ * a bottom-facing divider, must place this composable last in its own Column (see
+ * [dev.aarso.data.SessionStore.tabBarPositionFor] for the per-room-overridable preference each
+ * caller should read to decide that placement).
+ */
+@Composable
+fun HyleTabBar(
+    tabs: List<HyleTabSpec>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    position: String = "TOP",
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val tabRow: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            tabs.forEachIndexed { i, tab ->
+                val on = i == selected
+                val tint = if (on) c.violet else c.textMid
+                Column(
+                    modifier = Modifier.weight(1f)
+                        .clickable { haptics.tap(); onSelect(i) }
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Canvas(Modifier.size(22.dp)) { tab.glyph(this, tint) }
+                    Spacer(Modifier.height(5.dp))
+                    Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.height(2.dp).width(22.dp).background(if (on) c.violet else Color.Transparent))
+                }
+            }
+            trailing?.invoke()
+        }
+    }
+    Column(modifier) {
+        if (position == "BOTTOM") {
+            HorizontalDivider()
+            tabRow()
+        } else {
+            tabRow()
+            HorizontalDivider()
+        }
     }
 }
 
@@ -415,6 +520,7 @@ fun HyleChip(
     enabled: Boolean = true,
 ) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val shape = RoundedCornerShape(6.dp)
     Box(
         modifier = modifier
@@ -422,7 +528,7 @@ fun HyleChip(
             .clip(shape)
             .background(if (selected) c.violetDim else Color.Transparent)
             .border(1.dp, if (selected) c.violet else c.hairline, shape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, onClick = { haptics.tap(); onClick() })
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -453,6 +559,7 @@ fun HyleNavChip(
     contentDescription: String? = null,
 ) {
     val c = LocalHyleColors.current
+    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val shape = if (slantLeft) HyleFieldShape else HyleRightSlantShape
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -462,7 +569,7 @@ fun HyleNavChip(
             .clip(shape)
             .background(if (pressed) c.inset else c.raised, shape)
             .border(1.dp, c.hairline, shape)
-            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = { haptics.tap(); onClick() })
             .padding(horizontal = 14.dp)
             .then(
                 if (contentDescription != null) {

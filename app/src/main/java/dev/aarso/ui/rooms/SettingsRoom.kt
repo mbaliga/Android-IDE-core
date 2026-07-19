@@ -1,7 +1,8 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package dev.aarso.ui.rooms
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,13 +17,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -68,6 +70,7 @@ import dev.aarso.domain.image.ImageProviderKind
 import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.ui.SettingsViewModel
 import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.ui.hyle.HyleCard
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleDropdownField
 import dev.aarso.ui.hyle.HyleField
@@ -111,74 +114,62 @@ fun SettingsRoom(
     var tab by remember { mutableStateOf(SettingsTab.GLOBAL) }
     var overlay by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     BackHandler(enabled = overlay != null) { overlay = null }
+    val session = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container.sessionStore
+    val universalPosition by session.tabBarPosition.collectAsState()
+    val roomOverrides by session.roomTabBarPosition.collectAsState()
+    val position = roomOverrides["settings"] ?: universalPosition
+
+    val tabBar = @Composable { SettingsTabBar(tab, position = position) { tab = it } }
+    val content: @Composable ColumnScope.() -> Unit = {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            when (tab) {
+                SettingsTab.GLOBAL -> GlobalSettings(
+                    onShowSpatialMap = onShowSpatialMap,
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                    extraGlobalRows = extraGlobalRows,
+                )
+                else -> ProviderTab(
+                    tab = tab,
+                    viewModel = viewModel,
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                )
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             HyleTitle("Settings")
-            SettingsTabBar(tab) { tab = it }
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                when (tab) {
-                    SettingsTab.GLOBAL -> GlobalSettings(
-                        onShowSpatialMap = onShowSpatialMap,
-                        openOverlay = { overlay = it },
-                        closeOverlay = { overlay = null },
-                        extraGlobalRows = extraGlobalRows,
-                    )
-                    else -> ProviderTab(
-                        tab = tab,
-                        viewModel = viewModel,
-                        openOverlay = { overlay = it },
-                        closeOverlay = { overlay = null },
-                    )
-                }
+            if (position == "BOTTOM") {
+                content()
+                tabBar()
+            } else {
+                tabBar()
+                content()
             }
         }
         overlay?.invoke()
     }
 }
 
-@Composable
-private fun SettingsTabBar(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
-    Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            SettingsTab.entries.forEach { t ->
-                val on = t == selected
-                val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                Column(
-                    modifier = Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    TabGlyph(t, tint)
-                    Spacer(Modifier.height(5.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier.height(2.dp).width(22.dp).background(
-                            if (on) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                    )
-                }
-            }
-        }
-        HorizontalDivider()
-    }
-}
-
-/** Small Aeon-style line glyphs drawn in code (the app ships no icon font). */
-@Composable
-private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color) {
-    androidx.compose.foundation.Canvas(Modifier.size(22.dp)) {
+// One HyleTabSpec per SettingsTab, glyphs unchanged from the original hand-rolled TabGlyph —
+// this IS the bar HyleTabBar (Aeon.kt) was extracted from; now it consumes the shared component
+// instead of keeping its own parallel copy (2026-07-19 tab-bar consolidation).
+private val SettingsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = SettingsTab.entries.map { t ->
+    dev.aarso.ui.hyle.HyleTabSpec(t.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
         fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
             drawLine(tint, androidx.compose.ui.geometry.Offset(x0, y0), androidx.compose.ui.geometry.Offset(x1, y1), strokeWidth = sw)
-        when (tab) {
+        when (t) {
             SettingsTab.GLOBAL -> {
                 drawCircle(tint, radius = w * 0.42f, style = stroke)
                 drawOval(
@@ -225,6 +216,16 @@ private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color)
             }
         }
     }
+}
+
+@Composable
+private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSelect: (SettingsTab) -> Unit) {
+    dev.aarso.ui.hyle.HyleTabBar(
+        tabs = SettingsTabSpecs,
+        selected = SettingsTab.entries.indexOf(selected),
+        onSelect = { onSelect(SettingsTab.entries[it]) },
+        position = position,
+    )
 }
 
 /**
@@ -346,7 +347,7 @@ private fun GlobalSettings(
                 val json = dev.aarso.data.DataExport.toJson(container)
                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "application/json"
-                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Aarso export")
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Fonebrew export")
                     putExtra(android.content.Intent.EXTRA_TEXT, json)
                 }
                 ctx.startActivity(
@@ -383,18 +384,72 @@ private fun GlobalSettings(
     ThemePicker()
     HorizontalDivider()
 
+    Text("Header status", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "One quiet fact in the Chat header, about the conversation you're in — or nothing at all.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val headerIndicator by session.headerIndicator.collectAsState()
+        val c = LocalHyleColors.current
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                "NONE" to "None",
+                "SOVEREIGNTY" to "Sovereignty",
+                "QUOTA" to "Quota",
+                "TIME" to "Time",
+            ).forEach { (value, label) ->
+                HyleChip(headerIndicator == value, { session.setHeaderIndicator(value) }, label)
+            }
+        }
+        Text(
+            when (headerIndicator) {
+                "SOVEREIGNTY" -> "⌂ the % of this conversation's tokens that stayed on-device."
+                "QUOTA" -> "how many watched-cloud requests you've made today, across providers."
+                "TIME" -> "how long ago this conversation started."
+                else -> "nothing shown next to Settings in Chat."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textMid,
+        )
+    }
+    HorizontalDivider()
+
+    Text("Tab bar position", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Top or bottom, thumb-reach — applies everywhere unless a room says otherwise.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val tabBarPosition by session.tabBarPosition.collectAsState()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("TOP" to "Top", "BOTTOM" to "Bottom").forEach { (value, label) ->
+                HyleChip(tabBarPosition == value, { session.setTabBarPosition(value) }, label)
+            }
+        }
+    }
+    HorizontalDivider()
+
     Text("Summon from anywhere", style = MaterialTheme.typography.titleMedium)
     Text(
         buildString {
-            append("• Select text in any app → tap \"Aarso\" in the selection menu.\n")
-            append("• Share anything (text or image) → choose Aarso.\n")
+            append("• Select text in any app → tap \"Fonebrew\" in the selection menu.\n")
+            append("• Share anything (text or image) → choose Fonebrew.\n")
             append(
-                "• Assist gesture: set Aarso as your Digital assistant in the system " +
+                "• Assist gesture: set Fonebrew as your Digital assistant in the system " +
                     "Settings → Apps → Default apps → Digital assistant app (this replaces Gemini). " +
-                    "It then captures the on-screen text and brings Aarso forward.",
+                    "It then captures the on-screen text and brings Fonebrew forward.",
             )
             if (InvocationFeatures.BUBBLE_AVAILABLE) {
-                append("\n• Floating bubble (below): tap to open Aarso; long-press to OCR the screen behind it.")
+                append("\n• Floating bubble (below): tap to open Fonebrew; long-press to OCR the screen behind it.")
             }
         },
         style = MaterialTheme.typography.bodySmall,
@@ -509,7 +564,7 @@ private fun GlobalSettings(
 
     Text("About", style = MaterialTheme.typography.titleMedium)
     Text(
-        "Aarso ${dev.aarso.BuildConfig.VERSION_NAME} — Konkani for “mirror”.\n\n" +
+        "Fonebrew ${dev.aarso.BuildConfig.VERSION_NAME} (${dev.aarso.BuildConfig.VERSION_CODE})\n\n" +
             "Local-first by design: conversations, models, and keys live on this " +
             "device. No analytics, no telemetry. Cloud models run only when you " +
             "invoke them, and only against the provider you configured.",
@@ -522,7 +577,13 @@ private fun GlobalSettings(
             Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
-                    context.startActivity(dev.aarso.crashrecovery.CrashRecovery.previewIntent(context, appLabel = "Aarso"))
+                    context.startActivity(
+                        dev.aarso.crashrecovery.CrashRecovery.previewIntent(
+                            context,
+                            appLabel = "Fonebrew",
+                            style = dev.aarso.ui.theme.AarsoCrashRecoveryStyle,
+                        ),
+                    )
                 },
             )
         } else {
@@ -614,77 +675,121 @@ private fun GitConnect() {
         if (ciOpen) {
             CiPanel(h, store.token(h.id).orEmpty(), transport) { ciOpen = false }
         }
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
+        var showActions by remember(h.id) { mutableStateOf(false) }
+        val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+        HyleCard(
+            modifier = Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = { haptics.tap(); showActions = true },
+            ),
         ) {
-            Column(Modifier.padding(12.dp)) {
-                Text("${h.displayName} · watched", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "${h.kind.label} · ${h.owner}/${h.repo}@${h.branch}" +
-                        (if (store.hasToken(h.id)) " · token set" else " · no token"),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                status?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-                Row {
-                    TextButton(onClick = {
-                        val token = store.token(h.id)
-                        if (token.isNullOrBlank()) {
-                            status = "no token stored"
-                        } else {
-                            status = "testing…"
-                            scope.launch {
-                                status = transport.testConnection(h, token)
-                                    .fold({ "✓ connected · $it branch(es)" }, { "✗ ${it.message}" })
-                            }
-                        }
-                    }) { Text("Test") }
-                    TextButton(onClick = {
-                        val token = store.token(h.id)
-                        if (token.isNullOrBlank()) {
-                            status = "no token stored"
-                        } else {
-                            status = "backing up…"
-                            scope.launch {
-                                status = container.gitBackup.backUp(h, token).fold(
-                                    { "✓ backed up · ${it.created} new, ${it.skipped} already there" +
-                                        (if (it.failed > 0) ", ${it.failed} failed" else "") },
-                                    { "✗ ${it.message}" },
-                                )
-                            }
-                        }
-                    }) { Text("Back up") }
-                    TextButton(onClick = {
-                        val token = store.token(h.id)
-                        if (token.isNullOrBlank()) {
-                            status = "no token stored"
-                        } else {
-                            status = "pulling…"
-                            scope.launch {
-                                status = container.gitBackup.pull(h, token).fold(
-                                    { "✓ pulled · ${it.imported} imported, ${it.alreadyHad} already here" +
-                                        (if (it.orphans > 0) ", ${it.orphans} skipped" else "") },
-                                    { "✗ ${it.message}" },
-                                )
-                            }
-                        }
-                    }) { Text("Pull") }
-                    TextButton(onClick = {
-                        if (store.token(h.id).isNullOrBlank()) status = "no token stored" else browsing = true
-                    }) { Text("Browse") }
-                    TextButton(onClick = {
-                        if (store.token(h.id).isNullOrBlank()) status = "no token stored" else ciOpen = true
-                    }) { Text("CI") }
-                    TextButton(onClick = { store.remove(h.id) }) { Text("Remove") }
-                }
+            Text("${h.displayName} · watched", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${h.kind.label} · ${h.owner}/${h.repo}@${h.branch}" +
+                    (if (store.hasToken(h.id)) " · token set" else " · no token"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            status?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
+            // Test is the one inline action — a read-only connectivity check, safe to leave a
+            // single tap away. Everything else (Back up/Pull/Browse/CI/Remove) is a
+            // longer-running or destructive action, so it moves behind the long-press sheet
+            // below (mirrors ChatsRoom.kt's ConversationActionsSheet pattern).
+            TextButton(onClick = {
+                val token = store.token(h.id)
+                if (token.isNullOrBlank()) {
+                    status = "no token stored"
+                } else {
+                    status = "testing…"
+                    scope.launch {
+                        status = transport.testConnection(h, token)
+                            .fold({ "✓ connected · $it branch(es)" }, { "✗ ${it.message}" })
+                    }
+                }
+            }) { Text("Test") }
+        }
+        if (showActions) {
+            GitHostActionsSheet(
+                title = h.displayName,
+                onBackUp = {
+                    showActions = false
+                    val token = store.token(h.id)
+                    if (token.isNullOrBlank()) {
+                        status = "no token stored"
+                    } else {
+                        status = "backing up…"
+                        scope.launch {
+                            status = container.gitBackup.backUp(h, token).fold(
+                                { "✓ backed up · ${it.created} new, ${it.skipped} already there" +
+                                    (if (it.failed > 0) ", ${it.failed} failed" else "") },
+                                { "✗ ${it.message}" },
+                            )
+                        }
+                    }
+                },
+                onPull = {
+                    showActions = false
+                    val token = store.token(h.id)
+                    if (token.isNullOrBlank()) {
+                        status = "no token stored"
+                    } else {
+                        status = "pulling…"
+                        scope.launch {
+                            status = container.gitBackup.pull(h, token).fold(
+                                { "✓ pulled · ${it.imported} imported, ${it.alreadyHad} already here" +
+                                    (if (it.orphans > 0) ", ${it.orphans} skipped" else "") },
+                                { "✗ ${it.message}" },
+                            )
+                        }
+                    }
+                },
+                onBrowse = {
+                    showActions = false
+                    if (store.token(h.id).isNullOrBlank()) status = "no token stored" else browsing = true
+                },
+                onCi = {
+                    showActions = false
+                    if (store.token(h.id).isNullOrBlank()) status = "no token stored" else ciOpen = true
+                },
+                onRemove = {
+                    showActions = false
+                    store.remove(h.id)
+                },
+                onDismiss = { showActions = false },
+            )
         }
     }
     Text(if (hosts.isEmpty()) "Add a host" else "Add another", style = MaterialTheme.typography.titleSmall)
     GitConnectForm(newId = store.newId(), transport = transport) { host, token -> store.upsert(host, token) }
+}
+
+/** Long-press actions for a connected Git host row (mirrors ChatsRoom.kt's
+ *  ConversationActionsSheet/FolderTabActionsSheet pattern): only "Test" — a safe, read-only
+ *  connectivity check — stays inline on the row; Back up/Pull/Browse/CI and the destructive
+ *  Remove live here instead, off a long-press rather than six buttons crammed into one row. */
+@Composable
+private fun GitHostActionsSheet(
+    title: String,
+    onBackUp: () -> Unit,
+    onPull: () -> Unit,
+    onBrowse: () -> Unit,
+    onCi: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            TextButton(onClick = onBackUp, modifier = Modifier.fillMaxWidth()) { Text("Back up") }
+            TextButton(onClick = onPull, modifier = Modifier.fillMaxWidth()) { Text("Pull") }
+            TextButton(onClick = onBrowse, modifier = Modifier.fillMaxWidth()) { Text("Browse") }
+            TextButton(onClick = onCi, modifier = Modifier.fillMaxWidth()) { Text("CI") }
+            TextButton(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text("Remove") }
+        }
+    }
 }
 
 /**
@@ -737,55 +842,49 @@ private fun BuildsSection() {
                 for (build in list.take(5)) {
                     var installProgress by remember(build.id) { mutableStateOf<Float?>(null) }
                     var installError by remember(build.id) { mutableStateOf<String?>(null) }
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(Modifier.padding(10.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(build.name, style = MaterialTheme.typography.bodyMedium)
+                    HyleCard {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(build.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "${build.version}  ·  ${build.source.name.lowercase().replace('_', ' ')}" +
+                                        (if (build.sizeBytes > 0) "  ·  ${build.sizeBytes / (1024 * 1024)} MB" else ""),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            val url = container.buildsRepo.findApkUrl(build)
+                            if (url != null) {
+                                val prog = installProgress
+                                if (prog != null) {
                                     Text(
-                                        "${build.version}  ·  ${build.source.name.lowercase().replace('_', ' ')}" +
-                                            (if (build.sizeBytes > 0) "  ·  ${build.sizeBytes / (1024 * 1024)} MB" else ""),
+                                        if (prog < 0f) "✗" else "${(prog * 100).toInt()}%",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (prog < 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                     )
-                                }
-                                val url = container.buildsRepo.findApkUrl(build)
-                                if (url != null) {
-                                    val prog = installProgress
-                                    if (prog != null) {
-                                        Text(
-                                            if (prog < 0f) "✗" else "${(prog * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (prog < 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        )
-                                    } else {
-                                        TextButton(onClick = {
-                                            installProgress = 0f
-                                            installError = null
-                                            scope.launch {
-                                                container.apkInstaller.downloadAndInstall(url, build.name) { p ->
-                                                    installProgress = if (p.error != null) { installError = p.error; -1f } else if (p.done) null else p.fraction
-                                                }
+                                } else {
+                                    TextButton(onClick = {
+                                        installProgress = 0f
+                                        installError = null
+                                        scope.launch {
+                                            container.apkInstaller.downloadAndInstall(url, build.name) { p ->
+                                                installProgress = if (p.error != null) { installError = p.error; -1f } else if (p.done) null else p.fraction
                                             }
-                                        }) { Text("Install") }
-                                    }
+                                        }
+                                    }) { Text("Install") }
                                 }
                             }
-                            val p = installProgress
-                            if (p != null && p >= 0f) {
-                                LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                            }
-                            installError?.let {
-                                Text("✗ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                            }
+                        }
+                        val p = installProgress
+                        if (p != null && p >= 0f) {
+                            LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                        }
+                        installError?.let {
+                            Text("✗ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -1153,17 +1252,9 @@ private fun GitConnectForm(
                     }
                     for (r in filtered) {
                         val isSelected = selected?.fullName == r.fullName
-                        Card(
-                            onClick = { selected = r },
-                            colors  = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                            ),
-                            border  = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
+                        HyleCard(selected = isSelected, onClick = { selected = r }) {
                             Row(
-                                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -1214,12 +1305,9 @@ private fun GitConnectForm(
 
 @Composable
 private fun ImageProviderRow(provider: ImageProvider, hasKey: Boolean, onDelete: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+    HyleCard {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
@@ -1283,13 +1371,9 @@ private fun ProviderRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.clickable(onClick = onEdit),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+    HyleCard(onClick = onEdit) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {

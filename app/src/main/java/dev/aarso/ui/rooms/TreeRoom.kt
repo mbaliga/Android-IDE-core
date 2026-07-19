@@ -30,7 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,7 +42,8 @@ import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.TreeOutline
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleChip
+import dev.aarso.ui.hyle.HyleTabBar
+import dev.aarso.ui.hyle.HyleTabSpec
 import dev.aarso.ui.hyle.HyleTitle
 import kotlinx.coroutines.launch
 import dev.aarso.ui.theme.LocalHyleColors
@@ -63,28 +67,56 @@ fun TreeRoom(
     var note by remember { mutableStateOf<String?>(null) }
     var handoff by remember { mutableStateOf<String?>(null) }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        HyleTitle("Tree")
-        Text(
-            "Every turn is a node; every fork stays visible. Tap a node to continue " +
-                "from it — pinch out to return.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
+    // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
+    // commits branch, builds branch. Builds moved here from Develop.
+    var treeTab by remember { mutableStateOf(0) }
+    val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["tree"] ?: universalTabBarPosition
+
+    val tabBarBlock: @Composable () -> Unit = {
+        HyleTabBar(
+            tabs = listOf(
+                HyleTabSpec("Conversation") { tint ->
+                    // Branch glyph: a trunk line with a fork.
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawLine(tint, Offset(w * 0.30f, h * 0.15f), Offset(w * 0.30f, h * 0.85f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.30f, h * 0.55f), Offset(w * 0.72f, h * 0.30f), strokeWidth = sw)
+                    drawCircle(tint, radius = w * 0.09f, center = Offset(w * 0.30f, h * 0.20f))
+                    drawCircle(tint, radius = w * 0.09f, center = Offset(w * 0.30f, h * 0.80f))
+                    drawCircle(tint, radius = w * 0.09f, center = Offset(w * 0.76f, h * 0.24f))
+                },
+                HyleTabSpec("Commits") { tint ->
+                    // Commit glyph: a node dot on a vertical line.
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+                    drawLine(tint, Offset(w * 0.5f, h * 0.10f), Offset(w * 0.5f, h * 0.35f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.5f, h * 0.65f), Offset(w * 0.5f, h * 0.90f), strokeWidth = sw)
+                    drawCircle(tint, radius = w * 0.20f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
+                },
+                HyleTabSpec("Builds") { tint ->
+                    // Build glyph: a simple stacked bars/hammer-ish rect.
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+                    drawRoundRect(
+                        tint, topLeft = Offset(w * 0.14f, h * 0.20f),
+                        size = Size(w * 0.72f, h * 0.60f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f), style = stroke,
+                    )
+                    drawLine(tint, Offset(w * 0.14f, h * 0.50f), Offset(w * 0.86f, h * 0.50f), strokeWidth = sw)
+                },
+            ),
+            selected = treeTab,
+            onSelect = { treeTab = it },
+            modifier = Modifier.fillMaxWidth(),
+            position = tabBarPosition,
         )
+    }
 
-        // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
-        // commits branch, builds branch. Builds moved here from Develop.
-        var treeTab by remember { mutableStateOf(0) }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-        ) {
-            listOf("Conversation", "Commits", "Builds").forEachIndexed { i, label ->
-                HyleChip(treeTab == i, { treeTab = i }, label)
-            }
-        }
-
+    val contentBlock: @Composable () -> Unit = {
         when (treeTab) {
             0 -> {
                 // Git-sync indicator + manual export + handoff summary (IA §F).
@@ -100,20 +132,27 @@ fun TreeRoom(
                         color = if (host == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.weight(1f))
-                    if (host != null) {
-                        HyleButton("Back up", onClick = {
+                    // Always in the tree (avoids tab-bar jitter shoving Export/Handoff sideways
+                    // when a host connects/disconnects) — just invisible + non-clickable when
+                    // there's no host to back up to.
+                    HyleButton(
+                        "Back up",
+                        onClick = {
+                            val h = host ?: return@HyleButton
                             scope.launch {
-                                val token = container.gitHostStore.token(host.id)
+                                val token = container.gitHostStore.token(h.id)
                                 note = if (token == null) "No token — reconnect in Settings."
-                                else container.gitBackup.backUp(host, token).fold({ "Backed up to ${host.repo}." }, { "Backup failed: ${it.message}" })
+                                else container.gitBackup.backUp(h, token).fold({ "Backed up to ${h.repo}." }, { "Backup failed: ${it.message}" })
                             }
-                        })
-                    }
+                        },
+                        modifier = if (host == null) Modifier.alpha(0f) else Modifier,
+                        enabled = host != null,
+                    )
                     HyleButton("Export", onClick = {
                         scope.launch {
                             val files = dev.aarso.domain.sync.TreeArchive.write(container.repository.tree().allNodes())
                             val blob = files.entries.joinToString("\n\n") { "// ${it.key}\n${it.value}" }
-                            shareText(context, "Aarso tree export", blob)
+                            shareText(context, "Fonebrew tree export", blob)
                         }
                     })
                     HyleButton("Handoff", onClick = { handoff = buildHandoff(rows) })
@@ -146,20 +185,41 @@ fun TreeRoom(
                     }
                 }
             }
-            1 -> Text(
-                "Commits — soon. Commits from accepted changes (Develop → Files review) and manual " +
-                    "commits will branch here, each linked to its diff, the conversation that produced " +
-                    "it, and the builds it triggers. Nothing is fabricated until that plumbing lands.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp),
-            )
+            1 -> Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            ) {
+                Text(
+                    "Commits — soon. Commits from accepted changes (Develop → Files review) and manual " +
+                        "commits will branch here, each linked to its diff, the conversation that produced " +
+                        "it, and the builds it triggers. Nothing is fabricated until that plumbing lands.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             else -> Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             ) {
                 // Builds live in the Tree now (§6.1): the build branch, tied to its commit.
                 dev.aarso.ui.develop.BuildsFacet()
             }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        HyleTitle("Tree")
+        Text(
+            "Every turn is a node; every fork stays visible. Tap a node to continue " +
+                "from it — pinch out to return.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        if (tabBarPosition == "BOTTOM") {
+            Box(Modifier.weight(1f)) { contentBlock() }
+            tabBarBlock()
+        } else {
+            tabBarBlock()
+            Box(Modifier.weight(1f)) { contentBlock() }
         }
     }
 
@@ -172,7 +232,7 @@ fun TreeRoom(
                     Text(text, style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = { HyleButton("Share", onClick = { shareText(context, "Aarso handoff", text); handoff = null }) },
+            confirmButton = { HyleButton("Share", onClick = { shareText(context, "Fonebrew handoff", text); handoff = null }) },
             dismissButton = { HyleButton("Close", onClick = { handoff = null }) },
         )
     }

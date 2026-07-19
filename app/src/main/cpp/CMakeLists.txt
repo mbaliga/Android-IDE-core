@@ -1,8 +1,8 @@
-# Native build for the llama.cpp JNI bridge (aarso_llama).
-#
-# Builds llama.cpp (CPU-only, arm64) and the JNI shim into one shared library.
-# Wired into app/build.gradle.kts via externalNativeBuild. Requires the NDK and
-# the llama.cpp submodule checked out at ./llama.cpp.
+# Native build for the llama.cpp JNI bridge (aarso_llama) and the local-terminal PTY bridge
+# (aarso_pty). Both are wired into app/build.gradle.kts via the same externalNativeBuild block
+# (one CMakeLists.txt, two SHARED library targets -- AGP packages every target this file
+# produces). aarso_llama requires the NDK and the llama.cpp submodule checked out at
+# ./llama.cpp; aarso_pty has no external dependency beyond bionic's POSIX pty calls.
 
 cmake_minimum_required(VERSION 3.22.1)
 project(aarso_llama LANGUAGES C CXX)
@@ -36,4 +36,11 @@ find_library(log-lib log)
 
 target_link_libraries(aarso_llama
     llama
+    ${log-lib})
+
+# The PTY bridge is plain C/C++ against bionic -- no llama.cpp/GGML dependency, so it isn't
+# affected by the -march tuning above (harmless either way; it's a tiny, non-hot-path file).
+add_library(aarso_pty SHARED pty_exec.cpp)
+
+target_link_libraries(aarso_pty
     ${log-lib})

@@ -1,10 +1,8 @@
 package dev.aarso.ui.loops
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +68,7 @@ import dev.aarso.domain.loop.LoopState
 import dev.aarso.domain.model.ModelSpec
 import dev.aarso.inference.EngineGenerator
 import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.ui.hyle.HyleCard
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleDropdownField
 import dev.aarso.ui.hyle.HyleField
@@ -423,8 +420,8 @@ fun LoopRoom(onClose: () -> Unit) {
                     ) {
                         runError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
                         liveSteps.forEach { step ->
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            HyleCard(modifier = Modifier.fillMaxWidth()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(
                                             "${step.index + 1}. ${nodeById(step.nodeId)?.label ?: step.role}",
@@ -815,13 +812,18 @@ private fun GatewayDiamond(label: String, status: NodeStatus) {
 private fun TaskCard(node: LoopNode, widthDp: androidx.compose.ui.unit.Dp, status: NodeStatus) {
     val colors = LocalHyleColors.current
     val ring = statusColor(status)
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(if (ring != null) 2.dp else 1.dp, ring ?: colors.hairline),
-        shape = MaterialTheme.shapes.small,
-        modifier = Modifier.width(widthDp),
+    // ACTIVE == this node is the current connect-from selection → HyleCard's own `selected` look.
+    // DONE gets its own success-green completion ring, layered on since HyleCard's selected is violet-only.
+    Box(
+        Modifier.width(widthDp).then(
+            if (status == NodeStatus.DONE) {
+                Modifier.border(2.dp, colors.success, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+            } else {
+                Modifier
+            },
+        ),
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        HyleCard(selected = status == NodeStatus.ACTIVE) {
             Text(node.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1)
             val sub = node.modelId?.substringAfter(':') ?: node.role.ifBlank { "task" }
             Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -982,17 +984,15 @@ private fun LoadLoopDialog(
                 } else {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (loop in shown) {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth().clickable { onPick(loop) }) {
-                                Column(Modifier.padding(10.dp)) {
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text(loop.name.ifBlank { "Untitled loop" }, style = MaterialTheme.typography.bodyMedium)
-                                        Text(loopStateLabel(loop.state), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        TextButton(onClick = { onPick(loop) }) { Text(if (loop.state == LoopState.UNUSED) "Edit" else "View") }
-                                        TextButton(onClick = { onDuplicate(loop.id) }) { Text("Duplicate") }
-                                        TextButton(onClick = { onDelete(loop.id) }) { Text("Delete") }
-                                    }
+                            HyleCard(modifier = Modifier.fillMaxWidth(), onClick = { onPick(loop) }) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(loop.name.ifBlank { "Untitled loop" }, style = MaterialTheme.typography.bodyMedium)
+                                    Text(loopStateLabel(loop.state), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(onClick = { onPick(loop) }) { Text(if (loop.state == LoopState.UNUSED) "Edit" else "View") }
+                                    TextButton(onClick = { onDuplicate(loop.id) }) { Text("Duplicate") }
+                                    TextButton(onClick = { onDelete(loop.id) }) { Text("Delete") }
                                 }
                             }
                         }
