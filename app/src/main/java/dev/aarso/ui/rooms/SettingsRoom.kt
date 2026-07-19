@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -383,6 +384,41 @@ private fun GlobalSettings(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     ThemePicker()
+    HorizontalDivider()
+
+    Text("Header status", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "One quiet fact in the Chat header, about the conversation you're in — or nothing at all.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val headerIndicator by session.headerIndicator.collectAsState()
+        val c = LocalHyleColors.current
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                "NONE" to "None",
+                "SOVEREIGNTY" to "Sovereignty",
+                "QUOTA" to "Quota",
+                "TIME" to "Time",
+            ).forEach { (value, label) ->
+                HyleChip(headerIndicator == value, { session.setHeaderIndicator(value) }, label)
+            }
+        }
+        Text(
+            when (headerIndicator) {
+                "SOVEREIGNTY" -> "⌂ the % of this conversation's tokens that stayed on-device."
+                "QUOTA" -> "how many watched-cloud requests you've made today, across providers."
+                "TIME" -> "how long ago this conversation started."
+                else -> "nothing shown next to Settings in Chat."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textMid,
+        )
+    }
     HorizontalDivider()
 
     Text("Summon from anywhere", style = MaterialTheme.typography.titleMedium)
