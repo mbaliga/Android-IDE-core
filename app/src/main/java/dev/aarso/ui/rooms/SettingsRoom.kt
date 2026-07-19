@@ -114,31 +114,45 @@ fun SettingsRoom(
     var tab by remember { mutableStateOf(SettingsTab.GLOBAL) }
     var overlay by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     BackHandler(enabled = overlay != null) { overlay = null }
+    val session = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container.sessionStore
+    val universalPosition by session.tabBarPosition.collectAsState()
+    val roomOverrides by session.roomTabBarPosition.collectAsState()
+    val position = roomOverrides["settings"] ?: universalPosition
+
+    val tabBar = @Composable { SettingsTabBar(tab, position = position) { tab = it } }
+    val content: @Composable ColumnScope.() -> Unit = {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            when (tab) {
+                SettingsTab.GLOBAL -> GlobalSettings(
+                    onShowSpatialMap = onShowSpatialMap,
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                    extraGlobalRows = extraGlobalRows,
+                )
+                else -> ProviderTab(
+                    tab = tab,
+                    viewModel = viewModel,
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                )
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             HyleTitle("Settings")
-            SettingsTabBar(tab) { tab = it }
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                when (tab) {
-                    SettingsTab.GLOBAL -> GlobalSettings(
-                        onShowSpatialMap = onShowSpatialMap,
-                        openOverlay = { overlay = it },
-                        closeOverlay = { overlay = null },
-                        extraGlobalRows = extraGlobalRows,
-                    )
-                    else -> ProviderTab(
-                        tab = tab,
-                        viewModel = viewModel,
-                        openOverlay = { overlay = it },
-                        closeOverlay = { overlay = null },
-                    )
-                }
+            if (position == "BOTTOM") {
+                content()
+                tabBar()
+            } else {
+                tabBar()
+                content()
             }
         }
         overlay?.invoke()
@@ -205,11 +219,12 @@ private val SettingsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = SettingsTab.
 }
 
 @Composable
-private fun SettingsTabBar(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
+private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSelect: (SettingsTab) -> Unit) {
     dev.aarso.ui.hyle.HyleTabBar(
         tabs = SettingsTabSpecs,
         selected = SettingsTab.entries.indexOf(selected),
         onSelect = { onSelect(SettingsTab.entries[it]) },
+        position = position,
     )
 }
 
@@ -401,6 +416,25 @@ private fun GlobalSettings(
             style = MaterialTheme.typography.labelSmall,
             color = c.textMid,
         )
+    }
+    HorizontalDivider()
+
+    Text("Tab bar position", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Top or bottom, thumb-reach — applies everywhere unless a room says otherwise.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val tabBarPosition by session.tabBarPosition.collectAsState()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("TOP" to "Top", "BOTTOM" to "Bottom").forEach { (value, label) ->
+                HyleChip(tabBarPosition == value, { session.setTabBarPosition(value) }, label)
+            }
+        }
     }
     HorizontalDivider()
 

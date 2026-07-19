@@ -457,6 +457,15 @@ class HyleTabSpec(val label: String, val glyph: DrawScope.(tint: Color) -> Unit)
  * space in the caller rather than conditionally including it, or the tabs will visibly resize
  * when it appears/disappears (the exact "tab bar jitter" bug this bar's callers have already hit
  * once).
+ *
+ * [position] is `"TOP"` or `"BOTTOM"` (matching every other string-enum preference in
+ * [dev.aarso.data.SessionStore], e.g. `themeMode`) — it only flips the divider to the edge that
+ * faces away from this bar's own content (top: divider below the tabs; bottom: divider above
+ * them), so the bar reads correctly wherever it's placed. It does NOT move the bar within the
+ * caller's layout — a room wanting its tab bar to sit at the screen's bottom edge, not just have
+ * a bottom-facing divider, must place this composable last in its own Column (see
+ * [dev.aarso.data.SessionStore.tabBarPositionFor] for the per-room-overridable preference each
+ * caller should read to decide that placement).
  */
 @Composable
 fun HyleTabBar(
@@ -464,11 +473,12 @@ fun HyleTabBar(
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    position: String = "TOP",
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = LocalHyleColors.current
     val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
-    Column(modifier) {
+    val tabRow: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             tabs.forEachIndexed { i, tab ->
                 val on = i == selected
@@ -488,7 +498,15 @@ fun HyleTabBar(
             }
             trailing?.invoke()
         }
-        HorizontalDivider()
+    }
+    Column(modifier) {
+        if (position == "BOTTOM") {
+            HorizontalDivider()
+            tabRow()
+        } else {
+            tabRow()
+            HorizontalDivider()
+        }
     }
 }
 
