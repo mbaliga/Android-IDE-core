@@ -53,8 +53,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.HorizontalDivider
 import dev.aarso.FonebrewApp
 import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
+import dev.aarso.ui.hyle.HyleSegmentedToggle
 import dev.aarso.ui.hyle.HyleTabBar
 import dev.aarso.ui.hyle.HyleTabSpec
 import dev.aarso.ui.hyle.HyleTitle
@@ -125,16 +125,17 @@ fun ModelsRoom(
             onSelect = { tab = ModelsTab.entries[it] },
             position = tabBarPosition,
         )
-        // Source filter (Chat tab): on-device vs watched-cloud (owner ask).
+        // Source filter (Chat tab): on-device vs watched-cloud (owner ask). Rendered as a
+        // seam-grammar segmented toggle (cells packed along the slant seam) — the first
+        // in-app application of the owner's Global/Toggle reference.
         if (tab == ModelsTab.CHAT) {
             Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                HyleChip(source == ModelSource.ON_DEVICE, { source = ModelSource.ON_DEVICE }, "On-device")
-                HyleChip(source == ModelSource.CLOUD, { source = ModelSource.CLOUD }, "Cloud · watched")
-            }
+            HyleSegmentedToggle(
+                options = listOf("On-device", "Cloud · watched"),
+                selected = if (source == ModelSource.ON_DEVICE) 0 else 1,
+                onSelect = { source = if (it == 0) ModelSource.ON_DEVICE else ModelSource.CLOUD },
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
         }
     }
 
