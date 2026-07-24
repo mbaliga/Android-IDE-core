@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -448,15 +449,18 @@ fun HyleCard(
 class HyleTabSpec(val label: String, val glyph: DrawScope.(tint: Color) -> Unit)
 
 /**
- * The app's one fixed-width tab bar: an icon glyph, a label, and a 2dp underline indicator per
- * tab, laid out with equal weight (never scrolling) — first built for [dev.aarso.ui.rooms.
- * SettingsRoom]'s SettingsTabBar and pulled out here so every screen with a small, fixed set of
- * top-level categories uses the same widget instead of an ad hoc horizontalScroll chip row (the
- * single most repeated inconsistency an app-wide UX audit found this session). [trailing] is an
+ * The app's one fixed-width tab bar, in the **seam grammar** (the owner's carved-tab-bar
+ * reference, 2026-07-24): a solid strip in which the ACTIVE tab is a carved-out cell — filled
+ * with the room's own ground, its slant edges packing against the strip — while inactive
+ * neighbours are separated by thin `/` slashes at the same seam lean. Selection is carried by
+ * the carved fill, the cell shape, AND the label/glyph tint (never hue alone; the old 2dp
+ * underline is superseded by the carve). Tabs stay equal-weight and never scroll — first built
+ * for [dev.aarso.ui.rooms.SettingsRoom]'s SettingsTabBar, consolidated here so every screen
+ * with a small fixed set of top-level categories uses the same widget. [trailing] is an
  * optional fixed-width slot after the tabs (e.g. a filter-toggle icon) — always reserve its
  * space in the caller rather than conditionally including it, or the tabs will visibly resize
- * when it appears/disappears (the exact "tab bar jitter" bug this bar's callers have already hit
- * once).
+ * when it appears/disappears (the exact "tab bar jitter" bug this bar's callers have already
+ * hit once).
  *
  * [position] is `"TOP"` or `"BOTTOM"` (matching every other string-enum preference in
  * [dev.aarso.data.SessionStore], e.g. `themeMode`) — it only flips the divider to the edge that
@@ -478,22 +482,64 @@ fun HyleTabBar(
 ) {
     val c = LocalHyleColors.current
     val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val slashColor = c.textMid.copy(alpha = 0.45f)
     val tabRow: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEachIndexed { i, tab ->
-                val on = i == selected
-                val tint = if (on) c.violet else c.textMid
-                Column(
-                    modifier = Modifier.weight(1f)
-                        .clickable { haptics.tap(); onSelect(i) }
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Canvas(Modifier.size(22.dp)) { tab.glyph(this, tint) }
-                    Spacer(Modifier.height(5.dp))
-                    Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.height(2.dp).width(22.dp).background(if (on) c.violet else Color.Transparent))
+        Row(
+            Modifier.fillMaxWidth()
+                .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
+                .background(c.raised),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.weight(1f)
+                    .fillMaxHeight()
+                    // The `/` slashes between INACTIVE neighbours; boundaries touching the
+                    // active cell belong to its slant edges instead (per the reference).
+                    .drawBehind {
+                        val n = tabs.size
+                        if (n > 1) {
+                            val run = (size.height * 0.25f).coerceAtMost(12.dp.toPx())
+                            val vPad = size.height * 0.22f
+                            for (k in 1 until n) {
+                                if (k == selected || k - 1 == selected) continue
+                                val x = size.width * k / n
+                                drawLine(
+                                    color = slashColor,
+                                    start = Offset(x + run / 2f, vPad),
+                                    end = Offset(x - run / 2f, size.height - vPad),
+                                    strokeWidth = 1.dp.toPx(),
+                                    cap = StrokeCap.Round,
+                                )
+                            }
+                        }
+                    },
+            ) {
+                Row(Modifier.fillMaxWidth().fillMaxHeight()) {
+                    tabs.forEachIndexed { i, tab ->
+                        val on = i == selected
+                        val tint = if (on) c.violet else c.textMid
+                        // The carved cell: the room's ground showing through the strip. End
+                        // tabs keep the strip's square edge on their outer side; every seam
+                        // toward a neighbour (or the trailing slot) is slanted.
+                        val cellShape = HyleSegmentShape(
+                            slantStart = i > 0,
+                            slantEnd = i < tabs.lastIndex || trailing != null,
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f)
+                                .fillMaxHeight()
+                                .then(
+                                    if (on) Modifier.clip(cellShape).background(c.ink, cellShape) else Modifier,
+                                )
+                                .clickable { haptics.tap(); onSelect(i) }
+                                .padding(vertical = 9.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Canvas(Modifier.size(22.dp)) { tab.glyph(this, tint) }
+                            Spacer(Modifier.height(5.dp))
+                            Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                        }
+                    }
                 }
             }
             trailing?.invoke()
