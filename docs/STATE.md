@@ -118,9 +118,12 @@ owner-verified only.**
   `ai-catalogue-sentry` is now the one canonical updater for both files. A model with no
   independently-verified mirror (`downloadUrl: null`) renders "not available in this build — no
   verified mirror yet" rather than a dead download button (Nooz's own honesty rule, carried
-  through). **Owner follow-up**: Nooz's repo-default branch is currently `claude/app-build-d1f9s6`
-  (its `main` is an empty placeholder) — `SessionStore.DEFAULT_FT_URL`/`DEFAULT_MC_URL` point there;
-  repoint both once a stable release branch exists.
+  through). **Resolved 2026-07-24**: Nooz's real app build landed on its `main` branch (that
+  repo's PR #1); the placeholder-history branch this originally pointed at
+  (`claude/app-build-d1f9s6`) is superseded, and the owner flagged the stale pointer when closing
+  the docs-only PR this repo had open against Nooz (nooz#2 — closed unmerged, its two pieces of
+  lasting value ported to `main` directly via nooz#4). `SessionStore.DEFAULT_FT_URL`/
+  `DEFAULT_MC_URL` now point at `main`; both raw URLs reverified live (HTTP 200) before repointing.
 
 ### Version history (this cycle)
 v0.9.0 full IA · v0.9.1 B4 depth + loop streaming + profile icon · v0.10.0 agentic IDE + devices ·
