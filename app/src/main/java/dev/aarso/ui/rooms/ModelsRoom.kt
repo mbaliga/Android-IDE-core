@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +54,7 @@ import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.theme.LocalHyleColors
+import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
 private enum class ModelsTab { CHAT, IMAGE, BYO }
@@ -78,7 +81,29 @@ fun ModelsRoom(
     var customUrl by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(ModelsTab.CHAT) }
     var source by remember { mutableStateOf(ModelSource.ON_DEVICE) }
-    val cloudProviders by (LocalContext.current.applicationContext as AarsoApp).container.providerStore.providers.collectAsState()
+    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val cloudProviders by container.providerStore.providers.collectAsState()
+    val scope = rememberCoroutineScope()
+    var updatingCatalog by remember { mutableStateOf(false) }
+    var catalogUpdateNote by remember { mutableStateOf<String?>(null) }
+    var confirmCatalogUpdate by remember { mutableStateOf(false) }
+    val catalogSourceUrl by container.sessionStore.modelCatalogSourceUrl.collectAsState()
+
+    fun runCatalogUpdate() {
+        scope.launch {
+            updatingCatalog = true
+            catalogUpdateNote = "contacting the source online…"
+            container.modelCatalogUpdater.update(catalogSourceUrl).fold(
+                {
+                    modelsViewModel.refreshCatalog()
+                    imagesViewModel.refreshCatalog()
+                    catalogUpdateNote = "updated (list dated ${modelsViewModel.catalogLastUpdated})"
+                },
+                { e -> catalogUpdateNote = "update failed: ${e.message}" },
+            )
+            updatingCatalog = false
+        }
+    }
 
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (onClose != null) {
@@ -96,6 +121,29 @@ fun ModelsRoom(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp),
         )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        ) {
+            Text(
+                "Model list: this app doesn't maintain its own — it's Nooz's shared catalog" +
+                    (modelsViewModel.catalogLastUpdated.ifBlank { null }?.let { " (dated $it)" } ?: "") + ".",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { confirmCatalogUpdate = true }, enabled = !updatingCatalog) {
+                Text(if (updatingCatalog) "Updating…" else "Update")
+            }
+        }
+        catalogUpdateNote?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
         Spacer(Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -130,7 +178,8 @@ fun ModelsRoom(
                     fitVerdict = fit.verdict,
                     fitReason = fit.reason,
                     state = active[m.id],
-                    downloaded = modelsViewModel.isDownloaded(m.hfFile),
+                    downloaded = modelsViewModel.isDownloaded(m.fileName),
+                    available = m.downloadUrl != null,
                     onDownload = { modelsViewModel.downloadCatalog(m) },
                     onPause = { downloads.pause(m.id) },
                     onResume = { downloads.retry(m.id) },
@@ -148,7 +197,8 @@ fun ModelsRoom(
                     fitReason = fit.reason,
                     state = active[id],
                     downloaded = sdDownloaded.any { it.name == m.fileName },
-                    onDownload = { imagesViewModel.downloadSdModel(m.url) },
+                    available = m.downloadUrl != null,
+                    onDownload = { m.downloadUrl?.let { imagesViewModel.downloadSdModel(it) } },
                     onPause = { downloads.pause(id) },
                     onResume = { downloads.retry(id) },
                     onCancel = { downloads.cancel(id) },
@@ -199,6 +249,28 @@ fun ModelsRoom(
                 }
             }
         }
+    }
+
+    // Explicit consent before any network reach (binding rules 1 & 2) — the model list is
+    // fetched only on this affordance, never automatically.
+    if (confirmCatalogUpdate) {
+        AlertDialog(
+            onDismissRequest = { confirmCatalogUpdate = false },
+            title = { Text("Go online to update?") },
+            text = {
+                Text(
+                    "This connects to the internet and fetches the latest model list from:\n\n" +
+                        "$catalogSourceUrl\n\n" +
+                        "Aarso is on-device by default; this is the only time it reaches out for this list.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmCatalogUpdate = false; runCatalogUpdate() }) { Text("Allow") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmCatalogUpdate = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -278,6 +350,7 @@ private fun CoverCard(
     fitReason: String,
     state: DownloadCenter.State?,
     downloaded: Boolean,
+    available: Boolean,
     onDownload: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -322,7 +395,7 @@ private fun CoverCard(
                 Spacer(Modifier.height(6.dp))
                 Text(fitReason, style = MaterialTheme.typography.labelMedium, color = fitColor)
                 Spacer(Modifier.height(14.dp))
-                DownloadAction(state, downloaded, fitVerdict, onDownload, onPause, onResume, onCancel)
+                DownloadAction(state, downloaded, available, fitVerdict, onDownload, onPause, onResume, onCancel)
             }
         }
     }
@@ -333,6 +406,7 @@ private fun CoverCard(
 private fun DownloadAction(
     state: DownloadCenter.State?,
     downloaded: Boolean,
+    available: Boolean,
     fitVerdict: FitVerdict,
     onDownload: () -> Unit,
     onPause: () -> Unit,
@@ -343,6 +417,12 @@ private fun DownloadAction(
     val progress = state?.progress
     when {
         downloaded -> Text("on device", style = MaterialTheme.typography.labelMedium, color = c.success)
+        // Never coerce a null downloadUrl into "available" — the catalog's own honesty rule.
+        !available -> Text(
+            "not available in this build — no verified mirror yet",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         state?.paused == true -> Column {
             LinearProgressIndicator(progress = { progress?.fraction ?: 0f }, modifier = Modifier.fillMaxWidth())
             Row(verticalAlignment = Alignment.CenterVertically) {

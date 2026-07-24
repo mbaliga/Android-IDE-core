@@ -14,6 +14,9 @@ object InvocationFeatures {
     /** Play GenAI policy affordance — not required in the sideload build. */
     const val FLAG_OUTPUT_ENABLED: Boolean = false
 
+    /** FULL ships every model in Nooz's shared catalog, including community "abliterated" remixes. */
+    const val CATALOG_POLICY_SAFE_ONLY: Boolean = false
+
     /** Where a user-sent output report goes; empty = generic share sheet. */
     const val FLAG_REPORT_EMAIL: String = ""
 

@@ -1,6 +1,9 @@
 package dev.aarso.ui
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,14 +15,16 @@ import dev.aarso.data.DownloadCenter
 import dev.aarso.data.ImageProviderStore
 import dev.aarso.data.ImageStore
 import dev.aarso.data.LocalModel
+import dev.aarso.data.ModelCatalogStore
 import dev.aarso.data.ModelDownloader
 import dev.aarso.data.SdModelStore
-import dev.aarso.domain.catalog.SdCatalog
+import dev.aarso.domain.catalog.ModelCatalogMapper
 import dev.aarso.domain.catalog.SdCatalogModel
 import dev.aarso.domain.device.FitResult
 import dev.aarso.domain.device.ModelFit
 import dev.aarso.domain.image.ImageParams
 import dev.aarso.domain.image.ImageProvider
+import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.inference.EngineProvider
 import dev.aarso.inference.image.ImageEngineFactory
 import dev.aarso.inference.image.SdImageEngine
@@ -55,11 +60,25 @@ class ImagesViewModel(
     private val sdModelStore: SdModelStore,
     private val sdDownloader: ModelDownloader,
     private val downloadCenter: DownloadCenter,
+    private val catalogStore: ModelCatalogStore,
 ) : AndroidViewModel(app) {
 
     val providers: StateFlow<List<ImageProvider>> = providerStore.providers
     val sdModels: StateFlow<List<LocalModel>> = sdModelStore.models
-    val sdCatalog: List<SdCatalogModel> = SdCatalog.models
+
+    /** Nooz's shared catalog (kind SD_IMAGE) — see [refreshCatalog]. */
+    var sdCatalog: List<SdCatalogModel> by mutableStateOf(loadSdCatalog())
+        private set
+
+    private fun loadSdCatalog(): List<SdCatalogModel> =
+        ModelCatalogMapper.sdModels(catalogStore.catalog(), InvocationFeatures.CATALOG_POLICY_SAFE_ONLY)
+
+    /** Re-read the catalog store — call after a consented [dev.aarso.data.ModelCatalogUpdater
+     *  .update] succeeds. */
+    fun refreshCatalog() {
+        sdCatalog = loadSdCatalog()
+    }
+
     private val device = DeviceInfo.read(app)
 
     fun fit(sizeBytes: Long): FitResult = ModelFit.check(sizeBytes, device)
@@ -159,7 +178,10 @@ class ImagesViewModel(
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as AarsoApp
                 val c = app.container
-                ImagesViewModel(app, c.imageProviderStore, c.imageStore, c.engineProvider, c.sdModelStore, c.sdModelDownloader, c.downloadCenter)
+                ImagesViewModel(
+                    app, c.imageProviderStore, c.imageStore, c.engineProvider, c.sdModelStore,
+                    c.sdModelDownloader, c.downloadCenter, c.modelCatalogStore,
+                )
             }
         }
     }

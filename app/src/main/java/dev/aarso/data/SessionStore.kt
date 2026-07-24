@@ -97,6 +97,23 @@ class SessionStore(context: Context) {
         _freeTierSourceUrl.value = url
     }
 
+    // Model catalog refresh — same shape/contract as the free-tier refresh above: OFF by
+    // default, an explicit consented fetch, source URL shown to the user (watched).
+    private val _modelCatalogAutoUpdate = MutableStateFlow(prefs.getBoolean(KEY_MC_AUTO, false))
+    val modelCatalogAutoUpdate: StateFlow<Boolean> = _modelCatalogAutoUpdate.asStateFlow()
+    private val _modelCatalogSourceUrl = MutableStateFlow(prefs.getString(KEY_MC_URL, DEFAULT_MC_URL) ?: DEFAULT_MC_URL)
+    val modelCatalogSourceUrl: StateFlow<String> = _modelCatalogSourceUrl.asStateFlow()
+
+    fun setModelCatalogAutoUpdate(on: Boolean) {
+        prefs.edit().putBoolean(KEY_MC_AUTO, on).apply()
+        _modelCatalogAutoUpdate.value = on
+    }
+
+    fun setModelCatalogSourceUrl(url: String) {
+        prefs.edit().putString(KEY_MC_URL, url).apply()
+        _modelCatalogSourceUrl.value = url
+    }
+
     fun setActiveLeafId(id: String?) {
         prefs.edit().putString(KEY_LEAF, id).apply()
         _activeLeafId.value = id
@@ -208,12 +225,24 @@ class SessionStore(context: Context) {
         // the Aeon violet, which stays available as a preset.
         const val DEFAULT_ACCENT = "#4DA3FF"
 
-        // Default free-tier source: the catalog file on the repo's main branch. Editable in the
-        // UI (point it at wherever the list is published). The fetch only happens with consent.
+        // Default free-tier source: Nooz's shared `ai-catalogue/free-tiers.json` — the
+        // constellation's canonical, continually-refreshed copy (see that repo's
+        // ai-catalogue/README.md); Aarso no longer hand-maintains its own free-tier pipeline.
+        // Editable in the UI (point it at wherever the list is published). The fetch only
+        // happens with consent. `main` is nooz's real canonical branch as of nooz PR #1 (its
+        // pre-init placeholder history and the short-lived `claude/app-build-d1f9s6` line are
+        // both superseded — see nooz's STATE.md D16/D17 and the PR #2 close comment there).
         const val DEFAULT_FT_URL =
-            "https://raw.githubusercontent.com/mbaliga/mobile-llm/main/app/src/main/assets/free_tiers.json"
+            "https://raw.githubusercontent.com/mbaliga/nooz/main/ai-catalogue/free-tiers.json"
         private const val KEY_FT_AUTO = "freeTierAutoUpdate"
         private const val KEY_FT_URL = "freeTierSourceUrl"
+
+        // Default model-catalog source: Nooz's shared `ai-catalogue/models.json` — same
+        // provenance/branch note as DEFAULT_FT_URL above.
+        const val DEFAULT_MC_URL =
+            "https://raw.githubusercontent.com/mbaliga/nooz/main/ai-catalogue/models.json"
+        private const val KEY_MC_AUTO = "modelCatalogAutoUpdate"
+        private const val KEY_MC_URL = "modelCatalogSourceUrl"
 
         private const val KEY_LEAF = "activeLeafId"
         private const val KEY_MODEL = "activeModelId"

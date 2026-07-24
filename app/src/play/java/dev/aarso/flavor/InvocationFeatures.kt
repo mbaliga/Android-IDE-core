@@ -15,6 +15,10 @@ object InvocationFeatures {
 
     const val FLAG_OUTPUT_ENABLED: Boolean = true
 
+    /** PLAY only shows Nooz's shared catalog entries flagged `policySafe` — official/licensed
+     *  releases, never a community "abliterated"/uncensored remix (Play GenAI policy). */
+    const val CATALOG_POLICY_SAFE_ONLY: Boolean = true
+
     /**
      * Where a user-sent output report goes; empty = generic share sheet.
      * OWNER INPUT PENDING: set the reporting address before the Play listing

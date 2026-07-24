@@ -101,6 +101,29 @@ owner-verified only.**
   1.8**; the BoM pinned 1.7.6 → `NoSuchMethodError(BasicText…TextAutoSize)` on every markdown turn.
   Bumped `composeBom` → 2025.05.01 (Foundation 1.8.2).
 - Dev-Echo send: foreground service no longer started for non-on-device turns + hardened.
+- **One-click model downloads + the free-tier guide now come from Nooz, not this repo.** Per the
+  owner's constellation-wide data-sharing model (Nooz owns `ai-catalogue/` — models + free tiers —
+  and other apps consume it, same shape as D13/D15 in Nooz's own STATE.md), the two hand-maintained
+  `full`/`play` `ModelCatalog` objects are gone; `ModelCatalogMapper` now builds the chat-GGUF and
+  SD-checkpoint lists from a shared `RemoteModelCatalog` (JVM-tested `RemoteCatalogCodec` parses
+  Nooz's `ai-catalogue/models.json` schema). `ModelCatalogStore`/`ModelCatalogUpdater` mirror the
+  existing `FreeTierStore`/`FreeTierUpdater` shape exactly: a bundled `assets/model_catalog.json`
+  fallback, a `filesDir` override, and a refresh that only ever runs on explicit consent (Models
+  screen "Update" button, same `AlertDialog` pattern as the free-tier screen — binding rules 1/2).
+  The `play`/`full` split is now a runtime `policySafe` filter
+  (`InvocationFeatures.CATALOG_POLICY_SAFE_ONLY`) instead of two separate lists. `free_tiers.json`'s
+  default source URL moved from a stale `mbaliga/mobile-llm` link to Nooz's
+  `ai-catalogue/free-tiers.json`; this repo's own `scripts/update_free_tiers.py` +
+  `.github/workflows/update-free-tiers.yml` freshness pipeline is retired — Nooz's
+  `ai-catalogue-sentry` is now the one canonical updater for both files. A model with no
+  independently-verified mirror (`downloadUrl: null`) renders "not available in this build — no
+  verified mirror yet" rather than a dead download button (Nooz's own honesty rule, carried
+  through). **Resolved 2026-07-24**: Nooz's real app build landed on its `main` branch (that
+  repo's PR #1); the placeholder-history branch this originally pointed at
+  (`claude/app-build-d1f9s6`) is superseded, and the owner flagged the stale pointer when closing
+  the docs-only PR this repo had open against Nooz (nooz#2 — closed unmerged, its two pieces of
+  lasting value ported to `main` directly via nooz#4). `SessionStore.DEFAULT_FT_URL`/
+  `DEFAULT_MC_URL` now point at `main`; both raw URLs reverified live (HTTP 200) before repointing.
 
 ### Version history (this cycle)
 v0.9.0 full IA · v0.9.1 B4 depth + loop streaming + profile icon · v0.10.0 agentic IDE + devices ·
