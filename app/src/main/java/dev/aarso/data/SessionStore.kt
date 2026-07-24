@@ -229,18 +229,18 @@ class SessionStore(context: Context) {
         // constellation's canonical, continually-refreshed copy (see that repo's
         // ai-catalogue/README.md); Aarso no longer hand-maintains its own free-tier pipeline.
         // Editable in the UI (point it at wherever the list is published). The fetch only
-        // happens with consent. Branch note: `mbaliga/nooz`'s repo-default branch is currently
-        // `claude/app-build-d1f9s6` (its `main` is an empty placeholder) — update this constant
-        // if/when the owner designates a stable release branch.
+        // happens with consent. `main` is nooz's real canonical branch as of nooz PR #1 (its
+        // pre-init placeholder history and the short-lived `claude/app-build-d1f9s6` line are
+        // both superseded — see nooz's STATE.md D16/D17 and the PR #2 close comment there).
         const val DEFAULT_FT_URL =
-            "https://raw.githubusercontent.com/mbaliga/nooz/claude/app-build-d1f9s6/ai-catalogue/free-tiers.json"
+            "https://raw.githubusercontent.com/mbaliga/nooz/main/ai-catalogue/free-tiers.json"
         private const val KEY_FT_AUTO = "freeTierAutoUpdate"
         private const val KEY_FT_URL = "freeTierSourceUrl"
 
         // Default model-catalog source: Nooz's shared `ai-catalogue/models.json` — same
         // provenance/branch note as DEFAULT_FT_URL above.
         const val DEFAULT_MC_URL =
-            "https://raw.githubusercontent.com/mbaliga/nooz/claude/app-build-d1f9s6/ai-catalogue/models.json"
+            "https://raw.githubusercontent.com/mbaliga/nooz/main/ai-catalogue/models.json"
         private const val KEY_MC_AUTO = "modelCatalogAutoUpdate"
         private const val KEY_MC_URL = "modelCatalogSourceUrl"
 
