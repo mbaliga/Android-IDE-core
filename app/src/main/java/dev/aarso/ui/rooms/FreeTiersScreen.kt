@@ -32,7 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.domain.cost.FreeTierProvider
 import dev.aarso.ui.wire.WireBox
 import dev.aarso.ui.wire.WireButton
@@ -46,7 +46,7 @@ import dev.aarso.ui.wire.WireButton
 fun FreeTiersScreen(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
-    val container = (context.applicationContext as AarsoApp).container
+    val container = (context.applicationContext as FonebrewApp).container
     val session = container.sessionStore
     val scope = rememberCoroutineScope()
 

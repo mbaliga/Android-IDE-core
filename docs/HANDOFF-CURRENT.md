@@ -6,7 +6,7 @@
 >
 > **Repo:** `mbaliga/android-ide-core` (public open core). **Branch:**
 > `claude/android-ide-studio-refactor-sa2uq9` → mirrored to `main`. **APK:** `apk-dist` branch as
-> `aarso-sd.apk` (`https://raw.githubusercontent.com/mbaliga/Android-IDE-core/apk-dist/aarso-sd.apk`).
+> `fonebrew-sd.apk` (`https://raw.githubusercontent.com/mbaliga/Android-IDE-core/apk-dist/fonebrew-sd.apk`).
 >
 > **Status legend:** ✅ done (gate-green; Compose compile-verified, device-owner-verified) ·
 > 🟡 partial/in-works · ⛔ pending/not-started · 🔒 owner-gated. **CI never launches the app** —
@@ -309,7 +309,7 @@ Five icon tabs **Global / Image / Text / Video / 3D**.
   cost**). ✅ Populates from the live ledger writer. **Global cost REMOVED (§9)** — cost is a
   per-loop boundary; cards render `showCost=false`. 🟡 by-model / counts / flaired interaction
   history / trends / reconciliation overlay: partial.
-- **I** — reflective self-observation (§5b/§5c drift) — 🔒 ships **inert** (Aarso repo, Issue #2);
+- **I** — reflective self-observation (§5b/§5c drift) — 🔒 ships **inert** (Fonebrew repo, Issue #2);
   fabricates nothing.
 - 🟡 Every chart needs a data-table + spoken-summary equivalent — partial.
 
@@ -357,7 +357,7 @@ Currently the core shows the **locked placeholder**; the paid Studio installs th
 
 ## 12. Owner decisions / blockers (🔒)
 - Publish Hyle + core as artifacts (registry/token) so Studio depends on published core; set the
-  **Aarso** repo default branch (no `main` base → no PR yet).
+  **Fonebrew** repo default branch (no `main` base → no PR yet).
 - §5c/§5b mirror baseline (Issue #2) — owner-only input.
 - Device verification of every Compose surface on the RedMagic.
 - CI minutes on the private Studio repo (red `build-test` = billing, not code).

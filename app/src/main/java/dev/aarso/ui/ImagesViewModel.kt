@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.DeviceInfo
 import dev.aarso.data.DownloadCenter
 import dev.aarso.data.ImageProviderStore
@@ -157,7 +157,7 @@ class ImagesViewModel(
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as AarsoApp
+                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as FonebrewApp
                 val c = app.container
                 ImagesViewModel(app, c.imageProviderStore, c.imageStore, c.engineProvider, c.sdModelStore, c.sdModelDownloader, c.downloadCenter)
             }

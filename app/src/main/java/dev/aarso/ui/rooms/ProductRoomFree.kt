@@ -52,7 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.entity.TaskEntity
 import dev.aarso.domain.tasks.TaskDue
 import dev.aarso.domain.tasks.TaskState
@@ -112,7 +112,7 @@ fun ProductRoomFree(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TodoTab() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val store = container.taskStore
     val tasks by store.tasks.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()

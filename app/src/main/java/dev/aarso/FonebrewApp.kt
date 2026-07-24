@@ -5,7 +5,7 @@ import dev.aarso.crashrecovery.CrashRecovery
 import dev.aarso.di.AppContainer
 
 /** Holds the single [AppContainer] for the process. */
-class AarsoApp : Application() {
+class FonebrewApp : Application() {
     lateinit var container: AppContainer
         private set
 

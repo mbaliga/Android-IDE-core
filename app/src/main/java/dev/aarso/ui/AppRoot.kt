@@ -8,7 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.ui.spatial.SpatialRoot
 
 /**
@@ -18,7 +18,7 @@ import dev.aarso.ui.spatial.SpatialRoot
  */
 @Composable
 fun AppRoot() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val onboarded by container.sessionStore.onboardingDone.collectAsState()
     Box(Modifier.fillMaxSize()) {
         if (!onboarded) {

@@ -32,8 +32,9 @@ dependencyResolutionManagement {
 //   git -C hyle-design-system fetch && git -C hyle-design-system checkout <sha> && git add hyle-design-system
 includeBuild("hyle-design-system")
 
-// Aarso ("mirror"); design thesis: legibility + cognitive sovereignty.
-rootProject.name = "Aarso"
+// Fonebrew; design thesis: legibility + cognitive sovereignty. ("Aarso"/"mirror" now
+// names only the within-axis self-reflection lens, domain/mirror/ — see CLAUDE.md.)
+rootProject.name = "Fonebrew"
 include(":app")
 include(":sdengine")
 include(":hyle-probe")

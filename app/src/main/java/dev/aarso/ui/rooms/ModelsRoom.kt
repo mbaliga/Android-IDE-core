@@ -51,7 +51,7 @@ import dev.aarso.ui.ModelsViewModel
 import dev.aarso.ui.hyle.HyleButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.HorizontalDivider
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.ui.hyle.HyleCard
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
@@ -85,8 +85,8 @@ fun ModelsRoom(
     var customUrl by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(ModelsTab.CHAT) }
     var source by remember { mutableStateOf(ModelSource.ON_DEVICE) }
-    val cloudProviders by (LocalContext.current.applicationContext as AarsoApp).container.providerStore.providers.collectAsState()
-    val session = (LocalContext.current.applicationContext as AarsoApp).container.sessionStore
+    val cloudProviders by (LocalContext.current.applicationContext as FonebrewApp).container.providerStore.providers.collectAsState()
+    val session = (LocalContext.current.applicationContext as FonebrewApp).container.sessionStore
     val universalTabBarPosition by session.tabBarPosition.collectAsState()
     val roomTabBarOverrides by session.roomTabBarPosition.collectAsState()
     val tabBarPosition = roomTabBarOverrides["models"] ?: universalTabBarPosition

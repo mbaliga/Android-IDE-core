@@ -31,7 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.domain.remote.ExecChunk
 import dev.aarso.domain.remote.ExecRequest
 import dev.aarso.domain.remote.Identity
@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RemoteScreen(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()

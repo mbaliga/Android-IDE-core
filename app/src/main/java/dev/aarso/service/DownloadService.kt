@@ -9,7 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,11 +39,11 @@ class DownloadService : Service() {
         } catch (t: Throwable) {
             // DownloadCenter keeps downloading in its own scope; never crash for
             // a notification/priority formality.
-            android.util.Log.w("Aarso", "foreground promotion refused: $t")
+            android.util.Log.w("Fonebrew", "foreground promotion refused: $t")
             stopSelf()
             return START_NOT_STICKY
         }
-        val center = (application as AarsoApp).container.downloadCenter
+        val center = (application as FonebrewApp).container.downloadCenter
         scope.launch {
             center.active.collect { active ->
                 val running = active.values.filter { it.running }
@@ -86,7 +86,7 @@ class DownloadService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "aarso.downloads"
+        private const val CHANNEL_ID = "fonebrew.downloads"
         private const val NOTIF_ID = 1002
 
         fun start(context: Context) {
@@ -95,7 +95,7 @@ class DownloadService : Service() {
             } catch (t: Throwable) {
                 // Background-start restriction: the download itself continues in
                 // DownloadCenter's scope; only the notification is lost.
-                android.util.Log.w("Aarso", "could not start download FGS: $t")
+                android.util.Log.w("Fonebrew", "could not start download FGS: $t")
             }
         }
 

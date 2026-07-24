@@ -9,7 +9,7 @@ import dev.aarso.crashrecovery.CrashRecoveryStyle
  * consumer in the constellation can supply its own look) — so a crash still reads as Fonebrew,
  * not the module's unrelated generic default.
  */
-val AarsoCrashRecoveryStyle: CrashRecoveryStyle = CrashRecoveryStyle(
+val FonebrewCrashRecoveryStyle: CrashRecoveryStyle = CrashRecoveryStyle(
     background = Ink.toArgb(),
     surface = Raised.toArgb(),
     foreground = TextHigh.toArgb(),

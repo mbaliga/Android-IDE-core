@@ -181,7 +181,7 @@ fun ChatScreen(
                     if (!connectDismissed) {
                         item("connect-repos") {
                             val ctx = LocalContext.current
-                            val hosts by (ctx.applicationContext as dev.aarso.AarsoApp)
+                            val hosts by (ctx.applicationContext as dev.aarso.FonebrewApp)
                                 .container.gitHostStore.hosts.collectAsState()
                             if (hosts.isEmpty()) {
                                 Card(
@@ -529,7 +529,7 @@ private fun HomeHeader(
 @Composable
 private fun HeaderIndicator(state: ChatUiState) {
     val context = LocalContext.current
-    val container = (context.applicationContext as dev.aarso.AarsoApp).container
+    val container = (context.applicationContext as dev.aarso.FonebrewApp).container
     val mode by container.sessionStore.headerIndicator.collectAsState()
     if (mode == "NONE") return
     val c = LocalHyleColors.current

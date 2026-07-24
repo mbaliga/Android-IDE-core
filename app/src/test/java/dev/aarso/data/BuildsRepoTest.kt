@@ -83,7 +83,7 @@ class BuildsRepoTest {
     // ---------------------------------------------------------------------------
 
     @Test fun `findApkUrl returns the URL when present`() {
-        val url = "https://github.com/acme/mobile-llm/releases/download/v1.0/aarso-sd.apk"
+        val url = "https://github.com/acme/mobile-llm/releases/download/v1.0/fonebrew-sd.apk"
         val repo = BuildsRepo(BombTransport()) { null }
         assertEquals(url, repo.findApkUrl(sampleBuild().copy(downloadUrl = url)))
     }
@@ -115,8 +115,8 @@ class BuildsRepoTest {
         val releasesJson = """
             [
               {"tag_name":"v2.0","target_commitish":"main","published_at":"2026-06-17T00:00:00Z",
-               "assets":[{"id":42,"name":"aarso-sd.apk",
-                 "browser_download_url":"https://x/aarso-sd.apk","size":66060288}]}
+               "assets":[{"id":42,"name":"fonebrew-sd.apk",
+                 "browser_download_url":"https://x/fonebrew-sd.apk","size":66060288}]}
             ]
         """.trimIndent()
         // Releases endpoint succeeds; dist-branch listing returns 404 (no dist branch).
@@ -135,8 +135,8 @@ class BuildsRepoTest {
     @Test fun `listBuilds includes dist-branch APKs when no releases`() = runTest {
         val distJson = """
             [
-              {"type":"file","name":"aarso-sd.apk","sha":"a1b2c3d4e5",
-               "size":66060288,"download_url":"https://x/raw/aarso-sd.apk"}
+              {"type":"file","name":"fonebrew-sd.apk","sha":"a1b2c3d4e5",
+               "size":66060288,"download_url":"https://x/raw/fonebrew-sd.apk"}
             ]
         """.trimIndent()
         // Releases endpoint returns 404; dist-branch listing succeeds.
@@ -157,9 +157,9 @@ class BuildsRepoTest {
     // ---------------------------------------------------------------------------
 
     private fun sampleBuild() = Build(
-        id = "b1", version = "v1.0", name = "aarso-sd.apk", branch = "main",
+        id = "b1", version = "v1.0", name = "fonebrew-sd.apk", branch = "main",
         createdAt = "2026-06-17T00:00:00Z",
-        downloadUrl = "https://example.com/aarso-sd.apk",
+        downloadUrl = "https://example.com/fonebrew-sd.apk",
         sizeBytes = 66_060_288L,
         source = BuildSource.RELEASE_ASSET,
     )

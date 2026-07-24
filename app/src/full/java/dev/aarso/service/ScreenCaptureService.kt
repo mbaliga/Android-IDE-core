@@ -19,13 +19,13 @@ import android.os.Looper
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.Intake
 import dev.aarso.ui.MainActivity
 
 /**
  * Captures one screen frame via MediaProjection and OCRs it on-device (ML Kit,
- * offline), then routes the recognized text into Aarso (handoff §7, tier 2 — for
+ * offline), then routes the recognized text into Fonebrew (handoff §7, tier 2 — for
  * when the Assist API's text is thin). Costs the system consent prompt and yields
  * a screenshot's text, not the source file.
  */
@@ -71,7 +71,7 @@ class ScreenCaptureService : Service() {
         val ir = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
         reader = ir
         mp.createVirtualDisplay(
-            "aarso-capture", w, h, metrics.densityDpi,
+            "fonebrew-capture", w, h, metrics.densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, ir.surface, null, handler,
         )
         ir.setOnImageAvailableListener({ r ->
@@ -104,7 +104,7 @@ class ScreenCaptureService : Service() {
 
     private fun finishUp(text: String) {
         if (text.isNotBlank()) {
-            (applicationContext as AarsoApp).container.sharedIntake.offer(Intake(text = text, source = "screen"))
+            (applicationContext as FonebrewApp).container.sharedIntake.offer(Intake(text = text, source = "screen"))
         }
         startActivity(
             Intent(this, MainActivity::class.java)
@@ -145,7 +145,7 @@ class ScreenCaptureService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "aarso.capture"
+        private const val CHANNEL_ID = "fonebrew.capture"
         private const val NOTIF_ID = 1003
         private const val EXTRA_CODE = "code"
         private const val EXTRA_DATA = "data"

@@ -56,7 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.sin
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.library.ConvSort
 import dev.aarso.domain.library.ConversationProjection
@@ -97,7 +97,7 @@ fun ChatsRoom(
 ) {
     val c = LocalHyleColors.current
     val context = LocalContext.current
-    val session = (context.applicationContext as AarsoApp).container.sessionStore
+    val session = (context.applicationContext as FonebrewApp).container.sessionStore
 
     val conversations by viewModel.conversations.collectAsState()
     val imageNodes by viewModel.imageNodes.collectAsState()

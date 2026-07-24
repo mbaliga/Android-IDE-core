@@ -1,4 +1,4 @@
-# Aarso — Handoff (complete)
+# Fonebrew — Handoff (complete)
 
 > Single, self-contained handoff for any session (human or agent) picking this up.
 > Pairs with `CLAUDE.md` (binding rules) and `docs/status.md` (running snapshot) and
@@ -27,7 +27,7 @@
 
 ## 1. North star
 
-**Aarso** (*mirror*; package `dev.aarso`) is a **local-first Android app for working with
+**Fonebrew** (package `dev.aarso`) is a **local-first Android app for working with
 multiple AI models**, whose design thesis is **legibility + cognitive sovereignty** — a
 *tool-as-argument* artifact, not a generic chat client. One thesis sentence:
 
@@ -40,13 +40,13 @@ It is a **physics engine for thought**:
   you own your history (mirrored to your Git host), you make the surface yours.
 - **The loop is the product**: objective → propose → critique → refine, made visual,
   editable, named, shareable.
-- **Your repos, your builds**: Aarso is where you *develop* Android apps — browse code,
+- **Your repos, your builds**: Fonebrew is where you *develop* Android apps — browse code,
   run loops over it, see CI, install builds.
 - **Legibility over power**: non-technical users can read what it's doing and feel in
   control; nothing important is hidden.
 
 ### Expanded direction (owner, 2026-06-19)
-Aarso (esp. the Play build) is also an **agentic Android IDE** — conceive → build → test
+Fonebrew (esp. the Play build) is also an **agentic Android IDE** — conceive → build → test
 → launch an Android app **end-to-end from the phone** ("TikTok for Android app dev"),
 plus **project management** and **app-launch generation** in-app. Sequencing chosen:
 **foundation first, then the three pillars equally.** A fourth pillar, **Cost**, was added
@@ -98,8 +98,8 @@ stopping at the device/design/Issue-#2 ceiling (§E there). Package rename is de
 - Commands: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :hyle:test`
   (both flavors must stay green); `:app:assembleFullDebug` (native, heavy);
   `:app:bundlePlayRelease` (AAB).
-- **APK delivery:** orphan branch **`apk-dist`** holds `aarso-sd.apk` (+ `hyle-probe.apk`),
-  force-pushed. Install URL: `https://github.com/mbaliga/mobile-llm/raw/apk-dist/aarso-sd.apk`
+- **APK delivery:** orphan branch **`apk-dist`** holds `fonebrew-sd.apk` (+ `hyle-probe.apk`),
+  force-pushed. Install URL: `https://github.com/mbaliga/mobile-llm/raw/apk-dist/fonebrew-sd.apk`
   (private repo).
 - **Environment honesty:** the build container compiles everything but has **no
   device/emulator**. All runtime behaviour (inference quality, image output, overlay/
@@ -248,7 +248,7 @@ Legend: ✅ built & CI-green · 🟡 partial · 🔌 headless engine, UI/runtime
 
 ### 6.9 §7 invocation layer (full flavor)
 - ✅ Share-sheet + PROCESS_TEXT → `data/SharedIntake`; assist gesture + recognition trio
-  (`service/AarsoInteraction*`, `AarsoRecognitionService` is a deliberate STT stub);
+  (`service/FonebrewInteraction*`, `FonebrewRecognitionService` is a deliberate STT stub);
   floating bubble (`service/OverlayService`); screen-capture + ML Kit OCR
   (`service/ScreenCaptureService`). 📱 all owner-verified.
 
@@ -295,7 +295,7 @@ CI-green** (287 tests). Touchable wireframe UI exists for every new pillar.
 - **B1**: relocate Develop to the bottom **dev room** (needs the spatial-map reorg:
   Models folds into Settings; bottom axis opens Develop) — gesture code, device-verified.
 - Loop room: free-form canvas editing UI; lifecycle UI; material (ferrofluid) port to atoms.
-- On-device **voice/STT** for NL authoring (`AarsoRecognitionService` stub).
+- On-device **voice/STT** for NL authoring (`FonebrewRecognitionService` stub).
 
 ### 8.4 Owner-only / blocked
 - **§5b drift + §5c self-observation** — ⛔ blocked on **Issue #2** (idiolect baseline +

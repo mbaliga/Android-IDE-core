@@ -8,17 +8,17 @@ stays `full` (`dev.aarso.full`) on the `apk-dist` branch.
 
 1. **Upload keystore** (never committed; `keystore.properties` is gitignored):
    ```bash
-   keytool -genkeypair -v -keystore aarso-upload.keystore -alias aarso-upload \
+   keytool -genkeypair -v -keystore fonebrew-upload.keystore -alias fonebrew-upload \
      -keyalg RSA -keysize 2048 -validity 10000
    ```
    Store the file OUTSIDE the repo. Create `keystore.properties` at the repo root:
    ```properties
-   storeFile=/absolute/path/aarso-upload.keystore
+   storeFile=/absolute/path/fonebrew-upload.keystore
    storePassword=…
-   keyAlias=aarso-upload
+   keyAlias=fonebrew-upload
    keyPassword=…
    ```
-   (CI alternative: env vars `AARSO_KEYSTORE_FILE/_PASSWORD/_ALIAS`, `AARSO_KEY_PASSWORD`.)
+   (CI alternative: env vars `FONEBREW_KEYSTORE_FILE/_PASSWORD/_ALIAS`, `FONEBREW_KEY_PASSWORD`.)
 2. Play Console: create the app (`dev.aarso`), **enroll in Play App Signing**
    (Google holds the app key; the keystore above is only the upload key).
 3. Fill: Data safety (`data-safety.md`), content rating (`content-rating.md`),
@@ -40,7 +40,7 @@ stays `full` (`dev.aarso.full`) on the `apk-dist` branch.
 
 The signed AAB is built by `.github/workflows/release-play.yml`. The upload key
 lives ONLY in repository Secrets (never committed); the workflow base64-decodes it
-to an ephemeral file and points the build's `AARSO_KEYSTORE_*` env vars at it.
+to an ephemeral file and points the build's `FONEBREW_KEYSTORE_*` env vars at it.
 
 **One-time — add these repository secrets** (Settings → Secrets and variables →
 Actions → New repository secret), on the **core** repo (`Android-IDE-core`), which
@@ -48,10 +48,10 @@ is what produces the AAB — Studio is not part of this build:
 
 | Secret | Value |
 |---|---|
-| `AARSO_KEYSTORE_BASE64` | `base64 -w0 aarso-upload.keystore` (the upload keystore, encoded) |
-| `AARSO_KEYSTORE_PASSWORD` | store password |
-| `AARSO_KEYSTORE_ALIAS` | key alias (e.g. `aarso-upload`) |
-| `AARSO_KEY_PASSWORD` | key password |
+| `FONEBREW_KEYSTORE_BASE64` | `base64 -w0 fonebrew-upload.keystore` (the upload keystore, encoded) |
+| `FONEBREW_KEYSTORE_PASSWORD` | store password |
+| `FONEBREW_KEYSTORE_ALIAS` | key alias (e.g. `fonebrew-upload`) |
+| `FONEBREW_KEY_PASSWORD` | key password |
 
 Constraints, up front: the native cross-compile is memory-heavy (the job adds 12 GB
 swap, same as CI's native-assemble canary); and on this **private** repo the job

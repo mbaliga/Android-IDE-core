@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.domain.bpmn.BpmnArchive
 import dev.aarso.domain.bpmn.BpmnEdge
 import dev.aarso.domain.bpmn.BpmnGraph
@@ -182,7 +182,7 @@ private fun fromBpmnEdges(g: BpmnGraph): List<LoopEdge> =
  */
 @Composable
 fun LoopRoom(onClose: () -> Unit) {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val runnable = remember { container.modelRegistry.allSpecs().filter { container.engineProvider.isRunnable(it) } }
     val density = LocalDensity.current.density
     val store = container.loopStore

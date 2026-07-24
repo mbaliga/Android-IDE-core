@@ -41,13 +41,13 @@ private fun schemeFrom(c: HyleColors, dark: Boolean) = if (dark) {
 }
 
 /**
- * Aarso theme — Hyle structure, now runtime-switchable. [mode] picks dark/light/
+ * Fonebrew theme — Hyle structure, now runtime-switchable. [mode] picks dark/light/
  * system; [accent] re-tints the violet ramp (sovereignty of appearance). The full
  * palette is published via [LocalHyleColors]; the matching M3 scheme is published
  * via MaterialTheme so both styles of colour lookup stay in sync.
  */
 @Composable
-fun AarsoTheme(
+fun FonebrewTheme(
     mode: ThemeMode = ThemeMode.DARK,
     accent: Color = DefaultAccent,
     texture: Float = 0f,

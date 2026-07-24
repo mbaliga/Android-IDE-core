@@ -47,7 +47,7 @@ class GenerationService : Service() {
             startForeground(NOTIF_ID, notification)
         }.isSuccess
         if (!promoted) {
-            android.util.Log.w("Aarso", "foreground promotion refused; running without priority boost")
+            android.util.Log.w("Fonebrew", "foreground promotion refused; running without priority boost")
             stopSelf()
         }
         return START_NOT_STICKY
@@ -63,7 +63,7 @@ class GenerationService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "aarso.generation"
+        private const val CHANNEL_ID = "fonebrew.generation"
         private const val NOTIF_ID = 1001
 
         fun start(context: Context) {
@@ -76,7 +76,7 @@ class GenerationService : Service() {
                 }
             } catch (t: Throwable) {
                 // Background-start restriction: proceed without the priority boost.
-                android.util.Log.w("Aarso", "could not start generation FGS: $t")
+                android.util.Log.w("Fonebrew", "could not start generation FGS: $t")
             }
         }
 

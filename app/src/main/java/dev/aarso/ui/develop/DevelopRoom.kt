@@ -40,7 +40,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import kotlinx.coroutines.launch
 
 /**
@@ -66,7 +66,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun DevelopRoom(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     // Brief §7: Develop's tabs are exactly Hardware / Files / Terminal / Audit.
     //  - Cost moved to Loops (a per-loop budget boundary, §6.2) — no Cost tab here.
     //  - Builds moved to the Tree (§6.1) — the Tree's Builds tab owns build history.
@@ -220,7 +220,7 @@ private fun DrawScope.genericTabGlyph(tint: Color) {
  */
 @Composable
 internal fun BuildsFacet() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val hosts by container.gitHostStore.hosts.collectAsState()
     val host = hosts.firstOrNull()
     if (host == null) {
@@ -320,7 +320,7 @@ internal fun Hint(text: String) {
  */
 @Composable
 private fun HardwareFacet(onOpenTerminal: () -> Unit) {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
@@ -551,7 +551,7 @@ private fun uploadSummary(out: String): String {
  */
 @Composable
 private fun FilesFacet() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val runner = container.agentRepoRunner
     val scope = rememberCoroutineScope()
     val runnable = remember { container.modelRegistry.allSpecs().filter { container.engineProvider.isRunnable(it) } }

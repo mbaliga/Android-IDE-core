@@ -3,9 +3,9 @@ package dev.aarso.service
 import android.service.voice.VoiceInteractionService
 
 /**
- * Registers Aarso as a device assistant (handoff §7). Once the user selects Aarso
+ * Registers Fonebrew as a device assistant (handoff §7). Once the user selects Fonebrew
  * as the default digital assistant, the assist gesture summons it over any app —
  * the same framework Gemini runs on (displacing Gemini is acceptable, §7). The
- * actual session work is in [AarsoInteractionSessionService].
+ * actual session work is in [FonebrewInteractionSessionService].
  */
-class AarsoInteractionService : VoiceInteractionService()
+class FonebrewInteractionService : VoiceInteractionService()

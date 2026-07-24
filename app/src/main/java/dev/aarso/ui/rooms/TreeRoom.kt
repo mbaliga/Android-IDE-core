@@ -61,7 +61,7 @@ fun TreeRoom(
     val rows by viewModel.treeOutline.collectAsState()
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val container = (context.applicationContext as dev.aarso.AarsoApp).container
+    val container = (context.applicationContext as dev.aarso.FonebrewApp).container
     val hosts by container.gitHostStore.hosts.collectAsState()
     val scope = rememberCoroutineScope()
     var note by remember { mutableStateOf<String?>(null) }

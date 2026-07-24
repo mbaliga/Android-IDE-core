@@ -5,30 +5,30 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.Intake
 import dev.aarso.ui.MainActivity
 
 /**
  * The summoned assist surface (handoff §7). On the assist gesture we capture the
- * on-screen text (Assist API, tier 1) and route it into Aarso, then bring the app
+ * on-screen text (Assist API, tier 1) and route it into Fonebrew, then bring the app
  * forward — the "content → act on it" experience through a sanctioned door. We
  * can't lift the original file the way an OEM can; this is captured text.
  */
-class AarsoInteractionSession(context: Context) : VoiceInteractionSession(context) {
+class FonebrewInteractionSession(context: Context) : VoiceInteractionSession(context) {
 
     override fun onHandleAssist(state: AssistState) {
         super.onHandleAssist(state)
         val text = extractText(state.assistStructure)
         if (text.isNotBlank()) {
-            (context.applicationContext as AarsoApp).container.sharedIntake
+            (context.applicationContext as FonebrewApp).container.sharedIntake
                 .offer(Intake(text = text, source = "assist"))
         }
     }
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        // Bring Aarso forward; if assist text arrives it's already routed reactively.
+        // Bring Fonebrew forward; if assist text arrives it's already routed reactively.
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         context.startActivity(intent)

@@ -9,7 +9,7 @@ import org.json.JSONArray
 /**
  * Syncs loop **definitions** to the user's own Git host as standard BPMN 2.0 files (P6,
  * docs/build-plan.md; complements `GitBackup`/`TreeArchive`, which already sync the message
- * tree). Sovereignty: a loop is an open `.bpmn` you own and can edit in any BPMN tool — Aarso
+ * tree). Sovereignty: a loop is an open `.bpmn` you own and can edit in any BPMN tool — Fonebrew
  * is just one lens over it. Pure request builders over [GitContentsApi] (like `BuildsApi`); the
  * transport + token live in the data layer (owner-verified — no host in CI). JVM-tested.
  */

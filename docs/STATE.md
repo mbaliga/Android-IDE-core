@@ -1,4 +1,4 @@
-# Aarso / Workbench — Project State, Roadmap & End Goal
+# Fonebrew / Workbench — Project State, Roadmap & End Goal
 
 > Single source of truth: what's **done**, what's **pending**, and the **end goal**. Written
 > 2026-06-28. Companion to `CLAUDE.md` (build rules),  (revenue), and
@@ -12,7 +12,7 @@ A **local-first, sovereign AI computing environment** for a high-end Android pho
 on-device Claude Code with loop engineering," extending into a real **agentic IDE** (read repos,
 propose+review+commit changes, drive devices like a Pi/Arduino). Free and open to *build*; a paid
 "Studio" layer to *ship & sell* a product. Current shipped build: **v0.13.0** on the `apk-dist`
-branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
+branch (`fonebrew-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
 runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
 
 ---
@@ -34,7 +34,7 @@ the dependency direction sinks toward the routing engine.
 
 | Component | What it is | Source | Status |
 |---|---|---|---|
-| **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.13.0) |
+| **Fonebrew / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.13.0) |
 | **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | **Done** — its own repo `mbaliga/Hyle-Design-System`, single source of `dev.aarso:hyle:0.2.0`, consumed here via git submodule + includeBuild (vendored copy deleted; `0.1.0` retired) |
 | **PM + authoring** | A companion project-management surface | not in this repo | New repo pending owner; code mostly lives in main today, to be carved out |
 | **Sound & haptics authoring** | A companion authoring app | **Open** | Not started here |
@@ -192,4 +192,4 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 - `hyle/` design-system module · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),
   `handoff/hyle-extraction.md`, **this file**.
-- `apk-dist` branch — the installable `aarso-sd.apk`.
+- `apk-dist` branch — the installable `fonebrew-sd.apk`.

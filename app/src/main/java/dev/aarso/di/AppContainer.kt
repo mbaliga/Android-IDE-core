@@ -32,7 +32,7 @@ import dev.aarso.inference.echoDevSpecs
  * favours wiring you can read top-to-bottom over generated magic, and it keeps
  * the build surface small.
  *
- * Single instance held by [dev.aarso.AarsoApp].
+ * Single instance held by [dev.aarso.FonebrewApp].
  */
 class AppContainer(context: Context) {
 

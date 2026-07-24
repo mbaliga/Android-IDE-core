@@ -22,7 +22,7 @@ import kotlin.math.abs
 
 /**
  * A draggable "chat-head" bubble kept alive by a foreground service (handoff §7
- * fallback): always reachable, summons Aarso on tap. Dumber about context than the
+ * fallback): always reachable, summons Fonebrew on tap. Dumber about context than the
  * assist gesture, but it always works and needs no default-assistant change —
  * only the overlay permission.
  */
@@ -89,7 +89,7 @@ class OverlayService : Service() {
                 MotionEvent.ACTION_UP -> {
                     if (!dragged) {
                         val longPress = System.currentTimeMillis() - downTime > 500
-                        // Tap → open Aarso; long-press → capture the screen behind the bubble (OCR).
+                        // Tap → open Fonebrew; long-press → capture the screen behind the bubble (OCR).
                         val target = if (longPress) ScreenCaptureActivity::class.java else MainActivity::class.java
                         startActivity(
                             Intent(this, target)
@@ -121,7 +121,7 @@ class OverlayService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "aarso.overlay"
+        private const val CHANNEL_ID = "fonebrew.overlay"
         private const val NOTIF_ID = 1002
 
         fun start(context: Context) {

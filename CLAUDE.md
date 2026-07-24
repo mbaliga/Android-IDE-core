@@ -1,9 +1,9 @@
-# CLAUDE.md — Aarso / Workbench build handoff
+# CLAUDE.md — Fonebrew / Workbench build handoff
 
-**Aarso** (*mirror*; package `dev.aarso`) is a local-first Android app for working with multiple
-AI models. Its design thesis is **legibility + cognitive sovereignty** — a *tool-as-argument*
-artifact, not a generic chat client. Where a fork exists, prefer the option that makes
-routing/influence visible and keeps the user in the loop, even at some cost to convenience.
+**Fonebrew** (package `dev.aarso` — deferred rename, see below) is a local-first Android app for
+working with multiple AI models. Its design thesis is **legibility + cognitive sovereignty** — a
+*tool-as-argument* artifact, not a generic chat client. Where a fork exists, prefer the option that
+makes routing/influence visible and keeps the user in the loop, even at some cost to convenience.
 
 > **Read `docs/STATE.md` first.** It is the living index of *what's done / pending / the end
 > goal* across the whole constellation. This file is the **build rules + how-to-continue**;
@@ -38,7 +38,7 @@ Two names, two scopes (do not conflate):
    behaviour works — the build env has no device/emulator; the owner tests on the phone.
 
 ## Target device & conventions
-- Naming register: follow the codebase (e.g. *Aarso*, *Hyle*).
+- Naming register: follow the codebase (e.g. *Fonebrew*, *Hyle*).
 - Target: **a high-end arm64-v8a Android phone** (large unified RAM, recent Android). `minSdk 31`,
   `targetSdk/compileSdk 36`, single ABI `arm64-v8a`.
 
@@ -96,7 +96,7 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   Compose **Foundation 1.8** (`BasicText`'s `TextAutoSize`). `composeBom = 2025.05.01` (Foundation
   1.8.2) satisfies it. Pinning an older BoM → runtime `NoSuchMethodError` on every markdown turn
   (this was the launch/send crash). Keep BoM ≥ 1.8 or downgrade the renderer in lockstep.
-- **APK delivery:** push the APK as `aarso-sd.apk` on the **orphan branch `apk-dist`** (`--force`).
+- **APK delivery:** push the APK as `fonebrew-sd.apk` on the **orphan branch `apk-dist`** (`--force`).
 - **CI caveat:** the workflow runs the JVM gate only — the native assemble is `if: false` (it OOMs
   the runner), so **CI never launches the app**. A device-only launch/render crash passes CI. The
   in-app **crash-recovery harness** exists precisely because of this. **Red `build-test` is a
@@ -119,7 +119,7 @@ A family of cooperating apps, not a monolith. Dependency direction sinks toward 
 
 | Component | What | Source | Status |
 |---|---|---|---|
-| **Aarso/Workbench** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
+| **Fonebrew/Workbench** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
 | **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
 | **PM + authoring** | a companion project-management surface | not in this repo | repo pending owner; code in main, to carve out |
 | **Sound & haptics** | companion authoring app | **open** | not started |
@@ -127,7 +127,7 @@ A family of cooperating apps, not a monolith. Dependency direction sinks toward 
 Integration rule: the routing engine needs a **stable public API** from day one. See `docs/STATE.md`
 intelligence, never hold others' keys).
 
-## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `aarso-sd.apk`)
+## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `fonebrew-sd.apk`)
 Everything below compiled + JVM-tested + assembled; **device behaviour is owner-verified.** Full
 detail in `docs/STATE.md`.
 
@@ -149,7 +149,7 @@ detail in `docs/STATE.md`.
   never bricks; used across the constellation, not just here — see that repo's README);
   **fixed the launch/send crash** (Compose BoM → Foundation 1.8). **Preview the recovery
   screen without a real crash:** Settings → Global → About, long-press the version line
-  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Aarso")`.
+  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Fonebrew")`.
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
   (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
@@ -178,5 +178,5 @@ detail in `docs/STATE.md`.
    (`agentic-ide.md`, `information-architecture.md`, `workflow-builder.md`); `docs/handoff/
    hyle-extraction.md` — the split plan, now **executed** (Hyle lives in `mbaliga/Hyle-Design-System`;
    kept as historical record).
-3. Keep the gate green, ship small legible PRs to `main`, refresh `aarso-sd.apk` on `apk-dist`,
+3. Keep the gate green, ship small legible PRs to `main`, refresh `fonebrew-sd.apk` on `apk-dist`,
    and be honest that on-device behaviour is owner-verified.

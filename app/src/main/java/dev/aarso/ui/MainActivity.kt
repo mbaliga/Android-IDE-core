@@ -7,10 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.crashrecovery.CrashRecovery
 import dev.aarso.data.Intake
-import dev.aarso.ui.theme.AarsoTheme
+import dev.aarso.ui.theme.FonebrewTheme
 import dev.aarso.ui.theme.DefaultAccent
 import dev.aarso.ui.theme.ThemeMode
 import dev.aarso.ui.theme.parseHexColor
@@ -24,9 +24,9 @@ class MainActivity : ComponentActivity() {
         // which also lands a report via CrashRecovery.captureInitError), show the shared recovery
         // screen — NOT the app — instead of touching the (possibly uninitialised) container. This
         // finishes this Activity, so a device-only launch crash can't brick the install.
-        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Fonebrew", style = dev.aarso.ui.theme.AarsoCrashRecoveryStyle)) return
+        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Fonebrew", style = dev.aarso.ui.theme.FonebrewCrashRecoveryStyle)) return
 
-        val app = application as AarsoApp
+        val app = application as FonebrewApp
         handleIntake(intent)
         val session = app.container.sessionStore
         setContent {
@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
             val mode = runCatching { ThemeMode.valueOf(modeStr) }.getOrDefault(ThemeMode.DARK)
             val accent = parseHexColor(accentStr) ?: DefaultAccent
             val gradient = gradientStr.takeIf { it.isNotBlank() }?.let { parseHexColor(it) }
-            AarsoTheme(mode = mode, accent = accent, texture = texture, gradient = gradient) {
+            FonebrewTheme(mode = mode, accent = accent, texture = texture, gradient = gradient) {
                 AppRoot()
             }
             // Reached only if the theme + AppRoot composed without throwing → clear the crash flag
@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
     /** Route shared / selected text (and shared images) into the app (§7). */
     private fun handleIntake(intent: Intent?) {
         intent ?: return
-        val container = (application as AarsoApp).container
+        val container = (application as FonebrewApp).container
         when (intent.action) {
             Intent.ACTION_SEND -> {
                 val text = intent.getStringExtra(Intent.EXTRA_TEXT)

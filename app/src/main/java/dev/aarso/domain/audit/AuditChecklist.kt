@@ -1,13 +1,13 @@
 package dev.aarso.domain.audit
 
 /**
- * Audit — a **to-do list of checks, not a scanner**. Aarso deliberately does *not* embed
+ * Audit — a **to-do list of checks, not a scanner**. Fonebrew deliberately does *not* embed
  * heavy static analysers, linters, or crawlers; each item is a piece of honest advice the
  * owner can *act on*, and its action fires a chat prompt that runs the real tool
  * ([AuditChecklist.promptFor]). The result is recorded by hand (or, later, by an external
  * QA app) — the app never claims a check passed on its own.
  *
- * The whole surface is legible for the same reason the rest of Aarso is: the checklist is
+ * The whole surface is legible for the same reason the rest of Fonebrew is: the checklist is
  * a plain list of [AuditCheck]s, the status transitions are pure, and nothing here touches
  * Android or I/O. This file is the machine-verified part; the *running* of a check is
  * owner-verified (the build env has no device, and we don't ship the scanners).

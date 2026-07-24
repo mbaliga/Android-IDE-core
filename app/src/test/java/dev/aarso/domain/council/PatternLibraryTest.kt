@@ -65,7 +65,7 @@ class PatternLibraryTest {
 
     @Test fun `never labels itself MoE (CLAUDE rule 3)`() {
         // "Mixture of Agents" is a real paper title and is fine; what must never appear
-        // is Aarso's own council rebranded as "Mixture of Experts" / MoE.
+        // is Fonebrew's own council rebranded as "Mixture of Experts" / MoE.
         for (p in patterns) {
             val haystack = buildString {
                 append(p.title).append(' ').append(p.summary).append(' ').append(p.graph.name)

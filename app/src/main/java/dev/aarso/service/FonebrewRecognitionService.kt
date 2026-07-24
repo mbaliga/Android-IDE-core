@@ -5,11 +5,11 @@ import android.speech.RecognitionService
 import android.speech.SpeechRecognizer
 
 /**
- * Required stub: a VoiceInteractionService must name a RecognitionService. Aarso
+ * Required stub: a VoiceInteractionService must name a RecognitionService. Fonebrew
  * does no speech recognition (it's summoned by gesture, not wake-word), so this
  * just errors out cleanly if anything tries to listen.
  */
-class AarsoRecognitionService : RecognitionService() {
+class FonebrewRecognitionService : RecognitionService() {
     override fun onStartListening(recognizerIntent: Intent?, listener: Callback?) {
         listener?.error(SpeechRecognizer.ERROR_CLIENT)
     }

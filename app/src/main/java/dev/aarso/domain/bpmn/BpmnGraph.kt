@@ -6,10 +6,10 @@ package dev.aarso.domain.bpmn
  * This is the in-memory model. [BpmnArchive] serialises it to **standard BPMN 2.0
  * XML** so a loop is transportable to any BPMN tool and to the user's own Git host
  * (the sovereignty thesis: open, standard, portable — "discard the shell"). The
- * shapes mirror the owner's Bricks/cheat-sheet vocabulary. Aarso-specific data —
+ * shapes mirror the owner's Bricks/cheat-sheet vocabulary. Fonebrew-specific data —
  * the model assigned to a node, council role, cost budget, watched-cloud — rides
  * in [BpmnNode.ext] and is written as BPMN **extension elements**, so the file
- * stays valid-standard while Aarso still round-trips its own semantics.
+ * stays valid-standard while Fonebrew still round-trips its own semantics.
  *
  * Pure Kotlin; JVM-tested. Execution stays with the runner — BPMN is the notation.
  */
@@ -44,7 +44,7 @@ data class BpmnNode(
     val kind: BpmnNodeKind,
     val name: String = "",
     val bounds: Bounds = Bounds(0.0, 0.0),
-    /** Aarso extension attributes (e.g. model, role, watched, budget, macro). */
+    /** Fonebrew extension attributes (e.g. model, role, watched, budget, macro). */
     val ext: Map<String, String> = emptyMap(),
 )
 

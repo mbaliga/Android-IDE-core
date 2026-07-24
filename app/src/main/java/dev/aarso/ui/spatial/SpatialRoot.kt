@@ -58,7 +58,7 @@ import dev.aarso.domain.a11y.Room
 import dev.aarso.domain.a11y.SpatialLinearization
 import dev.aarso.domain.a11y.SpatialPosition
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.DownloadCenter
 import dev.aarso.ui.ChatScreen
 import dev.aarso.ui.ChatViewModel
@@ -215,7 +215,7 @@ class SpatialController(private val scope: CoroutineScope, private val onSettle:
 @Composable
 fun SpatialRoot() {
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val scope = rememberCoroutineScope()
     val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
     val controller = remember { SpatialController(scope, onSettle = haptics::settle) }

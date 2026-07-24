@@ -8,12 +8,12 @@ name: Release (Play AAB)
 #
 # ── Required repository secrets ────────────────────────────────────────────────
 #   Settings → Secrets and variables → Actions → New repository secret
-#     AARSO_KEYSTORE_BASE64     base64 of the upload keystore file
-#                               (generate: base64 -w0 aarso-upload.keystore)
-#     AARSO_KEYSTORE_PASSWORD   keystore (store) password
-#     AARSO_KEYSTORE_ALIAS      key alias (e.g. aarso-upload)
-#     AARSO_KEY_PASSWORD        key password
-#   app/build.gradle.kts reads AARSO_KEYSTORE_FILE/_PASSWORD/_ALIAS + AARSO_KEY_PASSWORD
+#     FONEBREW_KEYSTORE_BASE64     base64 of the upload keystore file
+#                               (generate: base64 -w0 fonebrew-upload.keystore)
+#     FONEBREW_KEYSTORE_PASSWORD   keystore (store) password
+#     FONEBREW_KEYSTORE_ALIAS      key alias (e.g. fonebrew-upload)
+#     FONEBREW_KEY_PASSWORD        key password
+#   app/build.gradle.kts reads FONEBREW_KEYSTORE_FILE/_PASSWORD/_ALIAS + FONEBREW_KEY_PASSWORD
 #   as env vars (signingValue()); we point _FILE at the decoded keystore below.
 #
 # ── How to release ─────────────────────────────────────────────────────────────
@@ -54,10 +54,10 @@ jobs:
     steps:
       - name: Fail fast if signing secrets are missing
         env:
-          KS: ${{ secrets.AARSO_KEYSTORE_BASE64 }}
+          KS: ${{ secrets.FONEBREW_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KS" ]; then
-            echo "::error::AARSO_KEYSTORE_BASE64 is not set — add the upload-key secrets before releasing (see docs/play/release-process.md)"
+            echo "::error::FONEBREW_KEYSTORE_BASE64 is not set — add the upload-key secrets before releasing (see docs/play/release-process.md)"
             exit 1
           fi
 
@@ -100,8 +100,8 @@ jobs:
         # Written under RUNNER_TEMP (outside the workspace) so it can never be captured
         # by an upload-artifact glob or accidentally committed. Ephemeral runner anyway.
         run: |
-          echo "${{ secrets.AARSO_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/aarso-upload.keystore"
-          echo "keystore decoded ($(stat -c%s "$RUNNER_TEMP/aarso-upload.keystore") bytes)"
+          echo "${{ secrets.FONEBREW_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/fonebrew-upload.keystore"
+          echo "keystore decoded ($(stat -c%s "$RUNNER_TEMP/fonebrew-upload.keystore") bytes)"
 
       - name: Add swap space (native cross-compile is memory-heavy)
         run: |
@@ -116,10 +116,10 @@ jobs:
 
       - name: Build signed Play bundle (AAB)
         env:
-          AARSO_KEYSTORE_FILE: ${{ runner.temp }}/aarso-upload.keystore
-          AARSO_KEYSTORE_PASSWORD: ${{ secrets.AARSO_KEYSTORE_PASSWORD }}
-          AARSO_KEYSTORE_ALIAS: ${{ secrets.AARSO_KEYSTORE_ALIAS }}
-          AARSO_KEY_PASSWORD: ${{ secrets.AARSO_KEY_PASSWORD }}
+          FONEBREW_KEYSTORE_FILE: ${{ runner.temp }}/fonebrew-upload.keystore
+          FONEBREW_KEYSTORE_PASSWORD: ${{ secrets.FONEBREW_KEYSTORE_PASSWORD }}
+          FONEBREW_KEYSTORE_ALIAS: ${{ secrets.FONEBREW_KEYSTORE_ALIAS }}
+          FONEBREW_KEY_PASSWORD: ${{ secrets.FONEBREW_KEY_PASSWORD }}
         run: ./gradlew --no-daemon :app:bundlePlayRelease
 
       - name: Verify the bundle is actually signed
@@ -132,7 +132,7 @@ jobs:
           if jarsigner -verify "$AAB" | grep -q "jar verified"; then
             echo "AAB is signed ✓"
           else
-            echo "::error::AAB is NOT signed — check the AARSO_KEYSTORE_* secrets"; exit 1
+            echo "::error::AAB is NOT signed — check the FONEBREW_KEYSTORE_* secrets"; exit 1
           fi
 
       - name: Upload AAB artifact

@@ -1,4 +1,4 @@
-# Aarso rendering handoff — for refinement in a conversational Claude chat
+# Fonebrew rendering handoff — for refinement in a conversational Claude chat
 
 > **Why this file exists.** Tight visual/material iteration (AGSL shaders, the Aeon
 > atoms, the Lens feel) is faster in a back-and-forth Claude chat with a quick
@@ -12,7 +12,7 @@
 
 A generic chat app is **flat**: opaque rectangles that announce their state in words
 ("Reading…", "Loading…", a spinner). You are *told* what is happening by software that
-sits between you and the truth. Aarso refuses this. Its surfaces are **materials with
+sits between you and the truth. Fonebrew refuses this. Its surfaces are **materials with
 real physical behaviour**, and that behaviour *is* the information — you are not told,
 you **see**. This is the legibility thesis made literal, and it is the same move as
 cognitive sovereignty: the interface does not mediate reality through a language it
@@ -45,7 +45,7 @@ Materials are **lit, not faked**. What a refiner must keep:
   deliberate, never the dopamine-bounce of consumer UI. Calm is a sovereignty signal.
 
 ### Layers (depth carries meaning, never ornament)
-Aarso is built from **stacked physical layers**, and depth encodes structure:
+Fonebrew is built from **stacked physical layers**, and depth encodes structure:
 - **A world sits behind the glass.** The dot-grid *room* is the substrate; refraction
   proves the layer behind is real. Materials are in front of a context, not floating.
 - **The Lens stack:** code (sharp, syntax-lit) → glass (the meaning, formed *on its
@@ -357,7 +357,7 @@ half4 main(float2 fragCoord) {
 
 **File:** `app/src/main/java/dev/aarso/ui/theme/AeonColors.kt` (runtime-swappable in
 the app); mirrored as constants in the probe. The violet ramp derives from the one
-Aarso violet `#8E7BFF`. Dark baseline:
+Fonebrew violet `#8E7BFF`. Dark baseline:
 
 | token | hex | use |
 |---|---|---|

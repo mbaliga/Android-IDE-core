@@ -8,7 +8,7 @@
 
 The owner watched our own working loop — *state an objective → produce something →
 review → give feedback → refine → repeat until it matches the destination* — and
-recognised it as a product. Today Aarso already has a **council**: a one-shot
+recognised it as a product. Today Fonebrew already has a **council**: a one-shot
 fan-out of voices (`domain/council/Agent.kt`, `ChatViewModel.sendCouncil`). The
 vision is to grow that one-shot panel into a **workflow**: a small graph of
 **experts**, each an expert *role* powered by the *model best suited to it*, that
@@ -122,7 +122,7 @@ This is the rule layer beneath both the GATE node kind and the visual builder.
 
 - Default stop conditions (max iterations? critic-approves? always human-gated?).
 - Cost/latency surfacing for cloud nodes (a run could fan out many calls).
-- Where a workflow library lives. (The code-shaped instance of this — Aarso
+- Where a workflow library lives. (The code-shaped instance of this — Fonebrew
   driving a coding loop on the user's Git repos via the Claude API — is
   `coding-assistant.md`.)
 - How much the builder should auto-propose a graph from a one-line objective vs.

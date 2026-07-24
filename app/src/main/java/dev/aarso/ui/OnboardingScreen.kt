@@ -35,7 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.DeviceInfo
 import dev.aarso.domain.catalog.ModelCatalog
 import dev.aarso.domain.device.FitVerdict
@@ -161,7 +161,7 @@ private fun OnboardingPage(title: String, subtitle: String, body: String) {
 @Composable
 private fun ModelSetupPage(onReady: () -> Unit) {
     val context = LocalContext.current
-    val container = (context.applicationContext as AarsoApp).container
+    val container = (context.applicationContext as FonebrewApp).container
     val session = container.sessionStore
     val scope = rememberCoroutineScope()
     val c = LocalHyleColors.current

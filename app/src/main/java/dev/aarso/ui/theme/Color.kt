@@ -2,8 +2,8 @@ package dev.aarso.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Aeon token structure, remapped to Aarso's dark register (§12 of the spatial
-// redesign brief). One accent: the Aarso violet — Aeon blue is retired, and
+// Aeon token structure, remapped to Fonebrew's dark register (§12 of the spatial
+// redesign brief). One accent: the Fonebrew violet — Aeon blue is retired, and
 // green/amber exist only as fit-check / warning semantics, never as a second
 // accent.
 
@@ -19,7 +19,7 @@ val TextHigh = Color(0xFFECEDEF)
 val TextMid = Color(0xFF9CA3AF)
 val TextDisabled = Color(0xFF4A4E57)
 
-// The violet ramp, derived from the one Aarso violet (#8E7BFF = Primary 700).
+// The violet ramp, derived from the one Fonebrew violet (#8E7BFF = Primary 700).
 val Violet = Color(0xFF8E7BFF)         // Primary 700 — default
 val VioletHover = Color(0xFF9F8FFF)    // Primary 500 — lightened ~15%
 val VioletPressed = Color(0xFF7262CC)  // Primary 900 — darkened ~20%

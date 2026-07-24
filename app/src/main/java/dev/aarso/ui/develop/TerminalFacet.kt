@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.remote.PtyShellSession
 import dev.aarso.domain.remote.term.PtyChannel
 import dev.aarso.ui.wire.WireField
@@ -44,7 +44,7 @@ private const val THIS_PHONE = "This phone"
 @Composable
 fun TerminalFacet() {
     val context = LocalContext.current
-    val container = (context.applicationContext as AarsoApp).container
+    val container = (context.applicationContext as FonebrewApp).container
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()

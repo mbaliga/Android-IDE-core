@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Fonebrew — display brand (owner ruling 2026-07-16, supersedes "FoneBru";
-         "Bru" is HUL-owned and litigious in India). Internally still Aarso —
-         "mirror"; the app renders the user's own interaction legible back to
-         them (handoff §5c/§11). Package stays dev.aarso (deferred rename). -->
+         "Bru" is HUL-owned and litigious in India). "Aarso" ("mirror") now names only
+         the within-axis self-reflection lens (domain/mirror/, ships inert) — everywhere
+         else internally is Fonebrew too. Package stays dev.aarso (deferred rename). -->
     <string name="app_name">Fonebrew</string>
 </resources>

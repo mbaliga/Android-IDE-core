@@ -29,7 +29,7 @@ data class HyleColors(
     val error: Color,
 )
 
-/** Default accent = the canonical Aarso violet (#8E7BFF). */
+/** Default accent = the canonical Fonebrew violet (#8E7BFF). */
 val DefaultAccent = Violet
 
 /** Dark palette. The canonical violet keeps its hand-tuned ramp verbatim (zero

@@ -29,13 +29,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.ui.hyle.HyleColorPicker
 
 /** Curated quick-start accents — the "floor" of customization. Each is mid-bright so
  *  the ramp derivation + contrast clamp keep it AA-safe in both light and dark. */
 private val ACCENT_PRESETS = listOf(
-    "#8E7BFF", // the Aarso violet (default)
+    "#8E7BFF", // the Fonebrew violet (default)
     "#4DA3FF", // blue
     "#2DD4BF", // teal
     "#5BD16A", // green
@@ -54,7 +54,7 @@ private val ACCENT_PRESETS = listOf(
 @Composable
 fun ThemePicker(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val session = (context.applicationContext as AarsoApp).container.sessionStore
+    val session = (context.applicationContext as FonebrewApp).container.sessionStore
     val c = LocalHyleColors.current
 
     val modeStr by session.themeMode.collectAsState()

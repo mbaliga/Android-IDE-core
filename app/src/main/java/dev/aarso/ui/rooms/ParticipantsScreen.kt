@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.data.Participant
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleDropdownField
@@ -41,7 +41,7 @@ import java.util.UUID
 @Composable
 fun ParticipantsScreen(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val store = container.councilStore
     val saved by store.participants.collectAsState()
 

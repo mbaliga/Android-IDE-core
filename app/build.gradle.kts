@@ -14,7 +14,7 @@ plugins {
 }
 
 // Release signing: gitignored keystore.properties, overridable via environment
-// (AARSO_KEYSTORE_FILE/_PASSWORD/_ALIAS/_KEY_PASSWORD). The upload key never
+// (FONEBREW_KEYSTORE_FILE/_PASSWORD/_ALIAS/_KEY_PASSWORD). The upload key never
 // enters the repo; Play App Signing holds the app key. Builds without either
 // stay unsigned so CI/agent environments still assemble.
 val keystoreProps = Properties().apply {
@@ -25,7 +25,8 @@ fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
 android {
-    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.aarso.
+    // Fonebrew (handoff §10.1 resolved). Package stays dev.aarso — deferred rename;
+    // "Aarso"/"mirror" now names only the self-reflection lens (domain/mirror/).
     namespace = "dev.aarso"
     compileSdk = 36
 
@@ -56,14 +57,14 @@ android {
         }
     }
 
-    val uploadKeystore = signingValue("storeFile", "AARSO_KEYSTORE_FILE")
+    val uploadKeystore = signingValue("storeFile", "FONEBREW_KEYSTORE_FILE")
     if (uploadKeystore != null) {
         signingConfigs {
             create("release") {
                 storeFile = file(uploadKeystore)
-                storePassword = signingValue("storePassword", "AARSO_KEYSTORE_PASSWORD")
-                keyAlias = signingValue("keyAlias", "AARSO_KEYSTORE_ALIAS")
-                keyPassword = signingValue("keyPassword", "AARSO_KEY_PASSWORD")
+                storePassword = signingValue("storePassword", "FONEBREW_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "FONEBREW_KEYSTORE_ALIAS")
+                keyPassword = signingValue("keyPassword", "FONEBREW_KEY_PASSWORD")
             }
         }
     }

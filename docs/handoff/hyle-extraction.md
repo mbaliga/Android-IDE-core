@@ -2,7 +2,7 @@
 
 > Goal: move the Hyle design system out of the app monorepo into a standalone repo
 > (`hyle`), published as a consumable artifact, so it can version, test, and render on its
-> own cadence — and eventually be reused beyond Aarso/Workbench. The `:hyle` module was
+> own cadence — and eventually be reused beyond Fonebrew/Workbench. The `:hyle` module was
 > *built to graduate* (see its `build.gradle.kts` header). This is the migration plan.
 
 ## 1. What "Hyle" is today (current state)
@@ -13,7 +13,7 @@ Three things wear the name; the extraction must keep them straight.
 |---|---|---|---|
 | `:hyle` module (`dev.aarso.hyle`) | `hyle/` | **Render-side tokens + contract** — `Finish`, `Pulse`, `RadiantHues`. Pure data, JVM-tested (`FinishTest`). Android library, no Compose. | **Yes — core** |
 | `:hyle-probe` app (`dev.aarso.hyleprobe`) | `hyle-probe/` | Standalone **render harness** APK: `FerrofluidProbe`, `AeonAtomsProbe`, `LensProbe`, `RadiantGlowProbe`, `GlassSandProbe`. The device-verification surface for the look. | **Yes — the gallery** |
-| Compose components | app `ui/aeon/Aeon.kt`, `ui/theme/*`, `ui/wire/*` | The actual `Hyle*` widgets (`HyleButton`, `HyleChip`, `HyleField`, `HyleDropdownField`, `HyleTitle`, `HyleNavChip`), `AeonColors`/`AarsoTheme`/`ThemePicker`, the wire primitives. | **Phased** — see §4 |
+| Compose components | app `ui/aeon/Aeon.kt`, `ui/theme/*`, `ui/wire/*` | The actual `Hyle*` widgets (`HyleButton`, `HyleChip`, `HyleField`, `HyleDropdownField`, `HyleTitle`, `HyleNavChip`), `AeonColors`/`FonebrewTheme`/`ThemePicker`, the wire primitives. | **Phased** — see §4 |
 | The **semantic** | app `domain/material` + `material-language.md` | "local vs from-elsewhere" meaning (a watched object reads differently). App-specific policy, **not** render. | **No — stays in app** |
 
 Consumers/wiring today: `settings.gradle.kts` `include(":hyle")`, `include(":hyle-probe")`;
@@ -60,7 +60,7 @@ header says so). Two-phase:
 - **Phase 2 (after device-verify):** move the render layer into the new repo as a
   `hyle-compose` artifact: `ui/aeon/Aeon.kt` (the `Hyle*` atoms), `ui/theme/AeonColors`,
   `AccentRamp`, `ThemePicker`, `ui/wire/*`. App then depends on `dev.aarso:hyle-compose`.
-  **Keep in the app:** anything that knows about *Aarso domain* (watched-object semantic,
+  **Keep in the app:** anything that knows about *Fonebrew domain* (watched-object semantic,
   `LocalHyleColors` wiring to `SessionStore`, screen-specific composition). Hyle ships the
   *vocabulary*; the app composes sentences.
 
@@ -92,7 +92,7 @@ header says so). Two-phase:
   stay green and the APK byte-diff should be render-neutral (tokens unchanged).
 - **Don't rename packages during the move** — one disruptive change at a time. Rename is Sprint R.
 - **The semantic stays home:** resist pulling `domain/material` (local-vs-elsewhere) into Hyle —
-  that's Aarso policy, not a render token, and it would couple the design system to the app.
+  that's Fonebrew policy, not a render token, and it would couple the design system to the app.
 - **Probe is the proof:** Hyle has no automated render test (AGSL/Compose are device-verified).
   The probe app *is* the acceptance test — keep it building and run it on device per change.
 

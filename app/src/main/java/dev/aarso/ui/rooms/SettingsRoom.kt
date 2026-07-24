@@ -114,7 +114,7 @@ fun SettingsRoom(
     var tab by remember { mutableStateOf(SettingsTab.GLOBAL) }
     var overlay by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     BackHandler(enabled = overlay != null) { overlay = null }
-    val session = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container.sessionStore
+    val session = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container.sessionStore
     val universalPosition by session.tabBarPosition.collectAsState()
     val roomOverrides by session.roomTabBarPosition.collectAsState()
     val position = roomOverrides["settings"] ?: universalPosition
@@ -265,7 +265,7 @@ private fun LocalModels(
     openOverlay: (@Composable () -> Unit) -> Unit,
     closeOverlay: () -> Unit,
 ) {
-    val container = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container
+    val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
     Text(
         "On-device $kind models run locally — the default. Download, switch, and remove them " +
             "in the Models shelf.",
@@ -314,7 +314,7 @@ private fun GlobalSettings(
     closeOverlay: () -> Unit,
     extraGlobalRows: List<@Composable () -> Unit> = emptyList(),
 ) {
-    val container = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container
+    val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
     val session = container.sessionStore
 
     // "Me · Myself · I" — the user meta (drift inert; linked accounts; usage). Provisional home
@@ -581,7 +581,7 @@ private fun GlobalSettings(
                         dev.aarso.crashrecovery.CrashRecovery.previewIntent(
                             context,
                             appLabel = "Fonebrew",
-                            style = dev.aarso.ui.theme.AarsoCrashRecoveryStyle,
+                            style = dev.aarso.ui.theme.FonebrewCrashRecoveryStyle,
                         ),
                     )
                 },
@@ -648,7 +648,7 @@ private fun ImageSettings(viewModel: SettingsViewModel) {
  *  token is encrypted on-device; the app talks only to your host. */
 @Composable
 private fun GitConnect() {
-    val container = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container
+    val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
     val store = container.gitHostStore
     val transport = container.gitTransport
     val hosts by store.hosts.collectAsState()
@@ -802,7 +802,7 @@ private fun GitHostActionsSheet(
  */
 @Composable
 private fun BuildsSection() {
-    val container = (LocalContext.current.applicationContext as dev.aarso.AarsoApp).container
+    val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
     val store = container.gitHostStore
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()

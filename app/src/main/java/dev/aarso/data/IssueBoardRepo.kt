@@ -12,7 +12,7 @@ import dev.aarso.domain.pm.IssueBoardApi
  * pattern as [BuildsRepo] — injects [GitTransport] + a token provider, returns
  * empty/false when no host is wired, and talks ONLY to the user's own host.
  *
- * There is no Aarso-side task store: the board *is* the repo's issues
+ * There is no Fonebrew-side task store: the board *is* the repo's issues
  * (docs/design/project-management.md). Network is owner-verified — no host in CI.
  *
  * @param tokenProvider decrypted token for a host id, or null. Production: `hostStore::token`.

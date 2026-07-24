@@ -1,18 +1,19 @@
-# Aarso brand assets
+# Fonebrew brand assets
 
 Tangible launch collateral for the Play listing + app icon. Clean-room (no borrowed
 marks), built from the app's own design tokens.
 
 ## The mark
 
-**Aarso means *mirror*.** The logo is a symmetric form split at a central seam — a
-solid shape and its lighter twin — resting above its own fading reflection. It encodes
-the thesis: the app reflects your own interaction with models back to you.
+The logo is a symmetric form split at a central seam — a solid shape and its lighter
+twin — resting above its own fading reflection: mirror imagery, alluding to Aarso, the
+app's internal self-reflection lens (`domain/mirror/`). It encodes the thesis: the app
+reflects your own interaction with models back to you.
 
 | File | Use |
 |---|---|
-| [`aarso-logo.svg`](aarso-logo.svg) | Full logo on the dark field (512×512). Play "app icon" upload, store graphics, README. |
-| [`aarso-icon-foreground.svg`](aarso-icon-foreground.svg) | Adaptive-icon **foreground** layer (108dp canvas, 72dp safe zone). Pair with a solid `#0E0F12` background layer. |
+| [`fonebrew-logo.svg`](fonebrew-logo.svg) | Full logo on the dark field (512×512). Play "app icon" upload, store graphics, README. |
+| [`fonebrew-icon-foreground.svg`](fonebrew-icon-foreground.svg) | Adaptive-icon **foreground** layer (108dp canvas, 72dp safe zone). Pair with a solid `#0E0F12` background layer. |
 
 ## Palette (from the app tokens)
 
@@ -28,8 +29,8 @@ SVG is the source of truth. Export the PNGs Play needs from it:
 
 ```bash
 # 512×512 app icon (Play requires 512 PNG)
-rsvg-convert -w 512 -h 512 docs/brand/aarso-logo.svg -o aarso-icon-512.png
-# or: inkscape docs/brand/aarso-logo.svg --export-type=png -w 512 -o aarso-icon-512.png
+rsvg-convert -w 512 -h 512 docs/brand/fonebrew-logo.svg -o fonebrew-icon-512.png
+# or: inkscape docs/brand/fonebrew-logo.svg --export-type=png -w 512 -o fonebrew-icon-512.png
 ```
 
 Still needed for a full Play listing (tracked, not yet generated):

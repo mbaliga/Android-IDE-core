@@ -11,7 +11,7 @@ import dev.aarso.domain.council.Generator
 /**
  * The distiller — the *ceiling* of loop distillation (docs/design/loop-distillation.md).
  * It reads a described method (a paper's method section / a pasted description) and
- * produces an editable [Loop]. Aarso eating its own tail: a loop that makes loops.
+ * produces an editable [Loop]. Fonebrew eating its own tail: a loop that makes loops.
  *
  * **Division of labour (the honest design):** the *model* does the understanding —
  * classify the method into one of a small set of orchestration topologies and extract

@@ -10,12 +10,12 @@ import java.net.URLEncoder
 
 /**
  * Builds the REST requests + response parsers for **app distribution** — listing the
- * APKs your repo's CI produced and their test status, so Aarso can show and install
+ * APKs your repo's CI produced and their test status, so Fonebrew can show and install
  * them in-app (docs/design/app-distribution.md). Pure, like [GitContentsApi]: it
  * builds [GitRequest]s and parses JSON; the network execution stays in GitTransport.
  *
  * Two APK sources are parsed (the ones actually in use): **Release assets** and a
- * **dist-branch** file (`apk-dist` → `aarso-sd.apk`, read via the contents API). CI
+ * **dist-branch** file (`apk-dist` → `fonebrew-sd.apk`, read via the contents API). CI
  * **checks** become the build's test badge. JVM-tested against sample host JSON.
  */
 object BuildsApi {

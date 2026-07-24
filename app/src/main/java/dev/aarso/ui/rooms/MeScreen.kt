@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.AarsoApp
+import dev.aarso.FonebrewApp
 import dev.aarso.domain.provenance.ProvenanceState
 import dev.aarso.ui.components.ByProviderList
 import dev.aarso.ui.components.BudgetRingView
@@ -49,7 +49,7 @@ import dev.aarso.ui.wire.WireBox
 @Composable
 fun MeScreen(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val providers by container.providerStore.providers.collectAsState()
     val imageProviders by container.imageProviderStore.providers.collectAsState()
     val hosts by container.gitHostStore.hosts.collectAsState()

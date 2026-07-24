@@ -2,5 +2,5 @@
 <resources>
     <!-- Compose drives the actual theming; this is the base platform theme the
          Activity inflates before Compose takes over. -->
-    <style name="Theme.Aarso" parent="android:Theme.Material.NoActionBar" />
+    <style name="Theme.Fonebrew" parent="android:Theme.Material.NoActionBar" />
 </resources>

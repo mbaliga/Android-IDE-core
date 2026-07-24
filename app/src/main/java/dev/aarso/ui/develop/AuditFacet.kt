@@ -22,7 +22,7 @@ import dev.aarso.domain.audit.AuditChecklist
 import dev.aarso.domain.audit.AuditStatus
 
 /**
- * Audit (free/core): a **to-do list of checks, not a scanner**. Aarso deliberately does not
+ * Audit (free/core): a **to-do list of checks, not a scanner**. Fonebrew deliberately does not
  * embed heavy static analysers — each row is honest advice, and its **Run** button fires a
  * chat prompt ([AuditChecklist.promptFor]) that runs the *real* tool where the model can act
  * on the repo. The owner records the outcome by hand (Pass/Fail/Skip), or an external QA app
