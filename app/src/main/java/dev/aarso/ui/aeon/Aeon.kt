@@ -449,18 +449,18 @@ fun HyleCard(
 class HyleTabSpec(val label: String, val glyph: DrawScope.(tint: Color) -> Unit)
 
 /**
- * The app's one fixed-width tab bar, in the **seam grammar** (the owner's carved-tab-bar
- * reference, 2026-07-24): a solid strip in which the ACTIVE tab is a carved-out cell — filled
- * with the room's own ground, its slant edges packing against the strip — while inactive
- * neighbours are separated by thin `/` slashes at the same seam lean. Selection is carried by
- * the carved fill, the cell shape, AND the label/glyph tint (never hue alone; the old 2dp
- * underline is superseded by the carve). Tabs stay equal-weight and never scroll — first built
- * for [dev.aarso.ui.rooms.SettingsRoom]'s SettingsTabBar, consolidated here so every screen
- * with a small fixed set of top-level categories uses the same widget. [trailing] is an
- * optional fixed-width slot after the tabs (e.g. a filter-toggle icon) — always reserve its
- * space in the caller rather than conditionally including it, or the tabs will visibly resize
- * when it appears/disappears (the exact "tab bar jitter" bug this bar's callers have already
- * hit once).
+ * The app's one fixed-width tab bar, in the **seam grammar** (the owner's designs are the
+ * canonical reference, 2026-07-24): EVERY tab is its own cell, packed along parallel `/`
+ * seams with a thin strip of ground between — no slash dividers, no strip; the cells
+ * themselves are the structure. Selection is carried by the cell's fill (the violet-on-dim-
+ * violet selection register, as chips/cards) AND the label/glyph tint — never hue alone; the
+ * old 2dp underline is superseded by the fill. Tabs stay equal-weight and never scroll —
+ * first built for [dev.aarso.ui.rooms.SettingsRoom]'s SettingsTabBar, consolidated here so
+ * every screen with a small fixed set of top-level categories uses the same widget.
+ * [trailing] is an optional fixed-width slot after the tabs (e.g. a filter-toggle icon) —
+ * always reserve its space in the caller rather than conditionally including it, or the tabs
+ * will visibly resize when it appears/disappears (the exact "tab bar jitter" bug this bar's
+ * callers have already hit once).
  *
  * [position] is `"TOP"` or `"BOTTOM"` (matching every other string-enum preference in
  * [dev.aarso.data.SessionStore], e.g. `themeMode`) — it only flips the divider to the edge that
@@ -482,63 +482,41 @@ fun HyleTabBar(
 ) {
     val c = LocalHyleColors.current
     val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
-    val slashColor = c.textMid.copy(alpha = 0.45f)
     val tabRow: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth()
                 .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
-                .background(c.raised),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.weight(1f)
-                    .fillMaxHeight()
-                    // The `/` slashes between INACTIVE neighbours; boundaries touching the
-                    // active cell belong to its slant edges instead (per the reference).
-                    .drawBehind {
-                        val n = tabs.size
-                        if (n > 1) {
-                            val run = (size.height * 0.25f).coerceAtMost(12.dp.toPx())
-                            val vPad = size.height * 0.22f
-                            for (k in 1 until n) {
-                                if (k == selected || k - 1 == selected) continue
-                                val x = size.width * k / n
-                                drawLine(
-                                    color = slashColor,
-                                    start = Offset(x + run / 2f, vPad),
-                                    end = Offset(x - run / 2f, size.height - vPad),
-                                    strokeWidth = 1.dp.toPx(),
-                                    cap = StrokeCap.Round,
-                                )
-                            }
-                        }
-                    },
+            Row(
+                Modifier.weight(1f).fillMaxHeight(),
+                // Boxes overlap by (slant − seam gap) so the parallel `/` seams read as a
+                // constant 3dp of ground; at tab-bar height the slant run caps at 12dp.
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy((-9).dp),
             ) {
-                Row(Modifier.fillMaxWidth().fillMaxHeight()) {
-                    tabs.forEachIndexed { i, tab ->
-                        val on = i == selected
-                        val tint = if (on) c.violet else c.textMid
-                        // The carved cell: the room's ground showing through the strip. End
-                        // tabs keep the strip's square edge on their outer side; every seam
-                        // toward a neighbour (or the trailing slot) is slanted.
-                        val cellShape = HyleSegmentShape(
-                            slantStart = i > 0,
-                            slantEnd = i < tabs.lastIndex || trailing != null,
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f)
-                                .fillMaxHeight()
-                                .then(
-                                    if (on) Modifier.clip(cellShape).background(c.ink, cellShape) else Modifier,
-                                )
-                                .clickable { haptics.tap(); onSelect(i) }
-                                .padding(vertical = 9.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Canvas(Modifier.size(22.dp)) { tab.glyph(this, tint) }
-                            Spacer(Modifier.height(5.dp))
-                            Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
-                        }
+                tabs.forEachIndexed { i, tab ->
+                    val on = i == selected
+                    val tint = if (on) c.violet else c.textMid
+                    // Every tab is a cell; outer edges of the group stay square-rounded,
+                    // every seam toward a neighbour (or the trailing slot) is slanted.
+                    val cellShape = HyleSegmentShape(
+                        slantStart = i > 0,
+                        slantEnd = i < tabs.lastIndex || trailing != null,
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f)
+                            .fillMaxHeight()
+                            .clip(cellShape)
+                            .background(if (on) c.violetDim else c.raised, cellShape)
+                            .clickable { haptics.tap(); onSelect(i) }
+                            .padding(vertical = 9.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                    ) {
+                        Canvas(Modifier.size(22.dp)) { tab.glyph(this, tint) }
+                        Spacer(Modifier.height(5.dp))
+                        Text(tab.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
                     }
                 }
             }

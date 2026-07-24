@@ -39,14 +39,20 @@ import kotlin.math.sqrt
  * Global/Toggle). The ASOC Voronoi identity made compositional: cells fit together
  * along parallel `/` seams with a thin strip of ground between them.
  *
- * [HyleSegmentShape] generalises the two existing field silhouettes: every seam
- * leans the same way (slope [SEAM_SLANT_RATIO], same as HyleFieldShape), so a
- * segment whose END is slanted tessellates against a following segment whose START
- * is slanted. Ends of a group keep square-rounded outer corners:
+ * [HyleSegmentShape]: EVERY seam edge leans the same `/` way at the field's slope
+ * ([SEAM_SLANT_RATIO]) — a slanted END has its bottom inset (top runs to full
+ * width) and a slanted START has its top inset, so the two edges of any seam are
+ * PARALLEL and the strip of ground between them is constant. (This is deliberately
+ * NOT the nav chips' mirrored pair, which point at opposite screen edges — seams
+ * pack, mirrors face.) Ends of a group keep square-rounded outer corners:
  *
  *   first  = HyleSegmentShape(slantStart = false, slantEnd = true )   ▐███/
  *   middle = HyleSegmentShape(slantStart = true,  slantEnd = true )   /███/
  *   last   = HyleSegmentShape(slantStart = true,  slantEnd = false)   /███▌
+ *
+ * Packing: because each box contains its own slant inset, a Row must OVERLAP
+ * adjacent boxes by (slant − [SEAM_GAP]) — `Arrangement.spacedBy(SEAM_GAP − slant)`
+ * — for the visible seam to read as [SEAM_GAP] of ground.
  */
 private const val SEAM_SLANT_RATIO = 0.25f // same slope as HyleFieldShape — all seams parallel
 
@@ -67,14 +73,15 @@ class HyleSegmentShape(
         val w = size.width
         val h = size.height
         val tlx = if (slantStart) slant else 0f // top-left vertex x (slant leans "/": top inset right)
-        val trx = if (slantEnd) w - slant else w // top-right vertex x
         val path = Path().apply {
             moveTo(tlx + r, 0f)
-            lineTo(trx - r, 0f)
+            lineTo(w - r, 0f)
             if (slantEnd) {
-                quadraticBezierTo(trx, 0f, trx + dx, dy)
-                lineTo(w - dx, h - dy)
-                quadraticBezierTo(w, h, w - r, h)
+                // "/" end: top vertex at full width, BOTTOM inset by slant — parallel to
+                // a following segment's slanted start.
+                quadraticBezierTo(w, 0f, w - dx, dy)
+                lineTo(w - slant + dx, h - dy)
+                quadraticBezierTo(w - slant, h, w - slant - r, h)
             } else {
                 quadraticBezierTo(w, 0f, w, r)
                 lineTo(w, h - r)
@@ -131,7 +138,9 @@ fun HyleSplitButton(
         else -> c.onViolet
     }
 
-    Row(modifier = modifier.heightIn(min = 40.dp), horizontalArrangement = Arrangement.spacedBy(SEAM_GAP)) {
+    // Boxes overlap by (slant − SEAM_GAP) so the parallel seam shows SEAM_GAP of ground:
+    // at the 40dp button height the slant run is 10dp → spacing −7dp.
+    Row(modifier = modifier.heightIn(min = 40.dp), horizontalArrangement = Arrangement.spacedBy(SEAM_GAP - 10.dp)) {
         val leadShape = HyleSegmentShape(slantStart = false, slantEnd = true)
         val leadInteraction = remember { MutableInteractionSource() }
         val leadPressed by leadInteraction.collectIsPressedAsState()
