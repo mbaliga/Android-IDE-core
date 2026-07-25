@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
@@ -51,6 +52,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -85,36 +87,8 @@ private const val FIELD_SLANT_RATIO = 0.25f // measured: 6px run over the 24px s
  *  line up. Matches the 32px design box. */
 private val FIELD_MIN_HEIGHT = 32.dp
 
-/** The Aeon selector silhouette: rounded rect whose left edge leans right (slant on
- *  left). The bottom-left corner — where the slant meets the base — is rounded more
- *  than the other three, per the design. */
-private object HyleFieldShape : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        if (size.width <= 0f || size.height <= 0f) return Outline.Generic(Path())
-        val r = with(density) { 4.dp.toPx() }.coerceAtMost(size.height / 4f)
-        val tlr = with(density) { 5.5.dp.toPx() }.coerceAtMost(size.height / 3f) // top-left: a touch more
-        val blr = with(density) { 7.dp.toPx() }.coerceAtMost(size.height / 2f) // bottom-left: rounder
-        val slant = (size.height * FIELD_SLANT_RATIO).coerceAtMost(with(density) { 12.dp.toPx() })
-        val len = kotlin.math.sqrt(slant * slant + size.height * size.height).coerceAtLeast(1f)
-        val tdx = tlr * slant / len
-        val tdy = tlr * size.height / len
-        val bdx = blr * slant / len
-        val bdy = blr * size.height / len
-        val path = Path().apply {
-            moveTo(slant + tlr, 0f)
-            lineTo(size.width - r, 0f)
-            quadraticBezierTo(size.width, 0f, size.width, r)
-            lineTo(size.width, size.height - r)
-            quadraticBezierTo(size.width, size.height, size.width - r, size.height)
-            lineTo(blr, size.height)
-            quadraticBezierTo(0f, size.height, bdx, size.height - bdy)
-            lineTo(slant - tdx, tdy)
-            quadraticBezierTo(slant, 0f, slant + tlr, 0f)
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}
+/** The Aeon selector silhouette now lives in CellGeometry.kt, transcribed exactly
+ *  from the owner's export rather than approximated by a radius/slant formula. */
 
 /** Mirror of HyleFieldShape: slant on the RIGHT edge (for left-side nav chips). */
 internal object HyleRightSlantShape : Shape {
@@ -154,78 +128,74 @@ fun HyleTitle(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** Label sits tight above the box. No asterisk here — the mandatory marker lives
+ *  inside the field (right edge), so repeating it in the label is redundant. */
 @Composable
-private fun HyleLabelRow(label: String, mandatory: Boolean) {
+private fun HyleLabelRow(label: String) {
     val c = LocalHyleColors.current
-    Row(modifier = Modifier.padding(bottom = 6.dp)) {
+    Row(modifier = Modifier.padding(bottom = 2.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = c.textMid)
-        if (mandatory) {
-            Text(" *", style = MaterialTheme.typography.labelMedium, color = c.violet)
-        }
     }
 }
 
-/** The shared Aeon container: slanted shape, fill, accent bar, and (when mandatory)
- *  the 5-point asterisk. NO border — the field reads as a lighter fill on the ground,
- *  per the design. [fieldColor] is the fill (also the asterisk's feather/halo colour),
- *  passed in because a Modifier extension can't read a CompositionLocal. */
+/**
+ * The shared Aeon container. Three layers, all transcribed from the owner's export:
+ * the slanted fill, a **gradient ring** whose colour encodes state (a flat stroke
+ * reads dead — the ramp is what makes the edge look lit), and the marker riding the
+ * slant. The marker is a single pill in every state *except* error, where the same
+ * silhouette splits into a literal exclamation (stem + dot). The mandatory asterisk
+ * is right-anchored, five-point.
+ *
+ * [ringStart]/[ringEnd] run left→right across the box. [markerColor] null hides the
+ * slant marker entirely; [asteriskColor] null hides the required mark.
+ */
 private fun Modifier.hyleContainer(
-    barColor: Color,
     fieldColor: Color,
-    showErrorMark: Boolean = false,
-    mandatoryColor: Color? = null,
+    ringStart: Color,
+    ringEnd: Color,
+    markerColor: Color? = null,
+    splitMarker: Boolean = false,
+    asteriskColor: Color? = null,
 ): Modifier = this
     .background(fieldColor, HyleFieldShape)
     .drawBehind {
-        // Accent bar / ! mark. SVG: x = fieldRight − 4px in a 32px field → 6dp.
-        val x = size.width - 6.dp.toPx()
-        val inset = size.height * 0.125f  // SVG: bar inset 4px in 32px field = 12.5% of H.
-        if (showErrorMark) {
-            // '!' proportions: stem 21.9%–59.4%, dot at 76.6%, strokeWidth 3dp (SVG-measured).
-            drawLine(
-                color = barColor,
-                start = Offset(x, size.height * 0.219f),
-                end = Offset(x, size.height * 0.594f),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-            drawCircle(color = barColor, radius = 1.5.dp.toPx(), center = Offset(x, size.height * 0.766f))
-        } else {
-            drawLine(
-                color = barColor,
-                start = Offset(x, inset),
-                end = Offset(x, size.height - inset),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
+        val s = size.height / CellPaths.FIELD_H
+        // Ring: the authored 4-unit stroke, floored at 1dp so it survives on a short
+        // field at low density (the source is authored 10x larger than we render).
+        val ringWidth = (CellPaths.FIELD_RING_STROKE * s).coerceAtLeast(1.dp.toPx())
+        val outline = HyleFieldShape.createOutline(size, layoutDirection, this)
+        if (outline is Outline.Generic) {
+            drawPath(
+                path = outline.path,
+                brush = Brush.horizontalGradient(
+                    0f to ringStart,
+                    1f to ringEnd,
+                    startX = 0f,
+                    endX = size.width,
+                ),
+                style = Stroke(width = ringWidth),
             )
         }
-        // Mandatory marker: a 5-POINT asterisk (five arms, point-up, gap at the bottom)
-        // riding the slanted left edge. HARD (square-cut) arm tips. Each arm carries a
-        // field-colour feather/halo — drawn a touch longer and wider underneath — so the
-        // mark blends where it overlaps the field and reads cleanly where it overflows
-        // onto the darker ground ("at home with the field").
-        if (mandatoryColor != null) {
-            val slant = (size.height * FIELD_SLANT_RATIO).coerceAtMost(12.dp.toPx())
-            val cx = slant * 0.45f
-            val cy = size.height * 0.30f
-            val armLen = size.height * 0.15f
-            val armW = 2.2.dp.toPx()
-            val feather = 1.8.dp.toPx()
-            val centre = Offset(cx, cy)
-            // Feather pass: field colour, a feather longer at each tip and wider on each
-            // side, hard butt caps — wraps the whole mark.
-            for (i in 0 until 5) {
-                val a = Math.PI / 2.0 + i * 2.0 * Math.PI / 5.0
-                val r = armLen + feather
-                val haloTip = Offset(cx + (r * cos(a)).toFloat(), cy - (r * sin(a)).toFloat())
-                drawLine(fieldColor, centre, haloTip, armW + 2f * feather, StrokeCap.Butt)
+        // Slant marker, left-anchored in the source canvas.
+        markerColor?.let { mc ->
+            if (splitMarker) {
+                drawPath(CellPaths.scaled(CellPaths.MARKER_STEM, s), mc)
+                drawPath(CellPaths.scaled(CellPaths.MARKER_DOT, s), mc)
+            } else {
+                drawPath(CellPaths.scaled(CellPaths.MARKER_PILL, s), mc)
             }
-            // Arm pass: marker colour, hard butt caps → square-cut tips.
-            for (i in 0 until 5) {
-                val a = Math.PI / 2.0 + i * 2.0 * Math.PI / 5.0
-                val tip = Offset(cx + (armLen * cos(a)).toFloat(), cy - (armLen * sin(a)).toFloat())
-                drawLine(mandatoryColor, centre, tip, armW, StrokeCap.Butt)
-            }
+        }
+        // Required asterisk, right-anchored: shifting by (w - FIELD_W * s) keeps it the
+        // same distance in from the right edge as it sits in the export.
+        asteriskColor?.let { ac ->
+            drawPath(
+                CellPaths.scaled(
+                    CellPaths.FIELD_ASTERISK,
+                    s,
+                    dx = size.width - CellPaths.FIELD_W * s,
+                ),
+                ac,
+            )
         }
     }
 
@@ -250,30 +220,56 @@ fun HyleField(
     val c = LocalHyleColors.current
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val barColor = when {
+    // Ring runs left→right; the state lives in the ramp, not a flat colour.
+    val ringStart = when {
+        error != null -> c.error
+        !enabled -> c.textHigh.copy(alpha = 0.14f)
+        focused -> c.violet
+        else -> c.textHigh.copy(alpha = 0.30f)
+    }
+    val ringEnd = when {
+        error != null -> c.error.copy(alpha = 0.35f)
+        !enabled -> c.textHigh.copy(alpha = 0.06f)
+        focused -> c.violetHover
+        else -> c.textHigh.copy(alpha = 0.08f)
+    }
+    // The slant marker is present in EVERY state — the default just mutes it rather
+    // than dropping it. Error is the only state that splits it into an exclamation.
+    val markerColor = when {
         error != null -> c.error
         !enabled -> c.textDisabled
         focused -> c.violet
-        else -> c.violet.copy(alpha = 0.4f)
+        else -> c.textMid
     }
-    // Mandatory marker colour, shown in every mandatory state — incl. disabled, where
-    // the design greys it (NOT hidden), matching the disabled SVG/PNG export.
-    val mandatoryColor = when {
+    val asteriskColor = when {
         !mandatory -> null
         error != null -> c.error
         !enabled -> c.textDisabled
         else -> c.violet
     }
     Column(modifier) {
-        if (label.isNotBlank()) HyleLabelRow(label, false)
+        if (label.isNotBlank()) HyleLabelRow(label)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FIELD_MIN_HEIGHT)
-                .hyleContainer(barColor, c.inset, showErrorMark = error != null, mandatoryColor = mandatoryColor)
-                // top > bottom by ~2dp: optical centering — Latin text geometrically
-                // centred reads a touch high, so nudge it down.
-                .padding(start = 18.dp, end = 18.dp, top = 5.dp, bottom = 3.dp),
+                .hyleContainer(
+                    fieldColor = c.inset,
+                    ringStart = ringStart,
+                    ringEnd = ringEnd,
+                    markerColor = markerColor,
+                    splitMarker = error != null,
+                    asteriskColor = asteriskColor,
+                )
+                // Start clears the slant; end clears the asterisk when one is shown.
+                // top > bottom: optical centering — Latin text geometrically centred
+                // reads high, and the export sets its baseline low in the box.
+                .padding(
+                    start = 22.dp,
+                    end = if (mandatory) 36.dp else 18.dp,
+                    top = 7.dp,
+                    bottom = 3.dp,
+                ),
             contentAlignment = Alignment.CenterStart,
         ) {
             BasicTextField(
@@ -332,15 +328,21 @@ fun HyleDropdownField(
     val c = LocalHyleColors.current
     var expanded by remember { mutableStateOf(false) }
     Column(modifier) {
-        if (label.isNotBlank()) HyleLabelRow(label, mandatory)
+        if (label.isNotBlank()) HyleLabelRow(label)
         Box {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = FIELD_MIN_HEIGHT)
-                    .hyleContainer(barColor = c.violet, fieldColor = c.inset)
+                    .hyleContainer(
+                        fieldColor = c.inset,
+                        ringStart = c.textHigh.copy(alpha = 0.30f),
+                        ringEnd = c.textHigh.copy(alpha = 0.08f),
+                        markerColor = c.textMid,
+                        asteriskColor = if (mandatory) c.violet else null,
+                    )
                     .clickable { expanded = true }
-                    .padding(start = 18.dp, end = 14.dp, top = 5.dp, bottom = 3.dp),
+                    .padding(start = 22.dp, end = 14.dp, top = 7.dp, bottom = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
