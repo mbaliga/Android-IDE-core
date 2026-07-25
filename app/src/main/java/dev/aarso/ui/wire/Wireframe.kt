@@ -8,9 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleChip
-import dev.aarso.ui.hyle.HyleField
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleField
 
 /**
  * Shared **wire** atoms — boxes, buttons, fields, now reskinned onto the real Hyle components

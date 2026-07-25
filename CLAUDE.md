@@ -56,7 +56,10 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
                             cloud/ (Anthropic, OpenAI-compat, Gemini — SSE), image/
     service/                GenerationService (FGS), OverlayService, ScreenCapture (+OCR), Voice
     ui/                     AppRoot + SpatialRoot (room model, NOT bottom nav); rooms/, loops/,
-                            develop/, codelens/, ide/ (ReviewSheet), remote/, theme/, aeon/
+                            develop/, codelens/, ide/ (ReviewSheet), remote/, theme/
+                            (theme/ is now app-side theming ONLY — ThemeMode, FonebrewTheme,
+                            ThemePicker, Texture. The palette + every Hyle component moved
+                            to the :hyle library; see below.)
     security/               KeystoreSecret (AES-GCM key encryption)
   src/main/cpp/             llama_jni.cpp + CMake + llama.cpp submodule → libaarso_llama.so
   src/test/                 400+ JVM unit tests (domain/ + data-layer) — keep green
@@ -64,6 +67,14 @@ sdengine/                   stable-diffusion.cpp submodule + sd_jni.cpp → liba
 hyle-design-system/         git submodule (mbaliga/Hyle-Design-System) — the SINGLE source of
                             dev.aarso:hyle:0.2.0, composited via includeBuild (settings.gradle.kts).
                             No vendored :hyle module here anymore.
+                            **Hyle now ships COMPONENTS, not just tokens** — it is a real
+                            dependency, not a mirror. `dev.aarso.hyle.cells` (HyleField,
+                            HyleButton, HyleCard, HyleTabBar, HyleChip, HyleWellToggle, …) and
+                            `dev.aarso.hyle.theme` (HyleColors, LocalHyleColors, the accent
+                            ramp) live there and NOWHERE else. Do not re-add an app-local copy:
+                            0.1.0 shipped from three divergent copies, which is what
+                            single-sourcing exists to prevent. Change a component in the
+                            submodule, not in app/.
 hyle-probe/                 on-device render harness app for Hyle (depends on dev.aarso:hyle)
 ```
 

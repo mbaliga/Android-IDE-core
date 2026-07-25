@@ -99,7 +99,7 @@ fun TerminalFacet() {
     Hint("Run a shell command on your machine over SSH. Output is shown verbatim.")
     Spacer(Modifier.height(8.dp))
 
-    dev.aarso.ui.hyle.HyleField(
+    dev.aarso.hyle.cells.HyleField(
         cmd,
         { cmd = it },
         label = "Shell command",

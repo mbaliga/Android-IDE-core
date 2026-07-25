@@ -41,12 +41,12 @@ import dev.aarso.domain.Role
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.TreeOutline
 import dev.aarso.ui.ChatViewModel
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleTabBar
-import dev.aarso.ui.hyle.HyleTabSpec
-import dev.aarso.ui.hyle.HyleTitle
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleTabBar
+import dev.aarso.hyle.cells.HyleTabSpec
+import dev.aarso.hyle.cells.HyleTitle
 import kotlinx.coroutines.launch
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
  * The z-axis view (§5): the current conversation abstracted into its branching

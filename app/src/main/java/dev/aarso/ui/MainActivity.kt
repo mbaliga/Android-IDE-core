@@ -11,9 +11,9 @@ import dev.aarso.FonebrewApp
 import dev.aarso.crashrecovery.CrashRecovery
 import dev.aarso.data.Intake
 import dev.aarso.ui.theme.FonebrewTheme
-import dev.aarso.ui.theme.DefaultAccent
+import dev.aarso.hyle.theme.DefaultAccent
 import dev.aarso.ui.theme.ThemeMode
-import dev.aarso.ui.theme.parseHexColor
+import dev.aarso.hyle.theme.parseHexColor
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

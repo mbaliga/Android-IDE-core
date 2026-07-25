@@ -48,17 +48,17 @@ import dev.aarso.data.DownloadCenter
 import dev.aarso.domain.device.FitVerdict
 import dev.aarso.ui.ImagesViewModel
 import dev.aarso.ui.ModelsViewModel
-import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.hyle.cells.HyleButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.HorizontalDivider
 import dev.aarso.FonebrewApp
-import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleField
-import dev.aarso.ui.hyle.HyleSegmentedToggle
-import dev.aarso.ui.hyle.HyleTabBar
-import dev.aarso.ui.hyle.HyleTabSpec
-import dev.aarso.ui.hyle.HyleTitle
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleSegmentedToggle
+import dev.aarso.hyle.cells.HyleTabBar
+import dev.aarso.hyle.cells.HyleTabSpec
+import dev.aarso.hyle.cells.HyleTitle
+import dev.aarso.hyle.theme.LocalHyleColors
 import kotlin.math.absoluteValue
 
 private enum class ModelsTab { CHAT, IMAGE, BYO }

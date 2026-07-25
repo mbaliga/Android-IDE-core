@@ -69,13 +69,13 @@ import dev.aarso.domain.image.ImageProvider
 import dev.aarso.domain.image.ImageProviderKind
 import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.ui.SettingsViewModel
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleChip
-import dev.aarso.ui.hyle.HyleDropdownField
-import dev.aarso.ui.hyle.HyleField
-import dev.aarso.ui.hyle.HyleTitle
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleDropdownField
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleTitle
+import dev.aarso.hyle.theme.LocalHyleColors
 import dev.aarso.ui.theme.ThemePicker
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -162,8 +162,8 @@ fun SettingsRoom(
 // One HyleTabSpec per SettingsTab, glyphs unchanged from the original hand-rolled TabGlyph —
 // this IS the bar HyleTabBar (Aeon.kt) was extracted from; now it consumes the shared component
 // instead of keeping its own parallel copy (2026-07-19 tab-bar consolidation).
-private val SettingsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = SettingsTab.entries.map { t ->
-    dev.aarso.ui.hyle.HyleTabSpec(t.label) { tint ->
+private val SettingsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = SettingsTab.entries.map { t ->
+    dev.aarso.hyle.cells.HyleTabSpec(t.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
@@ -220,7 +220,7 @@ private val SettingsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = SettingsTab.
 
 @Composable
 private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSelect: (SettingsTab) -> Unit) {
-    dev.aarso.ui.hyle.HyleTabBar(
+    dev.aarso.hyle.cells.HyleTabBar(
         tabs = SettingsTabSpecs,
         selected = SettingsTab.entries.indexOf(selected),
         onSelect = { onSelect(SettingsTab.entries[it]) },
@@ -676,7 +676,7 @@ private fun GitConnect() {
             CiPanel(h, store.token(h.id).orEmpty(), transport) { ciOpen = false }
         }
         var showActions by remember(h.id) { mutableStateOf(false) }
-        val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+        val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
         HyleCard(
             modifier = Modifier.combinedClickable(
                 onClick = {},

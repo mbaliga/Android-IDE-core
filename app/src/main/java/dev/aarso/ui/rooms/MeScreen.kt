@@ -31,8 +31,8 @@ import dev.aarso.ui.components.InputOutputCard
 import dev.aarso.ui.components.ProvenanceBadge
 import dev.aarso.ui.components.SovereigntyCard
 import dev.aarso.ui.components.StatePane
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleTitle
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.ui.state.MyselfPresenter
 import dev.aarso.ui.wire.WireBox
 

@@ -1,5 +1,6 @@
 package dev.aarso.ui.theme
 
+import dev.aarso.hyle.theme.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aarso.FonebrewApp
-import dev.aarso.ui.hyle.HyleColorPicker
+import dev.aarso.hyle.cells.HyleColorPicker
 
 /** Curated quick-start accents — the "floor" of customization. Each is mid-bright so
  *  the ramp derivation + contrast clamp keep it AA-safe in both light and dark. */

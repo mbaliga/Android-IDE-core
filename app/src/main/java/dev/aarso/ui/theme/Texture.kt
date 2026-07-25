@@ -1,5 +1,6 @@
 package dev.aarso.ui.theme
 
+import dev.aarso.hyle.theme.*
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Paint

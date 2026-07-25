@@ -63,13 +63,13 @@ import dev.aarso.data.DownloadCenter
 import dev.aarso.ui.ChatScreen
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.ui.ModelsViewModel
-import dev.aarso.ui.hyle.HyleButton
+import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.ui.rooms.ChatsRoom
 import dev.aarso.ui.rooms.ProductRoomFree
 import dev.aarso.ui.rooms.SettingsRoom
 import dev.aarso.ui.rooms.TreeRoom
 import androidx.compose.foundation.border
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.abs
 import kotlin.math.max
@@ -217,7 +217,7 @@ fun SpatialRoot() {
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val scope = rememberCoroutineScope()
-    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
     val controller = remember { SpatialController(scope, onSettle = haptics::settle) }
 
     // §7: content shared/selected into the app lands in the composer — go home.

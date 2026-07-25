@@ -25,10 +25,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aarso.FonebrewApp
 import dev.aarso.data.Participant
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleDropdownField
-import dev.aarso.ui.hyle.HyleField
-import dev.aarso.ui.hyle.HyleTitle
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleDropdownField
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.ui.wire.WireBox
 import java.util.UUID
 

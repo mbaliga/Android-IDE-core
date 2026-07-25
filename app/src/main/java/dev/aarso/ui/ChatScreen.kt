@@ -83,14 +83,14 @@ import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
 import dev.aarso.domain.tree.Conversations
-import dev.aarso.ui.hyle.hylePulse
+import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleField
-import dev.aarso.ui.hyle.HyleNavChip
-import dev.aarso.ui.hyle.FileImage
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleNavChip
+import dev.aarso.hyle.cells.FileImage
+import dev.aarso.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -409,7 +409,7 @@ fun ChatScreen(
         // Loading a GGUF into memory is genuinely obstructive — typing or switching rooms
         // mid-load races the engine's init, so the surface goes untouchable until it settles.
         if (state.genPhase == GenPhase.LOADING) {
-            dev.aarso.ui.hyle.HyleBlockingOverlay("Loading model…")
+            dev.aarso.hyle.cells.HyleBlockingOverlay("Loading model…")
         }
     }
 
@@ -723,11 +723,11 @@ private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Bool
 // than a scrolling chip row. Image/video/3D are NOT modes here — they live behind the composer's
 // "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
 private val ComposerModeTabs = listOf(
-    dev.aarso.ui.hyle.HyleTabSpec("Single") { tint ->
+    dev.aarso.hyle.cells.HyleTabSpec("Single") { tint ->
         val w = size.width; val h = size.height
         drawCircle(tint, radius = w * 0.30f, center = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.5f))
     },
-    dev.aarso.ui.hyle.HyleTabSpec("Council · personas") { tint ->
+    dev.aarso.hyle.cells.HyleTabSpec("Council · personas") { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val r = w * 0.16f
@@ -748,7 +748,7 @@ private val ComposerModeTabs = listOf(
             strokeWidth = sw,
         )
     },
-    dev.aarso.ui.hyle.HyleTabSpec("Council · models") { tint ->
+    dev.aarso.hyle.cells.HyleTabSpec("Council · models") { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         drawCircle(
@@ -767,7 +767,7 @@ private val ComposerModeTabs = listOf(
 
 @Composable
 private fun ComposerModeRow(mode: ComposerMode, enabled: Boolean, onMode: (ComposerMode) -> Unit) {
-    dev.aarso.ui.hyle.HyleTabBar(
+    dev.aarso.hyle.cells.HyleTabBar(
         tabs = ComposerModeTabs,
         selected = ComposerMode.entries.indexOf(mode).coerceAtLeast(0),
         onSelect = { onMode(ComposerMode.entries[it]) },
@@ -1143,8 +1143,8 @@ private fun MessageBubble(
     onLongPress: () -> Unit,
 ) {
     val fromUser = role == Role.USER
-    val c = dev.aarso.ui.theme.LocalHyleColors.current
-    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val c = dev.aarso.hyle.theme.LocalHyleColors.current
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
     val shape = RoundedCornerShape(10.dp)
     val headerLabel = when {
         fromUser -> "You"

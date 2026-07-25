@@ -64,12 +64,12 @@ import dev.aarso.domain.tree.Bookmarks
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.domain.library.Conversations as LibConversations
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleChip
-import dev.aarso.ui.hyle.HyleTitle
-import dev.aarso.ui.hyle.FileImage
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleTitle
+import dev.aarso.hyle.cells.FileImage
+import dev.aarso.hyle.theme.LocalHyleColors
 
 private enum class ChatsTab(val label: String) {
     ALL("All"), TEXT("Text"), IMAGE("Image"), STARRED("Starred"), PROJECTS("Projects")
@@ -250,8 +250,8 @@ fun ChatsRoom(
 // One HyleTabSpec per ChatsTab, glyphs unchanged from the original hand-rolled ChatsTabGlyph —
 // this bar now consumes the shared HyleTabBar (Aeon.kt) instead of keeping its own parallel copy
 // (2026-07-19 tab-bar consolidation).
-private val ChatsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = ChatsTab.entries.map { tab ->
-    dev.aarso.ui.hyle.HyleTabSpec(tab.label) { tint ->
+private val ChatsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ChatsTab.entries.map { tab ->
+    dev.aarso.hyle.cells.HyleTabSpec(tab.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = Stroke(width = sw)
@@ -315,8 +315,8 @@ private val ChatsTabSpecs: List<dev.aarso.ui.hyle.HyleTabSpec> = ChatsTab.entrie
 }
 
 /**
- * The Chats-room tab bar: the shared [dev.aarso.ui.hyle.HyleTabBar], plus a trailing funnel icon
- * (via [dev.aarso.ui.hyle.HyleTabBar]'s own `trailing` slot) that reveals the Sort row (the
+ * The Chats-room tab bar: the shared [dev.aarso.hyle.cells.HyleTabBar], plus a trailing funnel icon
+ * (via [dev.aarso.hyle.cells.HyleTabBar]'s own `trailing` slot) that reveals the Sort row (the
  * owner's "filters behind an icon" request). The 36dp slot stays reserved even when the funnel
  * isn't interactive — a conditionally-present trailing composable was the original "tab bar
  * fluctuates" bug (Compose redistributes the weighted tabs' width whenever a sibling enters/
@@ -331,7 +331,7 @@ private fun ChatsTabBar(
     onToggleSort: () -> Unit,
 ) {
     val c = LocalHyleColors.current
-    dev.aarso.ui.hyle.HyleTabBar(
+    dev.aarso.hyle.cells.HyleTabBar(
         tabs = ChatsTabSpecs,
         selected = ChatsTab.entries.indexOf(selected),
         onSelect = { onSelect(ChatsTab.entries[it]) },
@@ -495,7 +495,7 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
     val shape = RoundedCornerShape(10.dp)
     val leaning = index % 2 == 0
     var showActions by remember { mutableStateOf(false) }
-    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
     Row(
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(
             start = if (leaning) 18.dp else 0.dp,
@@ -650,7 +650,7 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
     val c = LocalHyleColors.current
     val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
     var showActions by remember { mutableStateOf(false) }
-    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -807,7 +807,7 @@ private fun ImageNodeCard(
 ) {
     val c = LocalHyleColors.current
     var showActions by remember { mutableStateOf(false) }
-    val haptics = dev.aarso.ui.hyle.rememberHyleHaptics()
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
     Card(
         modifier = Modifier.fillMaxWidth().combinedClickable(
             enabled = enabled,

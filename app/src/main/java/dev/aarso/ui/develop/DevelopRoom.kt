@@ -45,9 +45,9 @@ import kotlinx.coroutines.launch
 
 /**
  * The "develop on your repo" room — reskinned to Hyle. The header/tabs call
- * [dev.aarso.ui.hyle.HyleButton]/[dev.aarso.ui.hyle.HyleChip] directly; every facet below still
+ * [dev.aarso.hyle.cells.HyleButton]/[dev.aarso.hyle.cells.HyleChip] directly; every facet below still
  * calls the same-named [WireBox]/[WireButton]/[Hint] atoms it always has, but those now delegate
- * to [dev.aarso.ui.hyle.HyleCard]/[dev.aarso.ui.hyle.HyleChip] so the whole room picks up the
+ * to [dev.aarso.hyle.cells.HyleCard]/[dev.aarso.hyle.cells.HyleChip] so the whole room picks up the
  * design system without a per-call-site rewrite. Per brief §7 the free-core facets are exactly:
  *
  *  - **Hardware** → supported boards + detect/troubleshoot + the four control paths
@@ -79,17 +79,17 @@ fun DevelopRoom(onClose: () -> Unit) {
     // any Studio-contributed tab past those four gets a neutral diamond so this room never needs to
     // know Studio's icon set.
     val tabSpecs = listOf(
-        dev.aarso.ui.hyle.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
-        dev.aarso.ui.hyle.HyleTabSpec("Files") { tint -> filesTabGlyph(tint) },
-        dev.aarso.ui.hyle.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
-        dev.aarso.ui.hyle.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
-    ) + studioTabs.map { st -> dev.aarso.ui.hyle.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
+        dev.aarso.hyle.cells.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
+        dev.aarso.hyle.cells.HyleTabSpec("Files") { tint -> filesTabGlyph(tint) },
+        dev.aarso.hyle.cells.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
+        dev.aarso.hyle.cells.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
+    ) + studioTabs.map { st -> dev.aarso.hyle.cells.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
 
     val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
     val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
     val tabBarPosition = roomTabBarOverrides["develop"] ?: universalTabBarPosition
     val tabBarBlock: @Composable () -> Unit = {
-        dev.aarso.ui.hyle.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
+        dev.aarso.hyle.cells.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
     }
     val contentBlock: @Composable () -> Unit = {
         when {
@@ -113,7 +113,7 @@ fun DevelopRoom(onClose: () -> Unit) {
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            dev.aarso.ui.hyle.HyleButton("‹ Close", onClick = onClose, secondary = true)
+            dev.aarso.hyle.cells.HyleButton("‹ Close", onClick = onClose, secondary = true)
             Spacer(Modifier.width(12.dp))
             Text("Develop", style = MaterialTheme.typography.headlineSmall)
         }
@@ -284,16 +284,16 @@ internal fun BuildsFacet() {
     }
 }
 
-/** A grouped-content box — delegates to [dev.aarso.ui.hyle.HyleCard]. */
+/** A grouped-content box — delegates to [dev.aarso.hyle.cells.HyleCard]. */
 @Composable
 internal fun WireBox(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    dev.aarso.ui.hyle.HyleCard(modifier.padding(vertical = 4.dp), content = content)
+    dev.aarso.hyle.cells.HyleCard(modifier.padding(vertical = 4.dp), content = content)
 }
 
-/** A tappable label; [selected] marks tab/segment/toggle state — delegates to [dev.aarso.ui.hyle.HyleChip]. */
+/** A tappable label; [selected] marks tab/segment/toggle state — delegates to [dev.aarso.hyle.cells.HyleChip]. */
 @Composable
 internal fun WireButton(
     label: String,
@@ -301,12 +301,12 @@ internal fun WireButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    dev.aarso.ui.hyle.HyleChip(selected = selected, onClick = onClick, label = label, enabled = enabled)
+    dev.aarso.hyle.cells.HyleChip(selected = selected, onClick = onClick, label = label, enabled = enabled)
 }
 
 @Composable
 internal fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = dev.aarso.ui.theme.LocalHyleColors.current.textMid)
+    Text(text, style = MaterialTheme.typography.bodySmall, color = dev.aarso.hyle.theme.LocalHyleColors.current.textMid)
 }
 
 /* ---------------------------------------------------------------- Devices */
@@ -418,11 +418,11 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             WireButton("Open Terminal ▸", onClick = onOpenTerminal)
         }
         1 -> {
-            dev.aarso.ui.hyle.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
+            dev.aarso.hyle.cells.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            dev.aarso.ui.hyle.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
+            dev.aarso.hyle.cells.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            dev.aarso.ui.hyle.HyleField(sketch, { sketch = it }, label = "Sketch path on the host", modifier = Modifier.fillMaxWidth())
+            dev.aarso.hyle.cells.HyleField(sketch, { sketch = it }, label = "Sketch path on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 WireButton("List boards", enabled = !running, onClick = {
@@ -446,9 +446,9 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             }
         }
         2 -> {
-            dev.aarso.ui.hyle.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
+            dev.aarso.hyle.cells.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            dev.aarso.ui.hyle.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
+            dev.aarso.hyle.cells.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             WireButton(if (running) "Flashing…" else "Flash over network", enabled = !running && espIp.isNotBlank() && espBin.isNotBlank(), onClick = {
                 runRecipe(dev.aarso.domain.device.recipe.DeviceRecipes.espOta(espIp.trim(), espBin.trim()), null)
@@ -508,7 +508,7 @@ private fun UsbFlashPanel() {
         }
     }
     Spacer(Modifier.height(6.dp))
-    dev.aarso.ui.hyle.HyleField(hexPath, { hexPath = it }, label = ".hex file path on this phone", modifier = Modifier.fillMaxWidth())
+    dev.aarso.hyle.cells.HyleField(hexPath, { hexPath = it }, label = ".hex file path on this phone", modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(6.dp))
     WireButton(if (busy) "Flashing…" else "Flash over USB", enabled = !busy && selected != null && hexPath.isNotBlank(), onClick = {
         val board = boards.firstOrNull { it.device.deviceName == selected }?.device ?: return@WireButton
@@ -580,9 +580,9 @@ private fun FilesFacet() {
         return
     }
     Spacer(Modifier.height(8.dp))
-    dev.aarso.ui.hyle.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
+    dev.aarso.hyle.cells.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(6.dp))
-    dev.aarso.ui.hyle.HyleField(
+    dev.aarso.hyle.cells.HyleField(
         pathsText, { pathsText = it },
         label = "Context files — one path per line",
         singleLine = false,

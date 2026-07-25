@@ -28,10 +28,10 @@ import dev.aarso.domain.diff.Decision
 import dev.aarso.domain.diff.FileChange
 import dev.aarso.domain.diff.LineDiff
 import dev.aarso.domain.diff.ReviewSession
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleTitle
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleTitle
+import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
  * The shared **diff-review** sheet (agentic-ide §2/§5), now **per-hunk** over the tested

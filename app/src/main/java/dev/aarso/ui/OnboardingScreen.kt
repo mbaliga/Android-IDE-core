@@ -40,11 +40,11 @@ import dev.aarso.data.DeviceInfo
 import dev.aarso.domain.catalog.ModelCatalog
 import dev.aarso.domain.device.FitVerdict
 import dev.aarso.domain.device.ModelFit
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleCard
-import dev.aarso.ui.hyle.HyleTitle
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.ui.onboarding.AiCoreAvailability
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 
 /**

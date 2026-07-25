@@ -56,10 +56,10 @@ import dev.aarso.FonebrewApp
 import dev.aarso.data.entity.TaskEntity
 import dev.aarso.domain.tasks.TaskDue
 import dev.aarso.domain.tasks.TaskState
-import dev.aarso.ui.hyle.HyleButton
-import dev.aarso.ui.hyle.HyleField
-import dev.aarso.ui.hyle.HyleTitle
-import dev.aarso.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleTitle
+import dev.aarso.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 
 /**
