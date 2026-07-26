@@ -37,6 +37,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleLensHeading
+import dev.aarso.hyle.cells.HyleLensActions
+import dev.aarso.hyle.cells.HyleFocusLens
 import dev.aarso.domain.Role
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.TreeOutline
@@ -224,17 +227,17 @@ fun TreeRoom(
     }
 
     handoff?.let { text ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { handoff = null },
-            title = { Text("Handoff summary") },
-            text = {
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                    Text(text, style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            confirmButton = { HyleButton("Share", onClick = { shareText(context, "Fonebrew handoff", text); handoff = null }) },
-            dismissButton = { HyleButton("Close", onClick = { handoff = null }) },
-        )
+        HyleFocusLens(visible = true, onDismiss = { handoff = null }) {
+            HyleLensHeading("Handoff summary")
+            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                Text(text, style = MaterialTheme.typography.bodySmall)
+            }
+            HyleLensActions {
+                HyleButton("Close", secondary = true, onClick = { handoff = null })
+                Spacer(Modifier.width(8.dp))
+                HyleButton("Share", onClick = { shareText(context, "Fonebrew handoff", text); handoff = null })
+            }
+        }
     }
 }
 

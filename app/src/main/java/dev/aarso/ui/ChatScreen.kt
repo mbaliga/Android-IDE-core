@@ -409,7 +409,9 @@ fun ChatScreen(
         // Loading a GGUF into memory is genuinely obstructive — typing or switching rooms
         // mid-load races the engine's init, so the surface goes untouchable until it settles.
         if (state.genPhase == GenPhase.LOADING) {
-            dev.aarso.hyle.cells.HyleBlockingOverlay("Loading model…")
+            // Shown, not said: the ground goes out of reach and keeps moving, because
+            // the load genuinely is running. The words survive only for a screen reader.
+            dev.aarso.hyle.cells.HyleSealedLens("Loading model…")
         }
     }
 

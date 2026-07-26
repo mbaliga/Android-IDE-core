@@ -1,5 +1,6 @@
 package dev.aarso.ui.theme
 
+import dev.aarso.hyle.cells.HyleSlider
 import dev.aarso.hyle.theme.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,8 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -91,15 +90,10 @@ fun ThemePicker(modifier: Modifier = Modifier) {
         )
 
         SectionLabel("Texture", c.textMid)
-        Slider(
+        HyleSlider(
             value = texture,
             onValueChange = { session.setTextureIntensity(it) },
             valueRange = 0f..1f,
-            colors = SliderDefaults.colors(
-                thumbColor = c.violet,
-                activeTrackColor = c.violet,
-                inactiveTrackColor = c.inset,
-            ),
         )
 
         SectionLabel("Ambient gradient", c.textMid)

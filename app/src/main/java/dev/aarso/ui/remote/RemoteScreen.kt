@@ -31,6 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleLensHeading
+import dev.aarso.hyle.cells.HyleLensActions
+import dev.aarso.hyle.cells.HyleFocusLens
 import dev.aarso.FonebrewApp
 import dev.aarso.domain.remote.ExecChunk
 import dev.aarso.domain.remote.ExecRequest
@@ -271,30 +274,32 @@ private fun AddHostForm(onAdd: (RemoteHost, String, Boolean) -> Unit) {
 
 @Composable
 private fun TrustDialog(verdict: Trust, onAccept: () -> Unit, onReject: () -> Unit) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onReject,
-        title = { Text(if (verdict is Trust.Changed) "Host key CHANGED" else "Unknown host") },
-        text = {
-            Column {
-                when (verdict) {
-                    is Trust.Unknown -> {
-                        Text("First time connecting. Verify this fingerprint matches the server:")
-                        Spacer(Modifier.height(8.dp))
-                        Text(verdict.presented.fingerprint, fontFamily = FontFamily.Monospace)
-                    }
-                    is Trust.Changed -> {
-                        Text("The host key DIFFERS from the one you pinned. This could be a reinstall — or an interception. Do not accept unless you know why it changed.")
-                        Spacer(Modifier.height(8.dp))
-                        Text("pinned:    ${verdict.pinned.fingerprint}", fontFamily = FontFamily.Monospace)
-                        Text("presented: ${verdict.presented.fingerprint}", fontFamily = FontFamily.Monospace)
-                    }
-                    Trust.Vetted -> Text("Vetted.")
+    // A security decision: dismissal must be an explicit Reject, never a stray tap,
+    // so onDismiss stays null and the lens cannot be dismissed by touching the ground.
+    HyleFocusLens(visible = true, onDismiss = null) {
+        HyleLensHeading(if (verdict is Trust.Changed) "Host key CHANGED" else "Unknown host")
+        Column {
+            when (verdict) {
+                is Trust.Unknown -> {
+                    Text("First time connecting. Verify this fingerprint matches the server:")
+                    Spacer(Modifier.height(8.dp))
+                    Text(verdict.presented.fingerprint, fontFamily = FontFamily.Monospace)
                 }
+                is Trust.Changed -> {
+                    Text("The host key DIFFERS from the one you pinned. This could be a reinstall — or an interception. Do not accept unless you know why it changed.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("pinned:    ${verdict.pinned.fingerprint}", fontFamily = FontFamily.Monospace)
+                    Text("presented: ${verdict.presented.fingerprint}", fontFamily = FontFamily.Monospace)
+                }
+                Trust.Vetted -> Text("Vetted.")
             }
-        },
-        confirmButton = { WireButton(if (verdict is Trust.Changed) "Accept anyway" else "Accept", onClick = onAccept) },
-        dismissButton = { WireButton("Reject", onClick = onReject) },
-    )
+        }
+        HyleLensActions {
+            WireButton("Reject", onClick = onReject)
+            Spacer(Modifier.width(8.dp))
+            WireButton(if (verdict is Trust.Changed) "Accept anyway" else "Accept", onClick = onAccept)
+        }
+    }
 }
 
 private fun phaseLabel(s: SessionState): String = when (s) {
