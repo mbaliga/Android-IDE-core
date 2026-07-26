@@ -25,7 +25,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import dev.aarso.hyle.cells.HyleSwitch
 import dev.aarso.domain.git.GitHost
 import dev.aarso.domain.git.GitHostKind
 import kotlinx.coroutines.launch
@@ -464,7 +464,7 @@ private fun GlobalSettings(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Floating bubble (always-on summon)", style = MaterialTheme.typography.bodyMedium)
-            Switch(
+            HyleSwitch(
                 checked = bubbleOn,
                 onCheckedChange = { on ->
                     if (on) {
@@ -544,7 +544,7 @@ private fun GlobalSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
+        HyleSwitch(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
     }
     HorizontalDivider()
 

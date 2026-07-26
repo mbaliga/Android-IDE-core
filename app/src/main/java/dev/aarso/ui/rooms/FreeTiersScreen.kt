@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleSwitch
 import dev.aarso.FonebrewApp
 import dev.aarso.domain.cost.FreeTierProvider
 import dev.aarso.ui.wire.WireBox
@@ -109,7 +109,7 @@ fun FreeTiersScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Auto-update on open", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                Switch(
+                HyleSwitch(
                     checked = autoUpdate,
                     onCheckedChange = { want ->
                         if (want) pendingConsent = FtConsent.ENABLE_AUTO else session.setFreeTierAutoUpdate(false)

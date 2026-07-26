@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
@@ -23,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleSwitch
 import dev.aarso.domain.diff.ChangeSet
 import dev.aarso.domain.diff.Decision
 import dev.aarso.domain.diff.FileChange
@@ -133,7 +133,7 @@ private fun FileHunks(fc: FileChange, session: ReviewSession, approved: MutableL
                     modifier = Modifier.weight(1f),
                 )
                 Text(if (approved[j]) "apply" else "skip", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Switch(checked = approved[j], onCheckedChange = { approved[j] = it })
+                HyleSwitch(checked = approved[j], onCheckedChange = { approved[j] = it })
             }
             HunkLines(hunk)
         }

@@ -46,7 +46,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
+import dev.aarso.hyle.cells.HyleSwitch
 import dev.aarso.domain.markdown.StreamingMarkdown
 import dev.aarso.R
 import dev.aarso.domain.GeneratedToken
@@ -651,7 +651,7 @@ private fun InstrumentsStrip(
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = entropyColoring, onCheckedChange = onEntropyColoring)
+            HyleSwitch(checked = entropyColoring, onCheckedChange = onEntropyColoring)
         }
         // Instant, model-free prompt lint (§6a), recomputed as you type.
         val lint = remember(input) { PromptLinter.lint(input) }
