@@ -1,5 +1,8 @@
 package dev.aarso.ui.loops
 
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,16 +63,65 @@ fun DistillDialog(
     onDismiss: () -> Unit,
     onDistilled: (Loop) -> Unit,
 ) {
-    val container = (LocalContext.current.applicationContext as FonebrewApp).container
+    val context = LocalContext.current
+    val container = (context.applicationContext as FonebrewApp).container
     val scope = rememberCoroutineScope()
 
     var source by remember { mutableStateOf("") }
+    // Set when the source came from a picked file, so the distiller's provenance says the file's
+    // name rather than "pasted text" — cleared on a fresh pick only, not on every keystroke, so
+    // lightly touching up what was read in doesn't lose the attribution.
+    var pickedFileName by remember { mutableStateOf<String?>(null) }
     var modelId by remember { mutableStateOf(runnable.firstOrNull()?.id) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val options = runnable.map { (if (it.isOnDevice) "⌂ " else "☁ ") + it.displayName }
+
+    // A doc from the phone, not just a URL/pasted text (owner ask). v1 reads plain-text-decodable
+    // files only — .txt/.md and similar. PDF/DOCX are real, common formats but binary ones this
+    // app has no parser for; rather than dump garbled bytes into the source, this recognises their
+    // magic numbers and says so honestly (rule 6) instead of pretending to read them.
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        error = null
+        val bytes = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull()
+        if (bytes == null) {
+            error = "Couldn't read that file."
+            return@rememberLauncherForActivityResult
+        }
+        val fileName = runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+            }
+        }.getOrNull() ?: uri.lastPathSegment ?: "file"
+        when {
+            bytes.size >= 4 && bytes[0] == 0x25.toByte() && bytes[1] == 0x50.toByte() &&
+                bytes[2] == 0x44.toByte() && bytes[3] == 0x46.toByte() ->
+                error = "PDF text extraction isn't wired up yet — export it as .txt/.md, or paste the text directly."
+            bytes.size >= 2 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() ->
+                error = "That looks like a .docx (or other zip-based) document — not readable yet. " +
+                    "Export it as .txt/.md, or paste the text directly."
+            else -> {
+                val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
+                val sample = text?.take(4000)
+                val controlRatio = sample
+                    ?.count { it.code < 32 && it != '\n' && it != '\r' && it != '\t' }
+                    ?.let { it.toFloat() / sample.length.coerceAtLeast(1) }
+                    ?: 1f
+                if (text == null || controlRatio > 0.01f) {
+                    error = "That file doesn't look like plain text — export it as .txt/.md, or paste the text directly."
+                } else {
+                    source = text
+                    pickedFileName = fileName
+                }
+            }
+        }
+    }
 
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
@@ -85,12 +137,26 @@ fun DistillDialog(
                 )
                 HyleField(
                     value = source,
-                    onValueChange = { source = it },
+                    onValueChange = { source = it; pickedFileName = null },
                     label = "Text or URL",
                     singleLine = false,
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { filePicker.launch(arrayOf("*/*")) },
+                        enabled = !busy,
+                    ) { Text("Choose a file…") }
+                    pickedFileName?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                }
                 if (runnable.isNotEmpty()) {
                     HyleDropdownField(
                         value = modelId?.let { id -> runnable.firstOrNull { it.id == id } }
@@ -143,7 +209,7 @@ fun DistillDialog(
                                         )
                                         val result = Distiller(generator).distill(
                                             source = text,
-                                            sourceLabel = if (isUrl) typed else "pasted text",
+                                            sourceLabel = pickedFileName ?: if (isUrl) typed else "pasted text",
                                             distilledBy = spec.displayName,
                                             distilledOn = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()),
                                             id = UUID.randomUUID().toString(),

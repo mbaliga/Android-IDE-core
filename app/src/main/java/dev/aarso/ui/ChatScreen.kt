@@ -45,7 +45,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Text
@@ -515,26 +514,32 @@ fun ChatScreen(
     }
 
     // Interaction model is locked once a chat starts (IA §B4): changing it branches with a summary.
+    // Grown as a HyleFocusLens (the app's own material — see docs/LENS.md) rather than a generic
+    // platform AlertDialog, matching every other confirmation in this app; this one had been
+    // missed in the earlier lens migration (owner-flagged: "the modal did not make it as I wished
+    // for it to").
     val pendingMode by viewModel.pendingInteractionChange.collectAsState()
-    pendingMode?.let { mode ->
+    dev.aarso.hyle.cells.HyleFocusLens(
+        visible = pendingMode != null,
+        onDismiss = { viewModel.cancelInteractionChange() },
+    ) {
+        val mode = pendingMode ?: return@HyleFocusLens
         val label = when (mode) {
             ComposerMode.MODELS -> "Council · models"
             ComposerMode.PERSONAS -> "Council · personas"
             else -> "Single"
         }
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelInteractionChange() },
-            title = { Text("Switch to $label?") },
-            text = {
-                Text(
-                    "The interaction model is locked once a conversation starts. Switching " +
-                        "starts a new branch and summarizes everything so far into it — your " +
-                        "current thread stays intact on the tree.",
-                )
-            },
-            confirmButton = { HyleButton("Branch & switch", onClick = { viewModel.confirmInteractionChange() }) },
-            dismissButton = { TextButton(onClick = { viewModel.cancelInteractionChange() }) { Text("Cancel") } },
+        dev.aarso.hyle.cells.HyleLensHeading(
+            title = "Switch to $label?",
+            body = "The interaction model is locked once a conversation starts. Switching " +
+                "starts a new branch and summarizes everything so far into it — your " +
+                "current thread stays intact on the tree.",
         )
+        dev.aarso.hyle.cells.HyleLensActions {
+            TextButton(onClick = { viewModel.cancelInteractionChange() }) { Text("Cancel") }
+            Spacer(Modifier.width(8.dp))
+            HyleButton("Branch & switch", onClick = { viewModel.confirmInteractionChange() })
+        }
     }
 
     actionStep?.let { step ->
