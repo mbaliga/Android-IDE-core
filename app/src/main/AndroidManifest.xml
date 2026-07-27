@@ -9,6 +9,9 @@
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Push-to-talk dictation only, on-device recognizer only (docs/design/voice-input.md,
+         CLAUDE.md rule 1) — never the networked SpeechRecognizer, never ambient listening. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Keep the process alive while a local model loads/generates or downloads. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />

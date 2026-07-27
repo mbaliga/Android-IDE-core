@@ -1,22 +1,30 @@
 package dev.aarso.ui.loops
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,9 +32,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import dev.aarso.FonebrewApp
 import dev.aarso.data.DocumentFetcher
 import dev.aarso.domain.loop.DistillResult
@@ -38,6 +51,7 @@ import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleDropdownField
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.inference.EngineGenerator
+import dev.aarso.service.OnDeviceDictation
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,6 +90,40 @@ fun DistillDialog(
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // Voice intake (docs/design/voice-input.md): push-to-talk, on-device recognizer only — never
+    // the networked SpeechRecognizer, never ambient listening (CLAUDE.md rule 1). Feeds the same
+    // `source` field paste/URL/file-pick already use, so distillation itself needs no new path.
+    var listening by remember { mutableStateOf(false) }
+    val dictation = remember { OnDeviceDictation(context) }
+    DisposableEffect(Unit) { onDispose { dictation.destroy() } }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) error = "Microphone permission is needed for voice input."
+    }
+    fun beginListening() {
+        if (busy || listening) return
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        error = null
+        listening = dictation.start(
+            onPartial = {},
+            onFinal = { text ->
+                listening = false
+                if (text.isNotBlank()) {
+                    source = if (source.isBlank()) text else "$source $text"
+                    pickedFileName = null
+                }
+            },
+            onError = { msg -> listening = false; error = msg },
+        )
+    }
+    fun endListening() {
+        if (listening) dictation.stop()
+    }
 
     val options = runnable.map { (if (it.isOnDevice) "⌂ " else "☁ ") + it.displayName }
 
@@ -129,7 +177,8 @@ fun DistillDialog(
                 Text("Distill a loop", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Paste a method description (a paper's method section, a training recipe, an " +
-                        "agent architecture) — or a URL to an article about one. The model reads it " +
+                        "agent architecture) — a URL to an article about one, a file, or hold the " +
+                        "mic and describe it out loud. The model reads it " +
                         "and proposes a loop topology; it always lands as a draft you review before " +
                         "it can run.",
                     style = MaterialTheme.typography.bodySmall,
@@ -155,6 +204,65 @@ fun DistillDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                         )
+                    }
+                    // Present only where on-device recognition actually exists — no networked
+                    // fallback, so where it's unavailable the control is simply absent, not a
+                    // dead button (docs/design/voice-input.md).
+                    if (OnDeviceDictation.isAvailable(context)) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    CircleShape,
+                                )
+                                .pointerInput(busy) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            beginListening()
+                                            try {
+                                                awaitRelease()
+                                            } finally {
+                                                endListening()
+                                            }
+                                        },
+                                    )
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val tint = if (listening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+                                // A minimal hand-drawn mic glyph — capsule head + stand — matching
+                                // this app's own drawn-glyph convention (no icon-font dependency).
+                                drawRoundRect(
+                                    tint,
+                                    topLeft = Offset(size.width * 0.3f, 0f),
+                                    size = androidx.compose.ui.geometry.Size(size.width * 0.4f, size.height * 0.62f),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.2f),
+                                )
+                                drawArc(
+                                    tint,
+                                    startAngle = 20f,
+                                    sweepAngle = 140f,
+                                    useCenter = false,
+                                    topLeft = Offset(size.width * 0.08f, size.height * 0.22f),
+                                    size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.62f),
+                                    style = Stroke(width = size.width * 0.09f),
+                                )
+                                drawLine(
+                                    tint,
+                                    Offset(size.width * 0.5f, size.height * 0.84f),
+                                    Offset(size.width * 0.5f, size.height),
+                                    strokeWidth = size.width * 0.09f,
+                                )
+                            }
+                        }
+                        if (listening) {
+                            Spacer(Modifier.width(6.dp))
+                            Text("listening…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
                 if (runnable.isNotEmpty()) {
