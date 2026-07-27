@@ -426,6 +426,91 @@ fun LoopRoom(onClose: () -> Unit) {
                             color = if (running || graphResult != null || connectingFrom != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                         )
+
+                        // Radial fans, anchored at the point that was actually long-pressed —
+                        // in THIS Box, the same coordinate space LoopCanvas measures node
+                        // positions in, not a dialog centred wherever the platform likes
+                        // (owner ask, 2026-07-27). Both must live here, not elsewhere in the
+                        // tree, or `anchor` wouldn't line up with the canvas underneath it.
+                        addAt?.let { at ->
+                            fun addNode(kind: BpmnNodeKind) {
+                                val id = "n-${UUID.randomUUID().toString().take(6)}"
+                                val label = when (kind) {
+                                    BpmnNodeKind.END_EVENT -> "End"
+                                    BpmnNodeKind.EXCLUSIVE_GATEWAY -> "Gateway"
+                                    else -> "Task"
+                                }
+                                nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
+                                if (kind == BpmnNodeKind.TASK) configNodeId = id
+                            }
+                            dev.aarso.hyle.cells.HyleRadialMenu(
+                                visible = true,
+                                anchor = at,
+                                onDismiss = { addAt = null },
+                                modifier = Modifier.fillMaxSize(),
+                                items = listOf(
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Task", glyph = { tint ->
+                                        drawRoundRect(
+                                            tint,
+                                            topLeft = Offset(size.width * 0.2f, size.height * 0.3f),
+                                            size = androidx.compose.ui.geometry.Size(size.width * 0.6f, size.height * 0.4f),
+                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.08f),
+                                        )
+                                    }, onClick = { addNode(BpmnNodeKind.TASK) }),
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Gateway", glyph = { tint ->
+                                        val path = androidx.compose.ui.graphics.Path().apply {
+                                            moveTo(size.width * 0.5f, size.height * 0.1f)
+                                            lineTo(size.width * 0.9f, size.height * 0.5f)
+                                            lineTo(size.width * 0.5f, size.height * 0.9f)
+                                            lineTo(size.width * 0.1f, size.height * 0.5f)
+                                            close()
+                                        }
+                                        drawPath(path, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f))
+                                    }, onClick = { addNode(BpmnNodeKind.EXCLUSIVE_GATEWAY) }),
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "End", glyph = { tint ->
+                                        drawCircle(tint, radius = size.width * 0.32f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.1f))
+                                    }, onClick = { addNode(BpmnNodeKind.END_EVENT) }),
+                                ),
+                            )
+                        }
+
+                        menuNodeId?.let { id ->
+                            val node = nodeById(id)
+                            val nodeAnchor = node?.let { Offset(it.xPx, it.yPx) } ?: Offset.Zero
+                            val canEdit = node != null && !isEvent(node.kind)
+                            dev.aarso.hyle.cells.HyleRadialMenu(
+                                visible = true,
+                                anchor = nodeAnchor,
+                                onDismiss = { menuNodeId = null },
+                                modifier = Modifier.fillMaxSize(),
+                                items = buildList {
+                                    add(
+                                        dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Connect", glyph = { tint ->
+                                            drawLine(tint, Offset(size.width * 0.15f, size.height * 0.5f), Offset(size.width * 0.75f, size.height * 0.5f), strokeWidth = size.width * 0.09f)
+                                            val arrow = androidx.compose.ui.graphics.Path().apply {
+                                                moveTo(size.width * 0.55f, size.height * 0.3f)
+                                                lineTo(size.width * 0.85f, size.height * 0.5f)
+                                                lineTo(size.width * 0.55f, size.height * 0.7f)
+                                            }
+                                            drawPath(arrow, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f))
+                                        }, onClick = { connectingFrom = id }),
+                                    )
+                                    if (canEdit) {
+                                        add(
+                                            dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Edit", glyph = { tint ->
+                                                drawLine(tint, Offset(size.width * 0.25f, size.height * 0.75f), Offset(size.width * 0.75f, size.height * 0.25f), strokeWidth = size.width * 0.1f)
+                                            }, onClick = { configNodeId = id }),
+                                        )
+                                    }
+                                    add(
+                                        dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Delete", destructive = true, glyph = { tint ->
+                                            drawLine(tint, Offset(size.width * 0.28f, size.height * 0.28f), Offset(size.width * 0.72f, size.height * 0.72f), strokeWidth = size.width * 0.1f)
+                                            drawLine(tint, Offset(size.width * 0.72f, size.height * 0.28f), Offset(size.width * 0.28f, size.height * 0.72f), strokeWidth = size.width * 0.1f)
+                                        }, onClick = { deleteNode(id) }),
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     Column(
@@ -492,24 +577,6 @@ fun LoopRoom(onClose: () -> Unit) {
         }
     }
 
-    // ── Add-node palette (long-press canvas) ──────────────────────────────────
-    addAt?.let { at ->
-        AddNodeDialog(
-            onDismiss = { addAt = null },
-            onAdd = { kind ->
-                val id = "n-${UUID.randomUUID().toString().take(6)}"
-                val label = when (kind) {
-                    BpmnNodeKind.END_EVENT -> "End"
-                    BpmnNodeKind.EXCLUSIVE_GATEWAY -> "Gateway"
-                    else -> "Task"
-                }
-                nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
-                addAt = null
-                if (kind == BpmnNodeKind.TASK) configNodeId = id
-            },
-        )
-    }
-
     // ── Run sheet (P3): auto-generated params form + optional budget, refuse-to-start ────
     if (showRunSheet) {
         val graphForScan = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
@@ -520,19 +587,6 @@ fun LoopRoom(onClose: () -> Unit) {
                 showRunSheet = false
                 startRun(params, budget)
             },
-        )
-    }
-
-    // ── Node menu (long-press a node) ─────────────────────────────────────────
-    menuNodeId?.let { id ->
-        val node = nodeById(id)
-        NodeMenuDialog(
-            label = node?.label ?: id,
-            canEdit = node != null && !isEvent(node.kind),
-            onDismiss = { menuNodeId = null },
-            onEdit = { menuNodeId = null; configNodeId = id },
-            onConnect = { menuNodeId = null; connectingFrom = id },
-            onDelete = { menuNodeId = null; deleteNode(id) },
         )
     }
 
@@ -885,40 +939,6 @@ private fun statusColor(status: NodeStatus): Color? {
         NodeStatus.ACTIVE -> MaterialTheme.colorScheme.primary
         NodeStatus.DONE -> colors.success
         NodeStatus.IDLE -> null
-    }
-}
-
-@Composable
-private fun AddNodeDialog(onDismiss: () -> Unit, onAdd: (BpmnNodeKind) -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Add a node", style = MaterialTheme.typography.titleMedium)
-                HyleButton("Task — an AI step", onClick = { onAdd(BpmnNodeKind.TASK) })
-                HyleButton("Gateway — a branch", onClick = { onAdd(BpmnNodeKind.EXCLUSIVE_GATEWAY) })
-                HyleButton("End", onClick = { onAdd(BpmnNodeKind.END_EVENT) })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NodeMenuDialog(label: String, canEdit: Boolean, onDismiss: () -> Unit, onEdit: () -> Unit, onConnect: () -> Unit, onDelete: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(label, style = MaterialTheme.typography.titleMedium)
-                HyleButton("Connect from here →", onClick = onConnect)
-                if (canEdit) HyleButton("Edit", onClick = onEdit)
-                HyleButton("Delete", onClick = onDelete)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Close") }
-                }
-            }
-        }
     }
 }
 
