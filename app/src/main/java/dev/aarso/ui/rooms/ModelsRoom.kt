@@ -16,8 +16,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -50,100 +51,51 @@ import dev.aarso.ui.ImagesViewModel
 import dev.aarso.ui.ModelsViewModel
 import dev.aarso.hyle.cells.HyleButton
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material3.HorizontalDivider
-import dev.aarso.FonebrewApp
 import dev.aarso.hyle.cells.HyleCard
 import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.cells.HyleSegmentedToggle
-import dev.aarso.hyle.cells.HyleTabBar
-import dev.aarso.hyle.cells.HyleTabSpec
 import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.hyle.theme.LocalHyleColors
 import kotlin.math.absoluteValue
 
-private enum class ModelsTab { CHAT, IMAGE, BYO }
-private enum class ModelSource { ON_DEVICE, CLOUD }
-
 /**
- * The shelf beneath the thread (§5/§10): models as a tabbed coverflow — Chat,
- * Image, Bring-your-own. Each card is large and visually rich (gradient header +
- * big monogram, no logo), with the full download lifecycle inline.
+ * The on-device Chat shelf (§5/§10): Settings → Models → Text → On-device opens straight into
+ * this — no intermediate Chat/Image/Bring-your-own tabs and no On-device/Cloud toggle, both of
+ * which used to duplicate the choice the owner already made one level up (owner-flagged, the
+ * old [ModelsRoom]'s "Manage on-device models" button opened the WHOLE tabbed room instead of
+ * just this shelf). Each card is large and visually rich (gradient header + big monogram, no
+ * logo), with the full download lifecycle inline, then bring-your-own-GGUF, then what's already
+ * on this device.
+ *
+ * Rendered inside [SettingsRoom]'s hoisted `overlay` slot (root-level, outside the scrolling
+ * content) rather than inline — a [Coverflow]'s `HorizontalPager` measured inside a
+ * `verticalScroll` parent gets an infinite height constraint and crashes (the PR #39 fix this
+ * file's sibling already paid for; see [SettingsRoom]'s KDoc). Full-screen here buys the room a
+ * pager needs without reopening that crash class.
  */
 @Composable
-fun ModelsRoom(
+fun ChatOnDeviceShelf(
     downloads: DownloadCenter,
     onCustomUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
     onClose: (() -> Unit)? = null,
     modelsViewModel: ModelsViewModel = viewModel(factory = ModelsViewModel.Factory),
-    imagesViewModel: ImagesViewModel = viewModel(factory = ImagesViewModel.Factory),
 ) {
     if (onClose != null) BackHandler(onBack = onClose)
     val downloaded by modelsViewModel.downloaded.collectAsState()
-    val sdDownloaded by imagesViewModel.sdModels.collectAsState()
     val active by downloads.active.collectAsState()
     var customUrl by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(ModelsTab.CHAT) }
-    var source by remember { mutableStateOf(ModelSource.ON_DEVICE) }
-    val cloudProviders by (LocalContext.current.applicationContext as FonebrewApp).container.providerStore.providers.collectAsState()
-    val session = (LocalContext.current.applicationContext as FonebrewApp).container.sessionStore
-    val universalTabBarPosition by session.tabBarPosition.collectAsState()
-    val roomTabBarOverrides by session.roomTabBarPosition.collectAsState()
-    val tabBarPosition = roomTabBarOverrides["models"] ?: universalTabBarPosition
 
-    // The tab bar and its Chat-only source filter travel together, top or bottom, per the
-    // owner's layout preference (Settings → Global → Tab bar position, or a per-room override).
-    val tabBarBlock: @Composable () -> Unit = {
-        HyleTabBar(
-            tabs = listOf(
-                HyleTabSpec("Chat") { tint ->
-                    val w = size.width; val h = size.height
-                    val sw = w * 0.09f
-                    drawLine(tint, Offset(w * 0.16f, h * 0.30f), Offset(w * 0.84f, h * 0.30f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.16f, h * 0.50f), Offset(w * 0.72f, h * 0.50f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.16f, h * 0.70f), Offset(w * 0.56f, h * 0.70f), strokeWidth = sw)
-                },
-                HyleTabSpec("Image") { tint ->
-                    val w = size.width; val h = size.height
-                    val sw = w * 0.09f
-                    drawRoundRect(
-                        tint, topLeft = Offset(w * 0.10f, h * 0.18f),
-                        size = Size(w * 0.80f, h * 0.64f),
-                        cornerRadius = CornerRadius(w * 0.10f), style = Stroke(width = sw),
-                    )
-                    drawCircle(tint, radius = w * 0.09f, center = Offset(w * 0.36f, h * 0.40f))
-                },
-                HyleTabSpec("Bring your own") { tint ->
-                    val w = size.width; val h = size.height
-                    val sw = w * 0.09f
-                    drawCircle(tint, radius = w * 0.38f, style = Stroke(width = sw))
-                    drawLine(tint, Offset(w * 0.5f, h * 0.32f), Offset(w * 0.5f, h * 0.68f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.32f, h * 0.5f), Offset(w * 0.68f, h * 0.5f), strokeWidth = sw)
-                },
-            ),
-            selected = tab.ordinal,
-            onSelect = { tab = ModelsTab.entries[it] },
-            position = tabBarPosition,
-        )
-        // Source filter (Chat tab): on-device vs watched-cloud (owner ask). Rendered as a
-        // seam-grammar segmented toggle (cells packed along the slant seam) — the first
-        // in-app application of the owner's Global/Toggle reference.
-        if (tab == ModelsTab.CHAT) {
-            Spacer(Modifier.height(10.dp))
-            HyleSegmentedToggle(
-                options = listOf("On-device", "Cloud · watched"),
-                selected = if (source == ModelSource.ON_DEVICE) 0 else 1,
-                onSelect = { source = if (it == 0) ModelSource.ON_DEVICE else ModelSource.CLOUD },
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (onClose != null) {
+            TextButton(onClick = onClose, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
+                Text("‹ Settings")
+            }
         }
-    }
-
-    val contentBlock: @Composable () -> Unit = {
-        when (tab) {
-            ModelsTab.CHAT -> if (source == ModelSource.CLOUD) {
-                CloudProvidersList(cloudProviders)
-            } else Coverflow(modelsViewModel.catalog.size) { page ->
+        HyleTitle("On-device chat models")
+        DeviceFitLine()
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Coverflow(modelsViewModel.catalog.size) { page ->
                 val m = modelsViewModel.catalog[page]
                 val fit = modelsViewModel.fit(m.sizeBytes)
                 CoverCard(
@@ -159,7 +111,56 @@ fun ModelsRoom(
                     onCancel = { downloads.cancel(m.id) },
                 )
             }
-            ModelsTab.IMAGE -> Coverflow(imagesViewModel.sdCatalog.size) { page ->
+            Spacer(Modifier.height(16.dp))
+            BringYourOwn(
+                hint = "Point at any GGUF and it downloads to this device. Bigger files need " +
+                    "more RAM to run; the fit check applies once it lands.",
+                label = "GGUF URL",
+                placeholder = "https://huggingface.co/…/file.gguf",
+                url = customUrl,
+                onUrlChange = { customUrl = it },
+                enabled = customUrl.endsWith(".gguf"),
+                onDownload = { onCustomUrl(customUrl); customUrl = "" },
+            )
+            if (downloaded.isNotEmpty()) {
+                OnThisDeviceHeading()
+                downloaded.forEach { local ->
+                    LocalRow(
+                        local.name,
+                        local.sizeBytes,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    ) { modelsViewModel.delete(local) }
+                }
+            }
+        }
+    }
+}
+
+/** The on-device Image shelf — [ChatOnDeviceShelf]'s Stable Diffusion counterpart, same shape. */
+@Composable
+fun ImageOnDeviceShelf(
+    downloads: DownloadCenter,
+    onCustomUrl: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
+    imagesViewModel: ImagesViewModel = viewModel(factory = ImagesViewModel.Factory),
+) {
+    if (onClose != null) BackHandler(onBack = onClose)
+    val sdDownloaded by imagesViewModel.sdModels.collectAsState()
+    val active by downloads.active.collectAsState()
+    var customUrl by remember { mutableStateOf("") }
+
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (onClose != null) {
+            TextButton(onClick = onClose, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
+                Text("‹ Settings")
+            }
+        }
+        HyleTitle("On-device image models")
+        DeviceFitLine()
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Coverflow(imagesViewModel.sdCatalog.size) { page ->
                 val m = imagesViewModel.sdCatalog[page]
                 val id = "sd:${m.fileName}"
                 val fit = imagesViewModel.fit(m.sizeBytes)
@@ -176,111 +177,80 @@ fun ModelsRoom(
                     onCancel = { downloads.cancel(id) },
                 )
             }
-            ModelsTab.BYO -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item {
-                    Text(
-                        "Point at any GGUF and it downloads to this device. Bigger files " +
-                            "need more RAM to run; the fit check applies once it lands.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    HyleField(
-                        value = customUrl,
-                        onValueChange = { customUrl = it },
-                        label = "GGUF URL",
-                        placeholder = "https://huggingface.co/…/file.gguf",
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    )
-                    HyleButton(
-                        "Download from URL",
-                        onClick = { onCustomUrl(customUrl); customUrl = "" },
-                        enabled = customUrl.endsWith(".gguf"),
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                if (downloaded.isNotEmpty() || sdDownloaded.isNotEmpty()) {
-                    item {
-                        Text(
-                            "On this device",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-                        )
-                    }
-                    items(downloaded.size) { i ->
-                        val local = downloaded[i]
-                        LocalRow(local.name, local.sizeBytes) { modelsViewModel.delete(local) }
-                    }
-                    items(sdDownloaded.size) { i ->
-                        val local = sdDownloaded[i]
-                        LocalRow("${local.name} (image)", local.sizeBytes) { imagesViewModel.deleteSdModel(local) }
-                    }
+            Spacer(Modifier.height(16.dp))
+            BringYourOwn(
+                hint = "Point at a Stable Diffusion checkpoint (GGUF) and it downloads to this " +
+                    "device. Bigger files need more RAM to run; the fit check applies once it lands.",
+                label = "Checkpoint URL",
+                placeholder = "https://huggingface.co/…/file.gguf",
+                url = customUrl,
+                onUrlChange = { customUrl = it },
+                enabled = customUrl.endsWith(".gguf"),
+                onDownload = { onCustomUrl(customUrl); customUrl = "" },
+            )
+            if (sdDownloaded.isNotEmpty()) {
+                OnThisDeviceHeading()
+                sdDownloaded.forEach { local ->
+                    LocalRow(
+                        local.name,
+                        local.sizeBytes,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    ) { imagesViewModel.deleteSdModel(local) }
                 }
             }
-        }
-    }
-
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if (onClose != null) {
-            TextButton(onClick = onClose, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
-                Text("‹ Settings")
-            }
-        }
-        HyleTitle("Models")
-        val ramGb = "%.1f".format(modelsViewModel.device.totalRamBytes / 1_000_000_000.0)
-        Text(
-            "This device: $ramGb GB RAM · " +
-                (if (modelsViewModel.device.arm64) "arm64-v8a" else modelsViewModel.device.abis.joinToString()) +
-                "  ·  fit is a RAM safety check, not a speed promise.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Spacer(Modifier.height(12.dp))
-        if (tabBarPosition == "BOTTOM") {
-            Box(Modifier.weight(1f)) { contentBlock() }
-            tabBarBlock()
-        } else {
-            tabBarBlock()
-            Box(Modifier.weight(1f)) { contentBlock() }
         }
     }
 }
 
-/** The watched-cloud models the user has configured. Add/remove lives in Settings → Text. */
+/** "This device: N GB RAM · abi · fit disclaimer" — identical wording in both shelves. Reads
+ *  the device spec directly rather than through a viewmodel — [ImagesViewModel]'s own copy is
+ *  private, and it's the same physical device either way. */
 @Composable
-private fun CloudProvidersList(providers: List<dev.aarso.domain.cloud.CloudProvider>) {
-    val c = LocalHyleColors.current
-    if (providers.isEmpty()) {
-        Text(
-            "No cloud providers yet. Add one in Settings → Text — each is a watched object: " +
-                "opt-in, isolated, and on-device stays the default.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
+private fun DeviceFitLine() {
+    val device = dev.aarso.data.DeviceInfo.read(LocalContext.current)
+    val ramGb = "%.1f".format(device.totalRamBytes / 1_000_000_000.0)
+    Text(
+        "This device: $ramGb GB RAM · " +
+            (if (device.arm64) "arm64-v8a" else device.abis.joinToString()) +
+            "  ·  fit is a RAM safety check, not a speed promise.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 20.dp),
+    )
+}
+
+/** Bring-your-own — nested under On-device (owner ask), not a sibling tab of it. */
+@Composable
+private fun BringYourOwn(
+    hint: String,
+    label: String,
+    placeholder: String,
+    url: String,
+    onUrlChange: (String) -> Unit,
+    enabled: Boolean,
+    onDownload: () -> Unit,
+) {
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        Text("Bring your own", style = MaterialTheme.typography.titleSmall)
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        HyleField(
+            value = url,
+            onValueChange = onUrlChange,
+            label = label,
+            placeholder = placeholder,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
-        return
+        HyleButton("Download from URL", onClick = onDownload, enabled = enabled, modifier = Modifier.padding(top = 8.dp))
     }
-    LazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-        items(providers.size) { i ->
-            val p = providers[i]
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(p.displayName, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                    Text("watched", style = MaterialTheme.typography.labelSmall, color = c.warning)
-                }
-                Text(
-                    "${p.kind.label} · ${p.model}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                HorizontalDivider(Modifier.padding(top = 8.dp), color = c.hairline)
-            }
-        }
-    }
+}
+
+@Composable
+private fun OnThisDeviceHeading() {
+    Text(
+        "On this device",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+    )
 }
 
 /** Horizontal coverflow: the focused card is full size; neighbours shrink and fade. */
@@ -429,8 +399,8 @@ private fun DownloadAction(
 }
 
 @Composable
-private fun LocalRow(name: String, size: Long, onDelete: () -> Unit) {
-    HyleCard(modifier = Modifier.fillMaxWidth()) {
+private fun LocalRow(name: String, size: Long, modifier: Modifier = Modifier, onDelete: () -> Unit) {
+    HyleCard(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

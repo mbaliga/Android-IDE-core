@@ -333,20 +333,39 @@ private fun LocalModels(
 ) {
     val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
     Text(
-        "On-device $kind models run locally — the default. Download, switch, and remove them " +
-            "in the Models shelf.",
+        "On-device $kind models run locally — the default. Download, switch, and remove them below.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    HyleButton("Manage on-device models", onClick = {
+    // Opens straight to THIS modality's shelf — no Chat/Image/Bring-your-own tabs and no
+    // On-device/Cloud toggle to re-pick (owner-flagged as duplicative: both choices were already
+    // made one level up, in this very screen). Still an `openOverlay` full-screen slot rather than
+    // inline, because [Coverflow]'s pager needs a bounded height a `verticalScroll` parent can't
+    // give it (the PR #39 crash class — see this file's KDoc).
+    HyleButton("Manage on-device $kind models", onClick = {
         openOverlay {
-            val modelsVm: dev.aarso.ui.ModelsViewModel =
-                viewModel(factory = dev.aarso.ui.ModelsViewModel.Factory)
-            ModelsRoom(
-                downloads = container.downloadCenter,
-                onCustomUrl = { modelsVm.downloadCustom(it) },
-                onClose = closeOverlay,
-            )
+            when (kind) {
+                "image" -> {
+                    val imagesVm: dev.aarso.ui.ImagesViewModel =
+                        viewModel(factory = dev.aarso.ui.ImagesViewModel.Factory)
+                    ImageOnDeviceShelf(
+                        downloads = container.downloadCenter,
+                        onCustomUrl = { imagesVm.downloadSdModel(it) },
+                        onClose = closeOverlay,
+                        imagesViewModel = imagesVm,
+                    )
+                }
+                else -> {
+                    val modelsVm: dev.aarso.ui.ModelsViewModel =
+                        viewModel(factory = dev.aarso.ui.ModelsViewModel.Factory)
+                    ChatOnDeviceShelf(
+                        downloads = container.downloadCenter,
+                        onCustomUrl = { modelsVm.downloadCustom(it) },
+                        onClose = closeOverlay,
+                        modelsViewModel = modelsVm,
+                    )
+                }
+            }
         }
     })
 }
