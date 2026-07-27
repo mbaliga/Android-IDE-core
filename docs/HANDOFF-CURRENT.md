@@ -362,5 +362,7 @@ Currently the core shows the **locked placeholder**; the paid Studio installs th
 - Device verification of every Compose surface on the RedMagic.
 - CI minutes on the private Studio repo (red `build-test` = billing, not code).
 
+Business/monetization decisions are tracked privately, not in this repo.
+
 ---
 _Old `docs/HANDOFF.md` (2026-06-21) is stale (pre-split) and can be deleted or replaced by this._
