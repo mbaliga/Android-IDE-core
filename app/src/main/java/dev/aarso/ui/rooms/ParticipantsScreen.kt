@@ -39,8 +39,10 @@ import dev.aarso.hyle.cells.FileImage
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleDropdownField
 import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleSegmentedToggle
 import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.hyle.theme.LocalHyleColors
+import dev.aarso.ui.ComposerMode
 import dev.aarso.ui.wire.WireBox
 import java.util.UUID
 
@@ -55,14 +57,29 @@ import java.util.UUID
  * can't leave a council you own, but you can empty it out); and an Artifacts section — Media /
  * Links / Docs — scoped to [conversationId], plus an AI-relevant "Manage context" row standing in
  * for WhatsApp's "Manage storage."
+ *
+ * **This is now the one place the interaction model changes** (owner ask, 2026-07-27 follow-up):
+ * there is no more separate Single/Council·personas/Council·models row sitting outside the chat —
+ * the same way WhatsApp has no separate "is this a group?" selector, the mode falls out of who's
+ * in the roster. 0–1 participants reads as Single; 2+ reads as a council, flavoured Personas vs
+ * Models by [diversityMode] below. [onModeChange] carries that back to
+ * [dev.aarso.ui.ChatViewModel.requestComposerMode] on Save, which still enforces the real
+ * architecture rule this screen doesn't own: **immutable once a chat starts — a genuine change
+ * branches with a summary** (unchanged; only the UI entry point moved).
  */
 @Composable
-fun ParticipantsScreen(onClose: () -> Unit, conversationId: String? = null) {
+fun ParticipantsScreen(
+    onClose: () -> Unit,
+    conversationId: String? = null,
+    currentMode: ComposerMode = ComposerMode.SINGLE,
+    onModeChange: (ComposerMode) -> Unit = {},
+) {
     BackHandler(onBack = onClose)
     val c = LocalHyleColors.current
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val store = container.councilStore
     val saved by store.participants.collectAsState()
+    var diversityMode by remember { mutableStateOf(currentMode == ComposerMode.MODELS) }
 
     // Runnable models = downloaded on-device + configured cloud providers (same source the model
     // picker uses). Listed so any member can run a different one.
@@ -132,6 +149,17 @@ fun ParticipantsScreen(onClose: () -> Unit, conversationId: String? = null) {
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
+            // Only matters once there are 2+ members (below that this is just Single) — but kept
+            // visible rather than conditionally hidden, so choosing it ahead of adding a second
+            // member is possible.
+            Text("With 2+ members", style = MaterialTheme.typography.labelSmall, color = c.textMid)
+            HyleSegmentedToggle(
+                options = listOf("Personas — named experts", "Models — one prompt, diversity"),
+                selected = if (diversityMode) 1 else 0,
+                onSelect = { diversityMode = it == 1 },
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             HyleField(
                 value = search, onValueChange = { search = it },
@@ -208,7 +236,19 @@ fun ParticipantsScreen(onClose: () -> Unit, conversationId: String? = null) {
                 HyleButton("Add member", onClick = {
                     rows.add(Participant(UUID.randomUUID().toString(), "New member", ""))
                 })
-                HyleButton("Save", onClick = { store.setAll(rows.toList()); onClose() })
+                HyleButton(
+                    "Save",
+                    onClick = {
+                        store.setAll(rows.toList())
+                        val mode = when {
+                            rows.size <= 1 -> ComposerMode.SINGLE
+                            diversityMode -> ComposerMode.MODELS
+                            else -> ComposerMode.PERSONAS
+                        }
+                        onModeChange(mode)
+                        onClose()
+                    },
+                )
             }
 
             // Artifacts — WhatsApp's "Media, links, and docs," scoped to this conversation.
@@ -331,6 +371,7 @@ fun ParticipantsScreen(onClose: () -> Unit, conversationId: String? = null) {
                                 rows.clear()
                                 store.setAll(rows.toList())
                                 confirmingEmpty = false
+                                onModeChange(ComposerMode.SINGLE)
                             },
                         )
                     }

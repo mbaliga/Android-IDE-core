@@ -94,7 +94,7 @@ import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleCard
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.hyle.cells.HyleNavChip
-import dev.aarso.hyle.cells.HyleTabBar
+import dev.aarso.hyle.cells.HyleSlashTabBar
 import dev.aarso.hyle.cells.HyleTabSpec
 import dev.aarso.hyle.cells.FileImage
 import dev.aarso.hyle.theme.LocalHyleColors
@@ -205,9 +205,7 @@ fun ChatScreen(
             HomeHeader(
                 state = state,
                 onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
-                onOpenChats = onOpenChats,
-                onOpenSettings = onOpenSettings,
-                showNavChips = tabBarPosition != "BOTTOM",
+                onTitleClick = { showParticipants = true },
             )
             if (tabBarPosition != "BOTTOM") {
                 ChatTabBar(
@@ -381,18 +379,6 @@ fun ChatScreen(
                 }
             }
 
-            ComposerModeRow(
-                mode = state.composerMode,
-                enabled = state.genPhase == GenPhase.IDLE,
-                onMode = viewModel::requestComposerMode,
-            )
-            // Personas council = a group of experts you manage like a group chat (IA §B4).
-            if (state.composerMode == ComposerMode.PERSONAS) {
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    TextButton(onClick = { showParticipants = true }) { Text("Participants") }
-                }
-            }
-
             if (slashMatches.isNotEmpty()) {
                 SlashCommandPopup(slashMatches) { cmd -> cmd.run(); input = "" }
             }
@@ -521,6 +507,8 @@ fun ChatScreen(
                 dev.aarso.ui.rooms.ParticipantsScreen(
                     onClose = { showParticipants = false },
                     conversationId = state.steps.firstOrNull()?.node?.id,
+                    currentMode = state.composerMode,
+                    onModeChange = viewModel::requestComposerMode,
                 )
             }
         }
@@ -568,19 +556,17 @@ fun ChatScreen(
 }
 
 /**
- * The one piece of chrome the home room keeps: the conversation title (quiet,
- * left) and the model badge (right) — a dropdown affordance, cloud explicitly
- * watched (binding rule 2).
+ * The one piece of chrome the home room keeps: the conversation title (quiet, left, WhatsApp-
+ * style tappable to open [dev.aarso.ui.rooms.ParticipantsScreen] — group info lives behind the
+ * header, not a separate mode-selector row) and the status indicator (right). "‹ Chats"/"⚙" no
+ * longer live here — they're a permanent part of [ChatTabBar]'s leading/trailing slots now, so
+ * this header doesn't double them up regardless of whether that bar docks top or bottom.
  */
 @Composable
 private fun HomeHeader(
     state: ChatUiState,
     onBadgeTap: () -> Unit,
-    onOpenChats: () -> Unit,
-    onOpenSettings: () -> Unit,
-    // False when the Chat/Terminal tab bar is docked at the bottom — the "‹ Chats"/"⚙" chips move
-    // down into that same row ([ChatTabBar]) rather than doubling up top and bottom.
-    showNavChips: Boolean = true,
+    onTitleClick: () -> Unit,
 ) {
     val c = LocalHyleColors.current
     Row(
@@ -588,11 +574,8 @@ private fun HomeHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Left: Chats/Back — slant on the right, rounds on the left.
-        if (showNavChips) {
-            HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
-        }
-        // Centre: current conversation title (truncated).
+        // Current conversation title (truncated) — tap opens participants/group info, same as
+        // tapping a WhatsApp chat's header.
         Text(
             state.steps.firstOrNull { it.node.role == Role.USER }
                 ?.node?.content?.lineSequence()?.firstOrNull()?.take(36) ?: "",
@@ -600,23 +583,23 @@ private fun HomeHeader(
             color = c.textMid,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).clickable(onClick = onTitleClick),
         )
-        // Right: the user-selectable status chip (Settings -> Global -> Header status), then Settings.
-        // Replaces the fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings,
-        // this slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
+        // The user-selectable status chip (Settings -> Global -> Header status). Replaces the
+        // fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings, this
+        // slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
         HeaderIndicator(state)
-        if (showNavChips) {
-            HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
-        }
     }
 }
 
 /**
- * The Chat/Terminal tab bar — two windows onto the same underlying capability, not a Chat-vs-
- * something-else split (§ owner spec). When [tabBarPosition] is "BOTTOM" this row also carries
- * the "‹ Chats"/"⚙" chips [HomeHeader] otherwise shows at top, per the owner's "the back button
- * is with these tabs only, as is the settings icon" instruction.
+ * The Chat/Terminal switcher — two windows onto the same underlying capability, not a Chat-vs-
+ * something-else split (§ owner spec). Styled as [HyleSlashTabBar] (the owner's reference: a
+ * leading slot, then tabs threaded by a literal "/", no per-tab fill) rather than [HyleTabBar]'s
+ * heavier filled-chip register — this switches VIEWS of one conversation, not top-level rooms.
+ * "All chats" sits in the leading slot in place of the reference's generic overflow icon (owner
+ * ask); Settings trails. Lives here rather than split into [HomeHeader] so the whole row moves
+ * as one unit with [tabBarPosition] (top or bottom of the screen).
  */
 @Composable
 private fun ChatTabBar(
@@ -629,12 +612,9 @@ private fun ChatTabBar(
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        if (tabBarPosition == "BOTTOM") {
-            HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
-        }
-        HyleTabBar(
+        HyleSlashTabBar(
             tabs = listOf(
                 HyleTabSpec("Chat") { tint ->
                     val w = size.width; val h = size.height
@@ -653,12 +633,11 @@ private fun ChatTabBar(
             ),
             selected = tab.ordinal,
             onSelect = { onSelect(ChatTab.entries[it]) },
-            position = tabBarPosition,
-            modifier = Modifier.weight(1f),
+            leading = {
+                HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
+            },
         )
-        if (tabBarPosition == "BOTTOM") {
-            HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
-        }
+        HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
     }
 }
 
@@ -1039,64 +1018,6 @@ private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Bool
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-}
-
-// The interaction model (IA §B4): one model, a council of personas, or a council of different
-// models — a fixed 3-item set, never scrolling, and MORE consequential than Settings' tabs (the
-// interaction model is immutable once a chat starts), so it gets the shared HyleTabBar rather
-// than a scrolling chip row. Image/video/3D are NOT modes here — they live behind the composer's
-// "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
-private val ComposerModeTabs = listOf(
-    dev.aarso.hyle.cells.HyleTabSpec("Single") { tint ->
-        val w = size.width; val h = size.height
-        drawCircle(tint, radius = w * 0.30f, center = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.5f))
-    },
-    dev.aarso.hyle.cells.HyleTabSpec("Council · personas") { tint ->
-        val w = size.width; val h = size.height
-        val sw = w * 0.09f
-        val r = w * 0.16f
-        drawCircle(
-            tint, radius = r,
-            center = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.5f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
-        )
-        drawCircle(
-            tint, radius = r,
-            center = androidx.compose.ui.geometry.Offset(w * 0.70f, h * 0.5f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
-        )
-        drawLine(
-            tint,
-            androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.5f),
-            androidx.compose.ui.geometry.Offset(w * 0.56f, h * 0.5f),
-            strokeWidth = sw,
-        )
-    },
-    dev.aarso.hyle.cells.HyleTabSpec("Council · models") { tint ->
-        val w = size.width; val h = size.height
-        val sw = w * 0.09f
-        drawCircle(
-            tint, radius = w * 0.16f,
-            center = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.5f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
-        )
-        drawRect(
-            tint,
-            topLeft = androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.34f),
-            size = androidx.compose.ui.geometry.Size(w * 0.28f, h * 0.32f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw),
-        )
-    },
-)
-
-@Composable
-private fun ComposerModeRow(mode: ComposerMode, enabled: Boolean, onMode: (ComposerMode) -> Unit) {
-    dev.aarso.hyle.cells.HyleTabBar(
-        tabs = ComposerModeTabs,
-        selected = ComposerMode.entries.indexOf(mode).coerceAtLeast(0),
-        onSelect = { onMode(ComposerMode.entries[it]) },
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 /**

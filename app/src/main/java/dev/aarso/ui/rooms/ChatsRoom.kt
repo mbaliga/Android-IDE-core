@@ -424,7 +424,7 @@ private fun ConversationList(p: ConversationListProps) {
         itemsIndexed(p.conversations, key = { _, conv -> conv.rootId }) { idx, conv ->
             ConversationCard(p, conv, index = idx + 1)
             if (idx != p.conversations.lastIndex) {
-                ConversationRowConnector(accent = p.isActive(conv) || p.isActive(p.conversations[idx + 1]))
+                ConversationRowConnector()
             }
         }
     }
@@ -671,85 +671,65 @@ private fun ImageList(
 }
 
 /**
- * A short vertical connector threading between two consecutive flat-list rows, aligned under
- * the leading tab-flag — the "numbered tabs threaded together" look from the owner's reference
- * screenshot. Drawn as its own fixed-height band so the plain [HorizontalDivider] between rows
- * can sit centered inside it without breaking the thread.
+ * The plain divider threading between two consecutive flat-list rows — "simple dividers instead
+ * of boxes" (owner ask). [ConversationCard] itself now carries the tab identity (clipped to
+ * [dev.aarso.hyle.cells.HyleFieldShape], the same "/" file-tab silhouette as a nav chip), so this
+ * connector no longer needs its own accent bar — the row's slant already reads as a tab without
+ * a redundant flag beside it.
  */
 @Composable
-private fun ConversationRowConnector(accent: Boolean) {
+private fun ConversationRowConnector() {
     val c = LocalHyleColors.current
-    Box(Modifier.fillMaxWidth().height(10.dp)) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .width(5.dp)
-                .fillMaxHeight()
-                .background(if (accent) c.violet else c.outline),
-        )
-        HorizontalDivider(
-            color = c.hairline,
-            modifier = Modifier.align(Alignment.Center),
-        )
-    }
+    HorizontalDivider(color = c.hairline, modifier = Modifier.padding(vertical = 5.dp))
 }
 
 /**
- * The flat "All conversations" row, restyled to [FolderTabRow]'s "hanging tab" grammar — a
- * leading numbered tab-flag + index prefix instead of a boxed [Card] — minus the folder body
- * around it, since this is a flat list rather than a project group. Threaded to its neighbours
- * by [ConversationRowConnector] rather than its own border/background.
+ * The flat "All conversations" row — a genuine file-tab silhouette
+ * ([dev.aarso.hyle.cells.HyleFieldShape], the exact "/" shape a nav chip clips to), not a boxed
+ * [Card] and not [FolderTabRow]'s separate flag-bar-beside-a-rounded-rect (that read as "a card
+ * with a colored stripe," not a tab — owner-flagged twice). The slant IS the tab; active state is
+ * a solid violet fill of that same shape, exactly like an active nav chip.
  */
 @Composable
 private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary, index: Int) {
     val c = LocalHyleColors.current
     val active = p.isActive(conv)
-    val shape = RoundedCornerShape(10.dp)
+    val shape = dev.aarso.hyle.cells.HyleFieldShape
     var showActions by remember { mutableStateOf(false) }
     val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
-    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-        // Leading "tab flag", same visual grammar as FolderTabRow's.
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(5.dp)
-                .clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp))
-                .background(if (active) c.violet else c.outline),
-        )
-        Spacer(Modifier.width(4.dp))
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .clip(shape)
-                .then(
-                    if (active) {
-                        Modifier.background(c.violet, shape)
-                    } else {
-                        Modifier.background(c.raised, shape)
-                    },
-                )
-                .combinedClickable(
-                    enabled = p.enabled,
-                    onClick = { p.onOpen(conv) },
-                    onLongClick = { haptics.tap(); showActions = true },
-                )
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "%02d".format(index),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (active) c.onViolet.copy(alpha = 0.7f) else c.textMid,
-                modifier = Modifier.padding(end = 10.dp),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 68.dp)
+            .clip(shape)
+            .then(
+                if (active) {
+                    Modifier.background(c.violet, shape)
+                } else {
+                    Modifier.background(c.raised, shape).border(1.dp, c.hairline, shape)
+                },
             )
-            Box(Modifier.weight(1f)) {
-                ConversationCardContent(
-                    p, conv,
-                    titleColor = if (active) c.onViolet else c.textHigh,
-                    mutedColor = if (active) c.onViolet.copy(alpha = 0.75f) else c.textMid,
-                    accentColor = if (active) c.onViolet else c.violet,
-                )
-            }
+            .combinedClickable(
+                enabled = p.enabled,
+                onClick = { p.onOpen(conv) },
+                onLongClick = { haptics.tap(); showActions = true },
+            )
+            .padding(start = 24.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "%02d".format(index),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (active) c.onViolet.copy(alpha = 0.7f) else c.textMid,
+            modifier = Modifier.padding(end = 10.dp),
+        )
+        Box(Modifier.weight(1f)) {
+            ConversationCardContent(
+                p, conv,
+                titleColor = if (active) c.onViolet else c.textHigh,
+                mutedColor = if (active) c.onViolet.copy(alpha = 0.75f) else c.textMid,
+                accentColor = if (active) c.onViolet else c.violet,
+            )
         }
     }
     if (showActions) {
