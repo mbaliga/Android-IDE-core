@@ -271,6 +271,7 @@ fun LoopRoom(onClose: () -> Unit) {
         running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
         liveSteps = emptyList(); runBudget = budget; loggedNote = null
         runJob = scope.launch {
+            val jobId = container.backgroundJobs.start(loopName.ifBlank { "Loop" }, "loop")
             runCatching {
                 val cache = HashMap<String, EngineGenerator>()
                 fun genFor(spec: ModelSpec) = cache.getOrPut(spec.id) {
@@ -307,8 +308,9 @@ fun LoopRoom(onClose: () -> Unit) {
                         entries.forEach { container.ledgerStore.append(it) }
                         loggedNote = "Logged ${result.steps.size} step(s) to Tree · run $runId"
                     }
+                    container.backgroundJobs.finish(jobId)
                 },
-                { runError = it.message },
+                { runError = it.message; container.backgroundJobs.finish(jobId, failed = true) },
             )
             running = false
             runJob = null

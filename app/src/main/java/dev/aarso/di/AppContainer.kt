@@ -181,6 +181,10 @@ class AppContainer(context: Context) {
     val agentRepoRunner: dev.aarso.data.AgentRepoRunner =
         dev.aarso.data.AgentRepoRunner(gitTransport, gitHostStore, modelRegistry, engineProvider)
 
+    // Concurrent work in progress elsewhere in the app (a Loop run, the Agent proposing a
+    // change) — surfaced together in Chat's background-tasks strip.
+    val backgroundJobs: dev.aarso.data.BackgroundJobs = dev.aarso.data.BackgroundJobs()
+
     // Device recipes over the SSH spine (IA: agentic-ide #3): RPi / Arduino-via-Pi / ESP-OTA.
     val deviceRepo: dev.aarso.data.DeviceRepo = dev.aarso.data.DeviceRepo { newSshTransport() }
 }

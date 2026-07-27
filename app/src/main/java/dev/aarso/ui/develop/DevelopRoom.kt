@@ -604,14 +604,22 @@ private fun FilesFacet() {
             val paths = pathsText.split("\n", ",").map { it.trim() }.filter { it.isNotEmpty() }
             busy = true; status = "reading ${paths.size} file(s)…"; proposal = null
             scope.launch {
+                val jobId = container.backgroundJobs.start(
+                    "Agent: ${objective.take(40)}${if (objective.length > 40) "…" else ""}",
+                    "agent",
+                )
                 val ctx = runner.read(paths)
                 status = "proposing… (read ${ctx.size}/${paths.size})"
                 runner.propose(objective, ctx, mid).fold(
                     { p ->
                         proposal = p
                         status = "proposed ${p.changeSet.effective.size} change(s) over files: ${p.filesRead.joinToString(", ").ifEmpty { "(none)" }}"
+                        container.backgroundJobs.finish(jobId)
                     },
-                    { status = "failed: ${it.message}" },
+                    {
+                        status = "failed: ${it.message}"
+                        container.backgroundJobs.finish(jobId, failed = true)
+                    },
                 )
                 busy = false
             }

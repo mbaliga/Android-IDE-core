@@ -142,6 +142,13 @@ fun ChatScreen(
     val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
     val tabBarPosition = roomTabBarOverrides["chat"] ?: universalTabBarPosition
     val activeDownloads by container.downloadCenter.active.collectAsState()
+    val backgroundJobs by container.backgroundJobs.jobs.collectAsState()
+    LaunchedEffect(Unit) {
+        while (true) {
+            container.backgroundJobs.prune()
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
 
     // Slash commands: a keyboard-driven shortcut to the same actions the header chips, "+" sheet,
     // and composer-mode row already expose — nothing here reaches for a navigation hook the
@@ -220,7 +227,7 @@ fun ChatScreen(
                     TerminalFacet()
                 }
                 ChatTab.CHAT -> Column(Modifier.weight(1f)) {
-                    BackgroundTasksStrip(activeDownloads)
+                    BackgroundTasksStrip(activeDownloads, backgroundJobs)
                     InstrumentsStrip(
                         state = state,
                         input = input,
@@ -511,7 +518,10 @@ fun ChatScreen(
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.aarso.ui.rooms.ParticipantsScreen(onClose = { showParticipants = false })
+                dev.aarso.ui.rooms.ParticipantsScreen(
+                    onClose = { showParticipants = false },
+                    conversationId = state.steps.firstOrNull()?.node?.id,
+                )
             }
         }
     }
@@ -654,16 +664,37 @@ private fun ChatTabBar(
 
 /**
  * Background tasks — a layer BENEATH Chat/Terminal, not a third peer tab (§ owner spec): a
- * collapsed one-line entry inside Chat, expandable to the flat list of what's actually running.
- * Backed by [DownloadCenter.active] — the one async-work queue this codebase already exposes as
- * an observable list; a loop-in-progress or an agent repo job would feed the same strip once/if
- * those expose a similar observable (rule 6 — wire only what's real today).
+ * collapsed one-line entry inside Chat, expandable into Running/Finished sections the same shape
+ * as this app's OWN build tooling shows its parallel background agents. Two real sources, merged
+ * for display only: [DownloadCenter.active] (its own percentage) and [BackgroundJobs.jobs] (a
+ * Loop run, the coding Agent proposing a change — start/finish only, no fraction). Nothing here
+ * is invented state (rule 6): a source only appears once something actually registers it.
  */
 @Composable
-private fun BackgroundTasksStrip(active: Map<String, DownloadCenter.State>) {
-    if (active.isEmpty()) return
+private fun BackgroundTasksStrip(
+    active: Map<String, DownloadCenter.State>,
+    jobs: List<dev.aarso.data.BackgroundJobs.Job>,
+) {
+    val runningJobs = jobs.filter { it.finishedAt == null }
+    val finishedJobs = jobs.filter { it.finishedAt != null }
+    val runningCount = active.size + runningJobs.size
+    if (runningCount == 0 && finishedJobs.isEmpty()) return
+
     val c = LocalHyleColors.current
     var expanded by remember { mutableStateOf(false) }
+
+    // A live clock for "Ns" elapsed labels on running jobs — ticks only while there's something
+    // to time AND the strip is open, so a collapsed or idle strip never recomposes on its own.
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(expanded, runningCount) {
+        if (expanded && runningCount > 0) {
+            while (true) {
+                now = System.currentTimeMillis()
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
@@ -678,38 +709,111 @@ private fun BackgroundTasksStrip(active: Map<String, DownloadCenter.State>) {
                 modifier = Modifier.padding(end = 6.dp),
             )
             Text(
-                "${active.size} background ${if (active.size == 1) "task" else "tasks"}",
+                if (runningCount > 0) {
+                    "$runningCount background ${if (runningCount == 1) "task" else "tasks"} running"
+                } else {
+                    "${finishedJobs.size} background ${if (finishedJobs.size == 1) "task" else "tasks"} finished"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = c.textMid,
                 modifier = Modifier.weight(1f),
             )
         }
         if (expanded) {
-            active.values.forEach { s ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        s.request.fileName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = c.textHigh,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        when {
-                            s.failed -> "failed"
-                            s.paused -> "paused · ${(s.progress.fraction * 100).toInt()}%"
-                            else -> "${(s.progress.fraction * 100).toInt()}%"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (s.failed) c.error else c.textMid,
-                    )
-                }
+            if (runningCount > 0) {
+                BgSectionLabel("Running")
+                active.values.forEach { s -> BgDownloadRow(s) }
+                runningJobs.forEach { j -> BgJobRow(j, now, finished = false) }
+            }
+            if (finishedJobs.isNotEmpty()) {
+                BgSectionLabel("Finished")
+                finishedJobs.sortedByDescending { it.finishedAt }.forEach { j -> BgJobRow(j, now, finished = true) }
             }
         }
+    }
+}
+
+@Composable
+private fun BgSectionLabel(text: String) {
+    val c = LocalHyleColors.current
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        color = c.textMid,
+        modifier = Modifier.padding(start = 22.dp, top = 6.dp, bottom = 2.dp),
+    )
+}
+
+/** A small kind glyph — download / loop / agent / other — ahead of every row's label. */
+@Composable
+private fun BgIcon(kind: String) {
+    val c = LocalHyleColors.current
+    Text(
+        when (kind) {
+            "download" -> "⇩"
+            "loop" -> "◆"
+            "agent" -> "⌁"
+            else -> "•"
+        },
+        style = MaterialTheme.typography.labelSmall,
+        color = c.textMid,
+        modifier = Modifier.padding(end = 6.dp),
+    )
+}
+
+@Composable
+private fun BgDownloadRow(s: DownloadCenter.State) {
+    val c = LocalHyleColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BgIcon("download")
+        Text(
+            s.request.fileName,
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textHigh,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            when {
+                s.failed -> "failed"
+                s.paused -> "paused · ${(s.progress.fraction * 100).toInt()}%"
+                else -> "${(s.progress.fraction * 100).toInt()}%"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (s.failed) c.error else c.textMid,
+        )
+    }
+}
+
+@Composable
+private fun BgJobRow(job: dev.aarso.data.BackgroundJobs.Job, now: Long, finished: Boolean) {
+    val c = LocalHyleColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BgIcon(job.kind)
+        Text(
+            job.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textHigh,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            if (finished) {
+                if (job.failed) "failed" else "completed"
+            } else {
+                "${((now - job.startedAt) / 1000).coerceAtLeast(0)}s"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (job.failed) c.error else c.textMid,
+        )
     }
 }
 
