@@ -753,6 +753,7 @@ private fun BgIcon(kind: String) {
             "download" -> "⇩"
             "loop" -> "◆"
             "agent" -> "⌁"
+            "distill" -> "✎"
             else -> "•"
         },
         style = MaterialTheme.typography.labelSmall,

@@ -125,6 +125,11 @@ private data class LoopNode(
     val yPx: Float,
     val systemPrompt: String = "",
     val modelId: String? = null,
+    /** Everything in a loaded node's BPMN `ext` this editor doesn't have a named field for —
+     *  chiefly a distilled loop's start-event provenance (source/pattern/distilledBy/
+     *  distilledOn/summary, see [dev.aarso.domain.loop.Distiller]). Carried through untouched
+     *  so editing and re-saving a distilled loop doesn't silently drop where it came from. */
+    val provenanceExt: Map<String, String> = emptyMap(),
 )
 
 /** A connector; [label] drives gateway branching ("approve" / "refine" / "else"). */
@@ -144,6 +149,8 @@ private fun isEvent(kind: BpmnNodeKind) =
     kind == BpmnNodeKind.START_EVENT || kind == BpmnNodeKind.END_EVENT
 
 /** Editor graph → BPMN (positions + per-node prompt/model travel in extension elements). */
+private val NAMED_EXT_KEYS = setOf("systemPrompt", "model", "role")
+
 private fun toBpmnGraph(id: String, name: String, nodes: List<LoopNode>, edges: List<LoopEdge>): BpmnGraph =
     BpmnGraph(
         id = id, name = name,
@@ -151,7 +158,9 @@ private fun toBpmnGraph(id: String, name: String, nodes: List<LoopNode>, edges: 
             BpmnNode(
                 id = n.id, kind = n.kind, name = n.label,
                 bounds = Bounds(n.xPx.toDouble(), n.yPx.toDouble()),
-                ext = buildMap {
+                // Named fields first, then whatever carried through unrecognised (a distilled
+                // loop's provenance) — named fields win if a key somehow collides.
+                ext = n.provenanceExt + buildMap {
                     if (n.systemPrompt.isNotBlank()) put("systemPrompt", n.systemPrompt)
                     n.modelId?.let { put("model", it) }
                     if (n.role.isNotBlank()) put("role", n.role)
@@ -166,6 +175,7 @@ private fun fromBpmnNodes(g: BpmnGraph): List<LoopNode> = g.nodes.map { b ->
         id = b.id, kind = b.kind, label = b.name, role = b.ext["role"].orEmpty(),
         xPx = b.bounds.x.toFloat(), yPx = b.bounds.y.toFloat(),
         systemPrompt = b.ext["systemPrompt"].orEmpty(), modelId = b.ext["model"],
+        provenanceExt = b.ext.filterKeys { it !in NAMED_EXT_KEYS },
     )
 }
 
@@ -230,11 +240,21 @@ fun LoopRoom(onClose: () -> Unit) {
     var pendingEdge by remember { mutableStateOf<Pair<String, String>?>(null) } // gateway edge awaiting a label
     var showSave by remember { mutableStateOf(false) }
     var showLoad by remember { mutableStateOf(false) }
+    var showDistill by remember { mutableStateOf(false) }
     var syncNote by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
     val colors = LocalHyleColors.current
 
+    fun loadLoop(loop: Loop) {
+        loop.bpmnXml?.let { xml ->
+            runCatching { BpmnArchive.read(xml) }.getOrNull()?.let { g ->
+                nodes.clear(); nodes.addAll(fromBpmnNodes(g))
+                edges.clear(); edges.addAll(fromBpmnEdges(g))
+                loopId = loop.id; loopName = loop.name; savedNote = "Loaded “${loop.name}”"
+            }
+        }
+    }
     fun nodeById(id: String) = nodes.firstOrNull { it.id == id }
     fun moveNode(id: String, x: Float, y: Float) {
         val i = nodes.indexOfFirst { it.id == id }
@@ -330,6 +350,7 @@ fun LoopRoom(onClose: () -> Unit) {
                     Text(loopName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showLoad = true }) { Text("Loops") }
+                        TextButton(onClick = { showDistill = true }, enabled = runnable.isNotEmpty()) { Text("Distill…") }
                         TextButton(onClick = { showSave = true }, enabled = objective.isNotBlank()) { Text("Save") }
                         if (running) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -347,6 +368,21 @@ fun LoopRoom(onClose: () -> Unit) {
                 savedNote?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 12.dp))
                 }
+                // Provenance surfacing (docs/design/loop-distillation.md step 5): a distilled
+                // loop's start-event carries who/what/when in its ext map, preserved end to end
+                // by LoopNode.provenanceExt — shown here so influence stays visible, never a
+                // silent black box.
+                nodes.firstOrNull { it.kind == BpmnNodeKind.START_EVENT }?.provenanceExt
+                    ?.takeIf { it.containsKey("distilledBy") }
+                    ?.let { prov ->
+                        Text(
+                            "Distilled from ${prov["source"] ?: "a source"} by ${prov["distilledBy"]} " +
+                                "on ${prov["distilledOn"]} — review before running.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
                 HorizontalDivider()
 
                 if (runnable.isEmpty()) {
@@ -568,15 +604,18 @@ fun LoopRoom(onClose: () -> Unit) {
                 syncNote = "pulling…"
                 scope.launch { container.loopSyncRepo.pull().fold({ syncNote = "pulled $it loop(s) from Git" }, { syncNote = it.message }) }
             },
-            onPick = { loop ->
-                loop.bpmnXml?.let { xml ->
-                    runCatching { BpmnArchive.read(xml) }.getOrNull()?.let { g ->
-                        nodes.clear(); nodes.addAll(fromBpmnNodes(g))
-                        edges.clear(); edges.addAll(fromBpmnEdges(g))
-                        loopId = loop.id; loopName = loop.name; savedNote = "Loaded “${loop.name}”"
-                    }
-                }
-                showLoad = false
+            onPick = { loop -> loadLoop(loop); showLoad = false },
+        )
+    }
+
+    if (showDistill) {
+        DistillDialog(
+            runnable = runnable,
+            onDismiss = { showDistill = false },
+            onDistilled = { loop ->
+                store.save(loop)
+                loadLoop(loop)
+                showDistill = false
             },
         )
     }
