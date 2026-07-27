@@ -35,6 +35,12 @@ class SessionStore(context: Context) {
     private val _entropyColoring = MutableStateFlow(prefs.getBoolean(KEY_ENTROPY, true))
     val entropyColoring: StateFlow<Boolean> = _entropyColoring.asStateFlow()
 
+    // On-screen Ctrl-C button in Terminal — off by default for anyone whose keyboard already has
+    // a physical/IME control key (e.g. Clackpad), on by default for everyone else. The /ctrlc
+    // slash command always works regardless of this setting; this only hides the redundant button.
+    private val _terminalCtrlCButton = MutableStateFlow(prefs.getBoolean(KEY_TERMINAL_CTRL_C, true))
+    val terminalCtrlCButton: StateFlow<Boolean> = _terminalCtrlCButton.asStateFlow()
+
     private val _spatialMapSeen = MutableStateFlow(prefs.getBoolean(KEY_SPATIAL_MAP, false))
     val spatialMapSeen: StateFlow<Boolean> = _spatialMapSeen.asStateFlow()
 
@@ -148,6 +154,11 @@ class SessionStore(context: Context) {
     fun setEntropyColoring(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ENTROPY, enabled).apply()
         _entropyColoring.value = enabled
+    }
+
+    fun setTerminalCtrlCButton(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TERMINAL_CTRL_C, enabled).apply()
+        _terminalCtrlCButton.value = enabled
     }
 
     /** One-time spatial-map overlay; Settings can reset it to show the map again. */
@@ -282,6 +293,7 @@ class SessionStore(context: Context) {
         private const val KEY_ONBOARDED = "onboardingDone"
         private const val KEY_INSTRUMENTS = "instrumentsExpanded"
         private const val KEY_ENTROPY = "entropyColoring"
+        private const val KEY_TERMINAL_CTRL_C = "terminalCtrlCButton"
         private const val KEY_SPATIAL_MAP = "spatialMapSeen"
         private const val KEY_THEME_MODE = "themeMode"
         private const val KEY_HEADER_INDICATOR = "headerIndicator"

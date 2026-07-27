@@ -522,6 +522,26 @@ private fun GeneralSettings(
     }
     HorizontalDivider()
 
+    Text("Terminal Ctrl-C button", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Off by default if your keyboard already has a control key (e.g. Clackpad) — " +
+            "typing /ctrlc always works either way.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val showCtrlC by session.terminalCtrlCButton.collectAsState()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Show Ctrl-C button in Terminal", style = MaterialTheme.typography.bodyMedium)
+            HyleSwitch(checked = showCtrlC, onCheckedChange = session::setTerminalCtrlCButton)
+        }
+    }
+    HorizontalDivider()
+
     Text("Summon from anywhere", style = MaterialTheme.typography.titleMedium)
     Text(
         buildString {

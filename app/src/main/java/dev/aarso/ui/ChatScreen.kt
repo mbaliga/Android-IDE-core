@@ -97,6 +97,13 @@ import dev.aarso.hyle.cells.HyleSlashTabBar
 import dev.aarso.hyle.cells.HyleTabSpec
 import dev.aarso.hyle.cells.FileImage
 import dev.aarso.hyle.theme.LocalHyleColors
+import dev.aarso.ui.components.MentionPopup
+import dev.aarso.ui.components.MentionTarget
+import dev.aarso.ui.components.SlashCommand
+import dev.aarso.ui.components.SlashCommandPopup
+import dev.aarso.ui.components.applyMention
+import dev.aarso.ui.components.matchMentions
+import dev.aarso.ui.components.matchSlashCommands
 import dev.aarso.ui.develop.TerminalFacet
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -163,11 +170,18 @@ fun ChatScreen(
             SlashCommand("/settings", "Open Settings") { onOpenSettings() },
         )
     }
-    val slashMatches = if (input.startsWith("/")) {
-        slashCommands.filter { it.name.startsWith(input.trim(), ignoreCase = true) }
-    } else {
-        emptyList()
+    val slashMatches = matchSlashCommands(input, slashCommands)
+
+    // @ mentions: direct a message at one council participant by name — the same "@" convention
+    // as every mention-capable chat tool, not a Fonebrew invention (see docs/design/terminal-ux.md
+    // for why that's safe to use). Picking one inserts "@Name " into the composer; routing the
+    // turn to only that participant is a follow-up (ChatViewModel's turn orchestration isn't
+    // touched here — this wires the mention *composer* affordance, not new send semantics).
+    val participants by container.councilStore.participants.collectAsState()
+    val mentionTargets = remember(participants) {
+        participants.map { p -> MentionTarget(p.name, "council participant", "@${p.name} ") }
     }
+    val mentionMatches = matchMentions(input, mentionTargets)
 
     // §7: text shared in / selected elsewhere arrives here — prefill the input.
     val intake by viewModel.intake.collectAsState()
@@ -380,6 +394,8 @@ fun ChatScreen(
 
             if (slashMatches.isNotEmpty()) {
                 SlashCommandPopup(slashMatches) { cmd -> cmd.run(); input = "" }
+            } else if (mentionMatches.isNotEmpty()) {
+                MentionPopup(mentionMatches) { target -> input = applyMention(input, target) }
             }
 
             // Image mode is entered from the "+" sheet (no pill); a banner shows + exits it.
@@ -799,27 +815,6 @@ private fun BgJobRow(job: dev.aarso.data.BackgroundJobs.Job, now: Long, finished
             style = MaterialTheme.typography.labelSmall,
             color = if (job.failed) c.error else c.textMid,
         )
-    }
-}
-
-/** One slash command: a keyboard-driven shortcut to something the header/composer already does. */
-private data class SlashCommand(val name: String, val description: String, val run: () -> Unit)
-
-/** The popup shown above the composer while [commands] match what's typed so far. */
-@Composable
-private fun SlashCommandPopup(commands: List<SlashCommand>, onPick: (SlashCommand) -> Unit) {
-    val c = LocalHyleColors.current
-    HyleCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        commands.forEachIndexed { i, cmd ->
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable { onPick(cmd) }.padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(cmd.name, style = MaterialTheme.typography.labelMedium, color = c.violet, modifier = Modifier.padding(end = 10.dp))
-                Text(cmd.description, style = MaterialTheme.typography.labelSmall, color = c.textMid)
-            }
-            if (i != commands.lastIndex) HorizontalDivider(color = c.hairline)
-        }
     }
 }
 

@@ -273,7 +273,7 @@ private fun AddHostForm(onAdd: (RemoteHost, String, Boolean) -> Unit) {
 }
 
 @Composable
-private fun TrustDialog(verdict: Trust, onAccept: () -> Unit, onReject: () -> Unit) {
+internal fun TrustDialog(verdict: Trust, onAccept: () -> Unit, onReject: () -> Unit) {
     // A security decision: dismissal must be an explicit Reject, never a stray tap,
     // so onDismiss stays null and the lens cannot be dismissed by touching the ground.
     HyleFocusLens(visible = true, onDismiss = null) {
