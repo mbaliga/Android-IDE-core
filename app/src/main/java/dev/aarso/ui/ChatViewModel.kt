@@ -519,6 +519,7 @@ class ChatViewModel(
     fun send(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || transient.value.genPhase != GenPhase.IDLE) return
+        if (dev.aarso.ui.components.isShellEscape(trimmed)) { sendShellEscape(trimmed); return }
         if (transient.value.imageMode) { sendImage(trimmed); return }
         if (transient.value.councilMode) { sendCouncil(trimmed); return }
         val spec = activeModelId.value?.let { registry.byId(it) } ?: return
@@ -540,6 +541,35 @@ class ChatViewModel(
                 runTurn(spec, engine, userNode)
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(error = t.message ?: "send failed")
+            }
+        }
+    }
+
+    /**
+     * `!`-sigil shell escape (Jupyter/IPython convention): runs the rest of [text] as a single
+     * local command on this phone and posts its raw output as a turn — no model involved. Uses
+     * [dev.aarso.data.remote.LocalExec], a one-shot exec, not the persistent interactive pty
+     * the Terminal facet uses — a chat turn wants a finished result, not a live session.
+     */
+    private fun sendShellEscape(text: String) {
+        val command = dev.aarso.ui.components.shellEscapeCommand(text) ?: return
+        viewModelScope.launch {
+            transient.value = transient.value.copy(error = null)
+            try {
+                val parent = activeLeafId.value?.let { repository.node(it) }
+                val userNode = Nodes.child(parent, Role.USER, text, System.currentTimeMillis())
+                repository.insert(userNode)
+                embeddingLogger.onMessageInserted(userNode)
+                moveLeaf(userNode.id)
+                val output = dev.aarso.data.remote.LocalExec.run(command, appContext.filesDir)
+                val resultNode = Nodes.child(
+                    userNode, Role.ASSISTANT, output.ifBlank { "(no output)" }, System.currentTimeMillis(),
+                    metadata = mapOf("shell" to "true"),
+                )
+                repository.insert(resultNode)
+                moveLeaf(resultNode.id)
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(error = t.message ?: "shell command failed")
             }
         }
     }
@@ -742,17 +772,24 @@ class ChatViewModel(
      * into separate panes as each completes.
      */
     private fun sendCouncil(text: String) {
-        val voices = councilVoices()
-        if (voices.isEmpty()) {
+        val allVoices = councilVoices()
+        if (allVoices.isEmpty()) {
             transient.value = transient.value.copy(
                 error = if (transient.value.modelDiversity) "no runnable models for a model-diversity council — download/add at least two" else "active model not runnable",
             )
             return
         }
+        // A leading "@Name" addresses one participant only — same fan-out machinery, just
+        // narrowed to a single voice for this turn (handoff §4a follow-up).
+        val addressee = dev.aarso.domain.council.CouncilRouting.addressee(text, allVoices.map { it.label })
+        val voices = addressee?.let { name -> allVoices.filter { it.label.equals(name, ignoreCase = true) } } ?: allVoices
         viewModelScope.launch {
             transient.value = transient.value.copy(error = null)
             val parent = activeLeafId.value?.let { repository.node(it) }
-            val userNode = Nodes.child(parent, Role.USER, text, System.currentTimeMillis())
+            val userNode = Nodes.child(
+                parent, Role.USER, text, System.currentTimeMillis(),
+                metadata = addressee?.let { mapOf("addressedTo" to it) } ?: emptyMap(),
+            )
             try {
                 repository.insert(userNode)
                 embeddingLogger.onMessageInserted(userNode)

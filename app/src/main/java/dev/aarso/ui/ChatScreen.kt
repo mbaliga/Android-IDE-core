@@ -102,6 +102,7 @@ import dev.aarso.ui.components.MentionTarget
 import dev.aarso.ui.components.SlashCommand
 import dev.aarso.ui.components.SlashCommandPopup
 import dev.aarso.ui.components.applyMention
+import dev.aarso.ui.components.isShellEscape
 import dev.aarso.ui.components.matchMentions
 import dev.aarso.ui.components.matchSlashCommands
 import dev.aarso.ui.develop.TerminalFacet
@@ -173,10 +174,10 @@ fun ChatScreen(
     val slashMatches = matchSlashCommands(input, slashCommands)
 
     // @ mentions: direct a message at one council participant by name — the same "@" convention
-    // as every mention-capable chat tool, not a Fonebrew invention (see docs/design/terminal-ux.md
-    // for why that's safe to use). Picking one inserts "@Name " into the composer; routing the
-    // turn to only that participant is a follow-up (ChatViewModel's turn orchestration isn't
-    // touched here — this wires the mention *composer* affordance, not new send semantics).
+    // as every mention-capable chat tool, not a Fonebrew invention. Picking one inserts "@Name "
+    // into the composer; ChatViewModel.sendCouncil resolves a *leading* "@Name" (via
+    // domain.council.CouncilRouting) and narrows the fan-out to that one voice for the turn —
+    // this popup only handles the composer-insertion half.
     val participants by container.councilStore.participants.collectAsState()
     val mentionTargets = remember(participants) {
         participants.map { p -> MentionTarget(p.name, "council participant", "@${p.name} ") }
@@ -412,6 +413,17 @@ fun ChatScreen(
                     )
                     TextButton(onClick = { viewModel.setComposerMode(ComposerMode.SINGLE) }) { Text("Exit") }
                 }
+            }
+
+            // "!cmd" runs locally instead of going to a model (Jupyter/IPython convention) —
+            // flag it before Send so it's never a silent surprise which path a message takes.
+            if (isShellEscape(input)) {
+                Text(
+                    "⌘ Runs as a shell command on this phone",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                )
             }
 
             Row(

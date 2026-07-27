@@ -15,6 +15,24 @@ import dev.aarso.hyle.cells.HyleCard
 import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
+ * The input-prefix ("sigil") family a composer/terminal input recognizes. Each one is a
+ * distinct shape, not a single "trigger char" abstraction forced over all three — they behave
+ * differently enough that unifying them would just be indirection:
+ *  - `/` **command** — a closed, named set (`/ctrlc`, `/clear`, …); whole-input only (a
+ *    command is a shortcut for the *entire* message, not something typed mid-sentence);
+ *    autocompletes via [SlashCommandPopup].
+ *  - `@` **mention** — a closed set drawn from live data (council participants); can appear
+ *    anywhere in the message; autocompletes via [MentionPopup]. A *leading* `@Name` additionally
+ *    routes the turn to that one participant (see `domain.council.CouncilRouting`) — mid-message
+ *    it's just prose addressed at someone, same as it would be in any chat.
+ *  - `!` **shell escape** — open-ended (arbitrary shell text, no fixed set, no popup); whole-input
+ *    only. Runs the rest of the line as a single local command and posts its output, rather than
+ *    going to a model — the Jupyter/IPython `!cmd` convention. See [isShellEscape]/[shellEscapeCommand].
+ * Adding a future sigil (e.g. `#` to reference a Loop) means picking whichever of these three
+ * shapes it actually matches, not inventing a fourth.
+ */
+
+/**
  * One `/`-invoked action: a canned command with a name, a one-line description, and what it
  * does. Shared between Chat's composer and Terminal's input — a single library rather than a
  * copy per surface, so a command written once shows up wherever `/` is typed that registers it.
@@ -31,6 +49,14 @@ data class MentionTarget(val label: String, val description: String, val inserti
  *  something you type mid-sentence). */
 fun matchSlashCommands(input: String, commands: List<SlashCommand>): List<SlashCommand> =
     if (input.startsWith("/")) commands.filter { it.name.startsWith(input.trim(), ignoreCase = true) } else emptyList()
+
+/** Whether [input] is a whole-message `!`-shell-escape rather than a model turn. Leading
+ *  whitespace tolerated, same as [dev.aarso.domain.council.CouncilRouting]'s `@` handling. */
+fun isShellEscape(input: String): Boolean = input.trimStart().startsWith("!")
+
+/** The command text after the `!`, or null if [input] isn't a shell escape. */
+fun shellEscapeCommand(input: String): String? =
+    if (isShellEscape(input)) input.trimStart().removePrefix("!").trim().ifEmpty { null } else null
 
 /** The `@`-token currently being typed, if the cursor is sitting right after one with no
  *  intervening space — e.g. typing `hey @jud` mid-sentence matches `jud`, but `@judge, hey`
