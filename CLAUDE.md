@@ -7,8 +7,8 @@ routing/influence visible and keeps the user in the loop, even at some cost to c
 
 > **Read `docs/STATE.md` first.** It is the living index of *what's done / pending / the end
 > goal* across the whole constellation. This file is the **build rules + how-to-continue**;
-> `docs/STATE.md` and  are the current state + business. When they
-> disagree, STATE.md is newer.
+> `docs/STATE.md` is the current engineering state. When they disagree, STATE.md is newer.
+> Business/monetization planning is tracked privately, not in this repo.
 
 ## North star + naming split
 The product is a **post-desktop, touch-native computing environment** that makes the phone a
@@ -115,17 +115,18 @@ machine-verified parts. Never report on-device behaviour as confirmed.
 ---
 
 ## The constellation (multi-repo / multi-app)
-A family of cooperating apps, not a monolith. Dependency direction sinks toward the routing engine.
+A family of cooperating apps, not a monolith.
 
 | Component | What | Source | Status |
 |---|---|---|---|
 | **Aarso/Workbench** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
 | **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
-| **PM + authoring** | a companion project-management surface | not in this repo | repo pending owner; code in main, to carve out |
+| **PM + authoring** | a companion project-management surface | not in this repo | code lives elsewhere |
 | **Sound & haptics** | companion authoring app | **open** | not started |
+| **Routing engine** | on-device + cloud LLM router (any app) | not in this repo | not started here |
 
-Integration rule: the routing engine needs a **stable public API** from day one. See `docs/STATE.md`
-intelligence, never hold others' keys).
+Integration rule: the routing engine needs a **stable public API** from day one. Business/licensing
+decisions for these components are tracked privately, not in this repo.
 
 ## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `aarso-sd.apk`)
 Everything below compiled + JVM-tested + assembled; **device behaviour is owner-verified.** Full
@@ -156,8 +157,9 @@ detail in `docs/STATE.md`.
 - Versions this stage: v0.9.0 IA → v0.13.0 (current). See STATE.md §3 for the per-version list.
 
 **PLANNED / PENDING**
-- *Owner-blocked (need an owner action):* create the **PM/authoring**, **sound/haptics**,
-  **routing-engine** repos + grant access; then carve them out. (**Hyle is done** — its own repo
+- *Owner-blocked (need an owner action):* create the **sound/haptics** repo + grant access.
+  (**Hyle is done** — its own repo `mbaliga/Hyle-Design-System`, consumed via submodule +
+  includeBuild. PM/authoring and the routing engine are tracked outside this repo.)
 - *Engineering follow-ups:* Chat §B4 per-member **files** (needs file→context plumbing); **live
   per-step streaming in the graph Loop run** (`GraphRunner` progress callback); **video/3D**
   engines; **AI-assisted config** (parked); **drag-a-wire** Loop connect; **USB** on-device verify
@@ -166,17 +168,17 @@ detail in `docs/STATE.md`.
   (replace `PlaceholderEmbedder`); §5a base-vs-instruct diff; acceleration (Vulkan/NPU —
   benchmark, never assume); Google Play publication mechanics (AAB/signing/data-safety/screens).
 
-
-## Open owner decisions
-1. Create the new repos + grant access (PM / sound-haptics / routing engine). *(Hyle done — `mbaliga/Hyle-Design-System`.)*
-5. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, Devices/SSH
+## Open owner decisions (engineering-scoped)
+1. Create the sound/haptics repo + grant access.
+2. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, Devices/SSH
    flows, USB flash with a real board.
+
+Business/monetization decisions are tracked privately, not in this repo.
 
 ## How to continue (for the next chat)
 1. Read **`docs/STATE.md`** (the living index), then this file's binding rules + building.
-2.  for the business; `docs/design/*` for per-surface specs
-   (`agentic-ide.md`, `information-architecture.md`, `workflow-builder.md`); `docs/handoff/
-   hyle-extraction.md` — the split plan, now **executed** (Hyle lives in `mbaliga/Hyle-Design-System`;
-   kept as historical record).
+2. `docs/design/*` for per-surface specs (`agentic-ide.md`, `information-architecture.md`,
+   `workflow-builder.md`); `docs/handoff/hyle-extraction.md` — the split plan, now **executed**
+   (Hyle lives in `mbaliga/Hyle-Design-System`; kept as historical record).
 3. Keep the gate green, ship small legible PRs to `main`, refresh `aarso-sd.apk` on `apk-dist`,
    and be honest that on-device behaviour is owner-verified.
