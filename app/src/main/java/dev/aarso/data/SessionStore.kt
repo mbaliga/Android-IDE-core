@@ -35,9 +35,10 @@ class SessionStore(context: Context) {
     private val _entropyColoring = MutableStateFlow(prefs.getBoolean(KEY_ENTROPY, true))
     val entropyColoring: StateFlow<Boolean> = _entropyColoring.asStateFlow()
 
-    // On-screen Ctrl-C button in Terminal — off by default for anyone whose keyboard already has
-    // a physical/IME control key (e.g. Clackpad), on by default for everyone else. The /ctrlc
-    // slash command always works regardless of this setting; this only hides the redundant button.
+    // On-screen Ctrl-C button in Terminal — on by default; a Settings toggle for anyone whose
+    // keyboard already has a physical/IME control key (e.g. Clackpad) to hide the now-redundant
+    // button. No keyboard detection here — it's a manual opt-out, not an automatic one. The
+    // /ctrlc slash command always works regardless of this setting.
     private val _terminalCtrlCButton = MutableStateFlow(prefs.getBoolean(KEY_TERMINAL_CTRL_C, true))
     val terminalCtrlCButton: StateFlow<Boolean> = _terminalCtrlCButton.asStateFlow()
 

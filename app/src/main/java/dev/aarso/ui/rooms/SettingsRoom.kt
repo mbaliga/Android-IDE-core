@@ -524,7 +524,7 @@ private fun GeneralSettings(
 
     Text("Terminal Ctrl-C button", style = MaterialTheme.typography.titleMedium)
     Text(
-        "Off by default if your keyboard already has a control key (e.g. Clackpad) — " +
+        "On by default. Turn it off if your keyboard already has a control key (e.g. Clackpad) — " +
             "typing /ctrlc always works either way.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

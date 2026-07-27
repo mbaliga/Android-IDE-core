@@ -34,6 +34,13 @@ class CouncilRoutingTest {
     }
 
     @Test
+    fun `trailing punctuation right after the name is stripped before matching`() {
+        assertEquals("Skeptic", CouncilRouting.addressee("@Skeptic, thoughts?", names))
+        assertEquals("Skeptic", CouncilRouting.addressee("@Skeptic: go", names))
+        assertEquals("Skeptic", CouncilRouting.addressee("@Skeptic!", names))
+    }
+
+    @Test
     fun `bare sigil with no token is not an address`() {
         assertNull(CouncilRouting.addressee("@ hello", names))
     }

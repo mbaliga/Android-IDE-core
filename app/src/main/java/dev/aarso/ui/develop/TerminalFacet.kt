@@ -184,7 +184,10 @@ fun TerminalFacet() {
             "Remote" + (remoteAlias?.let { " ($it)" } ?: ""),
             selected = mode == REMOTE,
             enabled = hosts.isNotEmpty(),
-            onClick = { if (mode != REMOTE) switchTo(REMOTE, hosts.firstOrNull()?.alias) },
+            // Only auto-pick when there's exactly one saved host (the size==1 LaunchedEffect
+            // below does the same) — with several, land on the in-CLI "/connect <alias>" hint
+            // instead of silently always connecting to whichever host happens to be first.
+            onClick = { if (mode != REMOTE) switchTo(REMOTE, hosts.singleOrNull()?.alias) },
         )
     }
     Spacer(Modifier.height(8.dp))

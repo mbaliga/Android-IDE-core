@@ -554,7 +554,7 @@ class ChatViewModel(
     private fun sendShellEscape(text: String) {
         val command = dev.aarso.ui.components.shellEscapeCommand(text) ?: return
         viewModelScope.launch {
-            transient.value = transient.value.copy(error = null)
+            transient.value = transient.value.copy(error = null, genPhase = GenPhase.GENERATING)
             try {
                 val parent = activeLeafId.value?.let { repository.node(it) }
                 val userNode = Nodes.child(parent, Role.USER, text, System.currentTimeMillis())
@@ -570,6 +570,8 @@ class ChatViewModel(
                 moveLeaf(resultNode.id)
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(error = t.message ?: "shell command failed")
+            } finally {
+                transient.value = transient.value.copy(genPhase = GenPhase.IDLE)
             }
         }
     }
