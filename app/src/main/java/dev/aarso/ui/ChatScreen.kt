@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -86,11 +89,16 @@ import dev.aarso.domain.tree.Conversations
 import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
+import dev.aarso.data.DownloadCenter
 import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.hyle.cells.HyleNavChip
+import dev.aarso.hyle.cells.HyleTabBar
+import dev.aarso.hyle.cells.HyleTabSpec
 import dev.aarso.hyle.cells.FileImage
 import dev.aarso.hyle.theme.LocalHyleColors
+import dev.aarso.ui.develop.TerminalFacet
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -123,6 +131,37 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Chat / Terminal — two windows onto the same underlying capability: ask in Chat and it runs,
+    // or drive the shell directly in Terminal (§ owner spec, 2026-07-27). Background tasks is a
+    // layer BENEATH both, not a third peer tab — see [BackgroundTasksStrip].
+    val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
+    val c = LocalHyleColors.current
+    var chatTab by remember { mutableStateOf(ChatTab.CHAT) }
+    val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["chat"] ?: universalTabBarPosition
+    val activeDownloads by container.downloadCenter.active.collectAsState()
+
+    // Slash commands: a keyboard-driven shortcut to the same actions the header chips, "+" sheet,
+    // and composer-mode row already expose — nothing here reaches for a navigation hook the
+    // screen doesn't already have.
+    val slashCommands = remember(onOpenChats, onOpenSettings) {
+        listOf(
+            SlashCommand("/chat", "Switch to Chat") { chatTab = ChatTab.CHAT },
+            SlashCommand("/terminal", "Switch to Terminal") { chatTab = ChatTab.TERMINAL },
+            SlashCommand("/participants", "Manage council participants") { showParticipants = true },
+            SlashCommand("/models", "Switch model") { showModelSheet = true },
+            SlashCommand("/image", "Generate an image") { viewModel.setComposerMode(ComposerMode.IMAGE) },
+            SlashCommand("/chats", "Open Chats") { onOpenChats() },
+            SlashCommand("/settings", "Open Settings") { onOpenSettings() },
+        )
+    }
+    val slashMatches = if (input.startsWith("/")) {
+        slashCommands.filter { it.name.startsWith(input.trim(), ignoreCase = true) }
+    } else {
+        emptyList()
+    }
 
     // §7: text shared in / selected elsewhere arrives here — prefill the input.
     val intake by viewModel.intake.collectAsState()
@@ -161,15 +200,35 @@ fun ChatScreen(
                 onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
                 onOpenChats = onOpenChats,
                 onOpenSettings = onOpenSettings,
+                showNavChips = tabBarPosition != "BOTTOM",
             )
-            InstrumentsStrip(
-                state = state,
-                input = input,
-                expanded = instrumentsExpanded,
-                onToggle = { viewModel.setInstrumentsExpanded(!instrumentsExpanded) },
-                entropyColoring = entropyColoring,
-                onEntropyColoring = viewModel::setEntropyColoring,
-            )
+            if (tabBarPosition != "BOTTOM") {
+                ChatTabBar(
+                    tab = chatTab,
+                    tabBarPosition = tabBarPosition,
+                    onSelect = { chatTab = it },
+                    onOpenChats = onOpenChats,
+                    onOpenSettings = onOpenSettings,
+                )
+            }
+            when (chatTab) {
+                ChatTab.TERMINAL -> Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
+                    TerminalFacet()
+                }
+                ChatTab.CHAT -> Column(Modifier.weight(1f)) {
+                    BackgroundTasksStrip(activeDownloads)
+                    InstrumentsStrip(
+                        state = state,
+                        input = input,
+                        expanded = instrumentsExpanded,
+                        onToggle = { viewModel.setInstrumentsExpanded(!instrumentsExpanded) },
+                        entropyColoring = entropyColoring,
+                        onEntropyColoring = viewModel::setEntropyColoring,
+                    )
             Box(modifier = Modifier.weight(1f).then(threadModifier)) {
                 LazyColumn(
                     state = listState,
@@ -327,6 +386,10 @@ fun ChatScreen(
                 }
             }
 
+            if (slashMatches.isNotEmpty()) {
+                SlashCommandPopup(slashMatches) { cmd -> cmd.run(); input = "" }
+            }
+
             // Image mode is entered from the "+" sheet (no pill); a banner shows + exits it.
             if (state.imageMode) {
                 Row(
@@ -401,6 +464,17 @@ fun ChatScreen(
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
+            }
+                }
+            }
+            if (tabBarPosition == "BOTTOM") {
+                ChatTabBar(
+                    tab = chatTab,
+                    tabBarPosition = tabBarPosition,
+                    onSelect = { chatTab = it },
+                    onOpenChats = onOpenChats,
+                    onOpenSettings = onOpenSettings,
+                )
             }
         }
 
@@ -494,6 +568,9 @@ private fun HomeHeader(
     onBadgeTap: () -> Unit,
     onOpenChats: () -> Unit,
     onOpenSettings: () -> Unit,
+    // False when the Chat/Terminal tab bar is docked at the bottom — the "‹ Chats"/"⚙" chips move
+    // down into that same row ([ChatTabBar]) rather than doubling up top and bottom.
+    showNavChips: Boolean = true,
 ) {
     val c = LocalHyleColors.current
     Row(
@@ -502,7 +579,9 @@ private fun HomeHeader(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Left: Chats/Back — slant on the right, rounds on the left.
-        HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
+        if (showNavChips) {
+            HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
+        }
         // Centre: current conversation title (truncated).
         Text(
             state.steps.firstOrNull { it.node.role == Role.USER }
@@ -517,9 +596,147 @@ private fun HomeHeader(
         // Replaces the fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings,
         // this slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
         HeaderIndicator(state)
-        HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
+        if (showNavChips) {
+            HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
+        }
     }
 }
+
+/**
+ * The Chat/Terminal tab bar — two windows onto the same underlying capability, not a Chat-vs-
+ * something-else split (§ owner spec). When [tabBarPosition] is "BOTTOM" this row also carries
+ * the "‹ Chats"/"⚙" chips [HomeHeader] otherwise shows at top, per the owner's "the back button
+ * is with these tabs only, as is the settings icon" instruction.
+ */
+@Composable
+private fun ChatTabBar(
+    tab: ChatTab,
+    tabBarPosition: String,
+    onSelect: (ChatTab) -> Unit,
+    onOpenChats: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (tabBarPosition == "BOTTOM") {
+            HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
+        }
+        HyleTabBar(
+            tabs = listOf(
+                HyleTabSpec("Chat") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawLine(tint, Offset(w * 0.16f, h * 0.34f), Offset(w * 0.84f, h * 0.34f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.16f, h * 0.52f), Offset(w * 0.68f, h * 0.52f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.16f, h * 0.70f), Offset(w * 0.50f, h * 0.70f), strokeWidth = sw)
+                },
+                HyleTabSpec("Terminal") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.10f
+                    drawLine(tint, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.18f, h * 0.68f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.50f, h * 0.70f), Offset(w * 0.82f, h * 0.70f), strokeWidth = sw)
+                },
+            ),
+            selected = tab.ordinal,
+            onSelect = { onSelect(ChatTab.entries[it]) },
+            position = tabBarPosition,
+            modifier = Modifier.weight(1f),
+        )
+        if (tabBarPosition == "BOTTOM") {
+            HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
+        }
+    }
+}
+
+/**
+ * Background tasks — a layer BENEATH Chat/Terminal, not a third peer tab (§ owner spec): a
+ * collapsed one-line entry inside Chat, expandable to the flat list of what's actually running.
+ * Backed by [DownloadCenter.active] — the one async-work queue this codebase already exposes as
+ * an observable list; a loop-in-progress or an agent repo job would feed the same strip once/if
+ * those expose a similar observable (rule 6 — wire only what's real today).
+ */
+@Composable
+private fun BackgroundTasksStrip(active: Map<String, DownloadCenter.State>) {
+    if (active.isEmpty()) return
+    val c = LocalHyleColors.current
+    var expanded by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 6.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (expanded) "▾" else "▸",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textMid,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Text(
+                "${active.size} background ${if (active.size == 1) "task" else "tasks"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textMid,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (expanded) {
+            active.values.forEach { s ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        s.request.fileName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = c.textHigh,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        when {
+                            s.failed -> "failed"
+                            s.paused -> "paused · ${(s.progress.fraction * 100).toInt()}%"
+                            else -> "${(s.progress.fraction * 100).toInt()}%"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (s.failed) c.error else c.textMid,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One slash command: a keyboard-driven shortcut to something the header/composer already does. */
+private data class SlashCommand(val name: String, val description: String, val run: () -> Unit)
+
+/** The popup shown above the composer while [commands] match what's typed so far. */
+@Composable
+private fun SlashCommandPopup(commands: List<SlashCommand>, onPick: (SlashCommand) -> Unit) {
+    val c = LocalHyleColors.current
+    HyleCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        commands.forEachIndexed { i, cmd ->
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onPick(cmd) }.padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(cmd.name, style = MaterialTheme.typography.labelMedium, color = c.violet, modifier = Modifier.padding(end = 10.dp))
+                Text(cmd.description, style = MaterialTheme.typography.labelSmall, color = c.textMid)
+            }
+            if (i != commands.lastIndex) HorizontalDivider(color = c.hairline)
+        }
+    }
+}
+
+/** Two windows onto the same underlying capability (§ owner spec) — never a Chat-vs-Terminal
+ *  content fork, just where you're looking from. Background tasks is a layer beneath both. */
+private enum class ChatTab { CHAT, TERMINAL }
 
 /**
  * The user-selectable status chip that replaced the fixed Me·Myself·I avatar: a single fact,

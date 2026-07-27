@@ -83,26 +83,35 @@ import androidx.compose.foundation.layout.heightIn
 import dev.aarso.domain.git.GitLookupApi
 import dev.aarso.ui.loops.LoopRoom
 
-// The 5 Settings tabs (IA §C), each an icon. Global = config; the other four are provider
-// surfaces (Image / Text / Video / 3D) that toggle on-device ⇄ watched-cloud.
+// The 4 Settings tabs (IA §C), each an icon: General (config), Models (Text/Image/Video/3D ×
+// on-device/cloud, nested inside), Dev (Git & coding / Builds / Remote / Instruments), About.
 private enum class SettingsTab(val label: String) {
-    GLOBAL("Global"), IMAGE("Image"), TEXT("Text"), VIDEO("Video"), OBJECT3D("3D")
+    GENERAL("General"), MODELS("Models"), DEV("Dev"), ABOUT("About")
 }
 
 // Providers split by where they run: on-device (the default, rule 2) vs watched cloud.
 private enum class ProviderScope { LOCAL, CLOUD }
 
+// The four provider modalities nested inside the Models tab (owner ask): Text / Image / Video
+// / 3D, each with its own on-device ⇄ watched-cloud split (ProviderScope, above).
+private enum class ModelModality(val label: String) {
+    TEXT("Text"), IMAGE("Image"), VIDEO("Video"), OBJECT3D("3D")
+}
+
 /**
- * The room parked off the RIGHT edge (IA §C): **configuration only, never a launcher.** Five
- * icon tabs — Global + the four provider surfaces. Every cloud provider is a **watched object**:
- * opt-in, isolated, never a hidden default; keys stay in the Android Keystore.
+ * The room parked off the RIGHT edge (IA §C): **configuration only, never a launcher.** Four
+ * icon tabs — General (config), Models (Text/Image/Video/3D, each on-device ⇄ watched-cloud,
+ * nested inside), Dev (Git & coding / Builds / Remote / Instruments), and About. Every cloud
+ * provider is a **watched object**: opt-in, isolated, never a hidden default; keys stay in the
+ * Android Keystore.
  *
- * Full-screen sub-surfaces (Models, Free tiers, Remote, Git…) render in a hoisted [overlay] slot
- * at the room root, OUTSIDE the scrolling content — a scrollable child measured inside a
- * verticalScroll parent gets an infinite height constraint and crashes (the PR #39 fix).
+ * Full-screen sub-surfaces (on-device model management, Free tiers, Remote, Git…) render in a
+ * hoisted [overlay] slot at the room root, OUTSIDE the scrolling content — a scrollable child
+ * measured inside a verticalScroll parent gets an infinite height constraint and crashes (the
+ * PR #39 fix).
  *
  * [extraGlobalRows] mirrors [dev.aarso.ui.rooms.ProductRoomFree]'s `extraTabs` seam: it lets an
- * above-core layer append rows to the bottom of the Global tab (e.g. an entitlement/unlock
+ * above-core layer append rows to the bottom of the General tab (e.g. an entitlement/unlock
  * status row) without this file referencing that code.
  */
 @Composable
@@ -111,7 +120,7 @@ fun SettingsRoom(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
     extraGlobalRows: List<@Composable () -> Unit> = emptyList(),
 ) {
-    var tab by remember { mutableStateOf(SettingsTab.GLOBAL) }
+    var tab by remember { mutableStateOf(SettingsTab.GENERAL) }
     var overlay by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     BackHandler(enabled = overlay != null) { overlay = null }
     val session = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container.sessionStore
@@ -128,18 +137,22 @@ fun SettingsRoom(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             when (tab) {
-                SettingsTab.GLOBAL -> GlobalSettings(
+                SettingsTab.GENERAL -> GeneralSettings(
                     onShowSpatialMap = onShowSpatialMap,
                     openOverlay = { overlay = it },
                     closeOverlay = { overlay = null },
                     extraGlobalRows = extraGlobalRows,
                 )
-                else -> ProviderTab(
-                    tab = tab,
+                SettingsTab.MODELS -> ModelsSettings(
                     viewModel = viewModel,
                     openOverlay = { overlay = it },
                     closeOverlay = { overlay = null },
                 )
+                SettingsTab.DEV -> DevSettings(
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                )
+                SettingsTab.ABOUT -> AboutSettings()
             }
         }
     }
@@ -170,7 +183,7 @@ private val SettingsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = SettingsT
         fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
             drawLine(tint, androidx.compose.ui.geometry.Offset(x0, y0), androidx.compose.ui.geometry.Offset(x1, y1), strokeWidth = sw)
         when (t) {
-            SettingsTab.GLOBAL -> {
+            SettingsTab.GENERAL -> {
                 drawCircle(tint, radius = w * 0.42f, style = stroke)
                 drawOval(
                     tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.08f),
@@ -178,41 +191,34 @@ private val SettingsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = SettingsT
                 )
                 line(w * 0.10f, h * 0.5f, w * 0.90f, h * 0.5f)
             }
-            SettingsTab.IMAGE -> {
+            SettingsTab.MODELS -> {
+                // A shelf: a rounded-rect case with three shelves — the Text/Image/Video/3D
+                // modalities nested inside this tab.
                 drawRoundRect(
-                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.18f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.64f),
+                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.14f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.72f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f), style = stroke,
                 )
-                drawCircle(tint, radius = w * 0.07f, center = androidx.compose.ui.geometry.Offset(w * 0.34f, h * 0.38f))
-                val p = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(w * 0.16f, h * 0.74f); lineTo(w * 0.42f, h * 0.50f)
-                    lineTo(w * 0.60f, h * 0.66f); lineTo(w * 0.72f, h * 0.56f); lineTo(w * 0.84f, h * 0.74f)
+                line(w * 0.22f, h * 0.36f, w * 0.78f, h * 0.36f)
+                line(w * 0.22f, h * 0.50f, w * 0.78f, h * 0.50f)
+                line(w * 0.22f, h * 0.64f, w * 0.78f, h * 0.64f)
+            }
+            SettingsTab.DEV -> {
+                // A "<>" chevron pair.
+                val left = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.42f, h * 0.24f); lineTo(w * 0.16f, h * 0.5f); lineTo(w * 0.42f, h * 0.76f)
                 }
-                drawPath(p, tint, style = stroke)
-            }
-            SettingsTab.TEXT -> {
-                line(w * 0.16f, h * 0.30f, w * 0.84f, h * 0.30f)
-                line(w * 0.16f, h * 0.50f, w * 0.72f, h * 0.50f)
-                line(w * 0.16f, h * 0.70f, w * 0.80f, h * 0.70f)
-            }
-            SettingsTab.VIDEO -> {
-                drawRoundRect(
-                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.24f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.52f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f), style = stroke,
-                )
-                val p = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(w * 0.42f, h * 0.37f); lineTo(w * 0.42f, h * 0.63f); lineTo(w * 0.62f, h * 0.50f); close()
+                drawPath(left, tint, style = stroke)
+                val right = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.58f, h * 0.24f); lineTo(w * 0.84f, h * 0.5f); lineTo(w * 0.58f, h * 0.76f)
                 }
-                drawPath(p, tint)
+                drawPath(right, tint, style = stroke)
             }
-            SettingsTab.OBJECT3D -> {
+            SettingsTab.ABOUT -> {
+                // A circle with an "i" — dot above, stem below.
                 drawCircle(tint, radius = w * 0.42f, style = stroke)
-                drawOval(
-                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.06f, h * 0.34f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.88f, h * 0.32f), style = stroke,
-                )
+                drawCircle(tint, radius = w * 0.045f, center = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.32f))
+                line(w * 0.5f, h * 0.46f, w * 0.5f, h * 0.70f)
             }
         }
     }
@@ -228,33 +234,93 @@ private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSe
     )
 }
 
+// One HyleTabSpec per ModelModality — the exact glyphs the top-level Image/Text/Video/3D tabs
+// used before the Global/Image/Text/Video/3D → General/Models/Dev/About regroup, now nested
+// one level down inside the Models tab.
+private val ModelModalitySpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ModelModality.entries.map { t ->
+    dev.aarso.hyle.cells.HyleTabSpec(t.label) { tint ->
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+        fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
+            drawLine(tint, androidx.compose.ui.geometry.Offset(x0, y0), androidx.compose.ui.geometry.Offset(x1, y1), strokeWidth = sw)
+        when (t) {
+            ModelModality.IMAGE -> {
+                drawRoundRect(
+                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.18f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.64f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f), style = stroke,
+                )
+                drawCircle(tint, radius = w * 0.07f, center = androidx.compose.ui.geometry.Offset(w * 0.34f, h * 0.38f))
+                val p = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.16f, h * 0.74f); lineTo(w * 0.42f, h * 0.50f)
+                    lineTo(w * 0.60f, h * 0.66f); lineTo(w * 0.72f, h * 0.56f); lineTo(w * 0.84f, h * 0.74f)
+                }
+                drawPath(p, tint, style = stroke)
+            }
+            ModelModality.TEXT -> {
+                line(w * 0.16f, h * 0.30f, w * 0.84f, h * 0.30f)
+                line(w * 0.16f, h * 0.50f, w * 0.72f, h * 0.50f)
+                line(w * 0.16f, h * 0.70f, w * 0.80f, h * 0.70f)
+            }
+            ModelModality.VIDEO -> {
+                drawRoundRect(
+                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.24f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.52f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f), style = stroke,
+                )
+                val p = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.42f, h * 0.37f); lineTo(w * 0.42f, h * 0.63f); lineTo(w * 0.62f, h * 0.50f); close()
+                }
+                drawPath(p, tint)
+            }
+            ModelModality.OBJECT3D -> {
+                drawCircle(tint, radius = w * 0.42f, style = stroke)
+                drawOval(
+                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.06f, h * 0.34f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.88f, h * 0.32f), style = stroke,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelModalityTabBar(selected: ModelModality, onSelect: (ModelModality) -> Unit) {
+    dev.aarso.hyle.cells.HyleTabBar(
+        tabs = ModelModalitySpecs,
+        selected = ModelModality.entries.indexOf(selected),
+        onSelect = { onSelect(ModelModality.entries[it]) },
+    )
+}
+
 /**
- * A provider surface (Image / Text / Video / 3D) with an on-device ⇄ watched-cloud toggle
- * (IA §C). On-device is the default (rule 2). Video/3D have no engine wired yet — shown
- * honestly as planned, never faked (rule 6).
+ * The Models tab (owner ask): Text / Image / Video / 3D as a nested tab row, each with its own
+ * on-device ⇄ watched-cloud toggle (IA §C) beneath it. On-device is the default (rule 2).
+ * Video/3D have no engine wired yet — shown honestly as planned, never faked (rule 6).
  */
 @Composable
-private fun ColumnScope.ProviderTab(
-    tab: SettingsTab,
+private fun ColumnScope.ModelsSettings(
     viewModel: SettingsViewModel,
     openOverlay: (@Composable () -> Unit) -> Unit,
     closeOverlay: () -> Unit,
 ) {
-    var scope by remember(tab) { mutableStateOf(ProviderScope.LOCAL) }
+    var modality by remember { mutableStateOf(ModelModality.TEXT) }
+    ModelModalityTabBar(modality) { modality = it }
+    var scope by remember(modality) { mutableStateOf(ProviderScope.LOCAL) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         HyleChip(scope == ProviderScope.LOCAL, { scope = ProviderScope.LOCAL }, "On-device")
         HyleChip(scope == ProviderScope.CLOUD, { scope = ProviderScope.CLOUD }, "Cloud · watched")
     }
-    when (tab) {
-        SettingsTab.TEXT ->
+    when (modality) {
+        ModelModality.TEXT ->
             if (scope == ProviderScope.CLOUD) TextSettings(viewModel)
             else LocalModels("chat", openOverlay, closeOverlay)
-        SettingsTab.IMAGE ->
+        ModelModality.IMAGE ->
             if (scope == ProviderScope.CLOUD) ImageSettings(viewModel)
             else LocalModels("image", openOverlay, closeOverlay)
-        SettingsTab.VIDEO -> PlannedProvider("Video", scope)
-        SettingsTab.OBJECT3D -> PlannedProvider("3D-model", scope)
-        SettingsTab.GLOBAL -> Unit // handled by SettingsRoom
+        ModelModality.VIDEO -> PlannedProvider("Video", scope)
+        ModelModality.OBJECT3D -> PlannedProvider("3D-model", scope)
     }
 }
 
@@ -306,9 +372,8 @@ private fun PlannedProvider(label: String, scope: ProviderScope) {
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GlobalSettings(
+private fun GeneralSettings(
     onShowSpatialMap: () -> Unit,
     openOverlay: (@Composable () -> Unit) -> Unit,
     closeOverlay: () -> Unit,
@@ -318,7 +383,7 @@ private fun GlobalSettings(
     val session = container.sessionStore
 
     // "Me · Myself · I" — the user meta (drift inert; linked accounts; usage). Provisional home
-    // is here in Global until the owner picks its spatial place (IA open question).
+    // is here in General until the owner picks its spatial place (IA open question).
     Text("You", style = MaterialTheme.typography.titleMedium)
     Text(
         "Your linked accounts, usage overview, and the (inert) self-reflection mirror.",
@@ -359,7 +424,7 @@ private fun GlobalSettings(
     }
     HorizontalDivider()
 
-    // Models are managed in the provider tabs (Image/Text/…) now; Settings is not a launcher.
+    // Models are managed in the Models tab (Text/Image/Video/3D) now; Settings is not a launcher.
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Cloud free tiers", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         dev.aarso.ui.guide.HelpIcon(dev.aarso.domain.guide.Guides.ADD_CLOUD)
@@ -509,10 +574,26 @@ private fun GlobalSettings(
         HyleChip(councilDefault == "PERSONAS", { session.setCouncilDefault("PERSONAS") }, "Personas")
         HyleChip(councilDefault == "MODELS", { session.setCouncilDefault("MODELS") }, "Models")
     }
-    HorizontalDivider()
 
     // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —
     // reach them from the map (see "How to move around" above). Settings is config only.
+    // Git & coding / Builds / Remote / Instruments live under the Dev tab.
+
+    if (extraGlobalRows.isNotEmpty()) {
+        HorizontalDivider()
+        for (row in extraGlobalRows) row()
+    }
+}
+
+/** Build/dev surfaces moved out of General (owner ask): connect a Git host + see your builds,
+ *  connect to your own machines over SSH, and the entropy-colouring instrument. */
+@Composable
+private fun DevSettings(
+    openOverlay: (@Composable () -> Unit) -> Unit,
+    closeOverlay: () -> Unit,
+) {
+    val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
+    val session = container.sessionStore
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Remote", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -560,8 +641,14 @@ private fun GlobalSettings(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     BuildsSection()
-    HorizontalDivider()
+}
 
+/** Version + local-first blurb, plus (debug builds only) a long-press to preview the
+ *  crash-recovery screen without a real crash. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AboutSettings() {
+    val context = LocalContext.current
     Text("About", style = MaterialTheme.typography.titleMedium)
     Text(
         "Fonebrew ${dev.aarso.BuildConfig.VERSION_NAME} (${dev.aarso.BuildConfig.VERSION_CODE})\n\n" +
@@ -590,11 +677,6 @@ private fun GlobalSettings(
             Modifier
         },
     )
-
-    if (extraGlobalRows.isNotEmpty()) {
-        HorizontalDivider()
-        for (row in extraGlobalRows) row()
-    }
 }
 
 @Composable

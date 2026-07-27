@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aarso.FonebrewApp
-import dev.aarso.hyle.cells.HyleColorPicker
+import dev.aarso.hyle.cells.HyleColorPicker3D
 
 /** Curated quick-start accents — the "floor" of customization. Each is mid-bright so
  *  the ramp derivation + contrast clamp keep it AA-safe in both light and dark. */
@@ -82,9 +82,10 @@ fun ThemePicker(modifier: Modifier = Modifier) {
             }
         }
 
-        // Free colour — the reusable Hyle picker (a saturation/value field + hue slider). The
-        // ramp derivation + contrast clamp downstream keep any pick AA-legible in both modes.
-        HyleColorPicker(
+        // Free colour — Hyle's real 3D picker (hue ring + HSV/RGB/Lab/HCL slice + a live model of
+        // the space), the same one the tactile kit ships, verbatim. The ramp derivation +
+        // contrast clamp downstream keep any pick AA-legible in both modes.
+        HyleColorPicker3D(
             color = accent,
             onColorChange = { session.setAccentColor(it.toHexRgb()) },
         )

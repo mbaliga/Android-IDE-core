@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -34,11 +36,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -56,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.flow.distinctUntilChanged
 import dev.aarso.FonebrewApp
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.library.ConvSort
@@ -385,6 +390,11 @@ private class ConversationListProps(
     val onSetProject: (Conversations.Summary) -> Unit,
 )
 
+/** Shared "is this the open conversation" predicate — the same test [FolderTabRow] inlines,
+ *  hoisted here so [ConversationCard] and its threading connector can share one source of truth. */
+private fun ConversationListProps.isActive(conv: Conversations.Summary): Boolean =
+    conv.latestLeafId in activeIds || firstNodeId == conv.rootId
+
 @Composable
 private fun ConversationList(p: ConversationListProps) {
     if (p.conversations.isEmpty()) {
@@ -396,12 +406,27 @@ private fun ConversationList(p: ConversationListProps) {
         )
         return
     }
+    val listState = rememberLazyListState()
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    // The design kit's "haptic effect on scroll": one light tick per row scrolled past, driven
+    // off the first-visible-item index (not raw scroll delta) so it fires once per threshold
+    // crossing rather than continuously while dragging.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { haptics.tap() }
+    }
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
     ) {
-        items(p.conversations, key = { it.rootId }) { conv -> ConversationCard(p, conv) }
+        itemsIndexed(p.conversations, key = { _, conv -> conv.rootId }) { idx, conv ->
+            ConversationCard(p, conv, index = idx + 1)
+            if (idx != p.conversations.lastIndex) {
+                ConversationRowConnector(accent = p.isActive(conv) || p.isActive(p.conversations[idx + 1]))
+            }
+        }
     }
 }
 
@@ -645,31 +670,86 @@ private fun ImageList(
     }
 }
 
+/**
+ * A short vertical connector threading between two consecutive flat-list rows, aligned under
+ * the leading tab-flag — the "numbered tabs threaded together" look from the owner's reference
+ * screenshot. Drawn as its own fixed-height band so the plain [HorizontalDivider] between rows
+ * can sit centered inside it without breaking the thread.
+ */
 @Composable
-private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary) {
+private fun ConversationRowConnector(accent: Boolean) {
     val c = LocalHyleColors.current
-    val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
+    Box(Modifier.fillMaxWidth().height(10.dp)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .width(5.dp)
+                .fillMaxHeight()
+                .background(if (accent) c.violet else c.outline),
+        )
+        HorizontalDivider(
+            color = c.hairline,
+            modifier = Modifier.align(Alignment.Center),
+        )
+    }
+}
+
+/**
+ * The flat "All conversations" row, restyled to [FolderTabRow]'s "hanging tab" grammar — a
+ * leading numbered tab-flag + index prefix instead of a boxed [Card] — minus the folder body
+ * around it, since this is a flat list rather than a project group. Threaded to its neighbours
+ * by [ConversationRowConnector] rather than its own border/background.
+ */
+@Composable
+private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary, index: Int) {
+    val c = LocalHyleColors.current
+    val active = p.isActive(conv)
+    val shape = RoundedCornerShape(10.dp)
     var showActions by remember { mutableStateOf(false) }
     val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                enabled = p.enabled,
-                onClick = { p.onOpen(conv) },
-                onLongClick = { haptics.tap(); showActions = true },
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (active) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-        ),
-        border = BorderStroke(1.dp, c.hairline),
-    ) {
-        Box(Modifier.padding(14.dp)) {
-            ConversationCardContent(p, conv)
+    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        // Leading "tab flag", same visual grammar as FolderTabRow's.
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(5.dp)
+                .clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp))
+                .background(if (active) c.violet else c.outline),
+        )
+        Spacer(Modifier.width(4.dp))
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(shape)
+                .then(
+                    if (active) {
+                        Modifier.background(c.violet, shape)
+                    } else {
+                        Modifier.background(c.raised, shape)
+                    },
+                )
+                .combinedClickable(
+                    enabled = p.enabled,
+                    onClick = { p.onOpen(conv) },
+                    onLongClick = { haptics.tap(); showActions = true },
+                )
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "%02d".format(index),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (active) c.onViolet.copy(alpha = 0.7f) else c.textMid,
+                modifier = Modifier.padding(end = 10.dp),
+            )
+            Box(Modifier.weight(1f)) {
+                ConversationCardContent(
+                    p, conv,
+                    titleColor = if (active) c.onViolet else c.textHigh,
+                    mutedColor = if (active) c.onViolet.copy(alpha = 0.75f) else c.textMid,
+                    accentColor = if (active) c.onViolet else c.violet,
+                )
+            }
         }
     }
     if (showActions) {
@@ -689,8 +769,9 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
  * long-press [ConversationActionsSheet], matching [FolderTabRow]'s pattern). [FolderTabRow]
  * builds its own row content rather than calling this one — a tab row and a flat card read
  * differently enough that sharing this function would fight both layouts — but they share the
- * same long-press sheet. [titleColor]/[mutedColor]/[accentColor] remain overridable for a future
- * non-default caller; [ConversationCard] is the only caller today and uses the defaults.
+ * same long-press sheet. [titleColor]/[mutedColor]/[accentColor] default to the plain-surface
+ * palette; [ConversationCard] overrides them to the violet-fill/on-violet pair on its active row,
+ * same as [FolderTabRow]'s own active-state colours.
  */
 @Composable
 private fun ConversationCardContent(
