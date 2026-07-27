@@ -20,33 +20,7 @@ class GeminiEngine(provider: CloudProvider, apiKey: String) :
     CloudEngine(provider, apiKey) {
 
     override fun buildRequest(messages: List<MessageNode>, params: SamplingParams): Request {
-        val contents = JSONArray()
-        for (m in messages) {
-            if (m.role == Role.SYSTEM) continue
-            val role = if (m.role == Role.ASSISTANT) "model" else "user"
-            contents.put(
-                JSONObject()
-                    .put("role", role)
-                    .put("parts", JSONArray().put(JSONObject().put("text", m.content))),
-            )
-        }
-        val body = JSONObject().put("contents", contents)
-
-        val system = messages.filter { it.role == Role.SYSTEM }.joinToString("\n\n") { it.content }
-        if (system.isNotBlank()) {
-            body.put(
-                "systemInstruction",
-                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))),
-            )
-        }
-        if (provider.kind.supportsSampling) {
-            body.put(
-                "generationConfig",
-                JSONObject()
-                    .put("temperature", params.temperature.toDouble())
-                    .put("topP", params.topP.toDouble()),
-            )
-        }
+        val body = buildGeminiRequestBody(messages, params, supportsSampling = provider.kind.supportsSampling)
 
         val url = provider.baseUrl.trimEnd('/') +
             "/v1beta/models/${provider.model}:streamGenerateContent?alt=sse"
@@ -75,4 +49,50 @@ class GeminiEngine(provider: CloudProvider, apiKey: String) :
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
     }
+}
+
+/**
+ * Pure JSON-body builder for the Gemini `generateContent` request, factored out
+ * of [GeminiEngine.buildRequest] so it's unit-testable without the OkHttp
+ * [Request] wrapper (`buildRequest` is `protected` on [CloudEngine] and
+ * unreachable from a JVM test that isn't a subclass). `generationConfig` is
+ * always sent with `maxOutputTokens` set — previously the body omitted any
+ * output-token cap entirely and every reply relied on the server default;
+ * `temperature`/`topP` are added into that same object (not a duplicate one)
+ * only when the provider kind supports sampling knobs.
+ */
+internal fun buildGeminiRequestBody(
+    messages: List<MessageNode>,
+    params: SamplingParams,
+    supportsSampling: Boolean,
+): JSONObject {
+    val contents = JSONArray()
+    for (m in messages) {
+        if (m.role == Role.SYSTEM) continue
+        val role = if (m.role == Role.ASSISTANT) "model" else "user"
+        contents.put(
+            JSONObject()
+                .put("role", role)
+                .put("parts", JSONArray().put(JSONObject().put("text", m.content))),
+        )
+    }
+    val body = JSONObject().put("contents", contents)
+
+    val system = messages.filter { it.role == Role.SYSTEM }.joinToString("\n\n") { it.content }
+    if (system.isNotBlank()) {
+        body.put(
+            "systemInstruction",
+            JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))),
+        )
+    }
+
+    val generationConfig = JSONObject().put("maxOutputTokens", params.maxTokens)
+    if (supportsSampling) {
+        generationConfig
+            .put("temperature", params.temperature.toDouble())
+            .put("topP", params.topP.toDouble())
+    }
+    body.put("generationConfig", generationConfig)
+
+    return body
 }

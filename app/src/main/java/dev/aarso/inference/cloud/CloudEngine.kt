@@ -1,5 +1,6 @@
 package dev.aarso.inference.cloud
 
+import dev.aarso.BuildConfig
 import dev.aarso.domain.GeneratedToken
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.SamplingParams
@@ -78,14 +79,18 @@ abstract class CloudEngine(
         lastUsage = UsageReport.ZERO
         val listener = object : EventSourceListener() {
             override fun onEvent(es: EventSource, id: String?, type: String?, data: String) {
-                runCatching { usageOf(type, data) }.getOrNull()?.let {
-                    usage.merge(it); lastUsage = usage.current
-                }
+                runCatching { usageOf(type, data) }
+                    .onFailure { logSseParseFailure("usageOf", type, it) }
+                    .getOrNull()?.let {
+                        usage.merge(it); lastUsage = usage.current
+                    }
                 if (isDone(type, data)) {
                     close()
                     return
                 }
-                val text = runCatching { parseDelta(type, data) }.getOrNull()
+                val text = runCatching { parseDelta(type, data) }
+                    .onFailure { logSseParseFailure("parseDelta", type, it) }
+                    .getOrNull()
                 if (!text.isNullOrEmpty()) trySend(GeneratedToken(text))
             }
 
@@ -111,4 +116,16 @@ abstract class CloudEngine(
 
     /** Extract the text chunk from one SSE event, or null if it carries none. */
     protected abstract fun parseDelta(type: String?, data: String): String?
+
+    /**
+     * Debug-only visibility into a swallowed SSE parse failure — [usageOf] and [parseDelta]
+     * stay tolerant of malformed/unexpected provider events (still return null, still never
+     * crash or surface to the user), but silently eating every exception made provider drift
+     * indistinguishable from a quiet stream. Release builds stay silent.
+     */
+    private fun logSseParseFailure(fn: String, type: String?, t: Throwable) {
+        if (BuildConfig.DEBUG) {
+            android.util.Log.w("Fonebrew", "CloudEngine.$fn failed on event type=$type: $t")
+        }
+    }
 }

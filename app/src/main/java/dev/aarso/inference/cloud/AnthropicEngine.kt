@@ -19,19 +19,7 @@ class AnthropicEngine(provider: CloudProvider, apiKey: String) :
     CloudEngine(provider, apiKey) {
 
     override fun buildRequest(messages: List<MessageNode>, params: SamplingParams): Request {
-        val system = messages.filter { it.role == Role.SYSTEM }
-            .joinToString("\n\n") { it.content }
-        val msgs = JSONArray()
-        for (m in messages) {
-            if (m.role == Role.SYSTEM) continue
-            msgs.put(JSONObject().put("role", m.role.wire).put("content", m.content))
-        }
-        val body = JSONObject()
-            .put("model", provider.model)
-            .put("max_tokens", params.maxTokens)
-            .put("stream", true)
-            .put("messages", msgs)
-        if (system.isNotBlank()) body.put("system", system)
+        val body = buildAnthropicRequestBody(messages, params, provider.model)
 
         return Request.Builder()
             .url(provider.baseUrl.trimEnd('/') + "/v1/messages")
@@ -57,4 +45,33 @@ class AnthropicEngine(provider: CloudProvider, apiKey: String) :
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
     }
+}
+
+/**
+ * Pure JSON-body builder for the Anthropic Messages API request, factored out of
+ * [AnthropicEngine.buildRequest] so it's unit-testable without the OkHttp [Request]
+ * wrapper (`buildRequest` is `protected` on [CloudEngine] and unreachable from a
+ * JVM test that isn't a subclass). System turns are joined into the top-level
+ * `system` field; only user/assistant turns go in `messages`. `max_tokens` is
+ * always sent — the Messages API rejects a request without it.
+ */
+internal fun buildAnthropicRequestBody(
+    messages: List<MessageNode>,
+    params: SamplingParams,
+    model: String,
+): JSONObject {
+    val system = messages.filter { it.role == Role.SYSTEM }
+        .joinToString("\n\n") { it.content }
+    val msgs = JSONArray()
+    for (m in messages) {
+        if (m.role == Role.SYSTEM) continue
+        msgs.put(JSONObject().put("role", m.role.wire).put("content", m.content))
+    }
+    val body = JSONObject()
+        .put("model", model)
+        .put("max_tokens", params.maxTokens)
+        .put("stream", true)
+        .put("messages", msgs)
+    if (system.isNotBlank()) body.put("system", system)
+    return body
 }

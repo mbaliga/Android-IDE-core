@@ -742,8 +742,8 @@ private fun TextSettings(viewModel: SettingsViewModel) {
     )
     ProviderForm(
         editing = editing,
-        onSave = { id, name, kind, baseUrl, model, ctx, key ->
-            viewModel.save(id, name, kind, baseUrl, model, ctx, key)
+        onSave = { id, name, kind, baseUrl, model, ctx, vision, key ->
+            viewModel.save(id, name, kind, baseUrl, model, ctx, vision, key)
             editing = null
         },
         onCancelEdit = { editing = null },
@@ -1514,7 +1514,7 @@ private fun ProviderRow(
 @Composable
 private fun ProviderForm(
     editing: CloudProvider?,
-    onSave: (String?, String, ProviderKind, String, String, Int, String) -> Unit,
+    onSave: (String?, String, ProviderKind, String, String, Int, Boolean, String) -> Unit,
     onCancelEdit: () -> Unit,
 ) {
     // Keyed on the provider being edited so tapping a card reloads the form.
@@ -1523,6 +1523,7 @@ private fun ProviderForm(
     var baseUrl by remember(editing) { mutableStateOf(editing?.baseUrl ?: kind.defaultBaseUrl) }
     var model by remember(editing) { mutableStateOf(editing?.model ?: "") }
     var contextWindow by remember(editing) { mutableStateOf((editing?.contextWindow ?: 8192).toString()) }
+    var supportsVision by remember(editing) { mutableStateOf(editing?.supportsVision ?: true) }
     var apiKey by remember(editing) { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1552,6 +1553,14 @@ private fun ProviderForm(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Model understands images", style = MaterialTheme.typography.bodyMedium)
+            HyleSwitch(checked = supportsVision, onCheckedChange = { supportsVision = it })
+        }
         HyleField(
             apiKey, { apiKey = it },
             label = if (editing == null) "API key (encrypted on-device)" else "API key (blank = keep stored)",
@@ -1562,8 +1571,11 @@ private fun ProviderForm(
         HyleButton(
             if (editing == null) "Save provider" else "Save changes",
             onClick = {
-                onSave(editing?.id, name, kind, baseUrl, model, contextWindow.toIntOrNull() ?: 8192, apiKey)
-                name = ""; model = ""; apiKey = ""; contextWindow = "8192"
+                onSave(
+                    editing?.id, name, kind, baseUrl, model,
+                    contextWindow.toIntOrNull() ?: 8192, supportsVision, apiKey,
+                )
+                name = ""; model = ""; apiKey = ""; contextWindow = "8192"; supportsVision = true
             },
             // A new provider needs a key; an edit may keep the stored one.
             enabled = model.isNotBlank() && (apiKey.isNotBlank() || editing != null),

@@ -18,18 +18,12 @@ class OpenAiCompatEngine(provider: CloudProvider, apiKey: String) :
     CloudEngine(provider, apiKey) {
 
     override fun buildRequest(messages: List<MessageNode>, params: SamplingParams): Request {
-        val msgs = JSONArray()
-        for (m in messages) {
-            msgs.put(JSONObject().put("role", m.role.wire).put("content", m.content))
-        }
-        val body = JSONObject()
-            .put("model", provider.model)
-            .put("messages", msgs)
-            .put("stream", true)
-        if (provider.kind.supportsSampling) {
-            body.put("temperature", params.temperature.toDouble())
-            body.put("top_p", params.topP.toDouble())
-        }
+        val body = buildOpenAiCompatRequestBody(
+            messages,
+            params,
+            model = provider.model,
+            supportsSampling = provider.kind.supportsSampling,
+        )
         return Request.Builder()
             .url(provider.baseUrl.trimEnd('/') + "/chat/completions")
             .header("Authorization", "Bearer $apiKey")
@@ -55,3 +49,35 @@ class OpenAiCompatEngine(provider: CloudProvider, apiKey: String) :
 }
 
 internal fun String?.orEmptyToNull(): String? = if (this.isNullOrEmpty()) null else this
+
+/**
+ * Pure JSON-body builder for the OpenAI-compatible chat-completions request,
+ * factored out of [OpenAiCompatEngine.buildRequest] so it's unit-testable
+ * without the OkHttp [Request] wrapper (`buildRequest` is `protected` on
+ * [CloudEngine] and unreachable from a JVM test that isn't a subclass).
+ * `max_tokens` is the field name across OpenAI-compatible servers (some newer
+ * OpenAI-only servers accept `max_completion_tokens` instead, but `max_tokens`
+ * stays the widely-supported, provider-generic choice — CLAUDE.md rule 2) and
+ * is always sent so replies stop silently truncating at server defaults.
+ */
+internal fun buildOpenAiCompatRequestBody(
+    messages: List<MessageNode>,
+    params: SamplingParams,
+    model: String,
+    supportsSampling: Boolean,
+): JSONObject {
+    val msgs = JSONArray()
+    for (m in messages) {
+        msgs.put(JSONObject().put("role", m.role.wire).put("content", m.content))
+    }
+    val body = JSONObject()
+        .put("model", model)
+        .put("messages", msgs)
+        .put("stream", true)
+        .put("max_tokens", params.maxTokens)
+    if (supportsSampling) {
+        body.put("temperature", params.temperature.toDouble())
+        body.put("top_p", params.topP.toDouble())
+    }
+    return body
+}

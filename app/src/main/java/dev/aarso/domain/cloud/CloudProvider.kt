@@ -22,6 +22,10 @@ data class CloudProvider(
     val baseUrl: String,
     val model: String,
     val contextWindow: Int,
+    /** Per-configured-instance, not per-kind: model ids are user-typed free text
+     *  (`SettingsRoom.kt` `ProviderForm`), so vision support can't be inferred from
+     *  a catalog. Default on for cloud; the owner unchecks it for a blind model. */
+    val supportsVision: Boolean = true,
 )
 
 enum class ProviderKind(
@@ -29,8 +33,11 @@ enum class ProviderKind(
     val defaultBaseUrl: String,
     /** Sampling knobs apply? Anthropic Opus 4.7+ rejects them (§3). */
     val supportsSampling: Boolean,
+    /** Server-side web search tool exists for this kind? OpenAI-compatible has no
+     *  standard server-side search, so it's false there (W2). */
+    val supportsSearch: Boolean,
 ) {
-    OPENAI_COMPATIBLE("OpenAI-compatible", "https://api.openai.com/v1", true),
-    ANTHROPIC("Anthropic (Claude)", "https://api.anthropic.com", false),
-    GEMINI("Google Gemini", "https://generativelanguage.googleapis.com", true),
+    OPENAI_COMPATIBLE("OpenAI-compatible", "https://api.openai.com/v1", true, false),
+    ANTHROPIC("Anthropic (Claude)", "https://api.anthropic.com", false, true),
+    GEMINI("Google Gemini", "https://generativelanguage.googleapis.com", true, true),
 }

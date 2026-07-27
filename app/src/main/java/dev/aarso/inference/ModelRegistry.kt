@@ -88,6 +88,10 @@ fun LocalModel.toSpec(): ModelSpec = ModelSpec(
     templateId = TemplateId.CHATML, // default; future: detect from GGUF metadata
     runtime = Runtime.LOCAL_GGUF,
     modelPath = path,
+    // Local GGUF vision (mmproj) and search (app-side SearchProvider) are both out
+    // of scope this pass — see docs/design/daily-driver.md §Not-in-this-pass.
+    supportsVision = false,
+    supportsSearch = false,
 )
 
 fun CloudProvider.toSpec(): ModelSpec = ModelSpec(
@@ -100,4 +104,8 @@ fun CloudProvider.toSpec(): ModelSpec = ModelSpec(
     runtime = Runtime.CLOUD,
     providerId = id,
     watched = true,
+    // Per-instance (model ids are free-typed, no catalog to infer from).
+    supportsVision = supportsVision,
+    // Per-kind (server-side search only exists for some providers).
+    supportsSearch = kind.supportsSearch,
 )

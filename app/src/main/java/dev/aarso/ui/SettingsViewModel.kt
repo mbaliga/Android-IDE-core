@@ -31,6 +31,7 @@ class SettingsViewModel(
         baseUrl: String,
         model: String,
         contextWindow: Int,
+        supportsVision: Boolean,
         apiKey: String,
     ) {
         val id = existingId ?: store.newId()
@@ -42,6 +43,7 @@ class SettingsViewModel(
                 baseUrl = baseUrl.trim().ifBlank { kind.defaultBaseUrl },
                 model = model.trim(),
                 contextWindow = contextWindow.coerceAtLeast(256),
+                supportsVision = supportsVision,
             ),
             apiKey = apiKey,
         )

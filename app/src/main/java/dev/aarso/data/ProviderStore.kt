@@ -64,7 +64,8 @@ class ProviderStore(context: Context) {
                     .put("kind", p.kind.name)
                     .put("baseUrl", p.baseUrl)
                     .put("model", p.model)
-                    .put("contextWindow", p.contextWindow),
+                    .put("contextWindow", p.contextWindow)
+                    .put("supportsVision", p.supportsVision),
             )
         }
         prefs.edit().putString("configs", arr.toString()).apply()
@@ -84,6 +85,7 @@ class ProviderStore(context: Context) {
                 baseUrl = o.getString("baseUrl"),
                 model = o.getString("model"),
                 contextWindow = o.optInt("contextWindow", 8192),
+                supportsVision = o.optBoolean("supportsVision", true),
             )
         }
         return out.sortedBy { it.displayName.lowercase() }

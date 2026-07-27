@@ -28,6 +28,14 @@ data class ModelSpec(
     val modelPath: String? = null,
     /** A "watched object" (§5c) — every cloud model is one; on-device models are not. */
     val watched: Boolean = false,
+    /** Can this spec take image input? Provider-generic (CLAUDE.md rule 2) — for
+     *  [Runtime.CLOUD] this threads from [dev.aarso.domain.cloud.CloudProvider.supportsVision]
+     *  (per-instance, user-set); local GGUF is false in this pass (mmproj out of scope). */
+    val supportsVision: Boolean = false,
+    /** Can this spec use server-side web search? Threads from
+     *  [dev.aarso.domain.cloud.ProviderKind.supportsSearch] for cloud specs; local
+     *  GGUF is false in this pass (no app-side SearchProvider seam yet). */
+    val supportsSearch: Boolean = false,
 ) {
     val isOnDevice: Boolean get() =
         runtime == Runtime.ECHO_DEV || runtime == Runtime.LOCAL_GGUF || runtime == Runtime.AICORE_NANO
