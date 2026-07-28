@@ -71,7 +71,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import dev.aarso.domain.markdown.StreamingMarkdown
-import dev.aarso.R
+import dev.aarso.core_engine.R
 import dev.aarso.domain.GeneratedToken
 import dev.aarso.domain.Role
 import dev.aarso.domain.instrument.Confidence

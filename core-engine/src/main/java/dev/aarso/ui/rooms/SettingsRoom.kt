@@ -508,8 +508,17 @@ private fun GlobalSettings(
     HorizontalDivider()
 
     Text("About", style = MaterialTheme.typography.titleMedium)
+    // Read the SHIPPING app's own versionName via PackageManager rather than a BuildConfig
+    // constant baked into this library: :core-engine deliberately carries no versionName of
+    // its own (that's an application-module concern — see :app/build.gradle.kts), and a
+    // future Studio :app consuming this same module has its own, different version number.
+    val appVersionName = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
     Text(
-        "Aarso ${dev.aarso.BuildConfig.VERSION_NAME} — Konkani for “mirror”.\n\n" +
+        "Aarso $appVersionName — Konkani for “mirror”.\n\n" +
             "Local-first by design: conversations, models, and keys live on this " +
             "device. No analytics, no telemetry. Cloud models run only when you " +
             "invoke them, and only against the provider you configured.",
@@ -518,7 +527,7 @@ private fun GlobalSettings(
         // Debug-only: long-press the version to preview the crash-recovery screen without
         // actually crashing (dev.aarso:crash-recovery — see that repo's README). Never
         // reachable from a release build.
-        modifier = if (dev.aarso.BuildConfig.DEBUG) {
+        modifier = if (dev.aarso.core_engine.BuildConfig.DEBUG) {
             Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {

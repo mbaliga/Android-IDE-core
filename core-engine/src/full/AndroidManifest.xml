@@ -19,9 +19,12 @@
          so phones without OTG still install. Owner-verified — no board in CI. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- Fully-qualified android:name below, same reasoning as src/main's manifest: this
+         module's namespace (dev.aarso.core_engine) doesn't match the moved classes' real
+         package (dev.aarso.*), so relative names would resolve wrong. -->
     <application>
         <service
-            android:name=".service.OverlayService"
+            android:name="dev.aarso.service.OverlayService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -30,13 +33,13 @@
         </service>
 
         <activity
-            android:name=".ui.ScreenCaptureActivity"
+            android:name="dev.aarso.ui.ScreenCaptureActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <service
-            android:name=".service.ScreenCaptureService"
+            android:name="dev.aarso.service.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
     </application>

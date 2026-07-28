@@ -71,13 +71,16 @@ jobs:
         # Maven Central / the Gradle plugin portal intermittently 403 GitHub runners
         # during dependency resolution (a transient, IP-level block — not a code error).
         # Retry a few times with backoff so a flake doesn't red a sound build.
-        # :app:checkLicense (com.github.jk1 dependency-license-report) fails the build
-        # on any runtime dependency whose license isn't in config/allowed-licenses.json
-        # — see NOTICE and app/build.gradle.kts's licenseReport block.
+        # :core-engine:checkLicense (com.github.jk1 dependency-license-report) fails the
+        # build on any runtime dependency whose license isn't in
+        # config/allowed-licenses.json — see NOTICE and core-engine/build.gradle.kts's
+        # licenseReport block. Test + license tasks moved from :app to :core-engine in the
+        # § de-fork (:app is now a thin shell with no test sources / runtime deps of its
+        # own to scan).
         run: |
           for attempt in 1 2 3; do
             echo "::group::gradle attempt $attempt"
-            if ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :app:checkLicense; then
+            if ./gradlew --no-daemon :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest :core-engine:checkLicense; then
               echo "::endgroup::"; exit 0
             fi
             echo "::endgroup::"
@@ -102,7 +105,7 @@ jobs:
           name: test-reports
           path: |
             **/build/reports/tests/
-            app/build/reports/dependency-license/
+            core-engine/build/reports/dependency-license/
           if-no-files-found: ignore
 
   # §7 FIX — weekly native-assemble canary. The full native cross-compile is too heavy
