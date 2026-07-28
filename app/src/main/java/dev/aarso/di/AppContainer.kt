@@ -85,6 +85,10 @@ class AppContainer(context: Context) {
     val imageStore: ImageStore = ImageStore(context)
     val imageProviderStore: ImageProviderStore = ImageProviderStore(context)
 
+    /** User-node photo/file attachments (daily-driver.md W1 — vision input): downscaled
+     *  copies saved to filesDir/attachments/, same shape as [imageStore]. */
+    val attachmentStore: dev.aarso.data.AttachmentStore = dev.aarso.data.AttachmentStore(context)
+
     /** Content routed in from share / process-text / assist (§7). */
     val sharedIntake: SharedIntake = SharedIntake()
 

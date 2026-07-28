@@ -56,6 +56,10 @@ object Conversations {
     /** Metadata key marking a turn whose payload is a generated image file. */
     const val IMAGE_KEY = "image"
 
+    /** Metadata key for user-node attachments — a JSON array of {path, mime}
+     *  (see [Attachments]). Path-only in v1: no width/height/kind fields. */
+    const val ATTACHMENTS_KEY = "attachments"
+
     /**
      * Every image turn in the tree, newest first — "browse images" is a filter
      * over nodes (redesign §6), not a separate store.

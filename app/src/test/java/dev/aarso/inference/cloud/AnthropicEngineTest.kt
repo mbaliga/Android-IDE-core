@@ -3,28 +3,40 @@ package dev.aarso.inference.cloud
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.Role
 import dev.aarso.domain.SamplingParams
+import dev.aarso.domain.tree.Attachments
+import dev.aarso.domain.tree.Conversations
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.util.Base64
 
 /**
  * Golden-JSON coverage for [buildAnthropicRequestBody] — the pure body-building
  * function `AnthropicEngine.buildRequest` delegates to (that method itself is
  * `protected` on [CloudEngine] and unreachable from a JVM test).
  *
- * Baseline (pre-W1) coverage only: role/content are plain strings, no image
- * blocks. W1 adds vision content-block shapes on top of this.
+ * Baseline (pre-W1) coverage: role/content are plain strings, no image blocks —
+ * these cases all call the builder without [Boolean] `supportsVision`, so it
+ * defaults to `false` and the shape is untouched. W1 vision content-block cases
+ * are below.
  */
 class AnthropicEngineTest {
 
-    private fun node(role: Role, content: String, id: String) = MessageNode(
+    private fun node(
+        role: Role,
+        content: String,
+        id: String,
+        metadata: Map<String, String> = emptyMap(),
+    ) = MessageNode(
         id = id,
         parentId = null,
         role = role,
         content = content,
         createdAt = 0L,
+        metadata = metadata,
     )
 
     @Test fun `max_tokens flows from SamplingParams into the top-level field`() {
@@ -133,5 +145,96 @@ class AnthropicEngineTest {
 
         val reparsed = JSONObject(body.toString())
         assertEquals(2048, reparsed.getInt("max_tokens"))
+    }
+
+    // --- W1: vision content blocks -----------------------------------------------------
+
+    /** A real temp file so `contentOf`'s `File(path).readBytes()` has something to read. */
+    private fun tempImageFile(bytes: ByteArray = byteArrayOf(1, 2, 3, 4)): File =
+        File.createTempFile("attachment", ".jpg").apply {
+            writeBytes(bytes)
+            deleteOnExit()
+        }
+
+    @Test fun `attachment plus text on a vision-capable model becomes an image-then-text block array`() {
+        val imageBytes = byteArrayOf(-1, -40, -1, -32, 1, 2, 3) // arbitrary bytes, not a real JPEG
+        val file = tempImageFile(imageBytes)
+        val attachmentsJson = Attachments.encode(
+            listOf(Attachments.Attachment(path = file.absolutePath, mime = "image/jpeg")),
+        )
+        val messages = listOf(
+            node(
+                Role.USER,
+                "What's in this photo?",
+                "n1",
+                metadata = mapOf(Conversations.ATTACHMENTS_KEY to attachmentsJson),
+            ),
+        )
+
+        val body = buildAnthropicRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            model = "claude-opus-5",
+            supportsVision = true,
+        )
+
+        val content = body.getJSONArray("messages").getJSONObject(0).getJSONArray("content")
+        assertEquals(2, content.length())
+
+        // Image block first.
+        val imageBlock = content.getJSONObject(0)
+        assertEquals("image", imageBlock.getString("type"))
+        val source = imageBlock.getJSONObject("source")
+        assertEquals("base64", source.getString("type"))
+        assertEquals("image/jpeg", source.getString("media_type"))
+        assertEquals(Base64.getEncoder().encodeToString(imageBytes), source.getString("data"))
+        // The data field itself is bare base64 — no "data:image/jpeg;base64," prefix.
+        assertFalse(source.getString("data").startsWith("data:"))
+
+        // Trailing text block last.
+        val textBlock = content.getJSONObject(1)
+        assertEquals("text", textBlock.getString("type"))
+        assertEquals("What's in this photo?", textBlock.getString("text"))
+    }
+
+    @Test fun `attachment on a vision-blind model falls back to a plain string, silently`() {
+        val file = tempImageFile()
+        val attachmentsJson = Attachments.encode(
+            listOf(Attachments.Attachment(path = file.absolutePath, mime = "image/jpeg")),
+        )
+        val messages = listOf(
+            node(
+                Role.USER,
+                "What's in this photo?",
+                "n1",
+                metadata = mapOf(Conversations.ATTACHMENTS_KEY to attachmentsJson),
+            ),
+        )
+
+        val body = buildAnthropicRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            model = "claude-3-blind-model",
+            supportsVision = false,
+        )
+
+        val m = body.getJSONArray("messages").getJSONObject(0)
+        assertTrue("content should fall back to a plain String, was ${m.get("content")::class}", m.get("content") is String)
+        assertEquals("What's in this photo?", m.getString("content"))
+    }
+
+    @Test fun `no attachments plus supportsVision=true stays a plain string — cache-friendly`() {
+        val messages = listOf(node(Role.USER, "Hello, Claude", "n1"))
+
+        val body = buildAnthropicRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            model = "claude-opus-5",
+            supportsVision = true,
+        )
+
+        val m = body.getJSONArray("messages").getJSONObject(0)
+        assertTrue(m.get("content") is String)
+        assertEquals("Hello, Claude", m.getString("content"))
     }
 }

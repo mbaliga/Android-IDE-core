@@ -2,6 +2,10 @@
 
 package dev.aarso.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -84,6 +89,7 @@ import dev.aarso.domain.Role
 import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
+import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.domain.tree.PathView
@@ -127,9 +133,21 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
     val entropyColoring by viewModel.entropyColoring.collectAsState()
+    val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     var input by remember { mutableStateOf("") }
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
+    // W1 (vision input): gallery pick needs no runtime permission (Android Photo Picker);
+    // camera capture writes full-res into AttachmentStore's dir via the FileProvider a sibling
+    // agent wired in the manifest, so it also needs no storage permission.
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        uri?.let { viewModel.addPendingAttachmentFromUri(it) }
+    }
+    // The contract only returns success/failure, not the Uri — ChatViewModel remembers which
+    // path it handed out (survives rotation; the ViewModel outlives this composition).
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        viewModel.onCameraCaptureResult(success)
+    }
     var showParticipants by remember { mutableStateOf(false) }
     var actionStep by remember { mutableStateOf<PathView.Step?>(null) }
     var flagStep by remember { mutableStateOf<PathView.Step?>(null) }
@@ -426,6 +444,16 @@ fun ChatScreen(
                 )
             }
 
+            // W1 (vision input): photos picked/captured but not yet sent. State lives on
+            // ChatViewModel, not a bare remember{} here (see the composer-draft-text bug this
+            // deliberately doesn't repeat) — cleared on successful send.
+            if (pendingAttachments.isNotEmpty()) {
+                PendingAttachmentStrip(
+                    attachments = pendingAttachments,
+                    onRemove = viewModel::removePendingAttachment,
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -521,6 +549,15 @@ fun ChatScreen(
     if (showPlus) {
         PlusSheet(
             onGenerateImage = { viewModel.setComposerMode(ComposerMode.IMAGE); showPlus = false },
+            supportsVision = state.activeSupportsVision,
+            onPickPhoto = {
+                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                showPlus = false
+            },
+            onTakePhoto = {
+                cameraLauncher.launch(viewModel.newCameraCaptureUri())
+                showPlus = false
+            },
             onDismiss = { showPlus = false },
         )
     }
@@ -987,11 +1024,24 @@ private fun InstrumentsStrip(
 /** The send mode, explicit and legible: one voice, a council, or an image (§4b/§6). */
 /**
  * The composer "+" sheet (Gemini-style, IA §B5): attach + generation tools, instead of pills.
- * Image generation is wired today; video / 3D / file-attach are honest "soon" rows (rule 6 —
- * never claim a capability that isn't there). They map onto the provider types in Settings.
+ * Image generation and photo attach (W1) are wired; video / 3D / file-attach are honest "soon"
+ * rows (rule 6 — never claim a capability that isn't there). They map onto the provider types
+ * in Settings. Photo/Camera stay visible even when the active model can't see images — a
+ * disabled row with the reason as its subtitle, never a hidden one (legibility thesis).
  */
 @Composable
-private fun PlusSheet(onGenerateImage: () -> Unit, onDismiss: () -> Unit) {
+private fun PlusSheet(
+    onGenerateImage: () -> Unit,
+    supportsVision: Boolean,
+    onPickPhoto: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val visionReason = if (supportsVision) {
+        "Attach a photo — the active model can see images"
+    } else {
+        "This model can't see images — switch model or continue in text"
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1001,7 +1051,8 @@ private fun PlusSheet(onGenerateImage: () -> Unit, onDismiss: () -> Unit) {
                 PlusRow("◯", "3D model", "Soon — no engine wired yet", enabled = false) {}
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 Text("Attach", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                PlusRow("🖼", "Photo", "Soon — multimodal input not wired yet", enabled = false) {}
+                PlusRow("🖼", "Photo", visionReason, enabled = supportsVision, onClick = onPickPhoto)
+                PlusRow("📷", "Camera", visionReason, enabled = supportsVision, onClick = onTakePhoto)
                 PlusRow("📎", "File", "Soon — multimodal input not wired yet", enabled = false) {}
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -1028,6 +1079,40 @@ private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Bool
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * W1 (vision input): photos picked/captured but not yet sent, above the composer field. Each
+ * thumbnail reuses [FileImage] (same decoder as the persisted-turn render branch) with a small
+ * ✕ to drop it before send — matching this codebase's text-glyph convention rather than a
+ * Material icon (no icon library is imported here today).
+ */
+@Composable
+private fun PendingAttachmentStrip(attachments: List<PendingAttachment>, onRemove: (String) -> Unit) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(attachments, key = { it.id }) { attachment ->
+            Box(modifier = Modifier.size(64.dp)) {
+                FileImage(
+                    path = attachment.path,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)),
+                )
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
+                        .clickable { onRemove(attachment.id) },
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("✕", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
         }
     }
 }
@@ -1320,6 +1405,9 @@ private fun MessageTurn(
             role = step.node.role,
             content = step.node.content,
             imagePath = step.node.metadata[Conversations.IMAGE_KEY],
+            // W1: user-node photo attachments — a different metadata key and visual slot from
+            // the assistant-generated-image branch above (they're never both present on one node).
+            attachments = Attachments.decode(step.node.metadata[Conversations.ATTACHMENTS_KEY]),
             stopped = step.node.metadata["stopped"] == "true",
             // costMinor is only ever recorded for a watched-cloud turn that reported usage
             // (LedgerComponents.kt) — reuse it as the provenance signal rather than adding a
@@ -1392,6 +1480,7 @@ private fun MessageBubble(
     role: Role,
     content: String,
     imagePath: String?,
+    attachments: List<Attachments.Attachment> = emptyList(),
     stopped: Boolean,
     watched: Boolean,
     costMinor: String?,
@@ -1423,6 +1512,19 @@ private fun MessageBubble(
         ) {
             Text(headerLabel, style = MaterialTheme.typography.labelSmall, color = c.textMid)
             Spacer(Modifier.height(4.dp))
+            // W1: user-node photo attachments render as a thumbnail row above the text — a
+            // different metadata key and slot from the assistant-generated-image branch below.
+            if (attachments.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(attachments) { a ->
+                        FileImage(
+                            path = a.path,
+                            modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
             when {
                 // An image turn: the node's payload is the generated file (§6).
                 imagePath != null -> FileImage(

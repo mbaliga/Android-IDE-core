@@ -1,11 +1,13 @@
 package dev.aarso.ui
 
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.aarso.FonebrewApp
+import dev.aarso.data.AttachmentStore
 import dev.aarso.data.DeviceInfo
 import dev.aarso.data.DownloadCenter
 import dev.aarso.data.ImageProviderStore
@@ -36,18 +38,25 @@ import dev.aarso.domain.model.ModelSpec
 import dev.aarso.domain.model.Runtime
 import dev.aarso.domain.model.checkContext
 import dev.aarso.domain.template.ChatTemplates
+import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.Nodes
 import dev.aarso.domain.tree.PathView
 import dev.aarso.domain.tree.TreeOutline
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import dev.aarso.embedding.EmbeddingLogger
 import dev.aarso.inference.EngineProvider
 import dev.aarso.inference.InferenceEngine
 import dev.aarso.inference.ModelRegistry
 import dev.aarso.inference.image.ImageEngineFactory
 import dev.aarso.service.GenerationService
+import java.io.ByteArrayOutputStream
+import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +66,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Where a turn is in its lifecycle, for the progress indicator. */
 enum class GenPhase { IDLE, LOADING, GENERATING }
@@ -84,6 +94,18 @@ data class CouncilCard(
     val text: String,
     val done: Boolean,
     val nodeId: String?,
+)
+
+/**
+ * A photo picked or captured but not yet sent (daily-driver.md W1 — vision input): already
+ * downscaled + re-encoded and saved via [AttachmentStore] (so the strip can thumbnail it via
+ * [dev.aarso.hyle.cells.FileImage] like any other on-disk image), just not yet attached to a
+ * sent user node. [id] is a local-only key for the composer strip's remove action, not a tree id.
+ */
+data class PendingAttachment(
+    val id: String,
+    val path: String,
+    val mime: String,
 )
 
 data class ChatUiState(
@@ -118,6 +140,9 @@ data class ChatUiState(
     val modelDiversity: Boolean = false,
     /** Image mode (§6): send generates an image turn instead of a text turn. */
     val imageMode: Boolean = false,
+    /** Can the active model take image input (W1)? Gates the composer's Photo/Camera rows —
+     *  they stay visible-but-disabled-with-reason when this is false, never hidden (legibility). */
+    val activeSupportsVision: Boolean = false,
 ) {
     val composerMode: ComposerMode
         get() = when {
@@ -169,6 +194,7 @@ class ChatViewModel(
     private val downloadCenter: DownloadCenter,
     private val downloader: ModelDownloader,
     private val imageStore: ImageStore,
+    private val attachmentStore: AttachmentStore,
     private val imageProviders: ImageProviderStore,
     private val sdModels: SdModelStore,
     private val pricingStore: dev.aarso.data.PricingStore,
@@ -463,6 +489,7 @@ class ChatViewModel(
                 councilCards = councilCards,
                 modelDiversity = t.modelDiversity,
                 imageMode = t.imageMode,
+                activeSupportsVision = spec?.supportsVision ?: false,
             )
         }.stateIn(
             viewModelScope,
@@ -473,8 +500,106 @@ class ChatViewModel(
                 activeModelLabel = activeModelId.value
                     ?.let { registry.byId(it)?.displayName } ?: "No model",
                 noModelActive = activeModelId.value == null,
+                activeSupportsVision = activeModelId.value?.let { registry.byId(it)?.supportsVision } ?: false,
             ),
         )
+
+    /** Pending photo attachments (W1): picked/captured but not yet sent, shown as a thumbnail
+     *  strip above the composer. Lives here rather than a bare `remember{}` in ChatScreen — the
+     *  same class of bug as the composer-draft-text one this codebase already has (W3), which
+     *  this is deliberately not repeating. Cleared on successful send. */
+    private val _pendingAttachments = MutableStateFlow<List<PendingAttachment>>(emptyList())
+    val pendingAttachments: StateFlow<List<PendingAttachment>> = _pendingAttachments.asStateFlow()
+
+    /** Set by [newCameraCaptureUri] just before the camera intent launches; consumed by
+     *  [onCameraCaptureResult] when it returns. Single in-flight capture at a time, which
+     *  matches the composer's own one-sheet-at-a-time flow. */
+    private var pendingCameraPath: String? = null
+
+    /** A fresh `content://` Uri under the attachments dir (this app's own [AttachmentStore]
+     *  authority, shared with [dev.aarso.data.ApkInstaller]'s FileProvider precedent) for
+     *  `ActivityResultContracts.TakePicture` to write a full-resolution photo into. */
+    fun newCameraCaptureUri(): Uri {
+        val path = attachmentStore.newPath("jpg")
+        pendingCameraPath = path
+        return FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", File(path))
+    }
+
+    /** Called with the camera activity's result. On success, downscales the full-res capture
+     *  into a pending attachment and drops the temp full-res file either way. */
+    fun onCameraCaptureResult(success: Boolean) {
+        val path = pendingCameraPath
+        pendingCameraPath = null
+        if (path == null) return
+        if (!success) {
+            attachmentStore.delete(path)
+            return
+        }
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) { runCatching { File(path).readBytes() }.getOrNull() }
+            attachmentStore.delete(path) // the downscaled copy is the one we keep
+            bytes?.let { addPendingAttachmentFromBytes(it) }
+        }
+    }
+
+    /** A gallery pick (`ActivityResultContracts.PickVisualMedia`) — read via contentResolver
+     *  since it's a SAF/MediaStore Uri, not one of ours. */
+    fun addPendingAttachmentFromUri(uri: Uri) {
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching { appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+            }
+            bytes?.let { addPendingAttachmentFromBytes(it) }
+        }
+    }
+
+    private suspend fun addPendingAttachmentFromBytes(bytes: ByteArray) {
+        val path = withContext(Dispatchers.IO) { downscaleAndStore(bytes) } ?: return
+        _pendingAttachments.value = _pendingAttachments.value +
+            PendingAttachment(id = java.util.UUID.randomUUID().toString(), path = path, mime = "image/jpeg")
+    }
+
+    /** Longest edge to [ATTACHMENT_MAX_EDGE], JPEG re-encode q85 (plan §Composer) — bounds
+     *  token cost across providers regardless of source resolution. Decode+scale is real CPU
+     *  work on a full-res photo, so this always runs off the main thread (caller is on IO). */
+    private fun downscaleAndStore(bytes: ByteArray): String? = runCatching {
+        val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        val longestEdge = maxOf(original.width, original.height)
+        val scaled = if (longestEdge > ATTACHMENT_MAX_EDGE) {
+            val scale = ATTACHMENT_MAX_EDGE.toFloat() / longestEdge
+            val w = (original.width * scale).toInt().coerceAtLeast(1)
+            val h = (original.height * scale).toInt().coerceAtLeast(1)
+            Bitmap.createScaledBitmap(original, w, h, true)
+        } else {
+            original
+        }
+        try {
+            val out = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            attachmentStore.save(out.toByteArray(), "jpg")
+        } finally {
+            // Always recycle both the decoded source and (when downscaling happened) the
+            // scaled copy — previously only `original` was recycled, and only when
+            // `scaled !== original`, which leaked the held bitmap on every attach when no
+            // downscale was needed (already-small source: gallery thumbnail, screenshot,
+            // re-picking an already-downscaled attachment) and leaked `scaled` itself
+            // whenever downscaling did happen.
+            if (scaled !== original) scaled.recycle()
+            original.recycle()
+        }
+    }.getOrNull()
+
+    /** Remove one not-yet-sent attachment (✕ on the strip) and delete its downscaled file —
+     *  nothing else can reference it yet, so there's no orphan-cleanup tradeoff here. */
+    fun removePendingAttachment(id: String) {
+        val target = _pendingAttachments.value.firstOrNull { it.id == id } ?: return
+        _pendingAttachments.value = _pendingAttachments.value.filterNot { it.id == id }
+        attachmentStore.delete(target.path)
+    }
+
+    private fun clearPendingAttachments() {
+        _pendingAttachments.value = emptyList()
+    }
 
     /** Every conversation (one per root), newest activity first, for the map. */
     val conversations: StateFlow<List<Conversations.Summary>> =
@@ -525,19 +650,40 @@ class ChatViewModel(
         val spec = activeModelId.value?.let { registry.byId(it) } ?: return
         val engine = engines.engineFor(spec) ?: return // not runnable yet
 
+        // W1: a vision-blind model with pending photos never silently drops them — refuse the
+        // send with a visible error instead (plan §Send path). Nothing is inserted.
+        val attachments = _pendingAttachments.value
+        if (attachments.isNotEmpty() && !spec.supportsVision) {
+            transient.value = transient.value.copy(
+                error = "${spec.displayName} can't see images — switch model or remove the photo",
+            )
+            return
+        }
+
         viewModelScope.launch {
             transient.value = transient.value.copy(error = null)
             try {
                 val parent = activeLeafId.value?.let { repository.node(it) }
+                val metadata = if (attachments.isNotEmpty()) {
+                    mapOf(
+                        Conversations.ATTACHMENTS_KEY to Attachments.encode(
+                            attachments.map { Attachments.Attachment(path = it.path, mime = it.mime) },
+                        ),
+                    )
+                } else {
+                    emptyMap()
+                }
                 val userNode = Nodes.child(
                     parent = parent,
                     role = Role.USER,
                     content = trimmed,
                     now = System.currentTimeMillis(),
+                    metadata = metadata,
                 )
                 repository.insert(userNode)
                 embeddingLogger.onMessageInserted(userNode)
                 moveLeaf(userNode.id)
+                clearPendingAttachments()
                 runTurn(spec, engine, userNode)
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(error = t.message ?: "send failed")
@@ -785,12 +931,39 @@ class ChatViewModel(
         // narrowed to a single voice for this turn (handoff §4a follow-up).
         val addressee = dev.aarso.domain.council.CouncilRouting.addressee(text, allVoices.map { it.label })
         val voices = addressee?.let { name -> allVoices.filter { it.label.equals(name, ignoreCase = true) } } ?: allVoices
+
+        // W1: same "never silently drop a pending photo" guarantee as the single-model send
+        // path, adapted for a fan-out — block the whole turn (not a per-voice partial send)
+        // when nothing in this council can see it, rather than sending the images to some
+        // voices and silently dropping them for the rest.
+        val attachments = _pendingAttachments.value
+        if (attachments.isNotEmpty() && voices.none { it.spec.supportsVision }) {
+            transient.value = transient.value.copy(
+                error = "no voice in this council can see images — switch model or remove the photo",
+            )
+            return
+        }
+
         viewModelScope.launch {
             transient.value = transient.value.copy(error = null)
             val parent = activeLeafId.value?.let { repository.node(it) }
             val userNode = Nodes.child(
                 parent, Role.USER, text, System.currentTimeMillis(),
-                metadata = addressee?.let { mapOf("addressedTo" to it) } ?: emptyMap(),
+                metadata = buildMap {
+                    addressee?.let { put("addressedTo", it) }
+                    // Attach like the single-model path; each voice's own engine gates on its
+                    // own model's supportsVision (AnthropicEngine/GeminiEngine/OpenAiCompatEngine
+                    // contentOf()), so a mixed vision/blind council sees the image only through
+                    // the voices that can actually read it — never a hard requirement that every
+                    // voice support vision, matching the "some voices are blind" reality of a
+                    // model-diversity council.
+                    if (attachments.isNotEmpty()) {
+                        put(
+                            Conversations.ATTACHMENTS_KEY,
+                            Attachments.encode(attachments.map { Attachments.Attachment(path = it.path, mime = it.mime) }),
+                        )
+                    }
+                },
             )
             try {
                 repository.insert(userNode)
@@ -800,6 +973,7 @@ class ChatViewModel(
                 return@launch
             }
             moveLeaf(userNode.id)
+            clearPendingAttachments()
 
             GenerationService.start(appContext)
             stopRequested = false
@@ -861,6 +1035,16 @@ class ChatViewModel(
         if (sdModel == null && cloud == null) {
             transient.value = transient.value.copy(
                 error = "no image model — download one in Models, or add an image provider in Settings",
+            )
+            return
+        }
+        // W1: image mode is text-to-image only — [ImageParams] has no image-input field at
+        // all, so unlike the single-model/council paths there's no engine that could ever read
+        // a pending photo here. Refuse the send rather than silently discarding it (same
+        // "never silently drops them" guarantee as the vision-blind-model refusal in send()).
+        if (_pendingAttachments.value.isNotEmpty()) {
+            transient.value = transient.value.copy(
+                error = "image generation doesn't use a photo attachment — switch mode or remove the photo",
             )
             return
         }
@@ -1084,6 +1268,11 @@ class ChatViewModel(
     }
 
     companion object {
+        /** Longest-edge cap for a pending photo attachment before it's stored (W1) — bounds
+         *  token cost across providers; Anthropic's high-res tier takes more but at ~3x image
+         *  tokens (plan note), so this stays conservative for now. */
+        private const val ATTACHMENT_MAX_EDGE = 2048
+
         private const val REWRITE_SYSTEM =
             "You improve user prompts. Output ONLY the rewritten prompt — clearer, " +
                 "specific, with role/format/constraints where useful. No preamble, no commentary."
@@ -1110,6 +1299,7 @@ class ChatViewModel(
                     c.downloadCenter,
                     c.modelDownloader,
                     c.imageStore,
+                    c.attachmentStore,
                     c.imageProviderStore,
                     c.sdModelStore,
                     c.pricingStore,

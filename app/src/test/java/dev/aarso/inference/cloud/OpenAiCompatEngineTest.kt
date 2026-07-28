@@ -3,10 +3,16 @@ package dev.aarso.inference.cloud
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.Role
 import dev.aarso.domain.SamplingParams
+import dev.aarso.domain.tree.Attachments
+import dev.aarso.domain.tree.Conversations
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.util.Base64
 
 /**
  * Golden-JSON coverage for [buildOpenAiCompatRequestBody] — the pure body-building
@@ -17,12 +23,20 @@ import org.junit.Test
  */
 class OpenAiCompatEngineTest {
 
-    private fun node(role: Role, content: String, id: String) = MessageNode(
+    @get:Rule val tmp = TemporaryFolder()
+
+    private fun node(
+        role: Role,
+        content: String,
+        id: String,
+        metadata: Map<String, String> = emptyMap(),
+    ) = MessageNode(
         id = id,
         parentId = null,
         role = role,
         content = content,
         createdAt = 0L,
+        metadata = metadata,
     )
 
     @Test fun `max_tokens flows from SamplingParams into the top-level field`() {
@@ -30,7 +44,7 @@ class OpenAiCompatEngineTest {
         val params = SamplingParams(maxTokens = 4096)
 
         val body = buildOpenAiCompatRequestBody(
-            messages, params, model = "gpt-5", supportsSampling = true,
+            messages, params, model = "gpt-5", supportsSampling = true, supportsVision = false,
         )
 
         // Structured assertion...
@@ -48,6 +62,7 @@ class OpenAiCompatEngineTest {
             SamplingParams(),
             model = "gpt-5",
             supportsSampling = true,
+            supportsVision = false,
         )
 
         assertEquals(8192, body.getInt("max_tokens"))
@@ -63,7 +78,7 @@ class OpenAiCompatEngineTest {
         val params = SamplingParams(maxTokens = 2048)
 
         val body = buildOpenAiCompatRequestBody(
-            messages, params, model = "gpt-5", supportsSampling = true,
+            messages, params, model = "gpt-5", supportsSampling = true, supportsVision = false,
         )
 
         assertEquals("gpt-5", body.getString("model"))
@@ -91,6 +106,7 @@ class OpenAiCompatEngineTest {
             SamplingParams(maxTokens = 1024, temperature = 0.5f, topP = 0.9f),
             model = "gpt-5",
             supportsSampling = true,
+            supportsVision = false,
         )
 
         assertEquals(0.5, body.getDouble("temperature"), 0.0001)
@@ -105,6 +121,7 @@ class OpenAiCompatEngineTest {
             SamplingParams(maxTokens = 1024),
             model = "gpt-5",
             supportsSampling = false,
+            supportsVision = false,
         )
 
         assertTrue(!body.has("temperature"))
@@ -119,9 +136,82 @@ class OpenAiCompatEngineTest {
             SamplingParams(maxTokens = 3000),
             model = "gpt-5",
             supportsSampling = true,
+            supportsVision = false,
         )
 
         val reparsed = JSONObject(body.toString())
         assertEquals(3000, reparsed.getInt("max_tokens"))
+    }
+
+    /** daily-driver.md W1: vision-on + an attachment on the message → `content` becomes
+     *  an `image_url`+`text` block array, image block(s) first, text block last. */
+    @Test fun `vision-on message with an attachment becomes a data-URI content block array`() {
+        val bytes = byteArrayOf(1, 2, 3, 4)
+        val file = tmp.newFile("photo.jpg").apply { writeBytes(bytes) }
+        val attachmentsJson = Attachments.encode(
+            listOf(Attachments.Attachment(path = file.absolutePath, mime = "image/jpeg")),
+        )
+        val messages = listOf(
+            node(
+                Role.USER, "What's in this photo?", "n1",
+                metadata = mapOf(Conversations.ATTACHMENTS_KEY to attachmentsJson),
+            ),
+        )
+
+        val body = buildOpenAiCompatRequestBody(
+            messages, SamplingParams(), model = "gpt-5",
+            supportsSampling = true, supportsVision = true,
+        )
+
+        val content = body.getJSONArray("messages").getJSONObject(0).getJSONArray("content")
+        assertEquals(2, content.length())
+
+        val imageBlock = content.getJSONObject(0)
+        assertEquals("image_url", imageBlock.getString("type"))
+        val expectedDataUri =
+            "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(bytes)
+        assertEquals(expectedDataUri, imageBlock.getJSONObject("image_url").getString("url"))
+
+        val textBlock = content.getJSONObject(1)
+        assertEquals("text", textBlock.getString("type"))
+        assertEquals("What's in this photo?", textBlock.getString("text"))
+    }
+
+    /** Same node, but the model is vision-blind: `content` stays the plain string it
+     *  always was — byte-identical, cache-friendly request. */
+    @Test fun `vision-off message with an attachment falls back to a plain string content`() {
+        val file = tmp.newFile("photo.jpg").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+        val attachmentsJson = Attachments.encode(
+            listOf(Attachments.Attachment(path = file.absolutePath, mime = "image/jpeg")),
+        )
+        val messages = listOf(
+            node(
+                Role.USER, "What's in this photo?", "n1",
+                metadata = mapOf(Conversations.ATTACHMENTS_KEY to attachmentsJson),
+            ),
+        )
+
+        val body = buildOpenAiCompatRequestBody(
+            messages, SamplingParams(), model = "gpt-5",
+            supportsSampling = true, supportsVision = false,
+        )
+
+        val m = body.getJSONArray("messages").getJSONObject(0)
+        assertEquals("What's in this photo?", m.getString("content"))
+        assertFalse(m.get("content") is org.json.JSONArray)
+    }
+
+    /** No attachments at all: `supportsVision=true` alone must not turn `content` into
+     *  an array — byte-identical, cache-friendly request when there's nothing to add. */
+    @Test fun `vision-on with no attachments stays a plain string`() {
+        val body = buildOpenAiCompatRequestBody(
+            listOf(node(Role.USER, "Hello", "n1")),
+            SamplingParams(), model = "gpt-5",
+            supportsSampling = true, supportsVision = true,
+        )
+
+        val m = body.getJSONArray("messages").getJSONObject(0)
+        assertTrue(m.get("content") is String)
+        assertEquals("Hello", m.getString("content"))
     }
 }
