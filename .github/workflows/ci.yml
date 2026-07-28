@@ -39,7 +39,7 @@ jobs:
           fi
           test -f hyle-design-system/settings.gradle.kts \
             || { echo "::error::hyle-design-system submodule is empty — includeBuild would fail"; exit 1; }
-          test -f app/src/main/cpp/llama.cpp/CMakeLists.txt \
+          test -f core-engine/src/main/cpp/llama.cpp/CMakeLists.txt \
             || { echo "::error::llama.cpp submodule is empty — native build would fail"; exit 1; }
           test -f sdengine/src/main/cpp/stable-diffusion.cpp/CMakeLists.txt \
             || { echo "::error::stable-diffusion.cpp submodule is empty"; exit 1; }
