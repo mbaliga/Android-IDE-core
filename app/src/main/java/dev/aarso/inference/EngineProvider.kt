@@ -38,7 +38,15 @@ class EngineProvider(
         runCatching { AiCoreEngine(appContext) }.getOrNull()
     }
 
-    fun engineFor(spec: ModelSpec): InferenceEngine? = when (spec.runtime) {
+    /**
+     * [webSearchEnabled] threads the W2 per-turn search opt-in (`daily-driver.md` W2) down to
+     * [CloudEngineFactory]; defaults to `false` so every existing caller of [engineFor] keeps
+     * building the same engine it does today. Wired: the composer's globe-chip toggle lives in
+     * `ChatViewModel`'s private `Transient.webSearchOn` (surfaced read-only on `ChatUiState` as
+     * `webSearchOn`/`activeSupportsSearch`); `ChatViewModel.send()`/`regenerate()` AND it against
+     * the active spec's `supportsSearch` and pass the result here before calling `runTurn`.
+     */
+    fun engineFor(spec: ModelSpec, webSearchEnabled: Boolean = false): InferenceEngine? = when (spec.runtime) {
         Runtime.ECHO_DEV -> echo
         Runtime.LOCAL_GGUF -> if (spec.modelPath != null) llama else null
         Runtime.AICORE_NANO -> aiCore
@@ -47,7 +55,7 @@ class EngineProvider(
             val provider = pid?.let { providers.byId(it) }
             val key = pid?.let { providers.apiKey(it) }
             if (provider != null && !key.isNullOrBlank()) {
-                CloudEngineFactory.create(provider, key)
+                CloudEngineFactory.create(provider, key, webSearchEnabled)
             } else {
                 null
             }

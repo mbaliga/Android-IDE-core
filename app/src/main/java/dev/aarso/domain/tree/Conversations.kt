@@ -60,6 +60,21 @@ object Conversations {
      *  (see [Attachments]). Path-only in v1: no width/height/kind fields. */
     const val ATTACHMENTS_KEY = "attachments"
 
+    /** Metadata key for W2 web-search result sources on an assistant node — a JSON array of
+     *  {title, url} (see [Sources]). Present only when the provider's server-side search tool
+     *  actually returned at least one source that turn. */
+    const val SOURCES_KEY = "sources"
+
+    /** Metadata key marking a turn where server-side web search was allowed (W2) — set
+     *  whenever the composer's globe toggle was on for that turn, regardless of whether the
+     *  model actually used it or any source came back. That "the model was allowed to search"
+     *  fact is itself the watched-object event worth recording, not just realized search use. */
+    const val WEB_SEARCH_KEY = "webSearch"
+
+    /** Metadata key marking a turn where the provider's server-side search loop paused
+     *  mid-turn (W2 — e.g. Anthropic's `stop_reason:"pause_turn"` hitting its round cap). */
+    const val SEARCH_PAUSED_KEY = "searchPaused"
+
     /**
      * Every image turn in the tree, newest first — "browse images" is a filter
      * over nodes (redesign §6), not a separate store.

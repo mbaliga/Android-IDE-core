@@ -3,6 +3,7 @@ package dev.aarso.inference.cloud
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.Role
 import dev.aarso.domain.SamplingParams
+import dev.aarso.domain.cloud.Source
 import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
 import org.json.JSONObject
@@ -236,5 +237,128 @@ class AnthropicEngineTest {
         val m = body.getJSONArray("messages").getJSONObject(0)
         assertTrue(m.get("content") is String)
         assertEquals("Hello, Claude", m.getString("content"))
+    }
+
+    // --- W2: web search ------------------------------------------------------------------
+
+    @Test fun `webSearchEnabled=true adds the web_search tool with the correct shape`() {
+        val messages = listOf(node(Role.USER, "What happened in the news today?", "n1"))
+
+        val body = buildAnthropicRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            model = "claude-opus-5",
+            webSearchEnabled = true,
+        )
+
+        assertTrue(body.has("tools"))
+        val tools = body.getJSONArray("tools")
+        assertEquals(1, tools.length())
+        val tool = tools.getJSONObject(0)
+        assertEquals("web_search_20260209", tool.getString("type"))
+        assertEquals("web_search", tool.getString("name"))
+        assertEquals(3, tool.getInt("max_uses"))
+    }
+
+    @Test fun `webSearchEnabled=false omits tools entirely — byte-identical to a pre-W2 request`() {
+        val messages = listOf(node(Role.USER, "Hello, Claude", "n1"))
+
+        val withDefault = buildAnthropicRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            model = "claude-opus-5",
+        )
+        val withExplicitFalse = buildAnthropicRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            model = "claude-opus-5",
+            webSearchEnabled = false,
+        )
+
+        assertFalse(withDefault.has("tools"))
+        assertFalse(withExplicitFalse.has("tools"))
+        assertEquals(withDefault.toString(), withExplicitFalse.toString())
+    }
+
+    @Test fun `anthropicSourcesOf parses a realistic web_search_tool_result content_block_start`() {
+        val data = """
+            {
+              "type": "content_block_start",
+              "index": 1,
+              "content_block": {
+                "type": "web_search_tool_result",
+                "tool_use_id": "srvtoolu_01",
+                "content": [
+                  {
+                    "type": "web_search_result",
+                    "url": "https://example.com/a",
+                    "title": "Example A",
+                    "encrypted_content": "abc123",
+                    "page_age": "2 days ago"
+                  },
+                  {
+                    "type": "web_search_result",
+                    "url": "https://example.com/b",
+                    "title": "Example B"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val sources = anthropicSourcesOf("content_block_start", data)
+
+        assertEquals(
+            listOf(
+                Source(title = "Example A", url = "https://example.com/a"),
+                Source(title = "Example B", url = "https://example.com/b"),
+            ),
+            sources,
+        )
+    }
+
+    @Test fun `anthropicSourcesOf returns null for events that aren't web search results`() {
+        assertEquals(
+            null,
+            anthropicSourcesOf(
+                "content_block_delta",
+                """{"type":"content_block_delta","delta":{"text":"hi"}}""",
+            ),
+        )
+        assertEquals(
+            null,
+            anthropicSourcesOf(
+                "content_block_start",
+                """{"type":"content_block_start","content_block":{"type":"text"}}""",
+            ),
+        )
+    }
+
+    @Test fun `anthropicSourcesOf falls back to an empty list rather than throwing on a malformed shape`() {
+        val data = """
+            {
+              "type": "content_block_start",
+              "content_block": { "type": "web_search_tool_result" }
+            }
+        """.trimIndent()
+
+        assertEquals(emptyList<Source>(), anthropicSourcesOf("content_block_start", data))
+    }
+
+    @Test fun `anthropicIsPaused is true for a pause_turn message_delta`() {
+        val data = """{"type":"message_delta","delta":{"stop_reason":"pause_turn"},"usage":{"output_tokens":42}}"""
+
+        assertTrue(anthropicIsPaused("message_delta", data))
+    }
+
+    @Test fun `anthropicIsPaused is false for a normal end_turn message_delta`() {
+        val data = """{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":42}}"""
+
+        assertFalse(anthropicIsPaused("message_delta", data))
+    }
+
+    @Test fun `anthropicIsPaused is false for events that aren't message_delta`() {
+        assertFalse(anthropicIsPaused("message_stop", "{}"))
+        assertFalse(anthropicIsPaused(null, "{}"))
     }
 }

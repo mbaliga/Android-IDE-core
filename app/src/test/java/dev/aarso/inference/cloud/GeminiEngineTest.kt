@@ -3,6 +3,7 @@ package dev.aarso.inference.cloud
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.Role
 import dev.aarso.domain.SamplingParams
+import dev.aarso.domain.cloud.Source
 import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
 import org.json.JSONObject
@@ -238,5 +239,141 @@ class GeminiEngineTest {
         val parts = body.getJSONArray("contents").getJSONObject(0).getJSONArray("parts")
         assertEquals(1, parts.length())
         assertEquals("Hello", parts.getJSONObject(0).getString("text"))
+    }
+
+    // --- W2: web search --------------------------------------------------------------------
+
+    @Test fun `webSearchEnabled=true adds the google_search tool with the correct shape`() {
+        val messages = listOf(node(Role.USER, "What happened in the news today?", "n1"))
+
+        val body = buildGeminiRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            supportsSampling = true,
+            webSearchEnabled = true,
+        )
+
+        assertTrue(body.has("tools"))
+        val tools = body.getJSONArray("tools")
+        assertEquals(1, tools.length())
+        val tool = tools.getJSONObject(0)
+        assertTrue(tool.has("google_search"))
+        assertEquals(0, tool.getJSONObject("google_search").length())
+    }
+
+    @Test fun `webSearchEnabled=false omits tools entirely — byte-identical to a pre-W2 request`() {
+        val messages = listOf(node(Role.USER, "Hello", "n1"))
+
+        val withDefault = buildGeminiRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            supportsSampling = true,
+        )
+        val withExplicitFalse = buildGeminiRequestBody(
+            messages,
+            SamplingParams(maxTokens = 1024),
+            supportsSampling = true,
+            webSearchEnabled = false,
+        )
+
+        assertFalse(withDefault.has("tools"))
+        assertFalse(withExplicitFalse.has("tools"))
+        assertEquals(withDefault.toString(), withExplicitFalse.toString())
+    }
+
+    @Test fun `geminiSourcesOf parses a realistic groundingChunks payload`() {
+        val data = """
+            {
+              "candidates": [
+                {
+                  "content": { "role": "model", "parts": [ { "text": "Here's what happened." } ] },
+                  "groundingMetadata": {
+                    "webSearchQueries": [ "news today" ],
+                    "groundingChunks": [
+                      { "web": { "uri": "https://example.com/a", "title": "Example A" } },
+                      { "web": { "uri": "https://example.com/b", "title": "Example B" } }
+                    ]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val sources = geminiSourcesOf(null, data)
+
+        assertEquals(
+            listOf(
+                Source(title = "Example A", url = "https://example.com/a"),
+                Source(title = "Example B", url = "https://example.com/b"),
+            ),
+            sources,
+        )
+    }
+
+    @Test fun `geminiSourcesOf falls back to the older groundingAttributions shape`() {
+        val data = """
+            {
+              "candidates": [
+                {
+                  "groundingMetadata": {
+                    "groundingAttributions": [
+                      { "web": { "url": "https://example.com/c", "title": "Example C" } }
+                    ]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val sources = geminiSourcesOf(null, data)
+
+        assertEquals(listOf(Source(title = "Example C", url = "https://example.com/c")), sources)
+    }
+
+    @Test fun `geminiSourcesOf falls back to the url as title when no title is present`() {
+        val data = """
+            {
+              "candidates": [
+                {
+                  "groundingMetadata": {
+                    "groundingChunks": [ { "web": { "uri": "https://example.com/d" } } ]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val sources = geminiSourcesOf(null, data)
+
+        assertEquals(listOf(Source(title = "https://example.com/d", url = "https://example.com/d")), sources)
+    }
+
+    @Test fun `geminiSourcesOf returns null for a plain text chunk with no groundingMetadata`() {
+        val data = """
+            {
+              "candidates": [
+                { "content": { "role": "model", "parts": [ { "text": "hi" } ] } }
+              ]
+            }
+        """.trimIndent()
+
+        assertEquals(null, geminiSourcesOf(null, data))
+    }
+
+    @Test fun `geminiSourcesOf returns null when there are no candidates at all`() {
+        assertEquals(null, geminiSourcesOf(null, """{"candidates":[]}"""))
+        assertEquals(null, geminiSourcesOf(null, """{}"""))
+    }
+
+    @Test fun `geminiSourcesOf falls back to an empty list rather than throwing on a malformed shape`() {
+        val data = """
+            {
+              "candidates": [
+                { "groundingMetadata": { "webSearchQueries": [ "news today" ] } }
+              ]
+            }
+        """.trimIndent()
+
+        assertEquals(emptyList<Source>(), geminiSourcesOf(null, data))
     }
 }

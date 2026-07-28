@@ -2,6 +2,8 @@
 
 package dev.aarso.ui
 
+import android.content.Intent
+import android.widget.Toast
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -89,14 +91,17 @@ import dev.aarso.domain.Role
 import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
+import dev.aarso.domain.cloud.Source
 import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
+import dev.aarso.domain.tree.Sources
 import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.data.DownloadCenter
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleChip
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.hyle.cells.HyleNavChip
 import dev.aarso.hyle.cells.HyleSlashTabBar
@@ -415,6 +420,43 @@ fun ChatScreen(
                 SlashCommandPopup(slashMatches) { cmd -> cmd.run(); input = "" }
             } else if (mentionMatches.isNotEmpty()) {
                 MentionPopup(mentionMatches) { target -> input = applyMention(input, target) }
+            }
+
+            // W2 (web search): a globe chip near the "+", opt-in per turn, default off (cloud
+            // extras are opt-in — CLAUDE.md rule 2). State lives on ChatViewModel (not a bare
+            // remember{} here — same reasoning as the composer-draft-text bug this codebase
+            // already fixed once). Stays visible-but-disabled with a short reason when the
+            // active model can't search — the PlusSheet Photo/Camera row's convention (W1),
+            // never hidden (legibility thesis). Only the single-model turn wires search
+            // end-to-end this pass (council/image are out of scope, same exclusion as W1's
+            // vision work), so the chip only shows in that mode.
+            if (!state.noModelActive && !state.imageMode && !state.councilEnabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HyleChip(
+                        selected = state.webSearchOn,
+                        onClick = { viewModel.toggleWebSearch() },
+                        label = "⌕ Search",
+                        enabled = state.genPhase == GenPhase.IDLE && state.activeSupportsSearch,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (state.activeSupportsSearch) {
+                                "Web search toggle"
+                            } else {
+                                "Web search unavailable — this model can't search the web"
+                            }
+                        },
+                    )
+                    if (!state.activeSupportsSearch) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "this model can't search the web",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
             // Image mode is entered from the "+" sheet (no pill); a banner shows + exits it.
@@ -1416,6 +1458,12 @@ private fun MessageTurn(
             costMinor = step.node.metadata["costMinor"],
             tokensIn = step.node.metadata["tokensIn"],
             tokensOut = step.node.metadata["tokensOut"],
+            // W2: web-search provenance — "webSearch" records the model was allowed to search
+            // this turn (the watched-object fact) independent of whether any source came back;
+            // "sources" is only ever non-empty when the provider's tool actually returned one.
+            webSearch = step.node.metadata[Conversations.WEB_SEARCH_KEY] == "true",
+            searchPaused = step.node.metadata[Conversations.SEARCH_PAUSED_KEY] == "true",
+            sources = Sources.decode(step.node.metadata[Conversations.SOURCES_KEY]),
             onLongPress = onLongPress,
         )
         if (step.isBranchPoint) {
@@ -1471,9 +1519,10 @@ private fun CouncilCardView(card: CouncilCard, enabled: Boolean, onContinue: () 
 
 /**
  * A turn reads as a **file**: a small header line (who wrote it, and — for a watched-cloud
- * turn — the "☁" glyph, never colour alone, per Hyle's [dev.aarso.hyle.Provenance] rule), the
- * body, and a metadata footer below a hairline divider (cost/tokens, or "stopped here") —
- * the same three-part shape as a file card elsewhere in the app, instead of a bare chat bubble.
+ * turn — the "☁" glyph, plus "⌕" when web search was allowed that turn (W2), never colour
+ * alone, per Hyle's [dev.aarso.hyle.Provenance] rule), the body, and a metadata footer below a
+ * hairline divider (cost/tokens, sources, "stopped here") — the same three-part shape as a
+ * file card elsewhere in the app, instead of a bare chat bubble.
  */
 @Composable
 private fun MessageBubble(
@@ -1486,6 +1535,13 @@ private fun MessageBubble(
     costMinor: String?,
     tokensIn: String?,
     tokensOut: String?,
+    // W2: web search provenance. webSearch = the model was allowed to search this turn (the
+    // watched-object fact, recorded regardless of whether it actually searched); sources = the
+    // results the provider's tool actually surfaced, if any; searchPaused = the server-side
+    // search loop hit its round cap mid-turn.
+    webSearch: Boolean = false,
+    searchPaused: Boolean = false,
+    sources: List<Source> = emptyList(),
     onLongPress: () -> Unit,
 ) {
     val fromUser = role == Role.USER
@@ -1495,8 +1551,8 @@ private fun MessageBubble(
     val headerLabel = when {
         fromUser -> "You"
         role == Role.SYSTEM -> "System"
-        watched -> "☁ Assistant · watched"
-        else -> "⌂ Assistant"
+        watched -> "☁ Assistant · watched" + if (webSearch) " ⌕" else ""
+        else -> "⌂ Assistant" + if (webSearch) " ⌕" else ""
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1540,7 +1596,7 @@ private fun MessageBubble(
                 // well-formed markdown, so a complete turn passes through unchanged.
                 else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
             }
-            if (stopped || costMinor != null) {
+            if (stopped || costMinor != null || sources.isNotEmpty() || searchPaused) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = c.hairline)
                 if (costMinor != null) {
                     Text(
@@ -1551,6 +1607,37 @@ private fun MessageBubble(
                 }
                 if (stopped) {
                     Text("· stopped here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                }
+                // W2: sources footer — each row opens the link via ACTION_VIEW; runCatching
+                // covers the no-app-can-handle-this case (e.g. a device with no browser), and
+                // surfaces a toast on that failure so the tap doesn't silently do nothing.
+                if (sources.isNotEmpty()) {
+                    val context = LocalContext.current
+                    for (source in sources) {
+                        Text(
+                            "⌕ ${source.title}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source.url)))
+                                    }.onFailure {
+                                        Toast.makeText(context, "No app to open this link", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .padding(vertical = 2.dp),
+                        )
+                    }
+                }
+                // v1, no auto-resume: just the visible note (plan §Capturing sources).
+                if (searchPaused) {
+                    Text(
+                        "search paused — the server hit its round limit; type \"continue\" to resume",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
                 }
             }
         }

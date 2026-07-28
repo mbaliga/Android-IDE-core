@@ -42,6 +42,7 @@ import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.Nodes
 import dev.aarso.domain.tree.PathView
+import dev.aarso.domain.tree.Sources
 import dev.aarso.domain.tree.TreeOutline
 import android.content.Context
 import android.graphics.Bitmap
@@ -143,6 +144,13 @@ data class ChatUiState(
     /** Can the active model take image input (W1)? Gates the composer's Photo/Camera rows —
      *  they stay visible-but-disabled-with-reason when this is false, never hidden (legibility). */
     val activeSupportsVision: Boolean = false,
+    /** The composer's globe-chip toggle (W2 — web search): per-turn opt-in, default off
+     *  (cloud extras are opt-in — CLAUDE.md rule 2). Lives here, not a bare `remember{}` in
+     *  ChatScreen — same reasoning as [pendingAttachments]. */
+    val webSearchOn: Boolean = false,
+    /** Can the active model use server-side web search (W2)? Gates the globe chip the same
+     *  way [activeSupportsVision] gates Photo/Camera — visible-but-disabled-with-reason. */
+    val activeSupportsSearch: Boolean = false,
 ) {
     val composerMode: ComposerMode
         get() = when {
@@ -169,6 +177,8 @@ private data class Transient(
     val imageMode: Boolean = false,
     /** Live per-agent streaming during a council fan-out; null when not fanning. */
     val councilStreaming: List<CouncilCard>? = null,
+    /** W2: the composer's globe-chip search toggle. Default off. */
+    val webSearchOn: Boolean = false,
 )
 
 private data class StreamState(
@@ -490,6 +500,8 @@ class ChatViewModel(
                 modelDiversity = t.modelDiversity,
                 imageMode = t.imageMode,
                 activeSupportsVision = spec?.supportsVision ?: false,
+                webSearchOn = t.webSearchOn,
+                activeSupportsSearch = spec?.supportsSearch ?: false,
             )
         }.stateIn(
             viewModelScope,
@@ -501,6 +513,7 @@ class ChatViewModel(
                     ?.let { registry.byId(it)?.displayName } ?: "No model",
                 noModelActive = activeModelId.value == null,
                 activeSupportsVision = activeModelId.value?.let { registry.byId(it)?.supportsVision } ?: false,
+                activeSupportsSearch = activeModelId.value?.let { registry.byId(it)?.supportsSearch } ?: false,
             ),
         )
 
@@ -648,7 +661,10 @@ class ChatViewModel(
         if (transient.value.imageMode) { sendImage(trimmed); return }
         if (transient.value.councilMode) { sendCouncil(trimmed); return }
         val spec = activeModelId.value?.let { registry.byId(it) } ?: return
-        val engine = engines.engineFor(spec) ?: return // not runnable yet
+        // W2: the globe toggle only ever takes effect on a model that actually supports search
+        // (defense in depth — the composer chip is already disabled otherwise).
+        val webSearchOn = transient.value.webSearchOn && spec.supportsSearch
+        val engine = engines.engineFor(spec, webSearchEnabled = webSearchOn) ?: return // not runnable yet
 
         // W1: a vision-blind model with pending photos never silently drops them — refuse the
         // send with a visible error instead (plan §Send path). Nothing is inserted.
@@ -684,7 +700,7 @@ class ChatViewModel(
                 embeddingLogger.onMessageInserted(userNode)
                 moveLeaf(userNode.id)
                 clearPendingAttachments()
-                runTurn(spec, engine, userNode)
+                runTurn(spec, engine, userNode, webSearchEnabled = webSearchOn)
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(error = t.message ?: "send failed")
             }
@@ -729,12 +745,13 @@ class ChatViewModel(
     fun regenerate() {
         if (transient.value.genPhase != GenPhase.IDLE) return
         val spec = activeModelId.value?.let { registry.byId(it) } ?: return
-        val engine = engines.engineFor(spec) ?: return
+        val webSearchOn = transient.value.webSearchOn && spec.supportsSearch
+        val engine = engines.engineFor(spec, webSearchEnabled = webSearchOn) ?: return
         viewModelScope.launch {
             val leafId = activeLeafId.value ?: return@launch
             val userNode = repository.node(leafId)?.takeIf { it.role == Role.USER } ?: return@launch
             transient.value = transient.value.copy(error = null)
-            runTurn(spec, engine, userNode)
+            runTurn(spec, engine, userNode, webSearchEnabled = webSearchOn)
         }
     }
 
@@ -744,7 +761,12 @@ class ChatViewModel(
      * snapshot keyed to the new assistant node — local engine only; cloud/echo
      * ignore the session paths.
      */
-    private suspend fun runTurn(spec: ModelSpec, engine: InferenceEngine, userNode: MessageNode) {
+    private suspend fun runTurn(
+        spec: ModelSpec,
+        engine: InferenceEngine,
+        userNode: MessageNode,
+        webSearchEnabled: Boolean = false,
+    ) {
         val isLocal = spec.runtime == Runtime.LOCAL_GGUF
         val loadPath = userNode.parentId
             ?.takeIf { isLocal && kvCache.exists(it) }
@@ -802,8 +824,8 @@ class ChatViewModel(
             // Cost (G1): price a finished cloud turn from the provider-reported usage the
             // engine captured this turn (UsageAccumulator). On-device turns report no usage,
             // so they carry no cost line — the honest "no money changed hands" state.
-            val cloudUsage = (engine as? dev.aarso.inference.cloud.CloudEngine)?.lastUsage
-                ?.takeIf { it.totalTokens > 0 }
+            val cloudEngine = engine as? dev.aarso.inference.cloud.CloudEngine
+            val cloudUsage = cloudEngine?.lastUsage?.takeIf { it.totalTokens > 0 }
             val cloudCostMinor: Long? = cloudUsage?.let { usage ->
                 // Count this turn against the provider's free-tier usage (owner ask).
                 spec.providerId?.let { freeTierUsage.record(it, usage.inputTokens.toLong(), usage.outputTokens.toLong()) }
@@ -818,13 +840,23 @@ class ChatViewModel(
             } else {
                 emptyMap()
             }
+            // W2 (web search): metadata["webSearch"]="true" records that the model was
+            // *allowed* to search this turn — the watched-object fact — regardless of whether
+            // it actually used the tool or any source came back. Sources/pause are only ever
+            // non-empty/true on a CloudEngine that reported them via its SSE hooks.
+            val searchSources = cloudEngine?.lastSources.orEmpty()
+            val searchMeta = buildMap {
+                if (webSearchEnabled) put(Conversations.WEB_SEARCH_KEY, "true")
+                if (searchSources.isNotEmpty()) put(Conversations.SOURCES_KEY, Sources.encode(searchSources))
+                if (cloudEngine?.wasPaused == true) put(Conversations.SEARCH_PAUSED_KEY, "true")
+            }
             val assistantNode = Nodes.child(
                 parent = userNode,
                 role = Role.ASSISTANT,
                 content = assistantText,
                 now = System.currentTimeMillis(),
                 modelId = spec.id,
-                metadata = (if (stopRequested) mapOf("stopped" to "true") else emptyMap()) + costMeta,
+                metadata = (if (stopRequested) mapOf("stopped" to "true") else emptyMap()) + costMeta + searchMeta,
                 idGen = { assistantId }, // so the KV snapshot is keyed to this node
             )
             repository.insert(assistantNode)
@@ -878,6 +910,14 @@ class ChatViewModel(
 
     fun toggleModelDiversity() {
         transient.value = transient.value.copy(modelDiversity = !transient.value.modelDiversity)
+    }
+
+    /** The composer's globe-chip toggle (W2 — web search): per-turn opt-in, default off. The
+     *  UI only ever calls this when [ChatUiState.activeSupportsSearch] is true (the chip is
+     *  disabled otherwise), but [send]/[regenerate] re-AND it against the active spec before
+     *  it ever reaches an engine — defense in depth, not a second source of truth. */
+    fun toggleWebSearch() {
+        transient.value = transient.value.copy(webSearchOn = !transient.value.webSearchOn)
     }
 
     /** A single voice in a council fan-out: its label, the model + engine it runs on,
