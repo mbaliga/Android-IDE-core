@@ -105,10 +105,13 @@ private enum class ModelModality(val label: String) {
  * provider is a **watched object**: opt-in, isolated, never a hidden default; keys stay in the
  * Android Keystore.
  *
- * Full-screen sub-surfaces (on-device model management, Free tiers, Remote, Git…) render in a
- * hoisted [overlay] slot at the room root, OUTSIDE the scrolling content — a scrollable child
- * measured inside a verticalScroll parent gets an infinite height constraint and crashes (the
- * PR #39 fix).
+ * Full-screen sub-surfaces (Me·Myself·I, Free tiers, Remote, Git…) render in a hoisted
+ * [overlay] slot at the room root, OUTSIDE the scrolling content — a scrollable child measured
+ * inside a verticalScroll parent gets an infinite height constraint and crashes (the PR #39
+ * fix). On-device model management ([LocalModels], Models tab) used to need this same overlay
+ * slot for that reason — its [Coverflow] pager now gives itself an explicit bounded height
+ * instead (see that file's KDoc), so it renders directly inline in this room's own scrolling
+ * content and no longer uses [overlay] at all.
  *
  * [extraGlobalRows] mirrors [dev.aarso.ui.rooms.ProductRoomFree]'s `extraTabs` seam: it lets an
  * above-core layer append rows to the bottom of the General tab (e.g. an entitlement/unlock
@@ -143,11 +146,7 @@ fun SettingsRoom(
                     closeOverlay = { overlay = null },
                     extraGlobalRows = extraGlobalRows,
                 )
-                SettingsTab.MODELS -> ModelsSettings(
-                    viewModel = viewModel,
-                    openOverlay = { overlay = it },
-                    closeOverlay = { overlay = null },
-                )
+                SettingsTab.MODELS -> ModelsSettings(viewModel = viewModel)
                 SettingsTab.DEV -> DevSettings(
                     openOverlay = { overlay = it },
                     closeOverlay = { overlay = null },
@@ -300,11 +299,7 @@ private fun ModelModalityTabBar(selected: ModelModality, onSelect: (ModelModalit
  * Video/3D have no engine wired yet — shown honestly as planned, never faked (rule 6).
  */
 @Composable
-private fun ColumnScope.ModelsSettings(
-    viewModel: SettingsViewModel,
-    openOverlay: (@Composable () -> Unit) -> Unit,
-    closeOverlay: () -> Unit,
-) {
+private fun ColumnScope.ModelsSettings(viewModel: SettingsViewModel) {
     var modality by remember { mutableStateOf(ModelModality.TEXT) }
     ModelModalityTabBar(modality) { modality = it }
     var scope by remember(modality) { mutableStateOf(ProviderScope.LOCAL) }
@@ -315,59 +310,56 @@ private fun ColumnScope.ModelsSettings(
     when (modality) {
         ModelModality.TEXT ->
             if (scope == ProviderScope.CLOUD) TextSettings(viewModel)
-            else LocalModels("chat", openOverlay, closeOverlay)
+            else LocalModels("chat")
         ModelModality.IMAGE ->
             if (scope == ProviderScope.CLOUD) ImageSettings(viewModel)
-            else LocalModels("image", openOverlay, closeOverlay)
+            else LocalModels("image")
         ModelModality.VIDEO -> PlannedProvider("Video", scope)
         ModelModality.OBJECT3D -> PlannedProvider("3D-model", scope)
     }
 }
 
-/** On-device models for a modality — managed in the Models room (opened in the overlay slot). */
+/**
+ * On-device models for a modality — the cards render directly here now (owner ask: "the model
+ * cards are still hidden behind a button"), no extra tap into a separate overlay screen.
+ * [ChatOnDeviceShelf]/[ImageOnDeviceShelf]'s [Coverflow] pager used to need [SettingsRoom]'s
+ * hoisted `overlay` slot because a `HorizontalPager` measured inside a `verticalScroll` parent
+ * (this room's own scrolling content) gets an infinite height constraint and crashes (PR #39);
+ * [Coverflow] now gives its own pager an explicit bounded height instead (see its KDoc in
+ * ModelsRoom.kt), so it no longer needs a dedicated full-screen host and renders straight into
+ * this already-scrolling column — no Chat/Image/Bring-your-own tabs and no On-device/Cloud
+ * toggle to re-pick (owner-flagged as duplicative: both choices were already made one level up,
+ * in this very screen).
+ */
 @Composable
-private fun LocalModels(
-    kind: String,
-    openOverlay: (@Composable () -> Unit) -> Unit,
-    closeOverlay: () -> Unit,
-) {
+private fun LocalModels(kind: String) {
     val container = (LocalContext.current.applicationContext as dev.aarso.FonebrewApp).container
     Text(
         "On-device $kind models run locally — the default. Download, switch, and remove them below.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    // Opens straight to THIS modality's shelf — no Chat/Image/Bring-your-own tabs and no
-    // On-device/Cloud toggle to re-pick (owner-flagged as duplicative: both choices were already
-    // made one level up, in this very screen). Still an `openOverlay` full-screen slot rather than
-    // inline, because [Coverflow]'s pager needs a bounded height a `verticalScroll` parent can't
-    // give it (the PR #39 crash class — see this file's KDoc).
-    HyleButton("Manage on-device $kind models", onClick = {
-        openOverlay {
-            when (kind) {
-                "image" -> {
-                    val imagesVm: dev.aarso.ui.ImagesViewModel =
-                        viewModel(factory = dev.aarso.ui.ImagesViewModel.Factory)
-                    ImageOnDeviceShelf(
-                        downloads = container.downloadCenter,
-                        onCustomUrl = { imagesVm.downloadSdModel(it) },
-                        onClose = closeOverlay,
-                        imagesViewModel = imagesVm,
-                    )
-                }
-                else -> {
-                    val modelsVm: dev.aarso.ui.ModelsViewModel =
-                        viewModel(factory = dev.aarso.ui.ModelsViewModel.Factory)
-                    ChatOnDeviceShelf(
-                        downloads = container.downloadCenter,
-                        onCustomUrl = { modelsVm.downloadCustom(it) },
-                        onClose = closeOverlay,
-                        modelsViewModel = modelsVm,
-                    )
-                }
-            }
+    Spacer(Modifier.height(4.dp))
+    when (kind) {
+        "image" -> {
+            val imagesVm: dev.aarso.ui.ImagesViewModel =
+                viewModel(factory = dev.aarso.ui.ImagesViewModel.Factory)
+            ImageOnDeviceShelf(
+                downloads = container.downloadCenter,
+                onCustomUrl = { imagesVm.downloadSdModel(it) },
+                imagesViewModel = imagesVm,
+            )
         }
-    })
+        else -> {
+            val modelsVm: dev.aarso.ui.ModelsViewModel =
+                viewModel(factory = dev.aarso.ui.ModelsViewModel.Factory)
+            ChatOnDeviceShelf(
+                downloads = container.downloadCenter,
+                onCustomUrl = { modelsVm.downloadCustom(it) },
+                modelsViewModel = modelsVm,
+            )
+        }
+    }
 }
 
 /** Honest placeholder for a modality with no engine wired yet (rule 6: never claim it works). */

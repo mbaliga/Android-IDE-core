@@ -34,8 +34,12 @@ private val AnsiPalette = listOf(
     Color(0xFF5B8DEF), Color(0xFFC768E0), Color(0xFF3DBDD6), Color(0xFFD8D8D8),
 )
 
-private val TerminalBg = Color(0xFF0A0A0A)
-private val TerminalFg = Color(0xFFE8E8E8)
+// `internal` (not `private`) so callers that wrap this view — e.g.
+// [dev.aarso.ui.develop.TerminalFacet], which surrounds the grid with its own terminal-dark
+// chrome — can match these exact values instead of duplicating the hex and risking drift.
+// Purely a visibility change: the grid's own rendering below is untouched.
+internal val TerminalBg = Color(0xFF0A0A0A)
+internal val TerminalFg = Color(0xFFE8E8E8)
 
 /**
  * Renders a [ScreenBuffer] as an actual terminal grid: real per-cell SGR colors/bold/underline
