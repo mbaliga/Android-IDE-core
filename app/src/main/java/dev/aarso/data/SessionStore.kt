@@ -109,6 +109,31 @@ class SessionStore(context: Context) {
     private val _councilDefault = MutableStateFlow(prefs.getString(KEY_COUNCIL_DEFAULT, "SINGLE") ?: "SINGLE")
     val councilDefault: StateFlow<String> = _councilDefault.asStateFlow()
 
+    // Composer draft text, keyed by conversation root id (daily-driver.md W3 — reliability).
+    // Previously a bare `remember{}` in ChatScreen: wiped on process death *and* it silently
+    // followed the user across conversations, since a single in-composition variable has no
+    // notion of "whose draft is this". Keyed by root id rather than leaf id because leaf ids
+    // churn on every branch/regenerate (Conversations.rootOf is stable for a conversation's
+    // whole life); DRAFT_KEY_NEW is the slot for the not-yet-started conversation. Same
+    // "rootId\u0001value" persisted-set shape as [conversationProjects] above — the
+    // actual encode/decode/update logic is [DraftCodec] (factored out so it's JVM-testable
+    // without a real Context; see that file's doc). ChatViewModel debounces the writes
+    // (~400ms) so a keystroke doesn't hit disk every frame — this class itself stays simple
+    // write-through, matching every other setter here.
+    private val _drafts = MutableStateFlow(loadDrafts())
+    val drafts: StateFlow<Map<String, String>> = _drafts.asStateFlow()
+
+    /** Sets (or, for blank [text], clears) the draft for [key] — a conversation root id, or
+     *  [DRAFT_KEY_NEW] for the not-yet-started conversation. */
+    fun setDraft(key: String, text: String) {
+        val next = DraftCodec.update(_drafts.value, key, text)
+        prefs.edit().putStringSet(KEY_DRAFTS, DraftCodec.encode(next)).apply()
+        _drafts.value = next
+    }
+
+    private fun loadDrafts(): Map<String, String> =
+        DraftCodec.decode(prefs.getStringSet(KEY_DRAFTS, emptySet()).orEmpty())
+
     // Progressive disclosure tier: "CORE" / "STUDIO" / "POWER" (docs/design/disclosure.md).
     // Defaults to POWER so existing installs see no change; the onboarding intent step
     // sets it for new users, and Settings can change it any time.
@@ -309,5 +334,10 @@ class SessionStore(context: Context) {
         private const val KEY_CONV_OPENS = "conversationOpens"
         private const val KEY_COUNCIL_DEFAULT = "councilDefault"
         private const val KEY_DISCLOSURE = "disclosureTier"
+        private const val KEY_DRAFTS = "drafts"
+
+        /** [drafts]/[setDraft] key for the composer before the first message of a conversation
+         *  is sent (no root id exists yet). */
+        const val DRAFT_KEY_NEW = "new"
     }
 }

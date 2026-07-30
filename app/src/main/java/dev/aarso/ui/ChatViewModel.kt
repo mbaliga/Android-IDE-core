@@ -1,6 +1,9 @@
 package dev.aarso.ui
 
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -16,6 +19,7 @@ import dev.aarso.data.KvCacheStore
 import dev.aarso.data.LocalModelStore
 import dev.aarso.data.MessageTreeRepository
 import dev.aarso.data.ModelDownloader
+import dev.aarso.data.PartialReplyStore
 import dev.aarso.data.ProviderStore
 import dev.aarso.data.Intake
 import dev.aarso.data.SdModelStore
@@ -37,10 +41,13 @@ import dev.aarso.domain.model.DefaultModelPolicy
 import dev.aarso.domain.model.ModelSpec
 import dev.aarso.domain.model.Runtime
 import dev.aarso.domain.model.checkContext
+import dev.aarso.domain.reliability.PartialReply
+import dev.aarso.domain.reliability.PartialReplyRecovery
 import dev.aarso.domain.template.ChatTemplates
 import dev.aarso.domain.tree.Attachments
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.Nodes
+import dev.aarso.domain.tree.Outbox
 import dev.aarso.domain.tree.PathView
 import dev.aarso.domain.tree.Sources
 import dev.aarso.domain.tree.TreeOutline
@@ -59,11 +66,14 @@ import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -130,6 +140,13 @@ data class ChatUiState(
     val error: String? = null,
     /** The visible path ends on a user turn with no reply — Retry can regenerate. */
     val canRegenerate: Boolean = false,
+    /** W3 — outbox: non-null when the thread's tail is a genuinely unanswered user turn (crash
+     *  mid-generation, app switched away, or a stopped/errored send) — drives the persistent
+     *  inline "not answered — Retry" chip, distinct from [canRegenerate]'s error-snackbar Retry
+     *  (which only ever shows when an error was actually set). Same underlying condition,
+     *  purely derived from tree shape ([dev.aarso.domain.tree.Outbox]) so it reads correctly
+     *  again the instant the app relaunches after a crash. */
+    val outboxTurn: Outbox.UnansweredTurn? = null,
     val genPhase: GenPhase = GenPhase.IDLE,
     /** On-demand prompt rewrite (§6b): a suggested rewrite of the input, or null. */
     val promptSuggestion: String? = null,
@@ -199,6 +216,7 @@ class ChatViewModel(
     private val locals: LocalModelStore,
     private val embeddingLogger: EmbeddingLogger,
     private val kvCache: KvCacheStore,
+    private val partialReplies: PartialReplyStore,
     private val sharedIntake: SharedIntake,
     private val session: SessionStore,
     private val downloadCenter: DownloadCenter,
@@ -259,6 +277,29 @@ class ChatViewModel(
                 }
             }
         }
+        // W3 — crash-safe partial replies: recover whatever was still streaming when the app
+        // last died. `runTurn` checkpoints the in-progress text to `filesDir/outbox/` every
+        // ~2s (append-only tree: it can't write the real node until the turn finishes); a
+        // clean finish always deletes its own checkpoint, so anything found here on the very
+        // next launch is, by construction, the tail of a turn that never got to finish. Runs
+        // once, before anything else in this ViewModel can touch those user nodes.
+        viewModelScope.launch {
+            val checkpoints = withContext(Dispatchers.IO) { partialReplies.readAll() }
+            if (checkpoints.isEmpty()) return@launch
+            val tree = repository.tree()
+            val now = System.currentTimeMillis()
+            for (action in PartialReplyRecovery.plan(tree, checkpoints, now)) {
+                action.insert?.let { node ->
+                    runCatching { repository.insert(node) }.onSuccess {
+                        // Land the view on the recovered reply exactly like a normal
+                        // completion would — but only if nothing has already moved the leaf
+                        // elsewhere (e.g. a second checkpoint recovered first this same pass).
+                        if (activeLeafId.value == node.parentId) moveLeaf(node.id)
+                    }
+                }
+                partialReplies.delete(action.checkpoint.userNodeId)
+            }
+        }
     }
 
     // The in-flight token collection; cancelling it is how Stop works. The local
@@ -300,6 +341,84 @@ class ChatViewModel(
     private fun setActiveModel(id: String?) {
         activeModelId.value = id
         session.setActiveModelId(id)
+    }
+
+    // ── Composer drafts (daily-driver.md W3) ─────────────────────────────────────────────
+    // What's typed lives here, not a bare `remember{}` in ChatScreen (the same class of bug
+    // pendingAttachments below already deliberately avoids): it now survives process death and
+    // never leaks between conversations. [currentDraftKey] tracks which slot in
+    // SessionStore.drafts the in-memory text belongs to; it moves whenever the active
+    // conversation's root changes (new chat / open a different one) — never on a same-
+    // conversation branch (regenerate, switchAlternative, interaction-mode switch), since the
+    // root is unchanged there and the draft has no reason to reload.
+    private val _draft = MutableStateFlow("")
+    val draft: StateFlow<String> = _draft.asStateFlow()
+    private var currentDraftKey: String = SessionStore.DRAFT_KEY_NEW
+    private var draftPersistJob: Job? = null
+
+    /** A debounced write for [currentDraftKey] may not have landed yet — flush it now,
+     *  synchronously, and cancel the pending job. Called both when the draft key is about to
+     *  change (switching conversations, below) and on [Lifecycle.Event.ON_STOP] (the process
+     *  backgrounding, via [draftFlushObserver]): either way a debounced write that hasn't landed
+     *  yet must not be silently dropped — a real process kill shortly after backgrounding is
+     *  exactly the crash-safety case this feature exists for, and the 400ms debounce alone still
+     *  leaves that narrow a window open. isActive (rather than unconditionally writing) also
+     *  keeps a no-op flush — nothing pending — from re-writing a key that a background app-swipe
+     *  never actually touched. */
+    private fun flushPendingDraftWrite() {
+        if (draftPersistJob?.isActive == true) {
+            session.setDraft(currentDraftKey, _draft.value)
+        }
+        draftPersistJob?.cancel()
+    }
+
+    private val draftFlushObserver = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_STOP) flushPendingDraftWrite()
+    }
+
+    init {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(draftFlushObserver)
+        viewModelScope.launch {
+            combine(repository.observeTree(), activeLeafId) { tree, leaf ->
+                // leaf == null is the real "no conversation open" state -> "new". leaf != null but
+                // Conversations.rootOf(tree, leaf) == null does NOT mean the same thing: it just
+                // means this particular observeTree() emission hasn't caught up to activeLeafId's
+                // synchronous update yet (Room's invalidation requery is async, so right after
+                // e.g. sending into an already-open chat this can fire once with a stale tree that
+                // doesn't contain the new leaf). Treating that transient miss as "new" would
+                // spuriously swap the composer to the new-chat draft bucket mid-keystroke. So: null
+                // here means "indeterminate, wait for the next emission" and is filtered out below
+                // rather than resolved to a key.
+                if (leaf == null) SessionStore.DRAFT_KEY_NEW else Conversations.rootOf(tree, leaf)
+            }.filterNotNull().distinctUntilChanged().collect { key ->
+                flushPendingDraftWrite()
+                currentDraftKey = key
+                _draft.value = session.drafts.value[key].orEmpty()
+            }
+        }
+    }
+
+    /** Composer text changed. Updates immediately (typing must never feel debounced) and
+     *  persists under [currentDraftKey] after a ~400ms lull so a keystroke doesn't hit disk
+     *  every frame — the interval the plan calls for, chosen the same way [KvCacheStore]-style
+     *  file writes elsewhere in this codebase avoid becoming a per-frame cost. */
+    fun setDraft(text: String) {
+        _draft.value = text
+        val key = currentDraftKey
+        draftPersistJob?.cancel()
+        draftPersistJob = viewModelScope.launch {
+            delay(DRAFT_PERSIST_DEBOUNCE_MS)
+            session.setDraft(key, text)
+        }
+    }
+
+    /** Clears the draft immediately (no debounce) — called right after a send actually lands
+     *  in the tree, for every send path (single/council/image/shell-escape) alike. */
+    private fun clearDraft() {
+        draftPersistJob?.cancel()
+        val key = currentDraftKey
+        _draft.value = ""
+        session.setDraft(key, "")
     }
 
     // First-run setup card (§ usability rework): the one recommended starter
@@ -476,6 +595,17 @@ class ChatViewModel(
                     emptyList()
                 }
             }
+            // W3 — outbox: the active thread's tail is a user turn with no reply at all,
+            // derived purely from tree shape (Outbox.unansweredOnPath) rather than tracked —
+            // correct again the instant the app relaunches after a crash. excludeNodeId keeps
+            // a turn that's actively streaming from momentarily reading as "not answered" (its
+            // assistant node doesn't exist yet either, but it's mid-flight, not stuck). Same
+            // council exclusion as canRegenerate below (see Outbox's doc for the known gap: a
+            // council turn that crashes before its first voice replies is indistinguishable
+            // from a plain unanswered one by tree shape alone — out of scope for W3).
+            val outboxTurn = leaf
+                ?.let { l -> Outbox.unansweredOnPath(tree, l, excludeNodeId = if (t.genPhase != GenPhase.IDLE) l else null) }
+                ?.takeIf { councilCards.isEmpty() }
             ChatUiState(
                 steps = steps,
                 streamingTokens = t.stream.tokens,
@@ -492,6 +622,7 @@ class ChatViewModel(
                 error = t.error,
                 canRegenerate = steps.lastOrNull()?.node?.role == Role.USER &&
                     councilCards.isEmpty() && t.genPhase == GenPhase.IDLE,
+                outboxTurn = outboxTurn,
                 genPhase = t.genPhase,
                 promptSuggestion = t.promptSuggestion,
                 rewriting = t.rewriting,
@@ -700,6 +831,7 @@ class ChatViewModel(
                 embeddingLogger.onMessageInserted(userNode)
                 moveLeaf(userNode.id)
                 clearPendingAttachments()
+                clearDraft()
                 runTurn(spec, engine, userNode, webSearchEnabled = webSearchOn)
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(error = t.message ?: "send failed")
@@ -723,6 +855,7 @@ class ChatViewModel(
                 repository.insert(userNode)
                 embeddingLogger.onMessageInserted(userNode)
                 moveLeaf(userNode.id)
+                clearDraft()
                 val output = dev.aarso.data.remote.LocalExec.run(command, appContext.filesDir)
                 val resultNode = Nodes.child(
                     userNode, Role.ASSISTANT, output.ifBlank { "(no output)" }, System.currentTimeMillis(),
@@ -805,12 +938,28 @@ class ChatViewModel(
             val path = repository.path(userNode.id)
             val genStart = System.currentTimeMillis()
             val tokens = mutableListOf<GeneratedToken>()
+            // W3 — crash-safe partial replies: the assistant node below is only ever inserted
+            // once the whole turn finishes (append-only tree — there's nothing to update
+            // in-place if we inserted early), so a hard crash mid-stream would otherwise lose
+            // everything generated so far. Checkpoint it to a file every ~2s instead; see
+            // PartialReplyRecovery for how the next launch turns an orphaned checkpoint back
+            // into a real (if truncated) reply. Single-chat only — sendCouncil has its own
+            // per-voice loop and isn't checkpointed this pass (see the W3 report/scope note).
+            var lastCheckpointAt = 0L
             collectCancellable {
                 engine.generate(path, SamplingParams(), loadPath, savePath).collect { token ->
                     tokens += token
                     transient.value = transient.value.copy(
                         stream = StreamState(tokens = tokens.toList(), isGenerating = true),
                     )
+                    val now = System.currentTimeMillis()
+                    if (now - lastCheckpointAt >= PARTIAL_CHECKPOINT_INTERVAL_MS) {
+                        lastCheckpointAt = now
+                        val text = tokens.joinToString("") { it.text }
+                        withContext(Dispatchers.IO) {
+                            partialReplies.write(PartialReply(userNode.id, spec.id, text, now))
+                        }
+                    }
                 }
             }
 
@@ -901,6 +1050,12 @@ class ChatViewModel(
             )
         } finally {
             if (isLocal) GenerationService.stop(appContext)
+            // W3: the checkpoint is a cache, never a permanent store — clean it up on every
+            // exit from this turn (success, stop, or error alike; a real process death is the
+            // only way this doesn't run, which is exactly the case the next launch's recovery
+            // scan handles). A no-op if no checkpoint was ever written (the common case: most
+            // turns finish inside the first ~2s).
+            withContext(Dispatchers.IO) { partialReplies.delete(userNode.id) }
         }
     }
 
@@ -1014,6 +1169,7 @@ class ChatViewModel(
             }
             moveLeaf(userNode.id)
             clearPendingAttachments()
+            clearDraft()
 
             GenerationService.start(appContext)
             stopRequested = false
@@ -1100,6 +1256,7 @@ class ChatViewModel(
                 return@launch
             }
             moveLeaf(userNode.id)
+            clearDraft()
 
             GenerationService.start(appContext)
             try {
@@ -1205,6 +1362,7 @@ class ChatViewModel(
     override fun onCleared() {
         // App task removed: don't leave a dangling foreground service.
         GenerationService.stop(appContext)
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(draftFlushObserver)
     }
 
     /**
@@ -1308,6 +1466,14 @@ class ChatViewModel(
     }
 
     companion object {
+        /** How long the composer waits after the last keystroke before writing the draft
+         *  through to [SessionStore] (W3 — plan §Drafts). */
+        private const val DRAFT_PERSIST_DEBOUNCE_MS = 400L
+
+        /** How often [runTurn] checkpoints an in-progress reply to disk (W3 — crash-safe
+         *  partial replies). */
+        private const val PARTIAL_CHECKPOINT_INTERVAL_MS = 2_000L
+
         /** Longest-edge cap for a pending photo attachment before it's stored (W1) — bounds
          *  token cost across providers; Anthropic's high-res tier takes more but at ~3x image
          *  tokens (plan note), so this stays conservative for now. */
@@ -1334,6 +1500,7 @@ class ChatViewModel(
                     c.localModelStore,
                     c.embeddingLogger,
                     c.kvCacheStore,
+                    c.partialReplyStore,
                     c.sharedIntake,
                     c.sessionStore,
                     c.downloadCenter,

@@ -11,6 +11,7 @@ import dev.aarso.data.KvCacheStore
 import dev.aarso.data.LocalModelStore
 import dev.aarso.data.MessageTreeRepository
 import dev.aarso.data.ModelDownloader
+import dev.aarso.data.PartialReplyStore
 import dev.aarso.data.ProviderStore
 import dev.aarso.data.SdModelStore
 import dev.aarso.data.SessionStore
@@ -80,6 +81,12 @@ class AppContainer(context: Context) {
 
     /** KV-cache session snapshots for fast branch resume (§8.3). */
     val kvCacheStore: KvCacheStore = KvCacheStore(context)
+
+    /** Mid-stream reply checkpoints (daily-driver.md W3 — crash-safe partial replies):
+     *  `filesDir/outbox/<userNodeId>.partial.json`, read once at ChatViewModel init to recover
+     *  from a crash that hit mid-generation, written periodically during a turn, deleted on
+     *  every normal exit from one. */
+    val partialReplyStore: PartialReplyStore = PartialReplyStore(context)
 
     /** Image generation (§4c): saved images + watched image-provider configs. */
     val imageStore: ImageStore = ImageStore(context)

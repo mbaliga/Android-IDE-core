@@ -139,7 +139,11 @@ fun ChatScreen(
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
     val entropyColoring by viewModel.entropyColoring.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
-    var input by remember { mutableStateOf("") }
+    // W3 (reliability): composer text lives on ChatViewModel (StateFlow, keyed by conversation
+    // root, debounce-persisted) — not a bare remember{} here. That used to wipe on process death
+    // *and* silently follow the user across conversations (recon gotcha); see
+    // ChatViewModel.draft/setDraft.
+    val input by viewModel.draft.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
     // W1 (vision input): gallery pick needs no runtime permission (Android Photo Picker);
@@ -210,7 +214,7 @@ fun ChatScreen(
     // §7: text shared in / selected elsewhere arrives here — prefill the input.
     val intake by viewModel.intake.collectAsState()
     LaunchedEffect(intake) {
-        intake?.text?.let { input = it; viewModel.consumeIntake() }
+        intake?.text?.let { viewModel.setDraft(it); viewModel.consumeIntake() }
     }
 
     LaunchedEffect(state.steps.size, state.streamingTokens.size, state.genPhase) {
@@ -367,6 +371,28 @@ fun ChatScreen(
                             }
                         }
                     }
+
+                    // W3 — outbox: the thread's tail is a user turn with no reply at all (a
+                    // crash mid-generation, the app got switched away from, or a stopped/errored
+                    // send with nothing streamed). Purely derived from tree shape
+                    // (ChatViewModel.outboxTurn / Outbox.unansweredOnPath), so this is correct
+                    // again the instant the app relaunches — no special-case recovery UI needed.
+                    if (state.outboxTurn != null) {
+                        item("outbox-retry") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "not answered",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                HyleButton("Retry", onClick = { viewModel.regenerate() })
+                            }
+                        }
+                    }
                 }
 
                 // Down-arrow FAB (§2): appears whenever the view left the newest turn.
@@ -409,7 +435,7 @@ fun ChatScreen(
                         Text("Suggested rewrite", style = MaterialTheme.typography.labelMedium)
                         Text(suggestion, style = MaterialTheme.typography.bodySmall)
                         Row {
-                            TextButton(onClick = { input = suggestion; viewModel.clearSuggestion() }) { Text("Use") }
+                            TextButton(onClick = { viewModel.setDraft(suggestion); viewModel.clearSuggestion() }) { Text("Use") }
                             TextButton(onClick = { viewModel.clearSuggestion() }) { Text("Dismiss") }
                         }
                     }
@@ -417,9 +443,9 @@ fun ChatScreen(
             }
 
             if (slashMatches.isNotEmpty()) {
-                SlashCommandPopup(slashMatches) { cmd -> cmd.run(); input = "" }
+                SlashCommandPopup(slashMatches) { cmd -> cmd.run(); viewModel.setDraft("") }
             } else if (mentionMatches.isNotEmpty()) {
-                MentionPopup(mentionMatches) { target -> input = applyMention(input, target) }
+                MentionPopup(mentionMatches) { target -> viewModel.setDraft(applyMention(input, target)) }
             }
 
             // W2 (web search): a globe chip near the "+", opt-in per turn, default off (cloud
@@ -511,7 +537,7 @@ fun ChatScreen(
                 }
                 HyleField(
                     value = input,
-                    onValueChange = { input = it },
+                    onValueChange = { viewModel.setDraft(it) },
                     label = "",
                     singleLine = false,
                     modifier = Modifier.weight(1f),
@@ -546,10 +572,10 @@ fun ChatScreen(
                 } else {
                     HyleButton(
                         if (imageMode) "Generate" else "Send",
-                        onClick = {
-                            viewModel.send(input)
-                            input = ""
-                        },
+                        // W3: no optimistic `input = ""` here anymore — ChatViewModel.send()
+                        // clears the draft itself, only once the send actually lands in the
+                        // tree (clearDraft(), right beside every send path's clearPendingAttachments()).
+                        onClick = { viewModel.send(input) },
                         enabled = input.isNotBlank() && (state.engineAvailable || imageMode),
                         modifier = Modifier.padding(start = 8.dp),
                     )
@@ -1451,6 +1477,9 @@ private fun MessageTurn(
             // the assistant-generated-image branch above (they're never both present on one node).
             attachments = Attachments.decode(step.node.metadata[Conversations.ATTACHMENTS_KEY]),
             stopped = step.node.metadata["stopped"] == "true",
+            // W3: recovered from a crash-safe checkpoint rather than a normal deliberate Stop —
+            // same "stopped" truncated-reply styling underneath, but the footer says why.
+            partial = step.node.metadata["partial"] == "true",
             // costMinor is only ever recorded for a watched-cloud turn that reported usage
             // (LedgerComponents.kt) — reuse it as the provenance signal rather than adding a
             // second source of truth for the same fact.
@@ -1531,6 +1560,10 @@ private fun MessageBubble(
     imagePath: String?,
     attachments: List<Attachments.Attachment> = emptyList(),
     stopped: Boolean,
+    // W3: true when this reply was recovered from a crash-safe checkpoint (PartialReplyRecovery)
+    // rather than ended by a deliberate Stop tap. Always accompanied by stopped=true (the same
+    // truncated-reply metadata convention), so this only changes which footer line is shown.
+    partial: Boolean = false,
     watched: Boolean,
     costMinor: String?,
     tokensIn: String?,
@@ -1606,7 +1639,10 @@ private fun MessageBubble(
                     )
                 }
                 if (stopped) {
-                    Text("· stopped here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    // W3: honest about *why* it's truncated — a crash is not the same event as
+                    // the user tapping Stop, and the legibility thesis says never blur that.
+                    val label = if (partial) "· recovered after a crash — may be incomplete" else "· stopped here"
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                 }
                 // W2: sources footer — each row opens the link via ACTION_VIEW; runCatching
                 // covers the no-app-can-handle-this case (e.g. a device with no browser), and
