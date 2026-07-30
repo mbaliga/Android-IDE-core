@@ -23,6 +23,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -221,6 +230,13 @@ fun SpatialRoot() {
     val scope = rememberCoroutineScope()
     val controller = remember { SpatialController(scope) }
     var searchOpen by remember { mutableStateOf(false) }
+    // Global hardware-keyboard shortcut (§11.1, WP13's reachable subset): Ctrl+K opens/closes
+    // search from anywhere. Deliberately the ONLY key this root intercepts — everything else is
+    // left unconsumed so it still reaches whatever text field has focus (the chat composer, a
+    // search field, etc.). Hardware-keyboard behaviour is owner-verified only, same as every
+    // other runtime surface in this repo — there is no device/BT-keyboard in this container.
+    val rootFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
 
     // §7: content shared/selected into the app lands in the composer — go home.
     val intake by chatViewModel.intake.collectAsState()
@@ -259,7 +275,17 @@ fun SpatialRoot() {
             .background(ac.ink)
             .systemBarsPadding()
             .onSizeChanged { controller.viewport = it }
-            .spatialEdgeDrag(controller, edgePx),
+            .spatialEdgeDrag(controller, edgePx)
+            .focusRequester(rootFocusRequester)
+            .focusTarget()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.K) {
+                    searchOpen = !searchOpen
+                    true
+                } else {
+                    false
+                }
+            },
     ) {
         // Screen-reader room announcer: an invisible polite live region whose description is
         // the linearized room announcement. It re-announces only when [spatialPos] settles.

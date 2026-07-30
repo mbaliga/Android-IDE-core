@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +34,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -89,9 +99,36 @@ fun SearchOverlay(
     val c = LocalHyleColors.current
     val state by viewModel.uiState.collectAsState()
     var saveDialogOpen by remember { mutableStateOf(false) }
+    // Scoped hardware-keyboard shortcuts (§11.1's reachable-pre-M5 subset, WP13): Esc closes,
+    // Ctrl+S saves the current query, Ctrl+Enter opens the top result. Kept local to this
+    // Dialog's own composition (a separate Android window from SpatialRoot's), and — unlike
+    // that root's Ctrl+K — deliberately not consuming Enter/Tab bare, so typing into the query
+    // field is never intercepted. Owner-verified only; no hardware keyboard in this container.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize(), color = c.ink) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusTarget()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        event.key == Key.Escape -> { onDismiss(); true }
+                        event.isCtrlPressed && event.key == Key.S && !state.isZeroState -> {
+                            saveDialogOpen = true; true
+                        }
+                        event.isCtrlPressed && event.key == Key.Enter -> {
+                            state.rows.firstOrNull()?.let { onOpenConversation(it.convId) }
+                            true
+                        }
+                        else -> false
+                    }
+                },
+            color = c.ink,
+        ) {
             Column(Modifier.fillMaxSize()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     HyleTitle("Search", modifier = Modifier.weight(1f))
