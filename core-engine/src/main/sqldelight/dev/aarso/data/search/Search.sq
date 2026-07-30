@@ -98,9 +98,24 @@ CREATE TABLE search_history (
 
 -- ============ queries used by the WP3 driver spike + WP4 glue ============
 
-insertProjection:
+-- Idempotent (ON CONFLICT DO UPDATE): SearchIndexer (WP6) re-runs this for a conv_id whose
+-- content changed, and a resumed-after-interruption chunk may re-process a conv_id it already
+-- wrote — both must overwrite cleanly, never throw a PRIMARY KEY violation. An UPDATE path also
+-- fires conv_projection_au (not _ai), which is exactly the trigger that keeps conv_fts in sync
+-- for edits, not just first-time inserts.
+upsertProjection:
 INSERT INTO conv_projection(conv_id, title, snippet, body, title_raw, snippet_raw, body_raw, updated_at, created_at, projection_version)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(conv_id) DO UPDATE SET
+  title = excluded.title,
+  snippet = excluded.snippet,
+  body = excluded.body,
+  title_raw = excluded.title_raw,
+  snippet_raw = excluded.snippet_raw,
+  body_raw = excluded.body_raw,
+  updated_at = excluded.updated_at,
+  created_at = excluded.created_at,
+  projection_version = excluded.projection_version;
 
 deleteProjection:
 DELETE FROM conv_projection WHERE conv_id = ?;
@@ -109,7 +124,7 @@ countProjections:
 SELECT count(*) FROM conv_projection;
 
 -- SearchProjector (WP5) produces one Row per conversation; the indexer (WP6) writes it as one
--- insertProjection + one upsertFacets call per conv_id, inside the same chunk transaction.
+-- upsertProjection + one upsertFacets call per conv_id, inside the same chunk transaction.
 upsertFacets:
 INSERT INTO conv_facets(conv_id, starred, archived, project_id, model_ids, turn_count, branch_count, has_image, has_code, cost_minor, last_used_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

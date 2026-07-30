@@ -22,26 +22,28 @@ import com.eygraber.sqldelight.androidx.driver.AndroidxSqliteDriver
 object SearchDriverFactory {
 
     /** Production: a per-app-data-dir file-backed database. */
-    fun create(context: Context): SearchDatabase {
+    fun create(context: Context): SearchDatabaseHandle {
         val path = context.getDatabasePath("search.db").absolutePath
-        val driver = AndroidxSqliteDriver(
-            driver = BundledSQLiteDriver(),
-            databaseType = AndroidxSqliteDatabaseType.File(path),
-            schema = SearchDatabase.Schema,
-        )
-        installSyncTriggers(driver)
-        return SearchDatabase(driver)
+        return open(AndroidxSqliteDatabaseType.File(path))
     }
 
     /** JVM-testable / ephemeral: in-memory database, same driver artifact as production. */
-    fun createInMemory(): SearchDatabase {
+    fun createInMemory(): SearchDatabaseHandle = open(AndroidxSqliteDatabaseType.Memory)
+
+    private fun open(databaseType: AndroidxSqliteDatabaseType): SearchDatabaseHandle {
         val driver = AndroidxSqliteDriver(
             driver = BundledSQLiteDriver(),
-            databaseType = AndroidxSqliteDatabaseType.Memory,
+            databaseType = databaseType,
             schema = SearchDatabase.Schema,
         )
+        // SQLite disables foreign-key enforcement by default, per connection — it is NOT a
+        // property of the database file. Without this, conv_facets's `ON DELETE CASCADE`
+        // (Search.sq) silently never fires, and deleteProjection leaves an orphaned facets row
+        // behind (verified empirically by SearchIndexerTest's "remove deletes..." case failing
+        // without this line).
+        driver.execute(identifier = null, sql = "PRAGMA foreign_keys = ON", parameters = 0, binders = null)
         installSyncTriggers(driver)
-        return SearchDatabase(driver)
+        return SearchDatabaseHandle(SearchDatabase(driver), driver)
     }
 
     /**
@@ -77,5 +79,36 @@ object SearchDriverFactory {
             END
             """.trimIndent(),
         ).forEach { sql -> driver.execute(identifier = null, sql = sql, parameters = 0, binders = null) }
+    }
+}
+
+/**
+ * [database] plus the raw [SqlDriver] it wraps — [SearchDatabase] itself doesn't expose its
+ * driver (the generated `Transacter` interface has no such accessor), and a couple of real
+ * maintenance operations (here: [verifyAndRepairIfNeeded]) are raw SQL for the same reason the
+ * sync triggers are (see [SearchDriverFactory]'s KDoc): FTS5's own `integrity-check`/`rebuild`
+ * commands are special-command inserts targeting the `conv_fts` "module column" by name, which
+ * hits the identical SQLDelight analyzer limitation if declared in `Search.sq`.
+ */
+class SearchDatabaseHandle(val database: SearchDatabase, internal val driver: SqlDriver) {
+
+    /**
+     * Runs FTS5's built-in consistency check (`INSERT INTO conv_fts(conv_fts) VALUES
+     * ('integrity-check')`, which throws `SQLITE_CORRUPT_VTAB` if the shadow index has drifted
+     * from `conv_projection`) and repairs via `('rebuild')` if it fails (Doc §13 test 18: "FTS5
+     * external-content desync is detected and repaired via `('rebuild')`"). Returns `true` if a
+     * repair was needed and performed.
+     */
+    fun verifyAndRepairIfNeeded(): Boolean {
+        val corrupt = try {
+            driver.execute(null, "INSERT INTO conv_fts(conv_fts) VALUES('integrity-check')", 0, null)
+            false
+        } catch (_: Exception) {
+            true
+        }
+        if (corrupt) {
+            driver.execute(null, "INSERT INTO conv_fts(conv_fts) VALUES('rebuild')", 0, null)
+        }
+        return corrupt
     }
 }

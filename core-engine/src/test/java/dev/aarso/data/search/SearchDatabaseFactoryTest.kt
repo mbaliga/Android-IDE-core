@@ -20,13 +20,15 @@ import org.junit.Test
 class SearchDatabaseFactoryTest {
 
     @Test fun `in-memory database opens and reports zero rows`() {
-        val db = SearchDriverFactory.createInMemory()
+        val handle = SearchDriverFactory.createInMemory()
+        val db = handle.database
         assertEquals(0L, db.searchQueries.countProjections().executeAsOne())
     }
 
     @Test fun `fts5 match finds an inserted row via bm25 candidate ordering`() {
-        val db = SearchDriverFactory.createInMemory()
-        db.searchQueries.insertProjection(
+        val handle = SearchDriverFactory.createInMemory()
+        val db = handle.database
+        db.searchQueries.upsertProjection(
             conv_id = "c1",
             title = "gradle build cache misses",
             snippet = "configuration cache invalidated every run",
@@ -38,7 +40,7 @@ class SearchDatabaseFactoryTest {
             created_at = 1_735_689_600_000L,
             projection_version = 1L,
         )
-        db.searchQueries.insertProjection(
+        db.searchQueries.upsertProjection(
             conv_id = "c2",
             title = "unrelated conversation about weather",
             snippet = "sunny today",
@@ -59,8 +61,9 @@ class SearchDatabaseFactoryTest {
     @Test fun `fts5 phrase query requires detail=full to work`() {
         // Table-stakes per spec §6.1 — proves detail='full' actually took effect, not just
         // that unquoted MATCH works (which would also pass under detail='column').
-        val db = SearchDriverFactory.createInMemory()
-        db.searchQueries.insertProjection(
+        val handle = SearchDriverFactory.createInMemory()
+        val db = handle.database
+        db.searchQueries.upsertProjection(
             conv_id = "c1",
             title = "gradle build cache",
             snippet = "s",
@@ -81,7 +84,8 @@ class SearchDatabaseFactoryTest {
     }
 
     @Test fun `index_state upsert round-trips and resumes from last_indexed_rowid`() {
-        val db = SearchDriverFactory.createInMemory()
+        val handle = SearchDriverFactory.createInMemory()
+        val db = handle.database
         assertEquals(null, db.searchQueries.selectIndexState().executeAsOneOrNull())
 
         db.searchQueries.upsertIndexState(
