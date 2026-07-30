@@ -52,6 +52,7 @@ import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleTitle
 import dev.aarso.ui.hyle.FileImage
+import dev.aarso.ui.search.SearchEntryPill
 import dev.aarso.ui.theme.LocalHyleColors
 
 private enum class ChatsTab(val label: String) {
@@ -77,6 +78,7 @@ private val SORT_LABELS: List<Pair<ConvSort, String>> = listOf(
 fun ChatsRoom(
     viewModel: ChatViewModel,
     onClose: () -> Unit,
+    onOpenSearch: () -> Unit = {},
 ) {
     val c = LocalHyleColors.current
     val context = LocalContext.current
@@ -109,6 +111,7 @@ fun ChatsRoom(
     Box(Modifier.fillMaxSize().background(c.ink)) {
         Column(Modifier.fillMaxSize()) {
             HyleTitle("Chats")
+            SearchEntryPill(onClick = onOpenSearch)
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .horizontalScroll(rememberScrollState())

@@ -31,8 +31,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -68,6 +70,8 @@ import dev.aarso.ui.rooms.ChatsRoom
 import dev.aarso.ui.rooms.ProductRoomFree
 import dev.aarso.ui.rooms.SettingsRoom
 import dev.aarso.ui.rooms.TreeRoom
+import dev.aarso.ui.search.SearchOverlay
+import dev.aarso.ui.search.SearchViewModel
 import androidx.compose.foundation.border
 import dev.aarso.ui.theme.LocalHyleColors
 import androidx.compose.ui.platform.LocalContext
@@ -212,9 +216,11 @@ class SpatialController(private val scope: CoroutineScope) {
 @Composable
 fun SpatialRoot() {
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
+    val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val scope = rememberCoroutineScope()
     val controller = remember { SpatialController(scope) }
+    var searchOpen by remember { mutableStateOf(false) }
 
     // §7: content shared/selected into the app lands in the composer — go home.
     val intake by chatViewModel.intake.collectAsState()
@@ -280,7 +286,11 @@ fun SpatialRoot() {
                     .offset { IntOffset((-w * (1f - hProgress)).roundToInt(), 0) }
                     .padding(end = 72.dp),
             ) {
-                ChatsRoom(viewModel = chatViewModel, onClose = { controller.closeAll() })
+                ChatsRoom(
+                    viewModel = chatViewModel,
+                    onClose = { controller.closeAll() },
+                    onOpenSearch = { searchOpen = true },
+                )
             }
         }
         if (hProgress < -0.001f) {
@@ -452,6 +462,18 @@ fun SpatialRoot() {
             SpatialMapOverlay(
                 onDismiss = { container.sessionStore.setSpatialMapSeen(true) },
                 modifier = Modifier.zIndex(30f),
+            )
+        }
+
+        if (searchOpen) {
+            SearchOverlay(
+                viewModel = searchViewModel,
+                onOpenConversation = { rootId ->
+                    chatViewModel.openConversation(rootId)
+                    searchOpen = false
+                    controller.closeAll()
+                },
+                onDismiss = { searchOpen = false },
             )
         }
     }
