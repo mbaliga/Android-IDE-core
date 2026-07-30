@@ -3,6 +3,7 @@ package dev.aarso.ui.search
 import dev.aarso.domain.search.SearchHit
 import dev.aarso.domain.search.query.Diagnostic
 import dev.aarso.domain.search.query.FacetEvaluator
+import dev.aarso.domain.search.query.QueryCompiler
 import dev.aarso.domain.search.query.ParsedQuery
 import dev.aarso.domain.search.query.QueryChip
 import java.time.ZoneId
@@ -30,6 +31,10 @@ object SearchPresenter {
         val chips: List<QueryChip>,
         val diagnostics: List<Diagnostic>,
         val hasLossyDisjunction: Boolean,
+        /** The plain words to hand to a chat's find bar when a result is opened (S9
+         *  continuity) — facet/regex syntax stripped. Blank for a facet-only query, which has
+         *  no text to look for inside the conversation. */
+        val findText: String,
         val rows: List<SearchResultsPresenter.ResultRow>,
         val indexing: Boolean,
         val indexedCount: Long,
@@ -55,6 +60,7 @@ object SearchPresenter {
         chips = parsed.chips,
         diagnostics = parsed.diagnostics,
         hasLossyDisjunction = FacetEvaluator.hasLossyDisjunction(parsed.root),
+        findText = QueryCompiler.lexicalText(parsed.root),
         rows = SearchResultsPresenter.present(hits, nowMillis, zone, locale),
         indexing = indexing,
         indexedCount = indexedCount,

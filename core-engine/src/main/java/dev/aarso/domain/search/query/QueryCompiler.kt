@@ -60,6 +60,30 @@ object QueryCompiler {
 
     private fun quoted(text: String) = "\"" + text.replace("\"", "\"\"") + "\""
     private fun quotedPrefix(text: String, prefix: Boolean) = quoted(text) + if (prefix) "*" else ""
+
+    /**
+     * The plain words the user typed, with facet/regex syntax stripped — everything that is
+     * genuinely *text to find*. Two callers need exactly this: relevance re-scoring (feeding
+     * `is:starred` to a lexical scorer would rank documents for containing the words "is" and
+     * "starred"), and find-in-chat continuity (opening a result from a search for
+     * `gradle is:starred` should look for `gradle` inside the conversation, not the facet).
+     *
+     * Negated terms are excluded — `-maven` is a thing to *avoid*, never a thing to highlight.
+     */
+    fun lexicalText(node: QueryNode?): String = buildList { collectLexical(node, this) }.joinToString(" ")
+
+    private fun collectLexical(node: QueryNode?, into: MutableList<String>) {
+        when (node) {
+            null -> Unit
+            is QueryNode.Term -> into.add(node.text)
+            is QueryNode.Phrase -> into.add(node.text)
+            is QueryNode.Semantic -> into.add(node.text)
+            is QueryNode.And -> node.children.forEach { collectLexical(it, into) }
+            is QueryNode.Or -> node.children.forEach { collectLexical(it, into) }
+            is QueryNode.Not -> Unit
+            is QueryNode.Regex, is QueryNode.Facet -> Unit
+        }
+    }
 }
 
 /** Round-trippable canonical text for one node — what a chip's `text` is built from, and what

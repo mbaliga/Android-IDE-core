@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -40,13 +41,15 @@ fun InChatFindBar(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onClose: () -> Unit,
+    /** Reverse continuity (§9): promote what's typed here to the app-wide search overlay. */
+    onSearchAllChats: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = LocalHyleColors.current
+    Column(modifier.fillMaxWidth().background(c.raised)) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .background(c.raised)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -69,6 +72,18 @@ fun InChatFindBar(
         FindIconButton("‹", enabled = hasHits, onClick = onPrevious)
         FindIconButton("›", enabled = hasHits, onClick = onNext)
         FindIconButton("✕", enabled = true, onClick = onClose)
+    }
+    if (query.isNotBlank()) {
+        Text(
+            "Search all chats for “$query”",
+            style = MaterialTheme.typography.labelSmall,
+            color = c.violet,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSearchAllChats)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        )
+    }
     }
 }
 

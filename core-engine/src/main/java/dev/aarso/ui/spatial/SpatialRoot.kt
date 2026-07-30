@@ -230,6 +230,9 @@ fun SpatialRoot() {
     val scope = rememberCoroutineScope()
     val controller = remember { SpatialController(scope) }
     var searchOpen by remember { mutableStateOf(false) }
+    // S9 continuity: text handed from an opened search result to that chat's find bar, held
+    // here because the overlay is torn down the moment the conversation opens.
+    var pendingFind by remember { mutableStateOf<String?>(null) }
     // Global hardware-keyboard shortcut (§11.1, WP13's reachable subset): Ctrl+K opens/closes
     // search from anywhere. Deliberately the ONLY key this root intercepts — everything else is
     // left unconsumed so it still reaches whatever text field has focus (the chat composer, a
@@ -388,6 +391,12 @@ fun SpatialRoot() {
                 onOpenModels = { controller.open(SpatialTarget.SETTINGS) },
                 onOpenChats = { controller.open(SpatialTarget.CHATS) },
                 onOpenSettings = { controller.open(SpatialTarget.SETTINGS) },
+                findRequest = pendingFind,
+                onFindRequestConsumed = { pendingFind = null },
+                onSearchAllChats = { query ->
+                    searchViewModel.onQueryChange(query)
+                    searchOpen = true
+                },
             )
             // While parked, the card is one big return affordance: tap or drag
             // it home; nothing inside it should react. A scrim quiets the
@@ -494,8 +503,9 @@ fun SpatialRoot() {
         if (searchOpen) {
             SearchOverlay(
                 viewModel = searchViewModel,
-                onOpenConversation = { rootId ->
+                onOpenConversation = { rootId, findText ->
                     chatViewModel.openConversation(rootId)
+                    pendingFind = findText.takeIf { it.isNotBlank() }
                     searchOpen = false
                     controller.closeAll()
                 },

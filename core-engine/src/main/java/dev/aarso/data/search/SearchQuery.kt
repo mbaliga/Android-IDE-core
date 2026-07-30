@@ -83,7 +83,7 @@ object SearchQuery {
         // Re-score with the *lexical* text only. A facet like `is:starred` is a filter, not a
         // relevance signal — feeding "is:starred" to LexicalSearch as query text would score
         // documents for containing the literal words "is" and "starred".
-        val lexicalText = lexicalTextOf(parsed)
+        val lexicalText = QueryCompiler.lexicalText(parsed.root)
         if (lexicalText.isBlank()) {
             // Facet-only query: nothing to rank by, so keep the SQL's recency order and report an
             // honest zero score rather than inventing a relevance number.
@@ -181,24 +181,6 @@ object SearchQuery {
         is QueryNode.Or -> node.children.any(::containsRegex)
         is QueryNode.Not -> containsRegex(node.child)
         else -> false
-    }
-
-    /** The plain words a user actually typed, with facet/regex syntax stripped — what
-     *  [LexicalSearch] should rank by. */
-    private fun lexicalTextOf(parsed: ParsedQuery): String = buildList { collectLexical(parsed.root, this) }.joinToString(" ")
-
-    private fun collectLexical(node: QueryNode?, into: MutableList<String>) {
-        when (node) {
-            null -> Unit
-            is QueryNode.Term -> into.add(node.text)
-            is QueryNode.Phrase -> into.add(node.text)
-            is QueryNode.Semantic -> into.add(node.text)
-            is QueryNode.And -> node.children.forEach { collectLexical(it, into) }
-            is QueryNode.Or -> node.children.forEach { collectLexical(it, into) }
-            // A negated term must not become a positive ranking signal.
-            is QueryNode.Not -> Unit
-            is QueryNode.Regex, is QueryNode.Facet -> Unit
-        }
     }
 
     /**

@@ -93,7 +93,10 @@ fun SearchEntryPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 fun SearchOverlay(
     viewModel: SearchViewModel,
-    onOpenConversation: (String) -> Unit,
+    /** Called with the conversation to open and the plain text to hand to that chat's find bar
+     *  (S9 continuity) — facet syntax stripped, so opening a result for `gradle is:starred`
+     *  looks for `gradle` inside the conversation, not the facet. */
+    onOpenConversation: (convId: String, findText: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val c = LocalHyleColors.current
@@ -121,7 +124,7 @@ fun SearchOverlay(
                             saveDialogOpen = true; true
                         }
                         event.isCtrlPressed && event.key == Key.Enter -> {
-                            state.rows.firstOrNull()?.let { onOpenConversation(it.convId) }
+                            state.rows.firstOrNull()?.let { onOpenConversation(it.convId, state.findText) }
                             true
                         }
                         else -> false
@@ -294,7 +297,7 @@ private fun CenteredMessage(text: String, icon: (@Composable () -> Unit)? = null
 private fun ResultsList(
     state: SearchPresenter.UiState,
     onToggleExplain: (String) -> Unit,
-    onOpenConversation: (String) -> Unit,
+    onOpenConversation: (convId: String, findText: String) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -304,7 +307,7 @@ private fun ResultsList(
             ResultRowView(
                 row = row,
                 expanded = state.expandedResultId == row.convId,
-                onOpen = { onOpenConversation(row.convId) },
+                onOpen = { onOpenConversation(row.convId, state.findText) },
                 onToggleExplain = { onToggleExplain(row.convId) },
             )
             HorizontalDivider(color = LocalHyleColors.current.hairline)

@@ -105,6 +105,13 @@ fun ChatScreen(
     onOpenModels: () -> Unit = {},
     onOpenChats: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    /** S9 continuity: text carried in from an app-wide search result. Opens the find bar
+     *  pre-filled and scrolls to the first hit. Consumed once, via [onFindRequestConsumed], so
+     *  reopening the bar later doesn't resurrect a stale query. */
+    findRequest: String? = null,
+    onFindRequestConsumed: () -> Unit = {},
+    /** Reverse continuity: promote what's in the find bar to the app-wide search overlay. */
+    onSearchAllChats: (String) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
@@ -124,9 +131,7 @@ fun ChatScreen(
 
     // S9: find-in-chat (WP14) — row-level, not sub-string highlighting; see InChatFind.kt's
     // KDoc for why (the message body renders through the mikepenz Markdown composable, which
-    // owns its own text layout). Deliberately not wired to the app-wide search overlay's
-    // continuity affordances this pass (prefill-from-search-result, "search all chats for
-    // this") — a documented, deferred integration, not an oversight.
+    // owns its own text layout).
     var findOpen by remember { mutableStateOf(false) }
     var findQuery by remember { mutableStateOf("") }
     var findOptions by remember { mutableStateOf(InChatFindPresenter.FindOptions()) }
@@ -135,6 +140,14 @@ fun ChatScreen(
         InChatFindPresenter.find(state.steps.map { it.node.id to it.node.content }, findQuery, findOptions)
     }
     LaunchedEffect(findQuery, findOptions) { findIndex = if (findResult.hits.isEmpty()) -1 else 0 }
+    // S9 continuity: a search result was opened — carry its text into this chat's find bar.
+    LaunchedEffect(findRequest) {
+        val incoming = findRequest?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        findQuery = incoming
+        findOptions = InChatFindPresenter.FindOptions()
+        findOpen = true
+        onFindRequestConsumed()
+    }
     val currentFindHit = findResult.hits.getOrNull(findIndex)
     // The thread list's leading "connect repos" card (below) shifts every step's LazyColumn
     // item index by one when shown — read the same signal here so find-scroll lands on the
@@ -204,6 +217,7 @@ fun ChatScreen(
                     onPrevious = { findIndex = InChatFindPresenter.step(findResult.hits.size, findIndex, forward = false) },
                     onNext = { findIndex = InChatFindPresenter.step(findResult.hits.size, findIndex, forward = true) },
                     onClose = { findOpen = false; findQuery = "" },
+                    onSearchAllChats = { onSearchAllChats(findQuery) },
                 )
             }
             Box(modifier = Modifier.weight(1f).then(threadModifier)) {
