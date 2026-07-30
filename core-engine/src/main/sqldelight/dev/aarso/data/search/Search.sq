@@ -179,6 +179,35 @@ WHERE conv_fts MATCH :ftsQuery
 ORDER BY bm25(conv_fts, 10.0, 4.0, 1.0)
 LIMIT :limit;
 
+-- Same candidate generation, carrying each row's facet values along (WP16) so the facet
+-- predicate can be evaluated without an N+1 selectFacets call per candidate. LEFT JOIN, not
+-- JOIN: a projection whose facets row is somehow missing must still be findable by text — a
+-- missing facets row means "no facet data", not "not a conversation". FacetEvaluator gets
+-- defaults for those columns; see SearchQuery.toSubject.
+searchCandidatesWithFacets:
+SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at,
+       f.starred, f.archived, f.project_id, f.model_ids,
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor
+FROM conv_fts
+JOIN conv_projection p ON p.rowid = conv_fts.rowid
+LEFT JOIN conv_facets f ON f.conv_id = p.conv_id
+WHERE conv_fts MATCH :ftsQuery
+ORDER BY bm25(conv_fts, 10.0, 4.0, 1.0)
+LIMIT :limit;
+
+-- The facet-only path: a query like `is:starred` or `after:-7d` with no lexical text at all has
+-- no FTS expression to MATCH against, so there is no candidate set to narrow — the candidates
+-- are "the most recent N conversations", filtered by the facet predicate afterwards. Ordered by
+-- recency (not relevance) because with no query terms there is no relevance to rank by.
+selectRecentWithFacets:
+SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at,
+       f.starred, f.archived, f.project_id, f.model_ids,
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor
+FROM conv_projection p
+LEFT JOIN conv_facets f ON f.conv_id = p.conv_id
+ORDER BY p.updated_at DESC
+LIMIT :limit;
+
 selectIndexState:
 SELECT * FROM index_state WHERE id = 1;
 

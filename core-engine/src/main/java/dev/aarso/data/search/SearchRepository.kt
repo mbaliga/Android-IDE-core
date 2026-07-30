@@ -4,6 +4,8 @@ import dev.aarso.data.LedgerStore
 import dev.aarso.data.MessageTreeRepository
 import dev.aarso.data.SessionStore
 import dev.aarso.domain.search.SearchHit
+import dev.aarso.domain.search.query.ParsedQuery
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -39,10 +41,17 @@ class SearchRepository(
         SearchIndexer.reindex(database, rows, nowMillis)
     }
 
-    suspend fun search(query: String, nowMillis: Long, resultLimit: Int = SearchQuery.DEFAULT_RESULT_LIMIT): List<SearchHit> =
-        withContext(Dispatchers.IO) {
-            SearchQuery.search(database, query, nowMillis, resultLimit)
-        }
+    /** Takes an already-[ParsedQuery] rather than raw text: the search overlay parses on every
+     *  keystroke to paint chips/diagnostics, so re-parsing here would be waste, and a second
+     *  parse could in principle disagree with the one the user is looking at. */
+    suspend fun search(
+        parsed: ParsedQuery,
+        nowMillis: Long,
+        resultLimit: Int = SearchQuery.DEFAULT_RESULT_LIMIT,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<SearchHit> = withContext(Dispatchers.IO) {
+        SearchQuery.search(database, parsed, nowMillis, resultLimit, zone)
+    }
 
     suspend fun indexedCount(): Long = withContext(Dispatchers.IO) {
         database.searchQueries.countProjections().executeAsOne()

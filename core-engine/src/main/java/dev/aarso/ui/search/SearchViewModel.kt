@@ -65,7 +65,12 @@ class SearchViewModel(
         .debounce(120)
         .distinctUntilChanged()
         .flatMapLatest { text ->
-            flow { emit(if (text.isBlank()) emptyList() else repository.search(text, System.currentTimeMillis())) }
+            flow {
+                val now = System.currentTimeMillis()
+                // Parsed here (not inside the repository) so the exact tree the UI is painting
+                // chips and diagnostics from is the one that gets executed.
+                emit(if (text.isBlank()) emptyList() else repository.search(QueryParser.parse(text, now, zone), now, zone = zone))
+            }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 

@@ -60,15 +60,18 @@ class SearchPresenterTest {
         assertEquals(1, state.rows.size)
     }
 
-    @Test fun `facets in the query text are flagged as not yet applied to results`() {
+    @Test fun `a facet AND'd with text is applied exactly, so nothing is flagged`() {
         val state = present("is:starred gradle")
-        assertTrue(state.hasUnappliedFacets)
+        assertFalse(state.hasLossyDisjunction)
         assertTrue(state.chips.isNotEmpty())
     }
 
+    @Test fun `a facet OR'd with text is flagged as the one lossy shape`() {
+        assertTrue(present("(gradle OR is:starred)").hasLossyDisjunction)
+    }
+
     @Test fun `a query with no facets is not flagged`() {
-        val state = present("gradle build")
-        assertFalse(state.hasUnappliedFacets)
+        assertFalse(present("gradle build").hasLossyDisjunction)
     }
 
     @Test fun `diagnostics from the parser pass through untouched`() {

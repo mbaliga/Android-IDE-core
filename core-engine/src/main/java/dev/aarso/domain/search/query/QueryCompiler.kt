@@ -22,21 +22,30 @@ object QueryCompiler {
      * so a caller can still show "semantic search unavailable" without losing the term as a
      * plain-lexical fallback (hard rule 1: the raw query still runs).
      */
-    fun compileFts(node: QueryNode?): String? = node?.let(::renderFts)?.takeIf { it.isNotBlank() }
+    /**
+     * @param prefixBareTerms when true, a term the user did *not* explicitly suffix with `*` is
+     *   still compiled as an FTS5 prefix match. This is what an as-you-type search box needs
+     *   (spec S3): mid-word, `gradl` must already find `gradle`, or results only appear once the
+     *   user finishes typing a whole token. Off by default so [ParsedQuery.ftsExpression] stays a
+     *   faithful rendering of exactly what was typed — the retrieval layer
+     *   ([dev.aarso.data.search.SearchQuery]) opts in, a caller inspecting the parse does not.
+     */
+    fun compileFts(node: QueryNode?, prefixBareTerms: Boolean = false): String? =
+        node?.let { renderFts(it, prefixBareTerms) }?.takeIf { it.isNotBlank() }
 
-    private fun renderFts(node: QueryNode): String? = when (node) {
-        is QueryNode.Term -> quotedPrefix(node.text, node.prefix)
+    private fun renderFts(node: QueryNode, prefixBare: Boolean): String? = when (node) {
+        is QueryNode.Term -> quotedPrefix(node.text, node.prefix || prefixBare)
         is QueryNode.Phrase -> quoted(node.text)
         is QueryNode.Semantic -> quotedPrefix(node.text, prefix = true)
         is QueryNode.Regex -> null
         is QueryNode.Facet -> null
         is QueryNode.Or -> {
-            val parts = node.children.mapNotNull(::renderFts)
+            val parts = node.children.mapNotNull { renderFts(it, prefixBare) }
             if (parts.isEmpty()) null else "(" + parts.joinToString(" OR ") + ")"
         }
         is QueryNode.And -> {
-            val positive = node.children.filterNot { it is QueryNode.Not }.mapNotNull(::renderFts)
-            val negative = node.children.filterIsInstance<QueryNode.Not>().mapNotNull { renderFts(it.child) }
+            val positive = node.children.filterNot { it is QueryNode.Not }.mapNotNull { renderFts(it, prefixBare) }
+            val negative = node.children.filterIsInstance<QueryNode.Not>().mapNotNull { renderFts(it.child, prefixBare) }
             when {
                 positive.isEmpty() -> null // nothing lexical to anchor a NOT against — see class KDoc
                 negative.isEmpty() -> positive.joinToString(" ")

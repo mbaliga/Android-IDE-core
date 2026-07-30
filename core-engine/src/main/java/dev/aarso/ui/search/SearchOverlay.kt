@@ -159,10 +159,10 @@ fun SearchOverlay(
                             state.chips.forEach { chip -> HyleChip(true, {}, chip.text) }
                         }
                     }
-                    if (state.hasUnappliedFacets) {
+                    if (state.hasLossyDisjunction) {
                         Text(
-                            "Filters shown as chips aren't applied to these results yet — " +
-                                "use the Chats tabs for starred/text filtering.",
+                            "A filter OR'd with text is applied narrowly here — results may be " +
+                                "missing. Splitting it into two searches finds everything.",
                             style = MaterialTheme.typography.labelSmall,
                             color = c.textMid,
                             modifier = Modifier.padding(top = 4.dp),
