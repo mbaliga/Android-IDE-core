@@ -59,6 +59,12 @@ class SessionStore(context: Context) {
     private val _bookmarkedRoots = MutableStateFlow(prefs.getStringSet(KEY_BOOKMARKS, emptySet())?.toSet() ?: emptySet())
     val bookmarkedRoots: StateFlow<Set<String>> = _bookmarkedRoots.asStateFlow()
 
+    // Archived conversation roots — backs search's `is:archived` facet (FONEBREW_SEARCH_SPEC.md
+    // §6.1). Same shape as bookmarkedRoots on purpose; this is the flag only, not an archive
+    // management UI (no swipe-to-archive surface exists yet — out of scope for search).
+    private val _archivedRoots = MutableStateFlow(prefs.getStringSet(KEY_ARCHIVED, emptySet())?.toSet() ?: emptySet())
+    val archivedRoots: StateFlow<Set<String>> = _archivedRoots.asStateFlow()
+
     // Per-conversation project label (the "Projects" grouping in Chats). Persisted as a set of
     // "rootId\u0001project" entries; absent = unassigned. Local only.
     private val _conversationProjects = MutableStateFlow(loadConversationProjects())
@@ -172,6 +178,12 @@ class SessionStore(context: Context) {
         _bookmarkedRoots.value = next
     }
 
+    fun toggleArchived(rootId: String) {
+        val next = Bookmarks.toggle(_archivedRoots.value, rootId)
+        prefs.edit().putStringSet(KEY_ARCHIVED, next).apply()
+        _archivedRoots.value = next
+    }
+
     /** Assign (or clear, with a blank/null label) the project a conversation belongs to. */
     fun setConversationProject(rootId: String, project: String?) {
         val next = _conversationProjects.value.toMutableMap()
@@ -255,6 +267,7 @@ class SessionStore(context: Context) {
         private const val KEY_TEXTURE = "textureIntensity"
         private const val KEY_GRADIENT = "gradientColor"
         private const val KEY_BOOKMARKS = "bookmarkedRoots"
+        private const val KEY_ARCHIVED = "archivedRoots"
         private const val KEY_CONV_PROJECTS = "conversationProjects"
         private const val KEY_CONV_OPENS = "conversationOpens"
         private const val KEY_COUNCIL_DEFAULT = "councilDefault"

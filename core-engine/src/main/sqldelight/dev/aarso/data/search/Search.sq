@@ -31,7 +31,11 @@ CREATE TABLE conv_facets (
   branch_count INTEGER NOT NULL DEFAULT 0,
   has_image    INTEGER NOT NULL DEFAULT 0,
   has_code     INTEGER NOT NULL DEFAULT 0,   -- derived from markdown fences at projection time
-  cost_micros  INTEGER NOT NULL DEFAULT 0,   -- summed LedgerEntry.estCostMinor for this conv
+  cost_minor   INTEGER NOT NULL DEFAULT 0,   -- summed LedgerEntry.estCostMinor (minor currency
+                                             -- units, e.g. cents) for this conv — named to match
+                                             -- the actual source field's unit, not spec §4's
+                                             -- "cost_micros" (this app has no micros-denominated
+                                             -- cost data; renaming avoids a misleading unit)
   last_used_at INTEGER
 );
 CREATE INDEX idx_facets_composite ON conv_facets(archived, starred, project_id);
@@ -103,6 +107,26 @@ DELETE FROM conv_projection WHERE conv_id = ?;
 
 countProjections:
 SELECT count(*) FROM conv_projection;
+
+-- SearchProjector (WP5) produces one Row per conversation; the indexer (WP6) writes it as one
+-- insertProjection + one upsertFacets call per conv_id, inside the same chunk transaction.
+upsertFacets:
+INSERT INTO conv_facets(conv_id, starred, archived, project_id, model_ids, turn_count, branch_count, has_image, has_code, cost_minor, last_used_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(conv_id) DO UPDATE SET
+  starred = excluded.starred,
+  archived = excluded.archived,
+  project_id = excluded.project_id,
+  model_ids = excluded.model_ids,
+  turn_count = excluded.turn_count,
+  branch_count = excluded.branch_count,
+  has_image = excluded.has_image,
+  has_code = excluded.has_code,
+  cost_minor = excluded.cost_minor,
+  last_used_at = excluded.last_used_at;
+
+selectFacets:
+SELECT * FROM conv_facets WHERE conv_id = ?;
 
 -- Candidate generation (§5.1): bm25 column weights (10,4,1) are FTS5's per-query ranking
 -- weights for title/snippet/body — deliberately NOT the same as LexicalSearch's 2x/1x final
