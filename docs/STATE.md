@@ -120,10 +120,14 @@ Business/monetization/licensing decisions (PM+authoring, the routing engine, and
 revenue-related) are tracked privately, not in this repo.
 
 ### Engineering follow-ups (no owner action needed)
-- **Daily-driver pass (planned, spec ready)**: vision input, web search, artifacts +
-  Time-Machine versions, projects, drafts/outbox reliability, SAF sync, and the call-mode
-  engine (surface lands in `android-ide-studio`) — full execution spec in
-  `docs/design/daily-driver.md`; that doc supersedes overlapping bullets below while it runs.
+- **Daily-driver pass (in progress)**: vision input, web search, and drafts/outbox reliability
+  have landed. Still open: artifacts + Time-Machine versions, projects (instructions + files as
+  context), SAF sync, and basic on-device voice (talk-to-type dictation into the composer +
+  a ChatGPT-style continuous conversation mode — both free, both here). The phone-call-metaphor
+  experience (ring/answer/hang-up, proximity routing, video-call variant) is **not** a core
+  feature — that engine and its surface both live entirely in `android-ide-studio` as a paid
+  differentiator; core exposes only an inert seam. The full execution spec tracks privately,
+  not in this repo.
 - **Chat §B4 remainders**: per-member **files** (needs multimodal/file→context plumbing);
   optionally a unified model-per-member surface.
 - **Live per-step streaming in the graph Loop run** (`GraphRunner` needs a progress callback, like
