@@ -16,6 +16,7 @@ class ContrastTest {
         assertTrue("$label onViolet on violet < 4.5", contrastRatio(c.onViolet, c.violet) >= 4.5f)
         assertTrue("$label violet < 3:1 UI", contrastRatio(c.violet, c.ink) >= 3f)
         assertTrue("$label error < 3:1 UI", contrastRatio(c.error, c.ink) >= 3f)
+        assertTrue("$label cyan < 3:1 UI", contrastRatio(c.cyan, c.ink) >= 3f)
     }
 
     @Test fun `default dark palette clears AA`() = assertAA(darkHyleColors(), "dark")

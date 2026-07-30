@@ -90,11 +90,6 @@ private const val DEFAULT_PROPOSER_PROMPT =
 private const val DEFAULT_CRITIC_PROMPT =
     "You are the critic. Find concrete flaws against the objective; begin your reply with APPROVE only if it fully meets it."
 
-/** CORE_PHASES.md §1.3's cyan accent (`#08FED5`) — the budget bar's cap-tick colour. Not yet a
- *  vendored Hyle token (only the violet ramp exists there today), so it's a one-off literal
- *  here rather than a fabricated addition to the design-system module (rule 4). */
-private val LoopCyan = Color(0xFF08FED5)
-
 /** Icon+label for a run's stop reason (CORE_PHASES.md P3 "summary row") — never red (§1.4). */
 private fun stopLabel(reason: String): Pair<String, String> = when {
     reason == "reached end" -> "✓" to "Reached end"
@@ -702,7 +697,7 @@ private fun BudgetBar(usedFraction: Float, modifier: Modifier = Modifier) {
             drawRoundRect(colors.violet, size = androidx.compose.ui.geometry.Size(w, size.height), cornerRadius = r)
         }
         val tickX = size.width - 1.dp.toPx()
-        drawLine(LoopCyan, Offset(tickX, 0f), Offset(tickX, size.height), strokeWidth = 2.dp.toPx())
+        drawLine(colors.cyan, Offset(tickX, 0f), Offset(tickX, size.height), strokeWidth = 2.dp.toPx())
     }
 }
 
