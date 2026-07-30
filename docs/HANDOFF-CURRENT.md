@@ -301,13 +301,12 @@ Five icon tabs **Global / Image / Text / Video / 3D**.
 Currently the core shows the **locked placeholder**; the paid Studio installs the real room.
 - ⛔ **FREE floor: a to-do list** (simple, on-device) — **not built yet** (replaces the locked
   placeholder in core).
-- 🔒 **Studio suite (paid, Studio repo):** Assets (+ generation loops), Tasks/Epics,
-  Kanban/Timeline, pre-populated Launch to-dos, **Publishing** (API stores via runner/fastlane:
-  Play/Apple(macOS-gated)/Samsung/Huawei; no-API **submission concierge**: Garmin/Zepp/Huawei
-  Themes), product issue-tracking. Rollout: Garmin → Wear OS → Samsung → Apple → Zepp → Huawei.
+- 🔒 **Studio suite (paid, Studio repo):** the rest of product management — task lenses,
+  incidents, publishing/store-submission flows, business admin. Full detail lives in Studio's
+  own repo, not here.
 - **Free/paid line:** building (§§3–9) is free **and** the publishing-admin **watchlist** is free
-  (renewals/expirations as watched objects). Studio = ship-and-sell. **Lemon Squeezy** MoR for the
-  one-time ~$20 unlock (license check, no payment backend/telemetry).
+  (renewals/expirations as watched objects). Everything else in this room is Studio's paid
+  delta. Entitlement/pricing mechanics are tracked privately, not in this repo.
 
 ---
 
