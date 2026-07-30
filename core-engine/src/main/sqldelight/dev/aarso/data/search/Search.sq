@@ -143,6 +143,19 @@ ON CONFLICT(conv_id) DO UPDATE SET
 selectFacets:
 SELECT * FROM conv_facets WHERE conv_id = ?;
 
+-- Saved searches (§7 "save as smart collection" — see ScopeStack.nameableSnapshot, WP9).
+-- Execution against these rows (turning a saved query back into results) is whichever surface
+-- first needs it, WP10/WP11 — this is schema-complete CRUD, not yet wired to the UI.
+insertSavedSearch:
+INSERT INTO saved_search(id, name, query, pinned, created_at, sort_key)
+VALUES (?, ?, ?, ?, ?, ?);
+
+selectSavedSearches:
+SELECT * FROM saved_search ORDER BY pinned DESC, sort_key ASC, created_at DESC;
+
+deleteSavedSearch:
+DELETE FROM saved_search WHERE id = ?;
+
 -- Candidate generation (§5.1): bm25 column weights (10,4,1) are FTS5's per-query ranking
 -- weights for title/snippet/body — deliberately NOT the same as LexicalSearch's 2x/1x final
 -- weights (WP7 re-scores).
