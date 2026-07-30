@@ -42,7 +42,9 @@ import dev.aarso.AarsoApp
 import dev.aarso.domain.MessageNode
 import dev.aarso.domain.library.ConvSort
 import dev.aarso.domain.library.ConversationProjection
-import dev.aarso.domain.tree.Bookmarks
+import dev.aarso.domain.search.query.ChatsPreset
+import dev.aarso.domain.search.query.ConversationFacetFilter
+import dev.aarso.domain.search.query.QueryParser
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.domain.library.Conversations as LibConversations
@@ -148,9 +150,14 @@ fun ChatsRoom(
                 }
                 ChatsTab.PROJECTS -> ProjectGroupedList(listProps(conversations, ""), projects)
                 else -> {
+                    // Doc §6.4: "the existing tabs become presets" — Starred/Text are genuinely
+                    // boolean facet filters over data already in scope, so they're evaluated
+                    // through the shared query-language pipeline (ConversationFacetFilter)
+                    // instead of bespoke per-tab logic. Provably identical output to the old
+                    // Bookmarks.filter(...)/!it.hasImage checks — see ConversationFacetFilterTest.
                     val list = when (tab) {
-                        ChatsTab.STARRED -> Bookmarks.filter(conversations, bookmarked)
-                        ChatsTab.TEXT -> conversations.filter { !it.hasImage }
+                        ChatsTab.STARRED -> conversations.filterByPreset(ChatsPreset.STARRED, bookmarked, projects)
+                        ChatsTab.TEXT -> conversations.filterByPreset(ChatsPreset.TEXT, bookmarked, projects)
                         else -> conversations
                     }
                     val empty = when (tab) {
@@ -187,6 +194,17 @@ fun ChatsRoom(
             Text("+", style = MaterialTheme.typography.headlineMedium, color = c.onViolet)
         }
     }
+}
+
+/** Evaluates [preset]'s query through [ConversationFacetFilter] — see the call site's comment
+ *  in [ChatsRoom] for why only Starred/Text (genuine boolean filters) go through this path. */
+private fun List<Conversations.Summary>.filterByPreset(
+    preset: ChatsPreset,
+    bookmarked: Set<String>,
+    projects: Map<String, String>,
+): List<Conversations.Summary> {
+    val root = QueryParser.parse(preset.query).root
+    return filter { ConversationFacetFilter.matches(it, it.rootId in bookmarked, projects[it.rootId], root) }
 }
 
 /** Bundles the shared list inputs so the All/Text/Starred/Projects views stay in sync. */
