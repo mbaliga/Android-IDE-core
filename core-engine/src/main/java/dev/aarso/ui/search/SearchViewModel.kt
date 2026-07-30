@@ -38,10 +38,10 @@ import kotlinx.coroutines.launch
  * function. [SearchOverlay] only ever reads [uiState]; it never touches the repository or the
  * database directly.
  *
- * Indexing runs once, on creation (see [SearchRepository]'s KDoc for why: there is no
- * app-start backfill hook yet, so "the overlay was just opened" is the trigger this pass
- * relies on). A conversation added or edited after that stays unsearched until the overlay is
- * reopened — a known, deliberate M3-scope gap, not an oversight.
+ * Indexing starts on creation and then *keeps running* for this ViewModel's lifetime via
+ * [SearchRepository.keepIndexFresh], so a conversation edited while the app is open becomes
+ * searchable without reopening anything. Indexing while the app is *not* running (a
+ * `WorkManager` job, the spec's battery/thermal scheduling ladder) remains M6 territory.
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class SearchViewModel(
@@ -94,9 +94,15 @@ class SearchViewModel(
     init {
         viewModelScope.launch {
             indexing.value = true
-            repository.reindexAll(System.currentTimeMillis())
-            indexedCount.value = repository.indexedCount()
-            indexing.value = false
+            // Backfills, then keeps indexing for this ViewModel's lifetime — a conversation
+            // edited while the overlay is open becomes searchable without reopening it. Never
+            // returns; cancelled with viewModelScope.
+            repository.keepIndexFresh(
+                onIndexed = { count ->
+                    indexedCount.value = count
+                    indexing.value = false
+                },
+            )
         }
     }
 

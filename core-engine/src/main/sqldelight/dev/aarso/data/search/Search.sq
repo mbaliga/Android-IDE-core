@@ -123,6 +123,18 @@ DELETE FROM conv_projection WHERE conv_id = ?;
 countProjections:
 SELECT count(*) FROM conv_projection;
 
+-- Just enough of every indexed row to decide whether it still matches the freshly-projected
+-- one (WP17's incremental sync). Deliberately includes the facet columns, not only updated_at:
+-- starring or archiving a conversation, or assigning it to a project, changes what it should
+-- match without touching its last-activity timestamp, so an updated_at-only comparison would
+-- leave those edits invisible to search until the next cold rebuild.
+selectIndexStamps:
+SELECT p.conv_id, p.updated_at, p.projection_version,
+       f.starred, f.archived, f.project_id, f.model_ids,
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor
+FROM conv_projection p
+LEFT JOIN conv_facets f ON f.conv_id = p.conv_id;
+
 -- SearchProjector (WP5) produces one Row per conversation; the indexer (WP6) writes it as one
 -- upsertProjection + one upsertFacets call per conv_id, inside the same chunk transaction.
 upsertFacets:

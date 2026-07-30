@@ -88,6 +88,65 @@ object SearchIndexer {
         database.searchQueries.deleteProjection(convId)
     }
 
+    /** What one [sync] pass actually changed. Both zero means the index was already current —
+     *  the common case once the app has been running a while. */
+    data class SyncResult(val updated: Int, val removed: Int) {
+        val isNoOp: Boolean get() = updated == 0 && removed == 0
+    }
+
+    /**
+     * Brings an **already-backfilled** index in line with [rows] (WP17): upserts only the
+     * conversations whose projected content or facets actually differ from what's indexed, and
+     * drops rows for conversations that no longer exist.
+     *
+     * This is the incremental counterpart to [reindex]. [reindex] is the chunked, resumable
+     * cold-start path and deliberately short-circuits once `index_state` says the corpus is
+     * fully processed — which is correct for a resume, but means it can never notice *drift*
+     * (a new turn, a star, a project assignment). Running [reindex] then [sync] on app start
+     * covers both: the first finishes any interrupted backfill, the second catches everything
+     * that changed since.
+     *
+     * Cost is one small stamps query plus one transaction containing only the genuine deltas,
+     * so the steady-state case (nothing changed) is a single read and no writes at all.
+     */
+    fun sync(database: SearchDatabase, rows: List<SearchProjector.Row>, nowMillis: Long): SyncResult {
+        val stamps = database.searchQueries.selectIndexStamps().executeAsList().associateBy { it.conv_id }
+        val incomingIds = rows.mapTo(HashSet()) { it.convId }
+
+        val changed = rows.filter { row -> stamps[row.convId]?.let { !it.matches(row) } ?: true }
+        val removed = stamps.keys.filterNot { it in incomingIds }
+        if (changed.isEmpty() && removed.isEmpty()) return SyncResult(0, 0)
+
+        database.transaction {
+            changed.forEach { writeRow(database, it) }
+            removed.forEach { database.searchQueries.deleteProjection(it) }
+            // Everything in `rows` is now written, so the resume checkpoint is the full corpus.
+            database.searchQueries.upsertIndexState(
+                last_indexed_rowid = rows.size.toLong(),
+                projection_version = SearchProjector.PROJECTION_VERSION,
+                tokenizer_version = TOKENIZER_VERSION,
+                schema_version = SCHEMA_VERSION,
+                updated_at = nowMillis,
+            )
+        }
+        return SyncResult(changed.size, removed.size)
+    }
+
+    /** Whether the indexed stamp still describes [row] exactly. Any mismatch — text timestamp,
+     *  projection version, or any facet value — means re-index. */
+    private fun SelectIndexStamps.matches(row: SearchProjector.Row): Boolean =
+        updated_at == row.updatedAt &&
+            projection_version == row.projectionVersion &&
+            starred == row.starred.toSqlBoolean() &&
+            archived == row.archived.toSqlBoolean() &&
+            project_id == row.projectId &&
+            model_ids == row.modelIds &&
+            turn_count == row.turnCount &&
+            branch_count == row.branchCount &&
+            has_image == row.hasImage.toSqlBoolean() &&
+            has_code == row.hasCode.toSqlBoolean() &&
+            cost_minor == row.costMinor
+
     private fun writeRow(database: SearchDatabase, row: SearchProjector.Row) {
         database.searchQueries.upsertProjection(
             conv_id = row.convId,
