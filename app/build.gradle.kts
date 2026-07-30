@@ -1,16 +1,14 @@
-import com.github.jk1.license.filter.LicenseBundleNormalizer
-import org.gradle.api.attributes.Attribute
-import org.gradle.api.attributes.Bundling
-import org.gradle.api.attributes.Category
-import org.gradle.api.attributes.Usage
 import java.util.Properties
 
+// :app — the thin, shipping application shell (§ de-fork). All the reusable substrate now
+// lives in :core-engine (a com.android.library, so a future Studio :app can depend on it too);
+// this module carries only what's genuinely application-scoped: applicationId, versionCode/
+// versionName, signing, and the dist-flavor declarations needed to assemble real full/play
+// variants. No installStudio* calls happen anywhere in this open-core tree, so a bare build of
+// this module shows core's own locked placeholders — exactly the open-core shape.
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.license.report)
 }
 
 // Release signing: gitignored keystore.properties, overridable via environment
@@ -25,7 +23,10 @@ fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
 android {
-    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.aarso.
+    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.aarso. Matches the actual
+    // package the moved :core-engine Kotlin sources still declare (dev.aarso.*, unchanged by
+    // the extraction) — a relative android:name in this module's manifest (e.g. ".AarsoApp")
+    // resolves correctly against it.
     namespace = "dev.aarso"
     compileSdk = 36
 
@@ -38,21 +39,9 @@ android {
         versionCode = 17
         versionName = "0.13.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
         // arm64 is the only ABI the target device (and most modern phones) needs;
-        // restricting it keeps the llama.cpp build and APK small.
+        // restricting it keeps the packaged native libs (from :core-engine's AAR) small.
         ndk { abiFilters += "arm64-v8a" }
-    }
-
-    // Native llama.cpp engine (CPU-only first cut). The submodule lives at
-    // src/main/cpp/llama.cpp; the JNI shim + CMake build it into libaarso_llama.so.
-    ndkVersion = "28.2.13676358"
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.31.6"
-        }
     }
 
     val uploadKeystore = signingValue("storeFile", "AARSO_KEYSTORE_FILE")
@@ -69,28 +58,23 @@ android {
 
     buildTypes {
         release {
-            // Deliberately NOT minified: llama_jni.cpp resolves the streaming
-            // sink by name (GetMethodID("onToken")) — R8 renaming would kill
-            // token streaming silently; sdengine has the same shape. Turning R8
-            // on later needs -keep rules for the JNI surfaces plus an on-device
-            // regression pass. Size is dominated by the native libs anyway.
+            // Deliberately NOT minified: llama_jni.cpp (inside :core-engine's AAR) resolves
+            // the streaming sink by name (GetMethodID("onToken")) — R8 renaming would kill
+            // token streaming silently; sdengine has the same shape. This flag lives here
+            // (not on the library) because only the final application module actually runs
+            // R8 — a library's own isMinifyEnabled is a no-op; :core-engine instead ships a
+            // consumerProguardFiles rule carrying the same intent forward.
             isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
             if (uploadKeystore != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
     }
 
-    // Distribution split (owner decision 2026-06-12):
-    //  - play: Google Play build. Policy-safe catalog (official instruct GGUFs),
-    //    no overlay bubble / screen-capture OCR (the heaviest review surface),
-    //    in-app output flagging (Play GenAI policy).
-    //  - full: the sideload build (apk-dist) — current catalog and all §7 tiers.
-    //    Suffixed appId so both can live on one phone side by side.
+    // Distribution split (owner decision 2026-06-12) — must match :core-engine's own
+    // productFlavors exactly (same dimension name, same flavor names). This is a real,
+    // direct consumer of both variants (not a missingDimensionStrategy bystander), so it
+    // declares the dimension itself rather than deferring to one.
     flavorDimensions += "dist"
     productFlavors {
         create("full") {
@@ -103,28 +87,19 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlin {
-        jvmToolchain(17)
-    }
-    buildFeatures {
-        compose = true
-        // BuildConfig.DEBUG gates the echo dev stand-ins (no fake engine in release).
-        buildConfig = true
-    }
-
-    // Compress the native library inside the APK (extracted at install). Cuts the
-    // download size substantially with no effect on runtime behaviour.
+    // Packaging is final-APK-assembly-time behaviour, so it belongs on the application module
+    // even though the actual jniLibs/META-INF content originates from :core-engine's AAR (and
+    // sdengine's) — a library's own `packaging{}` block only governs that library's own AAR
+    // artifact, not how the consuming app later merges everything together. Moved here
+    // verbatim from the old monolithic :app; dropping this (discovered via a real
+    // :app:assembleFullDebug run, not assumed) reproduces a mergeFullDebugJavaResource
+    // failure on duplicate META-INF/versions/9/OSGI-INF/MANIFEST.MF across the sshj→
+    // BouncyCastle jars.
     packaging {
         jniLibs {
             useLegacyPackaging = true
         }
         resources {
-            // sshj pulls BouncyCastle, which ships duplicate/irrelevant metadata that
-            // R8 packaging otherwise rejects. None affect runtime.
             excludes += setOf(
                 "META-INF/*.kotlin_module",
                 "META-INF/versions/**",
@@ -137,100 +112,16 @@ android {
             )
         }
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlin {
+        jvmToolchain(17)
+    }
 }
 
 dependencies {
-    // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts);
-    // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
-    implementation("dev.aarso:hyle:0.2.0")
-    // Shared crash-recovery utility (same submodule, separate coordinate — deliberately
-    // independent of :hyle so non-Hyle apps can also depend on it; see that repo's README).
-    implementation("dev.aarso:crash-recovery:1.0.0")
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
-
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.activity.compose)
-
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    // Markdown rendering for assistant turns (legibility); pure rendering, no IO.
-    implementation(libs.markdown.renderer.m3)
-
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.sse)
-    // SSH/SFTP transport for the remote-exec spine (data/remote). Runtime owner-verified.
-    implementation(libs.sshj)
-    // On-device OCR (offline, bundled) for the screen-capture content tier (§7) —
-    // full flavor only; the play build ships without screen capture.
-    "fullImplementation"(libs.mlkit.text)
-
-    // On-device image generation native library (libaarso_sd.so).
-    implementation(project(":sdengine"))
-
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
-    // Real org.json for JVM tests (the app uses Android's bundled org.json; the
-    // stub in unit tests isn't functional). Lets us round-trip the tree archive.
-    testImplementation("org.json:json:20231013")
-}
-
-// §1.8 license gate: scans what actually ships and fails `checkLicense` on anything off
-// `config/allowed-licenses.json`. Test-only deps like JUnit are a different configuration
-// and never scanned. Every borrow is still verify-at-build (§1.8) — this only catches
-// licenses the repo hasn't already had a human look at.
-//
-// Two purpose-built resolvable configurations, NOT the real fullDebug/playDebug/fullRelease/
-// playReleaseRuntimeClasspath: asking the license-report plugin to resolve those directly
-// (it uses the legacy `Configuration.resolvedConfiguration` API, bypassing AGP's own task
-// graph) hits a composite-build variant-selection ambiguity — :hyle-design-system:hyle
-// (consumed via `includeBuild("hyle-design-system")`, substituted for `dev.aarso:hyle`)
-// publishes many secondary artifactType-tagged variants of its runtime configuration
-// (android-classes-jar, android-jni, android-res, plain jar, ...), and AGP's own
-// disambiguation rule for picking among them apparently doesn't cross the included-build
-// boundary — Gradle refuses to guess. AGP's real task graph resolves the exact same
-// dependency fine (proved by :app:testFullDebugUnitTest/:testPlayDebugUnitTest passing),
-// it just requests a specific artifactType the plugin's bare API call doesn't. Working
-// around it: mirror the real classpath's declared dependencies (extendsFrom the same
-// implementation buckets AGP's own RuntimeClasspath configurations extend) on a fresh
-// configuration that requests plain Usage=java-runtime/Category=library/artifactType=jar —
-// enough to disambiguate without needing AGP's flavor/build-type attributes at all, since
-// this is only for reading licenses off the resolved graph, not for compiling/packaging.
-val licenseScanAttrs: (org.gradle.api.attributes.AttributeContainer) -> Unit = { attrs ->
-    attrs.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
-    attrs.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category::class.java, Category.LIBRARY))
-    attrs.attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class.java, Bundling.EXTERNAL))
-    attrs.attribute(Attribute.of("artifactType", String::class.java), "jar")
-}
-listOf("full", "play").forEach { flavor ->
-    configurations.create("${flavor}LicenseScan") {
-        isCanBeResolved = true
-        isCanBeConsumed = false
-        extendsFrom(configurations.getByName("implementation"), configurations.getByName("${flavor}Implementation"))
-        attributes { licenseScanAttrs(this) }
-    }
-}
-//
-// config/allowed-licenses.json carries two narrow name-scoped overrides for
-// com.google.android.gms / com.google.mlkit / com.google.android.odml (the on-device
-// OCR chain behind `libs.mlkit.text`, `full` flavor only — see the dependency below).
-// Those report as "Android Software Development Kit License" / "ML Kit Terms of
-// Service", Google's own SDK-distribution terms rather than an OSS license string —
-// outside the §1.8 OSS allowlist by nature, not because they're a copyleft/attribution
-// risk (what §1.8 actually guards against). Pre-existing dependency, verified
-// 2026-07-11, scoped by name regex so the override can't silently cover anything else.
-licenseReport {
-    configurations = arrayOf("fullLicenseScan", "playLicenseScan")
-    filters = arrayOf(LicenseBundleNormalizer())
-    allowedLicensesFile = rootProject.file("config/allowed-licenses.json")
+    implementation(project(":core-engine"))
 }

@@ -2,7 +2,7 @@ package dev.aarso.di
 
 import android.content.Context
 import androidx.room.Room
-import dev.aarso.BuildConfig
+import dev.aarso.core_engine.BuildConfig
 import dev.aarso.data.AppDatabase
 import dev.aarso.data.DownloadCenter
 import dev.aarso.data.ImageProviderStore

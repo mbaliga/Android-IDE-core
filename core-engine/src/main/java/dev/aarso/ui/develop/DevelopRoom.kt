@@ -179,9 +179,14 @@ internal fun BuildsFacet() {
     }
 }
 
-/** A bordered rectangle — the only "component" this wireframe needs. */
+/**
+ * A bordered rectangle — the only "component" this wireframe needs.
+ *
+ * Public (not internal): a future dependent module's `StudioDevelopFacets` needs this
+ * unqualified, the same as [WireButton]/[Hint] below. No behaviour change.
+ */
 @Composable
-internal fun WireBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+fun WireBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -194,7 +199,7 @@ internal fun WireBox(content: @Composable androidx.compose.foundation.layout.Col
 
 /** A boxy text button; [selected] inverts it so tab/segment state is legible. */
 @Composable
-internal fun WireButton(
+fun WireButton(
     label: String,
     selected: Boolean = false,
     enabled: Boolean = true,
@@ -219,7 +224,7 @@ internal fun WireButton(
 }
 
 @Composable
-internal fun Hint(text: String) {
+fun Hint(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

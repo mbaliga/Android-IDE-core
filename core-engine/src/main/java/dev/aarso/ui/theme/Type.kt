@@ -10,7 +10,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import dev.aarso.R
+import dev.aarso.core_engine.R
 
 /**
  * Plus Jakarta Sans, bundled locally (OFL — docs/licenses/) — never fetched at
