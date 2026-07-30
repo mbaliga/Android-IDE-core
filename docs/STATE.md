@@ -1,19 +1,19 @@
 # Aarso / Workbench — Project State, Roadmap & End Goal
 
 > Single source of truth: what's **done**, what's **pending**, and the **end goal**. Written
-> 2026-06-28. Companion to `CLAUDE.md` (build rules),  (revenue), and
-> `docs/design/*` (per-surface specs). When in doubt, this file is the map; the others are the
-> territory.
+> 2026-06-28. Companion to `CLAUDE.md` (build rules) and `docs/design/*` (per-surface specs).
+> When in doubt, this file is the map; the others are the territory. Business/monetization
+> planning is tracked privately, not in this repo.
 
 ---
 
 ## 0. TL;DR
 A **local-first, sovereign AI computing environment** for a high-end Android phone — "an open,
 on-device Claude Code with loop engineering," extending into a real **agentic IDE** (read repos,
-propose+review+commit changes, drive devices like a Pi/Arduino). Free and open to *build*; a paid
-"Studio" layer to *ship & sell* a product. Current shipped build: **v0.13.0** on the `apk-dist`
-branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
-runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
+propose+review+commit changes, drive devices like a Pi/Arduino). Current shipped build:
+**v0.13.0** on the `apk-dist` branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the
+full APK assembles; everything runtime/device-side is **owner-verified only** (no device, board,
+or SSH host in CI).
 
 ---
 
@@ -29,19 +29,18 @@ runtime/device-side is **owner-verified only** (no device, board, or SSH host in
 ---
 
 ## 2. The constellation (multi-repo / multi-app)
-The product is becoming a **family of apps that work together**, not one monolith. Each is a repo;
-the dependency direction sinks toward the routing engine.
+The product is becoming a **family of apps that work together**, not one monolith. Each is a repo.
 
 | Component | What it is | Source | Status |
 |---|---|---|---|
-| **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.13.0) |
+| **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo) | Shipping (v0.13.0) |
 | **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | **Done** — its own repo `mbaliga/Hyle-Design-System`, single source of `dev.aarso:hyle:0.2.0`, consumed here via git submodule + includeBuild (vendored copy deleted; `0.1.0` retired) |
-| **PM + authoring** | A companion project-management surface | not in this repo | New repo pending owner; code mostly lives in main today, to be carved out |
+| **PM + authoring** | A companion project-management surface | not in this repo | code lives elsewhere |
 | **Sound & haptics authoring** | A companion authoring app | **Open** | Not started here |
+| **Routing engine** | On-device + cloud LLM **router/orchestrator** — picks model for max-impact/least-cost, manages keys; offered as a service to *any* app | not in this repo | Not started here |
 
-**Integration rule:** the routing engine needs a **stable, documented public API** from day one —
-it's the spine everything else hangs off. Hyle / sound-haptics / PM / main app may depend on the
-router's interface; never the reverse.
+**Integration rule:** the routing engine needs a **stable, documented public API** from day one.
+Business/licensing decisions for these components are tracked privately, not in this repo.
 
 ---
 
@@ -137,10 +136,11 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 - ~~**Hyle repo split** (task #2)~~ **DONE (2026-07-02):** Hyle lives in its own repo
   `mbaliga/Hyle-Design-System` (`dev.aarso:hyle:0.2.0`); core consumes it via git submodule
   (`hyle-design-system/`) + `includeBuild`, and the vendored `:hyle` module is deleted.
-- **PM/authoring repo**: owner creates the closed repo → carve the Studio layer (Project room,
-  Develop→Launch pipeline, playbooks) out of main.
 - **USB Arduino on-device verification**: the CDC flasher is unexercised in CI — needs a real CDC
   board (Uno R3 / Leonardo / Micro / ESP-CDC). Clone chips (CH340/CP210x/FTDI) need a vendor driver.
+
+Business/monetization/licensing decisions (PM+authoring, the routing engine, and anything
+revenue-related) are tracked privately, not in this repo.
 
 ### Engineering follow-ups (no owner action needed)
 - **Chat §B4 remainders**: per-member **files** (needs multimodal/file→context plumbing);
@@ -165,30 +165,21 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
    any model, engineer loops, run agents over your repos, drive hardware) without a laptop, and
    **every layer is legible**: you see which model is chosen and why, every cloud touch is a
    watched object, your history is a git-like tree you own and can export.
-2. **A family of cooperating, mostly-open apps** — the main app, Hyle (design), sound/haptics, all
-   open; a paid PM/authoring "Studio" layer; and a routing engine that any app can use to pick the
-   right model for the least cost.
-3. **A FOSS-honest business** — *free to build, pay to ship & sell*; patronage not paywall; the
-   commercially-successful and the willing fund a solo dev's modest, sustainable lifestyle, while
-   nobody is ever locked out ().
+2. **A family of cooperating, mostly-open apps** — the main app, Hyle (design), sound/haptics all
+   open; a routing engine that any app can use to pick the right model for the least cost.
+
+Business/monetization decisions are tracked privately, not in this repo.
 
 ---
 
-
----
-
-
----
-
-## 8. Open decisions awaiting the owner
-1. Create the **Hyle** repo, the **PM/authoring** repo, the **sound/haptics** repo, the **routing
-   engine** repo (give the agent access).
-5. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, the Devices/SSH
+## 6. Open decisions awaiting the owner (engineering-scoped)
+1. Create the **sound/haptics** repo (give the agent access).
+2. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, the Devices/SSH
    flows, and the USB flash with a real board.
 
 ---
 
-## 9. Constraints & honesty
+## 7. Constraints & honesty
 - **No device, emulator, board, or SSH host in this environment.** CI runs JVM unit tests only and
   **never launches the app** — so all runtime, gesture, rendering, network, and hardware behaviour
   is **owner-verified on the phone**. The tested cores (parsers, Intel HEX, STK500, diff, Git
@@ -207,7 +198,7 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 
 ---
 
-## 10. Where things live (map)
+## 8. Where things live (map)
 - `app/src/main/java/dev/aarso/` — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
   device, git, ide, remote), `data/` (Room tree, stores, repos, transports, AgentRepoRunner,
   DeviceRepo), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
