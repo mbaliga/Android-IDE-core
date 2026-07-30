@@ -1,0 +1,141 @@
+-- Search index substrate (FONEBREW_SEARCH_SPEC.md §4), trimmed to what's actually backed by
+-- data in this repo today (see the build plan's "facet data reality check" — tool:/file:/
+-- build:/loop:/room:/tag:/lang:/has:attachment|artifact|error/is:unread|failed are deferred
+-- until those domain concepts exist; adding their columns now would be dead weight).
+--
+-- Two SQL toolchains now coexist in :core-engine: Room owns the append-only message tree
+-- (AppDatabase), SQLDelight owns this FTS5 index — Room has no @Fts5, only @Fts3/@Fts4 (AOSP's
+-- system SQLite build), so a bundled-SQLite substrate is the entry ticket for FTS5, not an
+-- optimization (see D1). This is a separate SQLite file (SearchDatabase), not a Room migration.
+
+CREATE TABLE conv_projection (
+  conv_id            TEXT PRIMARY KEY,
+  title              TEXT NOT NULL,
+  snippet            TEXT NOT NULL,
+  body               TEXT NOT NULL,   -- segmented (Segmenter), space-joined, normalized
+  title_raw          TEXT NOT NULL,   -- original, for display + LexicalSearch re-scoring
+  snippet_raw        TEXT NOT NULL,
+  body_raw           TEXT NOT NULL,
+  updated_at         INTEGER NOT NULL,          -- epoch ms, drives the recency boost
+  created_at         INTEGER NOT NULL,
+  projection_version INTEGER NOT NULL
+);
+
+CREATE TABLE conv_facets (
+  conv_id      TEXT PRIMARY KEY REFERENCES conv_projection(conv_id) ON DELETE CASCADE,
+  starred      INTEGER NOT NULL DEFAULT 0,
+  archived     INTEGER NOT NULL DEFAULT 0,
+  project_id   TEXT,
+  model_ids    TEXT NOT NULL DEFAULT '',  -- comma-joined distinct model ids for this conversation
+  turn_count   INTEGER NOT NULL DEFAULT 0,
+  branch_count INTEGER NOT NULL DEFAULT 0,
+  has_image    INTEGER NOT NULL DEFAULT 0,
+  has_code     INTEGER NOT NULL DEFAULT 0,   -- derived from markdown fences at projection time
+  cost_micros  INTEGER NOT NULL DEFAULT 0,   -- summed LedgerEntry.estCostMinor for this conv
+  last_used_at INTEGER
+);
+CREATE INDEX idx_facets_composite ON conv_facets(archived, starred, project_id);
+CREATE INDEX idx_proj_updated ON conv_projection(updated_at DESC);
+
+-- Primary lexical index. detail='full' is REQUIRED: detail=column disables phrase/NEAR queries,
+-- and quoted-phrase search is table-stakes (spec §6.1). unicode61 with the extended category
+-- list is belt-and-braces — the real CJK/Devanagari/Arabic fix is Segmenter running upstream in
+-- Kotlin (D2); this table only ever receives pre-segmented, space-joined text.
+CREATE VIRTUAL TABLE conv_fts USING fts5(
+  title, snippet, body,
+  content       = 'conv_projection',
+  content_rowid = 'rowid',
+  tokenize      = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+  prefix        = '2 3',
+  detail        = 'full',
+  columnsize    = 1
+);
+
+-- External-content FTS5 tables do NOT auto-sync with their content table (verified empirically
+-- in the WP3 driver spike: inserting into conv_projection alone left conv_fts's shadow index
+-- empty, zero MATCH hits) — SQLite requires the app to keep them in sync itself, normally via
+-- the three AI/AD/AU triggers documented at https://sqlite.org/fts5.html#external_content_tables
+--
+-- Those triggers are deliberately NOT declared here. Verified empirically: SQLDelight 2.1.0's
+-- SQL analyzer (`InsertStmtValuesMixin.annotate`) throws a `ClassCastException` — `SqlModule-
+-- ColumnDefImpl cannot be cast to ColumnDefMixin` — on ANY `INSERT INTO conv_fts(<column-list>)`
+-- with an explicit column list, in a trigger or standalone, VALUES or SELECT form; it cannot
+-- resolve an FTS5 virtual table's "module columns" as insert targets. This is a sql-psi/
+-- SQLDelight tooling limitation, not a real SQLite problem — the exact same SQL is valid FTS5
+-- syntax. Since the crash is purely at .sq compile-time, the fix is to keep this SQL out of the
+-- analyzed schema entirely: SearchDriverFactory issues the three CREATE TRIGGER statements as a
+-- raw SQL string via SqlDriver.execute() right after opening the database, which SQLDelight's
+-- analyzer never sees. See SearchDriverFactory.kt and SearchDatabaseFactoryTest.
+
+CREATE TABLE index_state (
+  id                 INTEGER PRIMARY KEY CHECK (id = 1),
+  last_indexed_rowid INTEGER NOT NULL DEFAULT 0,
+  projection_version INTEGER NOT NULL,
+  tokenizer_version  INTEGER NOT NULL,
+  schema_version     INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL
+);
+
+CREATE TABLE saved_search (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  query      TEXT NOT NULL,
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  sort_key   INTEGER
+);
+
+CREATE TABLE search_history (
+  at             INTEGER NOT NULL,
+  query          TEXT NOT NULL,
+  result_count   INTEGER,
+  opened_conv_id TEXT  -- NULL if abandoned; local-only recency ordering, never uploaded
+);
+
+-- ============ queries used by the WP3 driver spike + WP4 glue ============
+
+insertProjection:
+INSERT INTO conv_projection(conv_id, title, snippet, body, title_raw, snippet_raw, body_raw, updated_at, created_at, projection_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteProjection:
+DELETE FROM conv_projection WHERE conv_id = ?;
+
+countProjections:
+SELECT count(*) FROM conv_projection;
+
+-- Candidate generation (§5.1): bm25 column weights (10,4,1) are FTS5's per-query ranking
+-- weights for title/snippet/body — deliberately NOT the same as LexicalSearch's 2x/1x final
+-- weights (WP7 re-scores).
+--
+-- Deviation from the spec's literal `rank MATCH 'bm25(...)' ... ORDER BY rank`: FTS5's `rank`
+-- is a magic column injected only at query-execution time by the virtual table module, which
+-- SQLDelight's static SQL analyzer (it verifies every column reference against the declared
+-- schema) doesn't know about and rejects at build time — verified empirically, no SQLDelight
+-- 2.x dialect module resolves it. `ORDER BY bm25(conv_fts, ...)` calls the ranking function
+-- directly instead, which the analyzer accepts. FTS5's docs note plain `ORDER BY rank` *can* be
+-- faster (early termination before materializing every row's score) — a real perf cost of this
+-- workaround, accepted here since M1's candidate query is still WHERE-bounded by MATCH + LIMIT
+-- and absolute latency at 100k+ scale is owner-verified/device-only in this pass regardless
+-- (see SearchBench, WP15). Revisit if a future SQLDelight release adds `rank` awareness.
+-- Lower bm25() is a *better* match (FTS5 convention) — ascending order is correct as written.
+searchCandidates:
+SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at
+FROM conv_fts
+JOIN conv_projection p ON p.rowid = conv_fts.rowid
+WHERE conv_fts MATCH :ftsQuery
+ORDER BY bm25(conv_fts, 10.0, 4.0, 1.0)
+LIMIT :limit;
+
+selectIndexState:
+SELECT * FROM index_state WHERE id = 1;
+
+upsertIndexState:
+INSERT INTO index_state(id, last_indexed_rowid, projection_version, tokenizer_version, schema_version, updated_at)
+VALUES (1, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  last_indexed_rowid = excluded.last_indexed_rowid,
+  projection_version = excluded.projection_version,
+  tokenizer_version = excluded.tokenizer_version,
+  schema_version = excluded.schema_version,
+  updated_at = excluded.updated_at;
