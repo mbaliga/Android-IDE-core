@@ -205,6 +205,13 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 - **AI-assisted configuration** (fill/automate any config via a model) — parked at owner request.
 - **Drag-a-wire connect** for the Loop editor (current = tap-to-connect; layer this on after the
   owner judges the feel on-device).
+- **Device independence — building Fonebrew on Fonebrew.** See
+  `docs/handoff/device-independence.md`. The phone can already author, commit and install; it
+  cannot build, test or release. Chasing green CI exposed this: the Deck, the build container and
+  GitHub's x86 runners are interchangeable stand-ins for one missing capability (a local
+  toolchain), and that footnote sits directly under the "sovereign primary device" thesis. The
+  doc audits every step that leaves the phone, and proposes a ladder whose first rung — run the
+  JVM unit gate on-device — needs no NDK and no `aapt2`. Research brief, no decision made.
 - **Search M4–M6** (`FONEBREW_SEARCH_SPEC.md`): vectors/embeddings, the AI layer (ASOM, answer
   synthesis, NL→query), and self-organization. Note M4 depends on the real on-device embedder
   below — `PlaceholderEmbedder` can't back semantic search. Smaller deterministic follow-ups
