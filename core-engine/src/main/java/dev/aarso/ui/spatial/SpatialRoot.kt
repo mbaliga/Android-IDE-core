@@ -23,6 +23,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,8 +40,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -68,6 +79,8 @@ import dev.aarso.ui.rooms.ChatsRoom
 import dev.aarso.ui.rooms.ProductRoomFree
 import dev.aarso.ui.rooms.SettingsRoom
 import dev.aarso.ui.rooms.TreeRoom
+import dev.aarso.ui.search.SearchOverlay
+import dev.aarso.ui.search.SearchViewModel
 import androidx.compose.foundation.border
 import dev.aarso.ui.theme.LocalHyleColors
 import androidx.compose.ui.platform.LocalContext
@@ -212,9 +225,21 @@ class SpatialController(private val scope: CoroutineScope) {
 @Composable
 fun SpatialRoot() {
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
+    val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val container = (LocalContext.current.applicationContext as AarsoApp).container
     val scope = rememberCoroutineScope()
     val controller = remember { SpatialController(scope) }
+    var searchOpen by remember { mutableStateOf(false) }
+    // S9 continuity: text handed from an opened search result to that chat's find bar, held
+    // here because the overlay is torn down the moment the conversation opens.
+    var pendingFind by remember { mutableStateOf<String?>(null) }
+    // Global hardware-keyboard shortcut (§11.1, WP13's reachable subset): Ctrl+K opens/closes
+    // search from anywhere. Deliberately the ONLY key this root intercepts — everything else is
+    // left unconsumed so it still reaches whatever text field has focus (the chat composer, a
+    // search field, etc.). Hardware-keyboard behaviour is owner-verified only, same as every
+    // other runtime surface in this repo — there is no device/BT-keyboard in this container.
+    val rootFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
 
     // §7: content shared/selected into the app lands in the composer — go home.
     val intake by chatViewModel.intake.collectAsState()
@@ -253,7 +278,17 @@ fun SpatialRoot() {
             .background(ac.ink)
             .systemBarsPadding()
             .onSizeChanged { controller.viewport = it }
-            .spatialEdgeDrag(controller, edgePx),
+            .spatialEdgeDrag(controller, edgePx)
+            .focusRequester(rootFocusRequester)
+            .focusTarget()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.K) {
+                    searchOpen = !searchOpen
+                    true
+                } else {
+                    false
+                }
+            },
     ) {
         // Screen-reader room announcer: an invisible polite live region whose description is
         // the linearized room announcement. It re-announces only when [spatialPos] settles.
@@ -280,7 +315,11 @@ fun SpatialRoot() {
                     .offset { IntOffset((-w * (1f - hProgress)).roundToInt(), 0) }
                     .padding(end = 72.dp),
             ) {
-                ChatsRoom(viewModel = chatViewModel, onClose = { controller.closeAll() })
+                ChatsRoom(
+                    viewModel = chatViewModel,
+                    onClose = { controller.closeAll() },
+                    onOpenSearch = { searchOpen = true },
+                )
             }
         }
         if (hProgress < -0.001f) {
@@ -352,6 +391,12 @@ fun SpatialRoot() {
                 onOpenModels = { controller.open(SpatialTarget.SETTINGS) },
                 onOpenChats = { controller.open(SpatialTarget.CHATS) },
                 onOpenSettings = { controller.open(SpatialTarget.SETTINGS) },
+                findRequest = pendingFind,
+                onFindRequestConsumed = { pendingFind = null },
+                onSearchAllChats = { query ->
+                    searchViewModel.onQueryChange(query)
+                    searchOpen = true
+                },
             )
             // While parked, the card is one big return affordance: tap or drag
             // it home; nothing inside it should react. A scrim quiets the
@@ -452,6 +497,19 @@ fun SpatialRoot() {
             SpatialMapOverlay(
                 onDismiss = { container.sessionStore.setSpatialMapSeen(true) },
                 modifier = Modifier.zIndex(30f),
+            )
+        }
+
+        if (searchOpen) {
+            SearchOverlay(
+                viewModel = searchViewModel,
+                onOpenConversation = { rootId, findText ->
+                    chatViewModel.openConversation(rootId)
+                    pendingFind = findText.takeIf { it.isNotBlank() }
+                    searchOpen = false
+                    controller.closeAll()
+                },
+                onDismiss = { searchOpen = false },
             )
         }
     }

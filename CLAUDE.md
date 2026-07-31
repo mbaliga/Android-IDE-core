@@ -49,9 +49,11 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
     domain/                 pure Kotlin, JVM-tested: tree, council, bpmn, loop (GraphRunner),
                             diff (ChangeSet/ReviewSession/LineDiff), device (ArduinoCli, usb/
                             IntelHex+Stk500), git (GitContentsApi/GitTreeApi), ide (RepoWorkLoop),
-                            remote (SSH session/term), disclosure, instruments, mirror (inert)
+                            remote (SSH session/term), disclosure, instruments, mirror (inert),
+                            search (Segmenter/LexicalSearch + query/ parser, facets, scope stack)
     data/                   Room (append-only tree), stores, repos, transports; AgentRepoRunner,
-                            DeviceRepo, GitEdit/GitBackup/GitBrowse, RemoteHostStore
+                            DeviceRepo, GitEdit/GitBackup/GitBrowse, RemoteHostStore,
+                            search/ (SQLDelight FTS5 index: projector, indexer, retrieval)
     inference/              InferenceEngine; LlamaCppEngine (JNI), Echo (dev), EngineGenerator,
                             cloud/ (Anthropic, OpenAI-compat, Gemini — SSE), image/
     service/                GenerationService (FGS), OverlayService, ScreenCapture (+OCR), Voice
@@ -92,6 +94,17 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   (`git submodule update --init --recursive` first, so the composite build resolves `dev.aarso:hyle`).
 - `./gradlew :app:assembleFullDebug` → sideload APK (slow native cross-compile).
   `:app:bundlePlayRelease` → Play AAB.
+- **Two SQL toolchains coexist in the main module (do not "unify"):** Room owns the append-only
+  message tree (`AppDatabase`); **SQLDelight owns the FTS5 search index** (`SearchDatabase`, schema
+  at `src/main/sqldelight/dev/aarso/data/search/Search.sq`) as a *separate SQLite file*. This isn't
+  duplication — Room exposes no `@Fts5` (only `@Fts3`/`@Fts4`), so bundled SQLite via
+  `androidx.sqlite:sqlite-bundled` is the entry ticket for FTS5. That artifact also ships JVM-host
+  natives, which is why `src/test` runs **real** `MATCH`/`bm25()` queries with no device or
+  Robolectric. Two SQLDelight-analyzer workarounds are documented inline and must not be "cleaned
+  up": `ORDER BY bm25(...)` instead of FTS5's `rank` magic column, and the external-content sync
+  triggers installed as raw SQL from `SearchDriverFactory` (the analyzer `ClassCastException`s on
+  any explicit-column-list `INSERT` into a virtual table). Keep `sqldelight = 2.1.0`: 2.3.x forces
+  a Kotlin Gradle Plugin bump that breaks KSP and threatens the Compose BoM pin below.
 - **Compose ↔ markdown pin (do not regress):** the mikepenz markdown renderer (`0.35.0`) needs
   Compose **Foundation 1.8** (`BasicText`'s `TextAutoSize`). `composeBom = 2025.05.01` (Foundation
   1.8.2) satisfies it. Pinning an older BoM → runtime `NoSuchMethodError` on every markdown turn

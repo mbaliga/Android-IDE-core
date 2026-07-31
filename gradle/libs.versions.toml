@@ -23,6 +23,29 @@ sshj = "0.39.0"
 # §1.8 license gate: com.github.jk1's dependency-license-report — generates a report of
 # every runtime dependency's license and fails the build on anything off the allowlist.
 licenseReport = "3.1.4"
+# Search index substrate (FONEBREW_SEARCH_SPEC.md D1): Room has no @Fts5 (only @Fts3/@Fts4,
+# per AOSP's system SQLite build), so the FTS5 candidate-generation layer is SQLDelight over a
+# bundled SQLite build instead — coexisting with Room, which stays the message-tree store.
+#
+# Pinned to 2.1.0, NOT the spec's originally-cited 2.3.2 — verified empirically (see the
+# WP3 commit): SQLDelight's Gradle *plugin* pulls kotlin-gradle-plugin as a runtime dependency
+# of its own plugin classpath (2.1.0->2.0.20, 2.2.1->2.2.21, 2.3.x->2.3.10 — checked each POM
+# directly), and this project's shared plugin classpath resolves the highest of those against
+# every other applied plugin (kotlin.android, kotlin.compose, ksp). 2.3.2 forced a project-wide
+# Kotlin Gradle Plugin bump to 2.3.10, which breaks KSP 2.1.0-1.0.29 (Room's processor) outright
+# and would have forced a matching Kotlin/Compose-compiler bump — risking the deliberately
+# pinned Compose BoM 1.8/markdown-renderer combination (see this file's composeBom comment).
+# 2.1.0 requires kotlin-gradle-plugin 2.0.20, which is *below* this project's existing 2.1.0
+# pin, so it changes nothing else. The 2.3.2 changelog line the spec cited (FTS5 virtual-table
+# synthesized-column dialect support) isn't used by this schema, so nothing is lost.
+sqldelight = "2.1.0"
+# androidx.sqlite's own KMP driver artifact, wrapped for a plain (non-multiplatform) Android
+# module by eygraber. Same androidx.sqlite:sqlite-bundled runtime underneath.
+sqldelightAndroidxDriver = "0.0.1"
+# SQLite 3.50.1 built with SQLITE_ENABLE_FTS5 (AOSP's system SQLite is FTS3/4 only). Also
+# resolves on plain JVM (linux/mac/windows host binaries) — see SearchDatabaseFactoryTest,
+# which runs a real FTS5 query in a JVM unit test against this exact artifact.
+sqliteBundled = "2.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +77,11 @@ mlkit-text = { group = "com.google.mlkit", name = "text-recognition", version.re
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
+sqldelight-runtime = { group = "app.cash.sqldelight", name = "runtime", version.ref = "sqldelight" }
+sqldelight-coroutines-extensions = { group = "app.cash.sqldelight", name = "coroutines-extensions", version.ref = "sqldelight" }
+sqldelight-androidx-driver = { group = "com.eygraber", name = "sqldelight-androidx-driver", version.ref = "sqldelightAndroidxDriver" }
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqliteBundled" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
@@ -61,3 +89,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 license-report = { id = "com.github.jk1.dependency-license-report", version.ref = "licenseReport" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

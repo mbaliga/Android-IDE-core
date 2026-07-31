@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -85,6 +86,8 @@ import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
 import dev.aarso.ui.hyle.HyleNavChip
 import dev.aarso.ui.hyle.FileImage
+import dev.aarso.ui.search.InChatFindBar
+import dev.aarso.ui.search.InChatFindPresenter
 import dev.aarso.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 
@@ -102,6 +105,13 @@ fun ChatScreen(
     onOpenModels: () -> Unit = {},
     onOpenChats: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    /** S9 continuity: text carried in from an app-wide search result. Opens the find bar
+     *  pre-filled and scrolls to the first hit. Consumed once, via [onFindRequestConsumed], so
+     *  reopening the bar later doesn't resurrect a stale query. */
+    findRequest: String? = null,
+    onFindRequestConsumed: () -> Unit = {},
+    /** Reverse continuity: promote what's in the find bar to the app-wide search overlay. */
+    onSearchAllChats: (String) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
@@ -118,6 +128,38 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // S9: find-in-chat (WP14) — row-level, not sub-string highlighting; see InChatFind.kt's
+    // KDoc for why (the message body renders through the mikepenz Markdown composable, which
+    // owns its own text layout).
+    var findOpen by remember { mutableStateOf(false) }
+    var findQuery by remember { mutableStateOf("") }
+    var findOptions by remember { mutableStateOf(InChatFindPresenter.FindOptions()) }
+    var findIndex by remember { mutableStateOf(-1) }
+    val findResult = remember(state.steps, findQuery, findOptions) {
+        InChatFindPresenter.find(state.steps.map { it.node.id to it.node.content }, findQuery, findOptions)
+    }
+    LaunchedEffect(findQuery, findOptions) { findIndex = if (findResult.hits.isEmpty()) -1 else 0 }
+    // S9 continuity: a search result was opened — carry its text into this chat's find bar.
+    LaunchedEffect(findRequest) {
+        val incoming = findRequest?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        findQuery = incoming
+        findOptions = InChatFindPresenter.FindOptions()
+        findOpen = true
+        onFindRequestConsumed()
+    }
+    val currentFindHit = findResult.hits.getOrNull(findIndex)
+    // The thread list's leading "connect repos" card (below) shifts every step's LazyColumn
+    // item index by one when shown — read the same signal here so find-scroll lands on the
+    // right row instead of one off.
+    val ctx0 = LocalContext.current
+    val gitHosts by (ctx0.applicationContext as dev.aarso.AarsoApp).container.gitHostStore.hosts.collectAsState()
+    val findScrollPrefix = if (!connectDismissed && gitHosts.isEmpty()) 1 else 0
+    LaunchedEffect(currentFindHit) {
+        val hit = currentFindHit ?: return@LaunchedEffect
+        val stepIndex = state.steps.indexOfFirst { it.node.id == hit.nodeId }
+        if (stepIndex >= 0) listState.animateScrollToItem(findScrollPrefix + stepIndex)
+    }
 
     // §7: text shared in / selected elsewhere arrives here — prefill the input.
     val intake by viewModel.intake.collectAsState()
@@ -159,6 +201,25 @@ fun ChatScreen(
                 entropyColoring = entropyColoring,
                 onEntropyColoring = viewModel::setEntropyColoring,
             )
+            if (findOpen) {
+                InChatFindBar(
+                    query = findQuery,
+                    onQueryChange = { findQuery = it },
+                    options = findOptions,
+                    onOptionsChange = { findOptions = it },
+                    statusText = when {
+                        findResult.error != null -> findResult.error
+                        findQuery.isBlank() -> ""
+                        findResult.hits.isEmpty() -> "No matches"
+                        else -> "${findIndex + 1} of ${findResult.hits.size}"
+                    },
+                    hasHits = findResult.hits.isNotEmpty(),
+                    onPrevious = { findIndex = InChatFindPresenter.step(findResult.hits.size, findIndex, forward = false) },
+                    onNext = { findIndex = InChatFindPresenter.step(findResult.hits.size, findIndex, forward = true) },
+                    onClose = { findOpen = false; findQuery = "" },
+                    onSearchAllChats = { onSearchAllChats(findQuery) },
+                )
+            }
             Box(modifier = Modifier.weight(1f).then(threadModifier)) {
                 LazyColumn(
                     state = listState,
@@ -210,6 +271,7 @@ fun ChatScreen(
                             enabled = !state.isGenerating,
                             onSwitch = { dir -> viewModel.switchAlternative(step.node.id, dir) },
                             onLongPress = { actionStep = step },
+                            highlighted = findOpen && currentFindHit?.nodeId == step.node.id,
                         )
                     }
                     // Single streaming bubble — only when not in a council fan-out.
@@ -281,6 +343,28 @@ fun ChatScreen(
                                 contentDescription = "Jump to latest",
                                 tint = MaterialTheme.colorScheme.primary,
                             )
+                        }
+                    }
+                }
+
+                // S9 entry point: find-in-chat, only worth offering once there's a thread to
+                // search. Toggling closed clears the query (a fresh find each time it opens).
+                if (state.steps.isNotEmpty() && !findOpen) {
+                    Surface(
+                        onClick = { findOpen = true },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
+                        tonalElevation = 4.dp,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .size(40.dp)
+                            .semantics { contentDescription = "Find in this chat" },
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("⌕", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -958,6 +1042,7 @@ private fun MessageTurn(
     enabled: Boolean,
     onSwitch: (Int) -> Unit,
     onLongPress: () -> Unit,
+    highlighted: Boolean = false,
 ) {
     val fromUser = step.node.role == Role.USER
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -967,6 +1052,7 @@ private fun MessageTurn(
             imagePath = step.node.metadata[Conversations.IMAGE_KEY],
             stopped = step.node.metadata["stopped"] == "true",
             onLongPress = onLongPress,
+            highlighted = highlighted,
         )
         // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
         step.node.metadata["costMinor"]?.let { minor ->
@@ -1037,6 +1123,7 @@ private fun MessageBubble(
     imagePath: String?,
     stopped: Boolean,
     onLongPress: () -> Unit,
+    highlighted: Boolean = false,
 ) {
     val fromUser = role == Role.USER
     Row(
@@ -1044,7 +1131,11 @@ private fun MessageBubble(
         horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
     ) {
         Card(
-            modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress),
+            modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress).let {
+                // S9: the current find-in-chat hit's row (row-level marker — see InChatFind.kt's
+                // KDoc for why not a sub-string highlight).
+                if (highlighted) it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium) else it
+            },
             colors = CardDefaults.cardColors(
                 containerColor = if (fromUser) {
                     MaterialTheme.colorScheme.primaryContainer

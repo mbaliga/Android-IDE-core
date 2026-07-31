@@ -225,4 +225,54 @@ class LexicalSearchTest {
         assertEquals("full", hits[0].doc.id)
         assertTrue(hits[0].score > hits[1].score)
     }
+
+    // ---- explain (additive, §3.3) ----
+
+    @Test fun `explain defaults to false and leaves explanation null`() {
+        val docs = listOf(doc("a", title = "kotlin flow", body = "notes"))
+        val hits = LexicalSearch.search(docs, "kotlin", NOW)
+        assertNull(hits[0].explanation)
+    }
+
+    @Test fun `explain populates explanation only when requested`() {
+        val docs = listOf(doc("a", title = "kotlin flow", body = "notes"))
+        val hits = LexicalSearch.search(docs, "kotlin", NOW, explain = true)
+        assertNotNull(hits[0].explanation)
+    }
+
+    @Test fun `explanation subtotals plus recency sum to score within tolerance`() {
+        val docs = listOf(
+            doc("t", title = "gradle build cache misses", body = "cache cache cache invalidated", ageDays = 6),
+        )
+        val hits = LexicalSearch.search(docs, "build cache misses", NOW, explain = true)
+        val hit = hits.single()
+        val explanation = hit.explanation!!
+        val sum = explanation.termContributions.sumOf { it.subtotal } + explanation.recencyFactor
+        assertEquals(hit.score, sum, 1e-9)
+        assertEquals(hit.score, explanation.lexicalScore, 1e-9)
+    }
+
+    @Test fun `explanation echoes the title and content weights`() {
+        val docs = listOf(doc("a", title = "kotlin", body = "x"))
+        val explanation = LexicalSearch.search(docs, "kotlin", NOW, explain = true).single().explanation!!
+        assertEquals(LexicalSearch.TITLE_WEIGHT, explanation.titleWeight, 1e-9)
+        assertEquals(LexicalSearch.CONTENT_WEIGHT, explanation.contentWeight, 1e-9)
+    }
+
+    @Test fun `explanation reports rawCount and field per term`() {
+        val docs = listOf(doc("a", title = "misc", body = "cache cache invalidated"))
+        val explanation = LexicalSearch.search(docs, "cache", NOW, explain = true).single().explanation!!
+        val contribution = explanation.termContributions.single()
+        assertEquals("cache", contribution.term)
+        assertEquals(ExplainField.CONTENT, contribution.field)
+        assertEquals(2, contribution.rawCount)
+    }
+
+    @Test fun `explanation over multilingual doc still sums correctly`() {
+        val docs = listOf(doc("hi", title = "नमस्ते दुनिया", body = "बातचीत", ageDays = 3))
+        val hits = LexicalSearch.search(docs, "नमस्ते", NOW, explain = true)
+        val hit = hits.single()
+        val sum = hit.explanation!!.termContributions.sumOf { it.subtotal } + hit.explanation.recencyFactor
+        assertEquals(hit.score, sum, 1e-9)
+    }
 }

@@ -27,6 +27,7 @@ data class HyleColors(
     val success: Color,
     val warning: Color,
     val error: Color,
+    val cyan: Color,
 )
 
 /** Default accent = the canonical Aarso violet (#8E7BFF). */
@@ -45,7 +46,7 @@ fun darkHyleColors(accent: Color = DefaultAccent): HyleColors {
         textHigh = TextHigh, textMid = TextMid, textDisabled = TextDisabled,
         violet = ramp.base, violetHover = ramp.hover, violetPressed = ramp.pressed,
         violetDim = ramp.dim, onViolet = ramp.on,
-        success = Success, warning = Warning, error = ErrorRed,
+        success = Success, warning = Warning, error = ErrorRed, cyan = Cyan,
     )
 }
 
@@ -58,7 +59,7 @@ fun lightHyleColors(accent: Color = DefaultAccent): HyleColors {
         textHigh = LTextHigh, textMid = LTextMid, textDisabled = LTextDisabled,
         violet = ramp.base, violetHover = ramp.hover, violetPressed = ramp.pressed,
         violetDim = ramp.dim, onViolet = ramp.on,
-        success = SuccessDeep, warning = Warning, error = ErrorRed,
+        success = SuccessDeep, warning = Warning, error = ErrorRed, cyan = LCyan,
     )
 }
 

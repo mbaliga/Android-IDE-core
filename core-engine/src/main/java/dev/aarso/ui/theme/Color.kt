@@ -32,6 +32,7 @@ val SuccessDeep = Color(0xFF009828)
 val Warning = Color(0xFFF78819)        // fit: tight · watched markers
 val WarningDim = Color(0xFF2E2310)
 val ErrorRed = Color(0xFFEE322C)
+val Cyan = Color(0xFF08FED5)           // CORE_PHASES.md §1.3 — budget-bar cap-tick accent
 
 // Light scheme (secondary; the app defaults to dark).
 val LInk = Color(0xFFF9F9F9)
@@ -43,3 +44,4 @@ val LHairline = Color(0x1F2F3238)   // near-black text @ ~12% — crisp 1dp edge
 val LTextHigh = Color(0xFF1A1C1F)
 val LTextMid = Color(0xFF5A5E66)
 val LTextDisabled = Color(0xFFA9ADB5)
+val LCyan = Color(0xFF00786A)          // Cyan, darkened for 3:1 legibility on a light ground

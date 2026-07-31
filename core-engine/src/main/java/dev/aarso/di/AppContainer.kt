@@ -193,4 +193,12 @@ class AppContainer(context: Context) {
 
     // Device recipes over the SSH spine (IA: agentic-ide #3): RPi / Arduino-via-Pi / ESP-OTA.
     val deviceRepo: dev.aarso.data.DeviceRepo = dev.aarso.data.DeviceRepo { newSshTransport() }
+
+    /** FTS5 search index (separate SQLite file from Room's [database] — see
+     *  [dev.aarso.data.search.SearchDriverFactory]'s KDoc) + the repository that projects the
+     *  message tree into it and serves ranked queries against it. */
+    val searchDatabaseHandle: dev.aarso.data.search.SearchDatabaseHandle =
+        dev.aarso.data.search.SearchDriverFactory.create(context)
+    val searchRepository: dev.aarso.data.search.SearchRepository =
+        dev.aarso.data.search.SearchRepository(repository, sessionStore, ledgerStore, searchDatabaseHandle.database)
 }

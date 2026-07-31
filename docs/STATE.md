@@ -10,7 +10,8 @@
 ## 0. TL;DR
 A **local-first, sovereign AI computing environment** for a high-end Android phone — "an open,
 on-device Claude Code with loop engineering," extending into a real **agentic IDE** (read repos,
-propose+review+commit changes, drive devices like a Pi/Arduino). Free and open to *build*; a paid
+propose+review+commit changes, drive devices like a Pi/Arduino), with **deterministic on-device
+search** across everything you've ever said to a model. Free and open to *build*; a paid
 "Studio" layer to *ship & sell* a product. Current shipped build: **v0.13.0** on the `apk-dist`
 branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
 runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
@@ -96,6 +97,59 @@ owner-verified only.**
   unit-test gate (the native APK assemble is disabled to avoid runner OOM — **CI never launches
   the app**, which is why device-only crashes were invisible).
 
+### Sovereign on-device search (`FONEBREW_SEARCH_SPEC.md` M0→M3)
+> The spec is an **owner-held document, not committed to this repo** — the `FONEBREW_SEARCH_SPEC.md`
+> section references throughout `domain/search/`, `data/search/` and `ui/search/` KDocs point at
+> it, not at a file you'll find here. Worth committing to `docs/design/search.md` alongside the
+> other per-surface specs so those references resolve.
+
+App-wide conversation search, **100% on-device and deterministic** — no embeddings, no model
+downloads, no network, nothing to opt into (binding rules 1/2 hold trivially). The spec runs
+M0→M6; **M0–M3 shipped**, M4 (vectors) / M5 (AI, ASOM, NL→query) / M6 (self-organization) are a
+separate future pass.
+
+- **M0 — segmentation.** `domain/search/Segmenter.kt` (ICU `BreakIterator` + NFKC) fixes FTS5's
+  documented Unicode failure modes (unbroken Han/Khmer/Lao/Myanmar runs; Devanagari/Arabic
+  diacritics acting as separators) *before* text reaches the index. `LexicalSearch.kt` — the
+  pre-existing, tested scorer — is untouched except additively (`explain = true` →
+  `MatchExplanation`, which backs the "why did this match?" panel).
+- **M1 — the index.** A **second SQLite database** alongside Room's message tree, via SQLDelight +
+  bundled SQLite: Room has no `@Fts5` (only `@Fts3`/`@Fts4`), so a bundled-SQLite substrate is the
+  entry ticket for FTS5, not an optimization. `SearchProjector` flattens conversations into index
+  rows; `SearchIndexer` writes them chunked + resumable; `SearchQuery` runs FTS5 as a **candidate
+  generator only**, with `LexicalSearch` doing the actual ranking (pinned by a golden-ordering
+  test). Incremental sync keeps the index current while the app runs, comparing facet columns and
+  not just timestamps — starring or filing a conversation changes what it matches without touching
+  its last-activity time.
+- **M2 — the query language.** A hand-written recursive-descent parser: `AND`/`OR`/`NOT`, phrases,
+  `/regex/`, `?semantic`, faceted fields with comparison/range operators and DST-safe relative
+  dates (`before:`/`after:`/`during:` go through `LocalDate`, never raw millisecond arithmetic).
+  **It never throws** — malformed input always degrades to a best-effort parse plus a diagnostic,
+  because a search box that throws is a search box people stop using. Facets evaluate against the
+  index for real (`is:`/`has:`/`project:`/`in:`/`model:`/dates/`turns:`/`branch:`/`cost:`); the
+  Chats tabs are now presets over that same pipeline rather than bespoke per-tab logic.
+- **M3 — the surfaces.** A full-screen search overlay (zero state with index health + saved
+  searches + operator reference, as-you-type results with highlights, editable facet chips, the
+  why-matched panel, honest indexing/no-results states); find-in-chat with `n of m` + wrap and
+  two-way continuity with the overlay; a reachable subset of hardware-keyboard shortcuts
+  (`Ctrl+K`, `Esc`, `Ctrl+S`, `Ctrl+Enter`); the cyan accent promoted to a real Hyle token.
+
+**Honest limits, stated rather than discovered:**
+- Facet *vocabulary* is complete so chips round-trip, but `tool:`/`file:`/`build:`/`loop:`/
+  `room:`/`tag:`/`lang:` describe domain concepts that **do not exist in this codebase yet**.
+  They parse and then report "not indexed yet" — an honest zero, never a silent no-op.
+- A facet OR'd with text (`gradle OR is:starred`) is evaluated narrowly: too few rows, never wrong
+  ones. Detected and said out loud in the UI.
+- Regex has no trigram sidecar (spec D3 deferred), so it scans the already-narrowed candidate set
+  — correct and bounded, but slower per candidate than an indexed lookup.
+- Indexing runs only while the app does. No `WorkManager` job and none of the spec's
+  battery/thermal/idle scheduling ladder — that's explicitly M6.
+- In-chat find highlights the matching **row**, not the substring: turn bodies render through the
+  mikepenz Markdown composable, which owns its own text layout.
+- Perf numbers from `SearchBenchTest` (10k synthetic docs index in ~1s; searches in tens of ms)
+  are **container/JVM numbers, not device numbers** — real p50/p95 is owner-verified, like every
+  other runtime claim in this repo.
+
 ### Notable fixes this cycle
 - **Launch/send crash** root-caused & fixed: markdown renderer 0.35.0 needed Compose **Foundation
   1.8**; the BoM pinned 1.7.6 → `NoSuchMethodError(BasicText…TextAutoSize)` on every markdown turn.
@@ -151,6 +205,24 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 - **AI-assisted configuration** (fill/automate any config via a model) — parked at owner request.
 - **Drag-a-wire connect** for the Loop editor (current = tap-to-connect; layer this on after the
   owner judges the feel on-device).
+- **Device independence — no second machine to own and maintain.** See
+  `docs/handoff/device-independence.md`. The constraint is precise: a physical device the owner
+  buys/houses/maintains is unacceptable; **rented ephemeral cloud compute (Actions minutes) is
+  fine**. That kills the "headless box at home" route outright and makes cloud CI a permanent
+  architectural component — so unblocking the Actions billing block is *on* the critical path,
+  not a distraction from it. Key finding: the client side of the loop is **already built and
+  never exercised** (`domain/builds` CI trigger + `BuildsApi` release/dist-branch listing + check
+  verdicts → `BuildsRepo` → `ApkInstaller`), because CI has been blocked the whole time. Only two
+  steps are genuinely unsolved: **release signing without a laptop**, and **real git
+  (rebase/conflict resolution)** — which cloud compute cannot solve, and which is the likeliest
+  thing to force a laptop at the worst moment. On-device toolchain is deferred with an explicit
+  revisit trigger, not rejected. Research brief, no decision made.
+- **Search M4–M6** (`FONEBREW_SEARCH_SPEC.md`): vectors/embeddings, the AI layer (ASOM, answer
+  synthesis, NL→query), and self-organization. Note M4 depends on the real on-device embedder
+  below — `PlaceholderEmbedder` can't back semantic search. Smaller deterministic follow-ups
+  within the shipped line: the trigram sidecar (D3) for fast regex, indexing the deferred facet
+  vocabulary once those domain concepts exist, and a `WorkManager` job so indexing survives the
+  app being closed.
 
 ### Owner-blocked product backlog (from `CLAUDE.md`)
 - §5c self-observation + §5b drift metric — **blocked on Issue #2** (binding rule 4).
@@ -209,9 +281,12 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 
 ## 10. Where things live (map)
 - `app/src/main/java/dev/aarso/` — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
-  device, git, ide, remote), `data/` (Room tree, stores, repos, transports, AgentRepoRunner,
-  DeviceRepo), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
-  ide, remote, theme, aeon, spatial), `service/`, `security/`.
+  device, git, ide, remote, **search** + `search/query/`), `data/` (Room tree, stores, repos,
+  transports, AgentRepoRunner, DeviceRepo, **search/** — the FTS5 index, projector, indexer,
+  retrieval), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
+  ide, remote, theme, aeon, spatial, **search/**), `service/`, `security/`.
+  Search's SQL schema lives at `src/main/sqldelight/dev/aarso/data/search/Search.sq` — the second,
+  FTS5-capable database, separate from Room's.
 - `hyle/` design-system module · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),
   `handoff/hyle-extraction.md`, **this file**.

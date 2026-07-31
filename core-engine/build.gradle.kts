@@ -19,6 +19,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.license.report)
+    alias(libs.plugins.sqldelight)
 }
 
 android {
@@ -118,6 +119,16 @@ android {
     }
 }
 
+// Search index substrate (FONEBREW_SEARCH_SPEC.md D1) — SQLDelight over bundled SQLite, for
+// FTS5 (Room has no @Fts5). Coexists with Room (the message-tree store); separate database.
+sqldelight {
+    databases {
+        create("SearchDatabase") {
+            packageName.set("dev.aarso.data.search")
+        }
+    }
+}
+
 dependencies {
     // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts);
     // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
@@ -145,6 +156,12 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    // Search FTS5 index (separate database from Room's message-tree store — see D1).
+    implementation(libs.sqldelight.runtime)
+    implementation(libs.sqldelight.coroutines.extensions)
+    implementation(libs.sqldelight.androidx.driver)
+    implementation(libs.androidx.sqlite.bundled)
+
     implementation(libs.okhttp)
     implementation(libs.okhttp.sse)
     // SSH/SFTP transport for the remote-exec spine (data/remote). Runtime owner-verified.
@@ -161,6 +178,12 @@ dependencies {
     // Real org.json for JVM tests (the app uses Android's bundled org.json; the
     // stub in unit tests isn't functional). Lets us round-trip the tree archive.
     testImplementation("org.json:json:20231013")
+    // JVM unit tests run on the host JVM, but this is a plain Android module (not Kotlin
+    // Multiplatform), so dependency resolution for `implementation(libs.androidx.sqlite.bundled)`
+    // uses Android's own consumer attributes and pulls the Android-ABI native binary — useless
+    // for the host JVM process the test actually runs in (UnsatisfiedLinkError). Force the real
+    // JVM-targeted artifact onto the test classpath explicitly. See SearchDatabaseFactoryTest.
+    testImplementation("androidx.sqlite:sqlite-bundled-jvm:2.7.0")
 }
 
 // §1.8 license gate — moved here verbatim from :app, since this module now carries the actual

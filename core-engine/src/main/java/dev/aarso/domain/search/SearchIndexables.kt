@@ -68,10 +68,56 @@ enum class MatchedIn {
  * @property score the legible relevance score from [LexicalSearch.score] — higher is better.
  * @property matchedIn the field the highlights index into.
  * @property highlights matched character ranges, in ascending start order, possibly empty.
+ * @property explanation the term-by-term arithmetic behind [score] — only populated when the
+ *   caller opts in via `explain = true` (see [LexicalSearch.search]); `null` otherwise so every
+ *   existing caller/test is unaffected.
  */
 data class SearchHit(
     val doc: SearchDoc,
     val score: Double,
     val matchedIn: MatchedIn,
     val highlights: List<IntRange>,
+    val explanation: MatchExplanation? = null,
+)
+
+/** Which tier a [TermContribution] was found in — mirrors [MatchedIn] but per-term. */
+enum class ExplainField {
+    TITLE,
+    CONTENT,
+}
+
+/**
+ * One query term's share of a [MatchExplanation]. [weight] is the doc-level field weight that
+ * applied to this term ([MatchExplanation.titleWeight] or [MatchExplanation.contentWeight] —
+ * see [LexicalSearch.score]'s KDoc for why the weight is doc-level, not per-occurrence), and
+ * [subtotal] is this term's even share of `termCoverage * weight`. [rawCount] is how many times
+ * the (normalized) term occurs in the field it matched, shown for legibility only — it does not
+ * factor into [subtotal], because the underlying formula scores term *coverage*, not term
+ * *frequency*.
+ */
+data class TermContribution(
+    val term: String,
+    val field: ExplainField,
+    val rawCount: Int,
+    val weight: Double,
+    val subtotal: Double,
+)
+
+/**
+ * The arithmetic behind one [SearchHit.score], for a "why this matched" panel. Additive-only
+ * (Doc `FONEBREW_SEARCH_SPEC.md` §3.3) — it never changes what [LexicalSearch.score] returns,
+ * it just shows the work. [termContributions] plus [recencyFactor] sum to [lexicalScore]
+ * (== the owning [SearchHit.score]) within `1e-9`.
+ *
+ * @property titleWeight echoed [LexicalSearch.TITLE_WEIGHT] so the UI never hardcodes it.
+ * @property contentWeight echoed [LexicalSearch.CONTENT_WEIGHT].
+ * @property recencyFactor the recency boost actually added on top of the term contributions.
+ * @property lexicalScore equal to the owning [SearchHit.score].
+ */
+data class MatchExplanation(
+    val termContributions: List<TermContribution>,
+    val titleWeight: Double,
+    val contentWeight: Double,
+    val recencyFactor: Double,
+    val lexicalScore: Double,
 )

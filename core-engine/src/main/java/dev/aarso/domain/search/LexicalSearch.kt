@@ -155,7 +155,21 @@ object LexicalSearch {
      * counting each query term at most once per tier. A term found anywhere sets a hit; a term
      * found in the title also flips [matchedIn] semantics (callers read that from [search]).
      */
-    fun score(doc: SearchDoc, queryTerms: List<String>, nowMillis: Long): Double? {
+    fun score(doc: SearchDoc, queryTerms: List<String>, nowMillis: Long): Double? =
+        computeScoreParts(doc, queryTerms, nowMillis)?.score
+
+    /** Everything [score] computes, plus the pieces [buildExplanation] needs — internal only,
+     *  so the public [score] signature/return type never changes for existing callers. */
+    private class ScoreParts(
+        val distinct: List<String>,
+        val normTitle: String,
+        val normContent: String,
+        val fieldWeight: Double,
+        val recencyBoost: Double,
+        val score: Double,
+    )
+
+    private fun computeScoreParts(doc: SearchDoc, queryTerms: List<String>, nowMillis: Long): ScoreParts? {
         if (queryTerms.isEmpty()) return null
         val distinct = queryTerms.distinct()
 
@@ -177,7 +191,60 @@ object LexicalSearch {
         val ageDays = ((nowMillis - doc.lastActivityMillis).coerceAtLeast(0L)) / MILLIS_PER_DAY
         val recencyBoost = RECENCY_WEIGHT * (1.0 / (1.0 + ageDays))
 
-        return termCoverage * fieldWeight + recencyBoost
+        return ScoreParts(
+            distinct = distinct,
+            normTitle = normTitle,
+            normContent = normContent,
+            fieldWeight = fieldWeight,
+            recencyBoost = recencyBoost,
+            score = termCoverage * fieldWeight + recencyBoost,
+        )
+    }
+
+    /**
+     * Builds the term-by-term breakdown behind [ScoreParts.score] (Doc §3.3). Each matched term
+     * gets an even share of `termCoverage * fieldWeight` — that is exactly how the formula
+     * already works (coverage is a fraction of *distinct* terms, weight is doc-level), so the
+     * shares plus [ScoreParts.recencyBoost] sum back to the score by construction.
+     */
+    private fun buildExplanation(parts: ScoreParts): MatchExplanation {
+        val perTermShare = parts.fieldWeight / parts.distinct.size.toDouble()
+        val contributions = parts.distinct.mapNotNull { term ->
+            if (term.isEmpty()) return@mapNotNull null
+            val inTitle = parts.normTitle.contains(term)
+            val field = if (inTitle) ExplainField.TITLE else ExplainField.CONTENT
+            val fieldText = if (inTitle) parts.normTitle else parts.normContent
+            if (!fieldText.contains(term)) return@mapNotNull null // unmatched term, no contribution
+            TermContribution(
+                term = term,
+                field = field,
+                rawCount = countOccurrences(fieldText, term),
+                weight = parts.fieldWeight,
+                subtotal = perTermShare,
+            )
+        }
+        return MatchExplanation(
+            termContributions = contributions,
+            titleWeight = TITLE_WEIGHT,
+            contentWeight = CONTENT_WEIGHT,
+            recencyFactor = parts.recencyBoost,
+            lexicalScore = parts.score,
+        )
+    }
+
+    /** Count non-overlapping occurrences of [term] in [text] — for [TermContribution.rawCount]
+     *  legibility only; does not feed the score itself (coverage-based, not frequency-based). */
+    private fun countOccurrences(text: String, term: String): Int {
+        if (term.isEmpty()) return 0
+        var count = 0
+        var from = 0
+        while (true) {
+            val idx = text.indexOf(term, from)
+            if (idx < 0) break
+            count++
+            from = idx + term.length
+        }
+        return count
     }
 
     /**
@@ -190,21 +257,33 @@ object LexicalSearch {
      * is [MatchedIn.TITLE] when any term hit the title, and its [SearchHit.highlights] index the
      * title in that case; otherwise the hit is [MatchedIn.CONTENT] with highlights over the
      * content text (`snippet + " " + body`).
+     *
+     * @param explain when `true`, each [SearchHit.explanation] is populated with the term-by-term
+     *   arithmetic behind its score (Doc §3.3) — for a "why this matched" panel. Defaults to
+     *   `false`, which keeps this call byte-for-byte identical to before the field existed.
      */
-    fun search(docs: List<SearchDoc>, query: String, nowMillis: Long): List<SearchHit> {
+    fun search(docs: List<SearchDoc>, query: String, nowMillis: Long, explain: Boolean = false): List<SearchHit> {
         val terms = tokenizeQuery(query)
         if (terms.isEmpty()) return emptyList()
 
         val hits = ArrayList<SearchHit>()
         for (doc in docs) {
-            val s = score(doc, terms, nowMillis) ?: continue
+            val parts = computeScoreParts(doc, terms, nowMillis) ?: continue
             val titleHighlights = findMatches(doc.title, terms)
             val (matchedIn, highlights) = if (titleHighlights.isNotEmpty()) {
                 MatchedIn.TITLE to titleHighlights
             } else {
                 MatchedIn.CONTENT to findMatches(doc.snippet + " " + doc.body, terms)
             }
-            hits.add(SearchHit(doc = doc, score = s, matchedIn = matchedIn, highlights = highlights))
+            hits.add(
+                SearchHit(
+                    doc = doc,
+                    score = parts.score,
+                    matchedIn = matchedIn,
+                    highlights = highlights,
+                    explanation = if (explain) buildExplanation(parts) else null,
+                ),
+            )
         }
 
         return hits.sortedWith(
