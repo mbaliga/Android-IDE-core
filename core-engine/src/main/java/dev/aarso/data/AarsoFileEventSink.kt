@@ -2,6 +2,8 @@ package dev.aarso.data
 
 import android.content.Context
 import dev.aarso.domain.mirror.AarsoEventSink
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
@@ -18,7 +20,10 @@ import java.io.FileOutputStream
  */
 class AarsoFileEventSink(private val file: File) : AarsoEventSink {
 
-    override suspend fun append(line: String) {
+    // Fixed per adversarial review: this used to run the blocking file I/O on whatever
+    // dispatcher the caller was on (unconstrained, since AarsoEventLog.record has no dispatcher
+    // of its own) — including Main, once Aarso capture is ever enabled.
+    override suspend fun append(line: String) = withContext(Dispatchers.IO) {
         file.parentFile?.mkdirs()
         FileOutputStream(file, /* append = */ true).use { out ->
             out.write((line + "\n").toByteArray(Charsets.UTF_8))

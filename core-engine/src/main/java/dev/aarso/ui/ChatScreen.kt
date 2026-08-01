@@ -586,11 +586,12 @@ fun ChatScreen(
                 val current = compactionDirectives[step.node.id]
                 viewModel.setCompactionDirective(step.node.id, current?.mustInclude ?: false, fidelity)
             },
-            onToggleMustInclude = {
-                val current = compactionDirectives[step.node.id]
-                val fidelity = current?.fidelity ?: dev.aarso.domain.curation.Fidelity.F1
-                viewModel.setCompactionDirective(step.node.id, current?.mustInclude != true, fidelity)
-            },
+            // Fixed per adversarial review: this used to hardcode Fidelity.F1 as the fallback
+            // when no directive existed yet, silently downgrading a message that auto-resolves
+            // higher (e.g. a +2-verdict message auto-floors to F3) the instant Must-include was
+            // touched. ChatViewModel.toggleMustInclude resolves the *actual* current fidelity
+            // via the same contract CompactionEngine uses, and preserves it.
+            onToggleMustInclude = { viewModel.toggleMustInclude(step.node.id) },
             onRewind = { viewModel.rewindFrom(step.node.id); actionStep = null },
         )
     }
@@ -1332,15 +1333,21 @@ private fun MessageBubble(
             // layered on the same setVerdict/toggleMessageBookmark calls, not built this pass —
             // owner-verify territory for gesture-conflict tuning against the existing long-press,
             // deliberately not risked without a device to test on).
-            if (role == Role.ASSISTANT) {
-                VerdictBookmarkRow(
-                    verdict = verdict,
-                    bookmarked = bookmarked,
-                    onVerdictUp = onVerdictUp,
-                    onVerdictDown = onVerdictDown,
-                    onToggleBookmark = onToggleBookmark,
-                )
-            }
+            // Fixed per adversarial review: the double-tap-to-bookmark gesture above is wired
+            // unconditionally on every role's Card, but this row used to render only for
+            // Role.ASSISTANT — a user/system message could be bookmarked with no visible pin and
+            // no way to un-bookmark it short of the same blind double-tap again. Verdict
+            // (useful/wrong) stays assistant-only (rating a user's own message is meaningless),
+            // but bookmarking is role-agnostic, so the row always shows, with verdict controls
+            // gated inside it instead of gating the whole row.
+            VerdictBookmarkRow(
+                verdict = verdict,
+                bookmarked = bookmarked,
+                showVerdict = role == Role.ASSISTANT,
+                onVerdictUp = onVerdictUp,
+                onVerdictDown = onVerdictDown,
+                onToggleBookmark = onToggleBookmark,
+            )
         }
     }
 }
@@ -1359,49 +1366,52 @@ private fun VerdictBookmarkRow(
     onVerdictUp: () -> Unit,
     onVerdictDown: () -> Unit,
     onToggleBookmark: () -> Unit,
+    showVerdict: Boolean = true,
 ) {
     val grade = verdict?.grade
     Row(
         modifier = Modifier.padding(top = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(
-            onClick = onVerdictDown,
-            modifier = Modifier.semantics {
-                contentDescription = if (grade != null && grade < 0) "Rated down. Tap to clear." else "Rate down"
-            },
-        ) {
-            Text(
-                if (grade != null && grade < 0) "▼" else "▽",
-                color = if (grade != null && grade < 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
-            )
-        }
-        TextButton(
-            onClick = onVerdictUp,
-            modifier = Modifier.semantics {
-                contentDescription = if (grade != null && grade > 0) "Rated up. Tap to clear." else "Rate up"
-            },
-        ) {
-            Text(
-                if (grade != null && grade > 0) "▲" else "△",
-                color = if (grade != null && grade > 0) LocalHyleColors.current.violet else MaterialTheme.colorScheme.outline,
-            )
-        }
-        if (grade != null) {
-            Text(
-                when (grade) {
-                    2 -> "reference-grade"
-                    1 -> "useful"
-                    -1 -> "off"
-                    -2 -> "wrong"
-                    else -> ""
+        if (showVerdict) {
+            TextButton(
+                onClick = onVerdictDown,
+                modifier = Modifier.semantics {
+                    contentDescription = if (grade != null && grade < 0) "Rated down. Tap to clear." else "Rate down"
                 },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 2.dp),
-            )
+            ) {
+                Text(
+                    if (grade != null && grade < 0) "▼" else "▽",
+                    color = if (grade != null && grade < 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
+                )
+            }
+            TextButton(
+                onClick = onVerdictUp,
+                modifier = Modifier.semantics {
+                    contentDescription = if (grade != null && grade > 0) "Rated up. Tap to clear." else "Rate up"
+                },
+            ) {
+                Text(
+                    if (grade != null && grade > 0) "▲" else "△",
+                    color = if (grade != null && grade > 0) LocalHyleColors.current.violet else MaterialTheme.colorScheme.outline,
+                )
+            }
+            if (grade != null) {
+                Text(
+                    when (grade) {
+                        2 -> "reference-grade"
+                        1 -> "useful"
+                        -1 -> "off"
+                        -2 -> "wrong"
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 2.dp),
+                )
+            }
+            Spacer(Modifier.width(4.dp))
         }
-        Spacer(Modifier.width(4.dp))
         TextButton(
             onClick = onToggleBookmark,
             modifier = Modifier.semantics {

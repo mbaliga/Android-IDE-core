@@ -126,6 +126,29 @@ class CompactionEngineTest {
         assertEquals(2, success.receipt.directivesHonored)
     }
 
+    @Test fun `directives for messages outside this run's batch don't count toward the receipt total`() = runTest {
+        // Regression test for a bug adversarial review found: `directives` is keyed by the
+        // caller's full directive map, which (once a Compaction Preview submits only a windowed
+        // subset of the conversation) can carry entries for messages this run never sees. Those
+        // can never appear in `entries`, so counting them toward directivesTotal without a
+        // matching honored count under-reported the receipt's "n/n honored" trust figure even
+        // when nothing in this run actually violated anything.
+        val inBatch = CompactionDirective("m1", mustInclude = false, fidelity = Fidelity.F2)
+        val outOfBatch = CompactionDirective("m-not-in-this-run", mustInclude = false, fidelity = Fidelity.F3)
+        val result = CompactionEngine.run(
+            messages = listOf(node("m1", "a")),
+            directives = mapOf("m1" to inBatch, "m-not-in-this-run" to outOfBatch),
+            verdicts = emptyMap(),
+            bookmarkedIds = emptySet(),
+            versionSpineIds = emptySet(),
+            agent = honestAgent,
+            now = 1000L,
+        )
+        val success = result as CompactionRunResult.Success
+        assertEquals(1, success.receipt.directivesTotal)
+        assertEquals(1, success.receipt.directivesHonored)
+    }
+
     @Test fun `verify returns no violations for a well-behaved run`() = runTest {
         val messages = listOf(node("m1", "verbatim text"))
         val result = CompactionEngine.run(

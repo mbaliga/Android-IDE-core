@@ -24,6 +24,8 @@ import dev.aarso.domain.curation.Verdict
 import dev.aarso.domain.curation.Version
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 /**
@@ -65,6 +67,19 @@ class CurationStore(
     suspend fun bookmarksFor(msgId: String): List<MessageBookmark> = bookmarkDao.forMessage(msgId).map { it.toDomain() }
 
     /**
+     * Guards [toggleMessageBookmark]/[toggleBlockBookmark]'s check-then-act (SELECT existing,
+     * then INSERT or DELETE — two separate suspend DAO round-trips, no Room `@Transaction`).
+     * Fixed per adversarial review: without this, two fast taps on the same bookmark control
+     * (an ordinary single-tap button, not just the double-tap gesture) could both observe "no
+     * existing bookmark" before either write lands, and both insert — leaving two live
+     * whole-message bookmark rows that then required an extra, unexplained tap to fully clear.
+     * A single process-wide mutex is enough here (this is a local, single-user, single-process
+     * app — there's no cross-device contention to model), and simpler than adding a Room
+     * `@Transaction` DAO method for a check-then-act that spans two different queries.
+     */
+    private val bookmarkMutex = Mutex()
+
+    /**
      * Double-tap semantics (STUDIO_UX_SPEC.md §4.3): double-tap pins the whole message; double-
      * tap again removes it. Returns the new bookmark if one was created, or null if the existing
      * one was removed.
@@ -73,11 +88,11 @@ class CurationStore(
         msgId: String,
         kind: BookmarkKind = BookmarkKind.REFERENCE,
         now: Long = System.currentTimeMillis(),
-    ): MessageBookmark? {
+    ): MessageBookmark? = bookmarkMutex.withLock {
         val existing = bookmarkDao.forMessage(msgId).firstOrNull { it.blockIndex == null }
         if (existing != null) {
             bookmarkDao.delete(existing)
-            return null
+            return@withLock null
         }
         val bookmark = MessageBookmark(
             id = UUID.randomUUID().toString(),
@@ -86,7 +101,7 @@ class CurationStore(
             at = now,
         )
         bookmarkDao.insert(bookmark.toEntity())
-        return bookmark
+        bookmark
     }
 
     /** Same double-tap toggle, scoped to one code block within a message (STUDIO_UX_SPEC.md §4.3: "Double-tap on a code block bookmarks the block specifically"). */
@@ -95,11 +110,11 @@ class CurationStore(
         blockIndex: Int,
         kind: BookmarkKind = BookmarkKind.SNIPPET,
         now: Long = System.currentTimeMillis(),
-    ): MessageBookmark? {
+    ): MessageBookmark? = bookmarkMutex.withLock {
         val existing = bookmarkDao.forMessage(msgId).firstOrNull { it.blockIndex == blockIndex }
         if (existing != null) {
             bookmarkDao.delete(existing)
-            return null
+            return@withLock null
         }
         val bookmark = MessageBookmark(
             id = UUID.randomUUID().toString(),
@@ -108,7 +123,7 @@ class CurationStore(
             at = now,
         )
         bookmarkDao.insert(bookmark.toEntity())
-        return bookmark
+        bookmark
     }
 
     suspend fun updateBookmark(bookmark: MessageBookmark) {

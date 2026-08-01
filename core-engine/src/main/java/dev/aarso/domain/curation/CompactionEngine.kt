@@ -101,8 +101,17 @@ object CompactionEngine {
         val violations = CompactionVerifier.verify(messages, entries)
         if (violations.isNotEmpty()) return CompactionRunResult.Failure(violations)
 
-        val directivesTotal = directives.size
-        val directivesHonored = directives.count { (msgId, directive) ->
+        // Fixed per adversarial review: scope the "directives honored" count to directives whose
+        // message is actually IN this run's batch. The caller's `directives` map may (and, once a
+        // Compaction Preview only submits a windowed subset of the conversation, routinely will)
+        // carry directives for messages outside this specific run — those can never appear in
+        // `entries`, so counting them toward `directivesTotal` without a matching honored count
+        // made the receipt's "n/n honored" trust figure under-report even when nothing in this
+        // run actually violated anything.
+        val messageIds = messages.mapTo(mutableSetOf()) { it.id }
+        val directivesInBatch = directives.filterKeys { it in messageIds }
+        val directivesTotal = directivesInBatch.size
+        val directivesHonored = directivesInBatch.count { (msgId, directive) ->
             val entry = entries.firstOrNull { it.msgId == msgId } ?: return@count false
             entry.resolution.fidelity == directive.fidelity
         }

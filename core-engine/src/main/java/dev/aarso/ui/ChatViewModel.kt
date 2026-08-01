@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -1065,13 +1066,47 @@ class ChatViewModel(
         }
     }
 
-    /** Curation sheet's fidelity dial / Must-include toggle. */
+    /** Curation sheet's fidelity dial: an explicit user choice, so it always wins outright — mustInclude preserves whatever was already set. */
     fun setCompactionDirective(msgId: String, mustInclude: Boolean, fidelity: dev.aarso.domain.curation.Fidelity) {
         viewModelScope.launch { curationStore.setDirective(msgId, mustInclude, fidelity) }
     }
 
     fun clearCompactionDirective(msgId: String) {
         viewModelScope.launch { curationStore.clearDirective(msgId) }
+    }
+
+    /**
+     * Curation sheet's Must-include toggle, kept deliberately independent of the fidelity dial
+     * (per [dev.aarso.domain.curation.CompactionDirective]'s own contract). Bug fixed here: a
+     * naive implementation that hardcodes a fallback fidelity (e.g. F1) when no directive exists
+     * yet would *silently downgrade* a message that currently auto-resolves higher — e.g. a
+     * +2-verdict message auto-floors to F3 with no directive at all; flipping Must-include must
+     * not be the thing that knocks it down to F1. Instead, when no directive exists, this first
+     * resolves what the fidelity *would already be* under the deterministic contract (same
+     * inputs [dev.aarso.domain.curation.CompactionEngine] would use) and preserves exactly that.
+     */
+    fun toggleMustInclude(msgId: String) {
+        viewModelScope.launch {
+            val current = curationStore.directiveFor(msgId)
+            val fidelity = current?.fidelity ?: resolveCurrentFidelity(msgId)
+            curationStore.setDirective(msgId, mustInclude = current?.mustInclude != true, fidelity = fidelity)
+        }
+    }
+
+    /** What [dev.aarso.domain.curation.CompactionContract] would resolve [msgId] to right now, absent any directive — i.e. its default fidelity under its current verdict/bookmark/version-spine signals. */
+    private suspend fun resolveCurrentFidelity(msgId: String): dev.aarso.domain.curation.Fidelity {
+        val verdict = curationStore.verdictFor(msgId)
+        val bookmarked = curationStore.bookmarksFor(msgId).isNotEmpty()
+        val versions = curationStore.versions.first()
+        val spineIds = runCatching { dev.aarso.domain.curation.VersionSpines.computeIds(repository.tree(), versions) }
+            .getOrDefault(emptySet())
+        return dev.aarso.domain.curation.CompactionContract.resolve(
+            msgId = msgId,
+            directive = null,
+            verdict = verdict,
+            isBookmarked = bookmarked,
+            isOnVersionSpine = msgId in spineIds,
+        ).fidelity
     }
 
     /**

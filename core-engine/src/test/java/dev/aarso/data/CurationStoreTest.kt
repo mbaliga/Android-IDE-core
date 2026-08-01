@@ -15,6 +15,8 @@ import dev.aarso.data.entity.VersionEntity
 import dev.aarso.domain.curation.BookmarkKind
 import dev.aarso.domain.curation.Fidelity
 import dev.aarso.domain.curation.GhostReason
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -46,6 +48,17 @@ private class FakeMessageBookmarkDao : MessageBookmarkDao {
     override fun observeAll(): Flow<List<MessageBookmarkEntity>> = rows
 }
 
+/** Wraps [FakeMessageBookmarkDao] with an artificial suspension inside [forMessage] (the SELECT
+ *  half of the toggle's check-then-act) so a race test can force two calls to interleave right at
+ *  the window [CurationStore.bookmarkMutex] is meant to close, instead of relying on scheduler
+ *  luck. */
+private class SlowMessageBookmarkDao(private val delegate: MessageBookmarkDao) : MessageBookmarkDao by delegate {
+    override suspend fun forMessage(msgId: String): List<MessageBookmarkEntity> {
+        kotlinx.coroutines.delay(10)
+        return delegate.forMessage(msgId)
+    }
+}
+
 private class FakeVersionDao : VersionDao {
     private val rows = MutableStateFlow<List<VersionEntity>>(emptyList())
     override suspend fun insert(version: VersionEntity) {
@@ -54,7 +67,9 @@ private class FakeVersionDao : VersionDao {
     }
     override suspend fun update(version: VersionEntity) { rows.value = rows.value.map { if (it.id == version.id) version else it } }
     override suspend fun delete(version: VersionEntity) { rows.value = rows.value.filterNot { it.id == version.id } }
-    override suspend fun atTip(msgId: String): VersionEntity? = rows.value.lastOrNull { it.branchTipMsgId == msgId }
+    // Matches the production VersionDao's `ORDER BY at DESC LIMIT 1` (newest-wins tie-break,
+    // same as the domain-layer Versions.atTip()) rather than list/insertion order.
+    override suspend fun atTip(msgId: String): VersionEntity? = rows.value.filter { it.branchTipMsgId == msgId }.maxByOrNull { it.at }
     override fun observeAll(): Flow<List<VersionEntity>> = rows
 }
 
@@ -146,6 +161,25 @@ class CurationStoreTest {
         assertNull(remaining.single().ref.blockIndex)
     }
 
+    @Test fun `two concurrent taps on the same bookmark toggle never leave two live rows`() = runTest {
+        // Regression test for a race adversarial review found: the toggle's check-then-act
+        // (SELECT existing, then INSERT or DELETE) spans two suspend calls with no transaction.
+        // SlowMessageBookmarkDao forces both concurrent calls to observe "no existing bookmark"
+        // before either write lands, which used to leave two live rows for the same message.
+        val store = CurationStore(
+            FakeVerdictDao(), SlowMessageBookmarkDao(FakeMessageBookmarkDao()), FakeVersionDao(),
+            FakeCompactionDirectiveDao(), FakeGhostBranchDao(), FakeFormStateDao(),
+        )
+        coroutineScope {
+            val a = async { store.toggleMessageBookmark("m1", now = 1L) }
+            val b = async { store.toggleMessageBookmark("m1", now = 2L) }
+            a.await(); b.await()
+        }
+        // One call created the bookmark, the other (serialized behind the mutex) saw it and
+        // removed it again -> net zero, never two rows.
+        assertTrue(store.bookmarksFor("m1").size <= 1)
+    }
+
     // ---- Versions ------------------------------------------------------------------------------
 
     @Test fun `markVersion then versionAtTip round-trips`() = runTest {
@@ -162,6 +196,18 @@ class CurationStoreTest {
         val updated = store.versionAtTip("m1")
         assertEquals("final", updated?.name)
         assertEquals("shipped", updated?.note)
+    }
+
+    @Test fun `versionAtTip returns the newest version by timestamp, not insertion order`() = runTest {
+        // Regression test for a bug adversarial review found: VersionDao.atTip's SQL had no
+        // ORDER BY, so a tip marked as a version more than once could return an arbitrary (in
+        // practice, insertion-order) row instead of the newest one — disagreeing with the
+        // domain-layer Versions.atTip()'s documented maxByOrNull(at) semantics.
+        val store = store()
+        store.markVersion("m1", name = "v2", now = 20L)
+        store.markVersion("m1", name = "v1-inserted-second", now = 10L)
+        val v = store.versionAtTip("m1")
+        assertEquals("v2", v?.name)
     }
 
     // ---- Compaction directives -------------------------------------------------------------

@@ -21,7 +21,10 @@ interface VersionDao {
     @Delete
     suspend fun delete(version: VersionEntity)
 
-    @Query("SELECT * FROM versions WHERE branchTipMsgId = :msgId")
+    // Fixed per adversarial review: newest-wins tie-break, matching the domain-layer
+    // Versions.atTip()'s semantics — without ORDER BY, SQLite returns an arbitrary row when a
+    // branch tip has been marked as a version more than once.
+    @Query("SELECT * FROM versions WHERE branchTipMsgId = :msgId ORDER BY at DESC LIMIT 1")
     suspend fun atTip(msgId: String): VersionEntity?
 
     @Query("SELECT * FROM versions")
