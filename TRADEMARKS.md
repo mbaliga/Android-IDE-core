@@ -5,21 +5,21 @@ that the code license does not grant any trademark rights — this file states t
 trademark policy separately, following the pattern used by Mozilla/Firefox and the Linux
 Foundation's member projects.
 
-**⚠ Status note (2026-08-01):** the project's consumer-facing brand name is, as of this writing,
-**unresolved between three candidates** — "FoneBru" (ruled as decision S3 in the private
-`Android-IDE-Studio` repo's `docs/STUDIO_SUITE_BRIEF.md`, 2026-07-11), "Fonebrew," and
-"Phonebrew"/"fonebru" (informally recorded elsewhere). This file is written to hold regardless of
-which name is finally settled on — it governs **the name that ships**, whichever that turns out to
-be, plus the identifiers below that are already fixed in code and unaffected by that choice.
+**Status note (resolved 2026-08-01):** the project's consumer-facing brand name is **"Fonebrew"**
+— ruled directly by the owner 2026-08-01, permanent unless the owner explicitly says otherwise.
+This supersedes the interim "FoneBru" ruling (decision S3, `Android-IDE-Studio` repo's
+`docs/STUDIO_SUITE_BRIEF.md`, 2026-07-11) and the informally-recorded "Phonebrew"/"fonebru"
+spelling. This file was originally written to hold regardless of which name settled — that
+condition has now resolved.
 
 ## What's covered
 
 - **"Aarso"** — the project's `rootProject.name`, its `dev.aarso` package/application-id root, and
   the name of the private self-reflection lens (`Aarso`, package `dev.aarso.domain.mirror`) are
   Madhav Baliga's marks.
-- **Whichever consumer-facing brand name is finally ruled** (see the status note above) and any
-  associated logos, wordmarks, or icon assets, once they exist — these are Madhav Baliga's marks,
-  not licensed under Apache-2.0.
+- **"Fonebrew"** (the consumer-facing brand name — see the status note above) and any associated
+  logos, wordmarks, or icon assets, once they exist — these are Madhav Baliga's marks, not
+  licensed under Apache-2.0.
 - Logo/icon/brand-asset files, wherever they're added to this repo, are covered by a separate
   all-rights-reserved (or CC-BY-ND, once chosen) notice placed alongside those files — never the
   Apache-2.0 code license. No such asset files exist in this repo as of this writing.
