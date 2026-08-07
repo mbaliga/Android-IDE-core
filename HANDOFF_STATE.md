@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1455 tests, 0 failures, 1
-ignored** as of WP-8b's completion (1410 at the end of WP-8a, 1402 at the end of WP-8) — this is
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1489 tests, 0 failures, 1
+ignored** as of WP-9's completion (1455 at the end of WP-8b, 1410 at the end of WP-8a) — this is
 the live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -310,10 +310,42 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   (§6); no AI/Distiller wiring; `DraftEditJournal` is in-memory, not Room-backed (WP-3's journal
   already proved the durable-append pattern generically for a different payload shape); no
   `AppContainer` wiring for any of the six pieces.
+- **WP-9 (language lane vertical slices: TypeScript, Python)** — DONE, gate **GREEN** (one real
+  test-authoring bug caught by the first real Gradle run, fixed, re-verified green on the
+  second). Full detail: `docs/WP9_GATE_REPORT.md`. Summary: genuinely greenfield, like WP-6's
+  search domain — no ratified spec or schema corpus for language lanes existed before this pass.
+  New `contracts/kotlin/LanguageLaneContracts.kt`: `LspCapability`/`DapCapability` (bounded,
+  closed sets), `ToolchainDeliveryMechanism` (five members grounded directly in
+  `01_VALIDATION_REPORT.md` §B1/§B3's W^X-exec-restriction and Play-interpreter-carve-out
+  findings, not invented — "downloaded native exec" is not a mechanism at all, on any flavor),
+  `LanguagePackManifest`/`ToolchainCapsuleManifest`/`TaskDefinition`/`LaunchConfiguration`, and
+  `BuiltInLanguagePacks` (concrete TypeScript/Python fixtures fully declared per "wire TS+Python
+  as far as JVM-verifiable"; Rust/C++ intentionally bare — no local LSP/DAP capsule reference,
+  "contract + REMOTE-mechanism only in this pass" per the brief). Five new files under
+  `domain/language/`: `LspSessionMachine`/`DapSessionMachine` (lifecycle state machines derived
+  from each protocol's own handshake, plus capability negotiation as a plain intersection —
+  neither side's unilateral wish list wins); `LanguageUriMapper` (workspace-relative path ⇄ LSP
+  `DocumentUri`, percent-encoding spaces/non-ASCII so a naive string-concat URI, which silently
+  breaks the moment a filename has a space, never ships); `DiagnosticsOwnership` (fails closed
+  into `Conflicted` when two packs claim the same file extension, never silently picks a winner
+  by list order); `ToolchainDeliveryLegality` (the per-mechanism-per-flavor legality table §B3
+  requires — **flagged as a reasoned proposal, not an owner-ratified decision**, no `FB-RAT-*` ID
+  exists for it yet, same posture as WP-3's `FB-RAT-WS-NEW-1` and WP-8b's `FB-RAT-PHN-011`
+  handling). `core-engine` JVM gate: **1489 tests, 0 failures** (up from 1455), 34 new tests
+  across 6 classes. The one bug caught was in the *test fixture*, not production code: a
+  `DiagnosticsOwnershipTest` first draft under-counted a `findAllConflicts` fixture (missed that
+  the real `BuiltInLanguagePacks.CPP` fixture already claims `.c` in addition to `.h`, so both
+  were genuinely contested, not just `.h`) — caught by the first real Gradle run, fixed, re-run
+  green (`docs/WP9_GATE_REPORT.md` §3). **Honest scope boundary:** no real LSP/DAP client spawns
+  an actual subprocess yet (the state machines are the shape-law an adapter must obey, same
+  posture as WP-3's `DocumentBufferMachine`); no JSON wire-format codec (the brief didn't ask for
+  one, unlike WP-2/3/4/7's domains); no `AppContainer` wiring; no toolchain capsule fetch/
+  install/verify (closer to WP-8a's `LoopInstallationDriver` territory than a language-lane
+  concern) (`docs/WP9_GATE_REPORT.md` §5).
 
 ## What is NOT done yet in this repo
 
-- **WP-9 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-10 and WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -333,13 +365,18 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP8b_GATE_REPORT.md` in full before touching
-   anything those eleven passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP9_GATE_REPORT.md` in full before touching
+   anything those twelve passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-8b.
-3. Proceed to **WP-9** (language lanes: TypeScript, Python). WP-10 (Device Broker + flash safety),
-   WP-11 (closeout) follow in order.
+   — not touched by WP-2 through WP-9.
+3. Proceed to **WP-10** (Device Broker + flash safety contracts). WP-11 (closeout) follows.
+3f. WP-9's language lanes have no real LSP/DAP client spawning an actual subprocess yet (the
+    state machines are the shape-law an adapter must obey), no JSON wire-format codec, no
+    `AppContainer` wiring, and no toolchain capsule fetch/install/verify — see
+    `docs/WP9_GATE_REPORT.md` §5 for the full list. `ToolchainDeliveryLegality`'s per-flavor
+    table is a reasoned proposal, not an owner-ratified decision (no `FB-RAT-*` ID exists for it
+    yet) — same posture as WP-3's `FB-RAT-WS-NEW-1` and WP-8b's `FB-RAT-PHN-011`.
 3a. `LoopRunDriver` (WP-8) has two honest, flagged integration gaps worth revisiting alongside
     WP-10: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to a real
     Device Broker or `AuthorityEngine` capability check yet (`docs/WP8_GATE_REPORT.md` §2/§5).
@@ -412,5 +449,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`/`[WP9]`
 prefixed commits implementing this state.
