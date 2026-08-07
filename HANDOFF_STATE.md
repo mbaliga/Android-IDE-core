@@ -15,11 +15,16 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1250 tests, 0 failures, 1
-ignored** as of WP-2's completion (1214 at the start of WP-2, before its own new envelope/receipt
-test files) — this is the live baseline every subsequent WP should keep green, not the
-guessed "868 tests" figure `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this
-session's additions). The NDK auto-install (`ndk;28.2.13676358`) does fail in this sandbox and
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1297 tests, 0 failures, 1
+ignored** as of WP-3's completion (1250 at the end of WP-2, 1214 before WP-2's own new tests) —
+this is the live baseline every subsequent WP should keep green, not the guessed "868 tests"
+figure `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
+`Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
+clzu43` branch (not `main` — see that repo's `settings.gradle.kts` pin comment and this repo's
+WP-2 gate report §4); its own CI (`mbaliga/Android-IDE-Studio#86`) is currently red on an
+account/repo-access issue unrelated to any code here (a private cross-repo submodule clone
+failing with "Repository not found" — needs an owner-level PAT/deploy-key fix, see that PR's
+comment thread) — not something a further code change in this repo can fix. The NDK auto-install (`ndk;28.2.13676358`) does fail in this sandbox and
 the native `assembleFullDebug`/CMake path is NOT verified here — the JVM unit-test gate does not
 need it and works around it fine; do not spend time chasing the NDK unless a native build is
 actually required. `git submodule update --init hyle-design-system` (the native llama.cpp/
@@ -112,10 +117,36 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   gap: the WP-2 brief's literal gate ("receipt store survives simulated process kill") is only
   proven at the idempotent-append/JVM level here, not via a real forced-kill/replay — that's
   WP-3's journal/`RecoverySnapshot` machinery's job, not WP-2's.
+- **WP-3 (Workspace Kernel: local provider + journal)** — DONE, gate **GREEN**. Full detail:
+  `docs/WP3_GATE_REPORT.md`. Summary: `DocumentBufferMachine`/`WorkspaceProviderMachine` (both
+  named state tables, WORKSPACE_KERNEL_SPEC.md §3.1/§3.2, fail-closed, exhaustively tested both
+  directions); `LocalWorkspaceProvider` (real `java.io.File`-backed `WorkspaceProvider`,
+  content-digest revisions, real `WatchService`-backed `watch()`); `BufferReplay` (deterministic
+  journal-to-content reconstruction, all 7 `JournalOpType`s); `WorkspaceCodec` (JSON round-trip,
+  same unknown-field-preserving pattern as WP-2's `EnvelopeCodec`); Room-backed
+  `RoomWorkspaceJournal` (`append`/`checkpoint`/`restore`, `AppDatabase` v6→v7); and
+  `AgentEditJournalAdapter` — the FB-RAT-WS-005 "one journal for human and agent edits" seam,
+  built as a **decorator over `RepoWorkLoop`'s existing `ChangeCommitter`**, not a rewrite.
+  `core-engine` JVM gate: **1297 tests, 0 failures** (up from 1250). The headline result: a
+  **100-iteration simulated forced-kill suite** (`RoomWorkspaceJournalTest`) — randomized edit
+  sequences, randomized kill points, a second independent `RoomWorkspaceJournal` instance over
+  the same backing store standing in for "process restarted" — zero loss, zero duplication,
+  byte-identical content reconstruction, all 100/100. One real compile bug found and fixed
+  (`kotlinx.coroutines.async`/`delay`/`withTimeout` called via FQN inside `runBlocking` failed to
+  resolve their implicit `CoroutineScope` receiver — fixed by importing normally); the
+  `WatchService`-backed test was specifically re-run twice to rule out timing flakiness, passed
+  both times. **Flagged, not silently patched:** a genuine WP-1 contract gap (neither
+  `BufferJournalEntry` nor `DocumentBuffer` carries a `workspaceId`, so `checkpoint(workspaceId)`
+  needs a bufferId→workspaceId link `WorkspaceJournal`'s own interface doesn't provide) worked
+  around via a new, explicitly-documented `BufferRegistryEntity`/`registerBuffer()` beyond that
+  interface. **Also wired into the real second consumer** the same way WP-2 was: `Android-IDE-
+  Studio`'s `core` submodule stays pinned to this branch (already repointed in WP-2), so its next
+  CI run against this branch picks up WP-3 automatically once that PR's unrelated CI-access issue
+  (see the build-environment note above) is resolved.
 
 ## What is NOT done yet in this repo
 
-- **WP-3 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-4 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -135,18 +166,17 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md`, `docs/WP1L_GATE_REPORT.md`, and `docs/WP2_GATE_REPORT.md` in
-   full before touching anything those three passes produced.
+1. Read `docs/WP1_GATE_REPORT.md`, `docs/WP1L_GATE_REPORT.md`, `docs/WP2_GATE_REPORT.md`, and
+   `docs/WP3_GATE_REPORT.md` in full before touching anything those four passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2.
-3. Proceed to **WP-3** (Workspace Kernel: `DocumentBuffer` + journal + `RecoverySnapshot` on the
-   local provider; `ResourceUri` model; conflict machine; unified human/agent edit transaction
-   path as adapters over existing editor/agent code — per `docs/ratified/WORKSPACE_KERNEL_SPEC.md`
-   already written in WP-1). Its gate ("forced-kill suite, 100 simulated kills, zero-loss on JVM")
-   is also where WP-2's honest `ReceiptStore` gap (§WP-2 above — idempotent-append proven, real
-   kill/replay not) should get its actual proof, since the journal/`RecoverySnapshot` machinery
-   that WP-2 deliberately deferred lives here.
+   — not touched by WP-2 or WP-3.
+3. Proceed to **WP-4** (Execution Contract + Authority engine — execution object model +
+   lifecycle; local Android provider; authority engine with grants/ladder/default-deny/escalation
+   prompts as a callback interface; secret-handle broker interface; receipts wired through WP-2's
+   `ReceiptStore`; SSH/CI providers stubbed with their conformance suite marked pending, per
+   `06_WORK_PACKAGES.md`'s WP-4 entry and `docs/ratified/EXECUTION_CONTRACT.md` +
+   `CAPABILITY_AUTHORITY_MODEL.md` from WP-1).
 4. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
    `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
    fully greenfield.
@@ -158,8 +188,17 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 6. `Android-IDE-Studio`'s own `CLAUDE.md` (repo map + gate command) is stale — still describes the
    pre-de-fork monolithic `app/` layout and never mentions `core-engine`/`:core`. Not fixed here
    (out of this repo's scope) but worth a fix next time a session works in that repo directly.
+7. `Android-IDE-Studio`'s CI (PR #86) is red on a private cross-repo submodule access issue
+   (`mbaliga/Android-IDE-core` returns "Repository not found" to the default `GITHUB_TOKEN`) that
+   needs an owner-level fix (a PAT/deploy-key secret, or temporarily making the repo public) — not
+   something further code changes here can resolve. See that PR's comment thread for the full
+   diagnosis; local verification (both repos' real Gradle gates) is green regardless.
+8. Real Room-backed JVM testing (a genuine embedded SQLite driver, not the fake-DAO pattern) was
+   investigated during WP-3 and found non-trivial with this module's current Room setup (the
+   Android-`Context`-requiring `Room.databaseBuilder` overload, not Room's KMP/context-free one) —
+   flagged as a possible future toolchain improvement, not attempted mid-WP.
 
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]` prefixed commits implementing this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]` prefixed commits implementing this state.
