@@ -15,10 +15,10 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1297 tests, 0 failures, 1
-ignored** as of WP-3's completion (1250 at the end of WP-2, 1214 before WP-2's own new tests) —
-this is the live baseline every subsequent WP should keep green, not the guessed "868 tests"
-figure `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1339 tests, 0 failures, 1
+ignored** as of WP-4's completion (1297 at the end of WP-3, 1250 at the end of WP-2) — this is the
+live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
+`CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
 clzu43` branch (not `main` — see that repo's `settings.gradle.kts` pin comment and this repo's
 WP-2 gate report §4); its own CI (`mbaliga/Android-IDE-Studio#86`) is currently red on an
@@ -143,10 +143,29 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   Studio`'s `core` submodule stays pinned to this branch (already repointed in WP-2), so its next
   CI run against this branch picks up WP-3 automatically once that PR's unrelated CI-access issue
   (see the build-environment note above) is resolved.
+- **WP-4 (Execution Contract + Authority engine)** — DONE, gate **GREEN**, compiled and passed on
+  the first real Gradle attempt. Full detail: `docs/WP4_GATE_REPORT.md`. Summary: `AuthorityEngine`
+  is the real policy-engine implementation `CAPABILITY_AUTHORITY_MODEL.md` itself named as future
+  work — default-deny, purpose/target/time binding, no transitive delegation (verified by a
+  correctness property, not just a check: the engine only ever reads the REQUESTING principal's
+  own grants, never an ancestor's). `LocalProcessExecutionProvider` is the real `LOCAL_ANDROID`
+  `ExecutionProvider` (lifecycle/cancellation/reconnect against real `/bin/sh -c` processes in this
+  JVM gate, mirroring WP-3's `LocalWorkspaceProvider` testing pattern). `AuditedAuthorityEngine`
+  wires authority decisions through WP-2's `ReceiptStore`; `SecretHandleBroker` + a reference
+  in-memory implementation; `SecretRedactionScanner` proves the "secret-redaction sentinel test"
+  gate (zero hits against real live secret values, and proven non-vacuous). `core-engine` JVM
+  gate: **1339 tests, 0 failures** (up from 1297). The full privilege-escalation fixture pack
+  (default deny, child-exceeds-parent, transitive delegation, purpose-crossing secret use, expired
+  grant, delegation widening, grant/capability rung mismatch) is now real, passing engine tests,
+  not just static JSON fixtures. One real design bug caught and fixed *before* ever running Gradle
+  (a scope-mismatch-vs-rung-mismatch reason-code conflation in the engine's own draft — see
+  `docs/WP4_GATE_REPORT.md` §3). **Flagged, not silently invented:** `RequireStrongerAuthority`
+  needed an explicit `escalateToRung` mechanism to be reachable at all, since a single `fb.*`
+  capability always sits at exactly one registry rung (§4 of that report).
 
 ## What is NOT done yet in this repo
 
-- **WP-4 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-5 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -166,17 +185,20 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md`, `docs/WP1L_GATE_REPORT.md`, `docs/WP2_GATE_REPORT.md`, and
-   `docs/WP3_GATE_REPORT.md` in full before touching anything those four passes produced.
+1. Read `docs/WP1_GATE_REPORT.md`, `docs/WP1L_GATE_REPORT.md`, `docs/WP2_GATE_REPORT.md`,
+   `docs/WP3_GATE_REPORT.md`, and `docs/WP4_GATE_REPORT.md` in full before touching anything those
+   five passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 or WP-3.
-3. Proceed to **WP-4** (Execution Contract + Authority engine — execution object model +
-   lifecycle; local Android provider; authority engine with grants/ladder/default-deny/escalation
-   prompts as a callback interface; secret-handle broker interface; receipts wired through WP-2's
-   `ReceiptStore`; SSH/CI providers stubbed with their conformance suite marked pending, per
-   `06_WORK_PACKAGES.md`'s WP-4 entry and `docs/ratified/EXECUTION_CONTRACT.md` +
-   `CAPABILITY_AUTHORITY_MODEL.md` from WP-1).
+   — not touched by WP-2, WP-3, or WP-4.
+3. Proceed to **WP-5** (SSH + CI providers against the same conformance suites WP-4's local
+   provider used: an SSH `ExecutionProvider`/workspace provider reusing the already-real sshj lane
+   at `domain/remote/` — WP0_SURVEY.md §1(h) — over a loopback sshd in tests; GitHub Actions +
+   Gitea Actions `ExecutionProvider`s against recorded HTTP fixtures, not live network calls;
+   reconnect tokens; visible provenance fields end-to-end, per `06_WORK_PACKAGES.md`'s WP-5 entry).
+   A Room-backed `GrantStore`/`PrincipalStore` (WP-4 left both in-memory-only, §Open-thread 9
+   below) may be worth revisiting alongside WP-5 if SSH/CI providers turn out to need persisted
+   grants across a restart — check before assuming in-memory is still sufficient.
 4. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
    `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
    fully greenfield.
@@ -197,8 +219,18 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
    investigated during WP-3 and found non-trivial with this module's current Room setup (the
    Android-`Context`-requiring `Room.databaseBuilder` overload, not Room's KMP/context-free one) —
    flagged as a possible future toolchain improvement, not attempted mid-WP.
+9. WP-4's `AuthorityEngine`/`AuditedAuthorityEngine` have no persisted `Grant`/`Principal` store
+   yet (`InMemoryGrantStore`/`InMemoryPrincipalStore` only) — fine for this pass (no consumer
+   exists to need persistence across a restart), but worth a Room-backed store the moment WP-5's
+   SSH/CI providers or a real UI surface needs grants to survive a process death.
+10. `CapabilityRegistry.kt` (WP-4) mirrors `schemas/loops/registries/capability-ids.v1.json` by
+    hand, manually cross-checked once (all 20 entries match) but not automatically kept in sync —
+    a future registry addition (new `fb.*` IDs are additive/MINOR per that file's own `bumpRule`)
+    needs a matching manual update here, or a real automated consistency test, whichever a later
+    session has time for.
 
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]` prefixed commits implementing this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]` prefixed commits implementing this
+state.
