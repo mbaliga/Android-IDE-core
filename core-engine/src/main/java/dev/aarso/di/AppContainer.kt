@@ -53,6 +53,13 @@ class AppContainer(context: Context) {
     val ledgerStore: dev.aarso.data.LedgerStore =
         dev.aarso.data.LedgerStore(database.ledgerDao())
 
+    /** Fonebrew handoff-pack WP-2: append-only receipt store (FB-RAT-COM-006). Same on-device,
+     *  no-telemetry shape as [ledgerStore] — see docs/ratified/COMMON_CONVENTIONS.md and
+     *  HANDOFF_STATE.md. No consumer wired in yet; later work packages (execution receipts,
+     *  import receipts, loop activation receipts) call [dev.aarso.data.ReceiptStore.append]. */
+    val receiptStore: dev.aarso.data.ReceiptStore =
+        dev.aarso.data.ReceiptStore(database.receiptDao())
+
     // Placeholder until the Phase 2 local embedder lands (§5b). Cold-start
     // logging is live regardless (§5c).
     val embedder: Embedder = PlaceholderEmbedder()

@@ -24,10 +24,11 @@
 // any Gradle module — see WP-0 survey §1(j): no contracts/kotlin/ directory existed in any
 // of the four constellation repos before this file).
 //
-// COMPILATION STATUS: UNVERIFIED. kotlinc/Gradle are not available in this build
-// environment (per the WP-1 task brief) — this file has been written carefully (balanced
-// braces, matched types, no typos attempted) but has NOT been compiled. Do not report it
-// as compiling; that is for the next session with Gradle available to confirm.
+// COMPILATION STATUS: VERIFIED (WP-2, 2026-08-07). Wired into core-engine's build as a real
+// compiled source directory (core-engine/build.gradle.kts) and confirmed via
+// :core-engine:compileFullDebugKotlin BUILD SUCCESSFUL alongside every other contracts/kotlin/
+// file. See docs/WP1_GATE_REPORT.md's addendum for the one real defect that first compile
+// attempt found (in a different file, LoopPackageContracts.kt) and how it was fixed.
 //
 // Why no sealed-interface state machine appears in this file: the common envelope domain
 // defines shared WIRE SHAPES referenced by every other domain, not a domain with its own
