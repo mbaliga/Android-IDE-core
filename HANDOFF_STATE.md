@@ -15,8 +15,9 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1214 tests, 0 failures, 1
-ignored** as of WP-2 — this is the live baseline every subsequent WP should keep green, not the
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1250 tests, 0 failures, 1
+ignored** as of WP-2's completion (1214 at the start of WP-2, before its own new envelope/receipt
+test files) — this is the live baseline every subsequent WP should keep green, not the
 guessed "868 tests" figure `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this
 session's additions). The NDK auto-install (`ndk;28.2.13676358`) does fail in this sandbox and
 the native `assembleFullDebug`/CMake path is NOT verified here — the JVM unit-test gate does not
@@ -92,10 +93,29 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   assigned scope) — fixed via a `typealias`, zero regressions, full gate re-run confirmed green.
   Unknown-field round-trip remains genuinely UNVERIFIED (needs a real runtime round-trip test, not
   just a successful compile).
+- **WP-2 (shared envelope/error/receipt runtime library)** — DONE, gate **GREEN**. Full detail:
+  `docs/WP2_GATE_REPORT.md`. Summary: implemented (not just declared) `IdGenerator` (real ULID),
+  `Digest` (SHA-256 `IntegrityRef`), `JsonInterop` (unknown-field preservation over `org.json`),
+  `EnvelopeCodec` (encode/decode for `ContractEnvelope`/`ErrorEnvelope`/`CapabilityManifest`/
+  `ArtifactRef`/`MigrationPlan`/`ConformanceSuite`), `MigrationRunner` (fail-closed step
+  execution), and a Room-backed `ReceiptStore` (idempotent append-only, `AppDatabase` v5→v6),
+  wired into `AppContainer`. `core-engine` JVM gate: 1250 tests, 0 failures (up from 1214). Two
+  real bugs found and fixed during verification: Kotlin's nested-block-comment behavior
+  (`IdGenerator.kt`/`EnvelopeCodec.kt` KDoc prose containing a literal `/*` from a glob-style
+  path reference cascaded into an "Unclosed comment" compile error) and a `MigrationRunnerTest`
+  fixture that violated `DataMigrationSteps`'s own non-empty-steps invariant (test bug, not a
+  `MigrationRunner` bug). **Also wired into the real second consumer**, correcting the pack's
+  literal "wire into Aarso" instruction per WP-0's finding that `Aarso` isn't a consumer at all —
+  see `docs/WP2_GATE_REPORT.md` §4 for the `Android-IDE-Studio` submodule repoint (its `core` pin
+  was stale, pointing at a since-merged PR's commit; repointed to this branch, gate re-verified
+  green there too: `:app:testFullDebugUnitTest` 9/9, `:hyle:test` 10/10, both 0 failures). Honest
+  gap: the WP-2 brief's literal gate ("receipt store survives simulated process kill") is only
+  proven at the idempotent-append/JVM level here, not via a real forced-kill/replay — that's
+  WP-3's journal/`RecoverySnapshot` machinery's job, not WP-2's.
 
 ## What is NOT done yet in this repo
 
-- **WP-2 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-3 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -115,29 +135,31 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` and `docs/WP1L_GATE_REPORT.md` in full before touching anything
-   WP-1/WP-1L produced.
+1. Read `docs/WP1_GATE_REPORT.md`, `docs/WP1L_GATE_REPORT.md`, and `docs/WP2_GATE_REPORT.md` in
+   full before touching anything those three passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
-   low-risk once done carefully with full-document review, not sed-across-the-corpus).
-3. Get a real Kotlin/Gradle toolchain available and run the UNVERIFIED checks from both gate
-   reports: compilation of all 14 `contracts/kotlin/*.kt` files (`./gradlew
-   :core-engine:compileFullDebugKotlin` or equivalent, per the WP-0 real-module-path correction),
-   and unknown-field round-trip preservation (needs a real deserializer, not just structural
-   design-evidence inspection).
-4. Proceed to **WP-2** (shared envelope/error/receipt runtime library — implement, not just
-   declare, the common library from `docs/ratified/COMMON_CONVENTIONS.md` /
-   `contracts/kotlin/CommonContracts.kt`, and wire it into `core-engine`). This is the first WP
-   that touches the actual app module rather than only adding contract-corpus files.
-5. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
+   low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
+   — not touched by WP-2.
+3. Proceed to **WP-3** (Workspace Kernel: `DocumentBuffer` + journal + `RecoverySnapshot` on the
+   local provider; `ResourceUri` model; conflict machine; unified human/agent edit transaction
+   path as adapters over existing editor/agent code — per `docs/ratified/WORKSPACE_KERNEL_SPEC.md`
+   already written in WP-1). Its gate ("forced-kill suite, 100 simulated kills, zero-loss on JVM")
+   is also where WP-2's honest `ReceiptStore` gap (§WP-2 above — idempotent-append proven, real
+   kill/replay not) should get its actual proof, since the journal/`RecoverySnapshot` machinery
+   that WP-2 deliberately deferred lives here.
+4. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
    `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
    fully greenfield.
-6. Two owner-only calls are now ready for a decision, not blocking further build-out but worth
+5. Two owner-only calls are now ready for a decision, not blocking further build-out but worth
    surfacing: the differentiator-first vs. substrate-first reordering (§Deviations above), and the
    bounded-marketplace-backend phasing question (`08_OPEN_QUESTIONS.md` §E.1) — `LOOP_MARKETPLACE_CONTRACT.md`
    already builds toward the static/Git-registry answer (b) by default per the master brief, but
    the owner has not ruled on it.
+6. `Android-IDE-Studio`'s own `CLAUDE.md` (repo map + gate command) is stale — still describes the
+   pre-de-fork monolithic `app/` layout and never mentions `core-engine`/`:core`. Not fixed here
+   (out of this repo's scope) but worth a fix next time a session works in that repo directly.
 
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]` prefixed commits implementing this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]` prefixed commits implementing this state.
