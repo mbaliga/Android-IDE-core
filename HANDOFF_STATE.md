@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1394 tests, 0 failures, 1
-ignored** as of WP-7's completion (1359 at the end of WP-6, 1350 at the end of WP-5) — this is the
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1402 tests, 0 failures, 1
+ignored** as of WP-8's completion (1394 at the end of WP-7, 1359 at the end of WP-6) — this is the
 live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -219,10 +219,28 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   background research pass confirmed both `mbaliga/assay` and `mbaliga/csapp` are real but
   pre-alpha (no live manifest/index files exist anywhere yet) — `csapp`'s own GitHub Issue #3
   shows the other side is already aware of and blocked on this exact contract.
+- **WP-8 (loop engineering lifecycle around GraphRunner)** — DONE, gate **GREEN**, compiled and
+  passed on the first real Gradle attempt. Full detail: `docs/WP8_GATE_REPORT.md`. Summary:
+  `LoopRunDriver` drives WP-1L's real 17-state `RunState` machine (`LOOP_ENGINEERING_SPEC_V2.1.md`
+  §9) around the already-real `GraphRunner` engine — CREATED→PREFLIGHT→WAITING_BINDING→
+  WAITING_AUTHORITY→READY→RUNNING→terminal, every event individually legal (enforced by
+  `RunEvent`'s own constructor) AND checked as a full sequence (`assertLegalEventSequence`, a
+  belt-and-suspenders test helper). Translates `GraphRunner`'s flat `GraphRunResult` into the full
+  `LoopRun` audit record (event log, per-node `NodeAttempt`s, a correctly §9-categorized
+  `TerminalReason`). A mid-run cancellation correctly routes through `CANCELLING` (two events),
+  not straight to `CANCELLED` (not a legal direct transition from `RUNNING`) — proven by a
+  dedicated test. `core-engine` JVM gate: **1402 tests, 0 failures** (up from 1394). **Honest scope
+  boundary, not silently skipped:** `WAITING_BINDING`/`WAITING_AUTHORITY` are auto-resolved seams
+  this pass (`GraphRunner` has no device-binding or authority concept of its own) — real
+  integration with WP-10's Device Broker / WP-4's `AuthorityEngine` is a flagged follow-up, not
+  built here. `WAITING_USER`/`SUSPENDED` are unexercised since `GraphRunner` itself has no
+  mid-graph pause concept. `SUCCEEDED_UNVERIFIED` maps to `REQUIRED_VERIFIER_INCOMPLETE` as an
+  interpretation choice (the closed category vocabulary has no "no verifiers configured" value) —
+  flagged, matching the same honesty standard WP-4/WP-6's own interpretation notes set.
 
 ## What is NOT done yet in this repo
 
-- **WP-8 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-8a through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -242,16 +260,18 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP7_GATE_REPORT.md` in full before touching
-   anything those eight passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP8_GATE_REPORT.md` in full before touching
+   anything those nine passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-7.
-3. Proceed to **WP-8** (Loop engineering lifecycle around `GraphRunner` — the loop contract corpus
-   v2.1 from WP-1L now gets a real implementation layer: package/build/lifecycle machinery around
-   the existing, already-real `GraphRunner` execution engine, per `06_WORK_PACKAGES.md`'s WP-8
-   entry and `docs/ratified/loops/LOOP_ENGINEERING_SPEC_V2.1.md`). WP-8a (packages/transfer/
-   import/activation) and WP-8b (phone authoring surfaces) follow in the pack's own numbered order.
+   — not touched by WP-2 through WP-8.
+3. Proceed to **WP-8a** (packages/transfer/import/activation — `LOOP_ENGINEERING_SPEC_V2.1.md`
+   §20-22's package build pipeline, transfer/activation boundary, and update contract, plus WP-1L's
+   `LoopPackageContracts.kt`/`LoopActivationContracts.kt` — implementing already-ratified contracts,
+   same posture as WP-7). WP-8b (phone authoring surfaces) follows.
+3a. `LoopRunDriver` (WP-8) has two honest, flagged integration gaps worth revisiting alongside
+    WP-8a/WP-10: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to a real
+    Device Broker or `AuthorityEngine` capability check yet (`docs/WP8_GATE_REPORT.md` §2/§5).
 4. `WorkspaceSearchIndex`/`SemanticSearchProvider` (WP-6) have no live consumer yet — a Develop-tab
    search surface or a `WorkspaceJournal`-observing auto-indexer is a natural follow-up, not built
    this pass (see `docs/WP6_GATE_REPORT.md` §5).
@@ -301,5 +321,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]` prefixed
-commits implementing this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`
+prefixed commits implementing this state.
