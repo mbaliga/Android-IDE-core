@@ -60,6 +60,20 @@ class AppContainer(context: Context) {
     val receiptStore: dev.aarso.data.ReceiptStore =
         dev.aarso.data.ReceiptStore(database.receiptDao())
 
+    /** Fonebrew handoff-pack WP-3: Workspace Kernel journal (FB-RAT-WS-003/005) + the LOCAL
+     *  provider (FB-RAT-WS-002/004). No consumer wired in yet -- WP-3 is the domain/data layer;
+     *  wiring into the live IDE surfaces (Develop tab, RepoWorkLoop) is a later work package's
+     *  job per docs/ratified/WORKSPACE_KERNEL_SPEC.md's own scope note. */
+    val workspaceJournal: dev.aarso.data.RoomWorkspaceJournal =
+        dev.aarso.data.RoomWorkspaceJournal(
+            journalDao = database.bufferJournalDao(),
+            snapshotDao = database.recoverySnapshotDao(),
+            registryDao = database.bufferRegistryDao(),
+        )
+
+    val localWorkspaceProvider: dev.aarso.domain.workspace.LocalWorkspaceProvider =
+        dev.aarso.domain.workspace.LocalWorkspaceProvider(context.applicationContext.filesDir)
+
     // Placeholder until the Phase 2 local embedder lands (§5b). Cold-start
     // logging is live regardless (§5c).
     val embedder: Embedder = PlaceholderEmbedder()
