@@ -1,0 +1,26 @@
+{
+  "deviceIdentityId": "dev-generic-ch340-0012",
+  "family": "CH34X",
+  "board": {
+    "catalogRef": "UNCATALOGED",
+    "catalogId": null,
+    "displayName": "Unknown CH340-based board"
+  },
+  "mcu": null,
+  "usbDescriptor": {
+    "vendorId": "0x1a86",
+    "productId": "0x7523",
+    "manufacturer": null,
+    "productName": null
+  },
+  "serial": null,
+  "bootloaderInfo": null,
+  "capabilities": null,
+  "confidence": {
+    "level": "UNCERTAIN",
+    "basis": [
+      "Heuristic port-name guess only; no protocol probe attempted yet"
+    ]
+  },
+  "unknownFields": {}
+}

@@ -1,0 +1,35 @@
+Structural validation result: PASSES schemas/execution/target.schema.json.
+`visibilityContract` is only structurally required to be present (with all five boolean fields)
+once `provenanceStyle` is USER_INITIATED_REMOTE or CI_PIPELINE — the schema does NOT require
+every field to be `true`, because a target legitimately needs to be representable mid-handshake,
+or with a known gap, before all five are true. This fixture is adversarial at the semantic layer
+only: it is a structurally well-formed ExecutionTarget whose `dataBoundaryVisible` is `false`.
+
+MUST BE REJECTED BY A REAL IMPLEMENTATION (for starting new work against this target) — this
+fixture describes a target a provider gate MUST refuse to schedule an ExecutionRequest against,
+not a target that is simply unusable or malformed.
+
+Required behavior from a real implementation (not just structural validation):
+  1. FB-RAT-STR-004: compute provenance permits user-initiated SSH and CI compute only when
+     execution location, revision, data boundary, state, AND result are all visible — this is a
+     conjunction, not a majority vote. A target with even one false field (here,
+     `dataBoundaryVisible: false` — the user cannot see what data crosses onto this
+     third-party-fork CI target) does not meet the bar.
+  2. The Execution Contract's provider-gate (docs/ratified/EXECUTION_CONTRACT.md §4) MUST inspect
+     `visibilityContract` before calling ExecutionProvider.prepare()/start() for any target whose
+     `provenanceStyle` is USER_INITIATED_REMOTE or CI_PIPELINE, and MUST refuse if any of the five
+     booleans is false.
+  3. Recommended ErrorEnvelope for the refusal (schemas/common/error.schema.json):
+       code: "EXECUTION_TARGET_VISIBILITY_INCOMPLETE"
+       severity: "ERROR"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Resolve dataBoundaryVisible (e.g. confirm what repository data this
+         fork's CI can read) before retrying, or choose a different target."
+       userMessage: "This target can't be used yet — what data it can see isn't fully visible."
+  4. A target discovered mid-handshake (all fields legitimately unknown/false because probing
+     hasn't finished) is a DIFFERENT, benign case from this fixture's case (a probe that
+     completed and came back with one confirmed-false field) — both are structurally identical
+     shapes, so a real implementation MUST NOT conflate 'not yet checked' with 'checked and
+     failed' at the UI/accessibility layer (FB-RAT-COM-009); the two need different `stateReason`-
+     equivalent messaging even though this schema alone cannot distinguish them.

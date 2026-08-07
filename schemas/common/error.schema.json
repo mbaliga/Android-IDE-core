@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/common/error.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ErrorEnvelope per FB-RAT-COM-007 (stable code, severity, retryability, side-effect state, technical detail, recovery action) and FB-RAT-COM-009 (accessibility semantics — `userMessage` is the textual-semantics carrier so an error state is legible without color/icon/haptic). Typically carried as the `payload` of a ContractEnvelope<ErrorEnvelope> (see envelope.schema.json) — it does not repeat schemaVersion/objectId/createdAtUtc/producer, which it inherits from that outer envelope.",
+  "title": "ErrorEnvelope",
+  "type": "object",
+  "required": ["code", "severity", "retryable", "sideEffectState", "detail", "recoveryAction", "userMessage"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$",
+      "description": "Stable machine-readable error code, e.g. 'GIT_AUTH_EXPIRED', 'DEVICE_FLASH_VERIFY_FAILED'. Stable across releases (FB-RAT-COM-007) — never localize, never reuse a retired code for a different meaning."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["INFO", "WARNING", "ERROR", "CRITICAL"],
+      "description": "Coarse severity band (FB-RAT-COM-007). CRITICAL implies the surrounding operation cannot be considered safe to ignore."
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "Whether retrying the same logical operation (with the same idempotencyKey, if the failed operation had one) can plausibly succeed without caller changes."
+    },
+    "sideEffectState": {
+      "type": "string",
+      "enum": ["NONE", "PARTIAL", "COMPLETED", "UNKNOWN"],
+      "description": "What happened to any side effect the failed operation attempted, so a caller or human knows whether blind retry is safe (FB-RAT-COM-007). UNKNOWN MUST be used rather than guessing NONE when the producer cannot determine the outcome (e.g. a network write that timed out after the request left the device)."
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Technical detail for logs/diagnostics (FB-RAT-COM-007). MAY contain identifiers, provider error text, stack summaries. MUST NOT contain secrets or API keys (binding rule: keys are never logged) — a producer that cannot strip a secret from the underlying error MUST redact it before populating this field."
+    },
+    "recoveryAction": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A concrete next step, machine- or human-actionable (e.g. 're-authenticate with the provider', 'reduce payload below 10MB', 'reconnect the USB device'). Never just repeats `detail`."
+    },
+    "userMessage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Plain-language textual semantics of this error state, independent of color/icon/haptic/position (FB-RAT-COM-009) — the string a screen reader, text-only surface, or accessibility service presents. MUST stand on its own without relying on a coincident color or icon to convey meaning."
+    },
+    "objectId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional back-reference to the ContractEnvelope.objectId of the operation/artifact that failed, for correlating this error with the durable object it concerns (FB-RAT-COM-002)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true
+}

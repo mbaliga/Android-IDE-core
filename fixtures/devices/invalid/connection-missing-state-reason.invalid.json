@@ -1,0 +1,11 @@
+{
+  "connectionId": "conn-0051",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "state": "DISCONNECTED",
+  "stateReason": null,
+  "enteredStateAtUtc": "2026-08-07T10:45:00Z",
+  "transportPath": "/dev/bus/usb/001/014",
+  "usbPermissionGranted": true,
+  "exclusiveLock": null,
+  "unknownFields": {}
+}

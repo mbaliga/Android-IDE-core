@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "01J9B0000000000000000RC4",
+  "sourceType": "CSAPP_ISSUES_MANIFEST",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "5c2e9f4a1b6d3e7c8f0a2b4c6d8e0f1a3b5c7d9e0f1a2b3c4d5e6f708192a3b4",
+    "byteLength": 905
+  },
+  "sourceLocation": "csapp-export://csapp-proj-aarso-mobile/2026-08-04T09:00:00Z",
+  "previewId": "01J9C0000000000000000PV4",
+  "initiatedBy": "studio-user:jordan",
+  "decision": "PARTIAL",
+  "createdAtUtc": "2026-08-04T09:20:00Z",
+  "created": [
+    { "sourceId": "csapp-iss-2001", "incidentId": "01J9D0000000000000000IN3" }
+  ],
+  "updated": [],
+  "duplicates": [],
+  "rejected": [],
+  "unknownFields": {
+    "note": "The preview for this source (previewId 01J9C0000000000000000PV4) also offered csapp-iss-2002 as a new record; the user explicitly deselected it before confirming. decision=PARTIAL records that fact — no per-item entry is needed for a user-elected exclusion of an otherwise-clean new record, since it was never acted on (INT-007: PARTIAL MUST correspond to an explicit confirmation step, never a silent default)."
+  }
+}

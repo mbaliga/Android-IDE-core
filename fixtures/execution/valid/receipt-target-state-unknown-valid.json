@@ -1,0 +1,54 @@
+{
+  "receiptId": "01J8ZR0000000000000000E4",
+  "requestId": "01J8ZB0000000000000000R2",
+  "handleId": "01J8ZH0000000000000000H2",
+  "targetSnapshot": {
+    "id": "01J8ZA0000000000000000T1",
+    "type": "LOCAL_ANDROID",
+    "displayName": "This phone",
+    "trust": "TRUSTED",
+    "hostFingerprint": null,
+    "arch": "arm64-v8a"
+  },
+  "revision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "capsuleDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "5b0b673f333e59549fac44488b13a7972e0749ba40b333cefff045c283d7ffa7",
+    "byteLength": 604
+  },
+  "timings": {
+    "queuedAtUtc": "2026-08-07T10:59:50Z",
+    "startedAtUtc": "2026-08-07T11:00:02Z",
+    "finishedAtUtc": "2026-08-07T11:47:02Z",
+    "durationMs": 2820000
+  },
+  "exitState": "TARGET_STATE_UNKNOWN",
+  "terminationCause": "RECONNECT_UNKNOWN",
+  "logs": {
+    "ref": null,
+    "excerpt": "Last confirmed heartbeat 2026-08-07T10:02:19Z. Reconnect at 2026-08-07T11:47:02Z presented a stale token; provider could not confirm run state.",
+    "redactionApplied": true
+  },
+  "resourceSummary": {
+    "cpuSecondsUsed": null,
+    "wallClockSecondsUsed": null,
+    "networkBytesUp": null,
+    "networkBytesDown": null,
+    "peakMemoryBytes": null,
+    "thermalStateObserved": "UNKNOWN"
+  },
+  "outputs": [],
+  "sideEffects": [],
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "provenance": {
+    "sourceLocation": "/data/user/0/dev.aarso.full/workspace/android-ide-core",
+    "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+    "initiatingPrincipal": "owner",
+    "evidenceLinks": []
+  },
+  "unknownFields": {}
+}

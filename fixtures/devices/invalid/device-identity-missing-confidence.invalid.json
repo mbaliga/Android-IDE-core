@@ -1,0 +1,24 @@
+{
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "family": "STK500",
+  "board": {
+    "catalogRef": "ARDUINO_CLI",
+    "catalogId": "arduino:avr:uno",
+    "displayName": "Arduino Uno"
+  },
+  "mcu": "ATmega328P",
+  "usbDescriptor": {
+    "vendorId": "0x2341",
+    "productId": "0x0043",
+    "manufacturer": "Arduino LLC",
+    "productName": "Arduino Uno"
+  },
+  "serial": "8563031373935120A192",
+  "bootloaderInfo": {
+    "supported": true,
+    "family": "STK500",
+    "entryMethod": "1200-baud touch auto-reset"
+  },
+  "capabilities": null,
+  "unknownFields": {}
+}

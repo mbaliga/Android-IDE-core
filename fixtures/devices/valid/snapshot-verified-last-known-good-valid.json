@@ -1,0 +1,19 @@
+{
+  "snapshotId": "snap-5001",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionStateAtCapture": "READY",
+  "firmwareArtifactId": "fw-arduino-uno-blink-v3",
+  "firmwareDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "f9b27032939d4d72b5cb88fa5c51d3c3eee0515a056cd728804b68ee7c66ab38",
+    "byteLength": 1084
+  },
+  "verification": {
+    "state": "VERIFIED",
+    "method": "READ_BACK_HASH",
+    "verifiedAtUtc": "2026-08-07T10:10:00Z"
+  },
+  "lastKnownGood": true,
+  "capturedAtUtc": "2026-08-07T10:10:01Z",
+  "unknownFields": {}
+}

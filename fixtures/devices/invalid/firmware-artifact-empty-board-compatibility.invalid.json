@@ -1,0 +1,29 @@
+{
+  "firmwareArtifactId": "fw-mystery-image-v1",
+  "artifact": {
+    "id": "fw-mystery-image-v1",
+    "mediaType": "application/octet-stream",
+    "digest": {
+      "algorithm": "SHA-256",
+      "digestHex": "f9b27032939d4d72b5cb88fa5c51d3c3eee0515a056cd728804b68ee7c66ab38",
+      "byteLength": 2048
+    },
+    "sizeBytes": 2048,
+    "storageLocation": {
+      "kind": "LOCAL_FS",
+      "locator": "/storage/emulated/0/Android-IDE-core/firmware/mystery.bin"
+    },
+    "verificationState": "UNVERIFIED",
+    "unknownFields": {}
+  },
+  "boardCompatibility": [],
+  "memoryLayout": {
+    "flashBytes": 2048
+  },
+  "signing": {
+    "signed": false,
+    "signatureScheme": null,
+    "verified": null
+  },
+  "unknownFields": {}
+}

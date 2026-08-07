@@ -1,0 +1,15 @@
+{
+  "snapshotId": "snap-5002",
+  "deviceIdentityId": "dev-generic-ch340-0012",
+  "connectionStateAtCapture": "DISCOVERED",
+  "firmwareArtifactId": null,
+  "firmwareDigest": null,
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "lastKnownGood": false,
+  "capturedAtUtc": "2026-08-07T10:11:00Z",
+  "unknownFields": {}
+}

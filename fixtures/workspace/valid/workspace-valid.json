@@ -1,0 +1,28 @@
+{
+  "workspaceId": "01J8ZK1M3P5R7T9V1X3Z5B7D9F",
+  "displayName": "Fonebrew constellation",
+  "createdAtUtc": "2026-07-01T08:00:00Z",
+  "projectIds": [
+    "01J8ZK3N5Q7S9U1W3Y5A7C9E1G",
+    "01J8ZK4P6R8T1V3X5Z7B9D1F3H"
+  ],
+  "activeProjectId": "01J8ZK3N5Q7S9U1W3Y5A7C9E1G",
+  "providerConnections": [
+    {
+      "providerId": "local-primary",
+      "providerKind": "LOCAL",
+      "state": "READY",
+      "lastTransitionAtUtc": "2026-08-07T09:00:00Z",
+      "detail": null
+    },
+    {
+      "providerId": "ssh-host-9f21e3",
+      "providerKind": "SSH",
+      "state": "DEGRADED",
+      "lastTransitionAtUtc": "2026-08-07T10:12:04Z",
+      "detail": "Latency above 2s on last three round trips; connection still usable."
+    }
+  ],
+  "recoverySnapshotId": "01J8ZM7Q9S1U3W5Y7A9C1E3G5J",
+  "unknownFields": {}
+}

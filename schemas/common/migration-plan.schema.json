@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/common/migration-plan.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. MigrationPlan per FB-RAT-COM-011 — describes how a reader/store moves from one schemaVersion of SOME OTHER contract to another (major or minor compatibility, per FB-RAT-COM-003), plus the data migration and rollback it requires. Typically carried as the `payload` of a ContractEnvelope<MigrationPlan> (see envelope.schema.json); `migrationId` below is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "MigrationPlan",
+  "type": "object",
+  "required": ["migrationId", "fromSchemaVersion", "toSchemaVersion", "compatibility", "dataMigration", "rollback"],
+  "properties": {
+    "migrationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this migration plan (FB-RAT-COM-002)."
+    },
+    "contractRef": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Stable identifier of the contract this plan migrates (e.g. a schema $id or a Kotlin type FQN), so one MigrationPlan is unambiguous about which schemaVersion sequence it applies to."
+    },
+    "fromSchemaVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "The schemaVersion this plan migrates away from."
+    },
+    "toSchemaVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "The schemaVersion this plan migrates to."
+    },
+    "compatibility": {
+      "type": "string",
+      "enum": ["MAJOR", "MINOR"],
+      "description": "Whether fromSchemaVersion→toSchemaVersion crosses a MAJOR boundary (old readers MUST reject the new payload per FB-RAT-COM-003 until they adopt this plan) or is MINOR (old readers preserve unknown fields and keep working unmigrated)."
+    },
+    "dataMigration": {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "description": "Ordered, human-legible migration steps a store/reader executes to move stored data from fromSchemaVersion's shape to toSchemaVersion's shape."
+        },
+        "reversible": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the data transformation described by `steps` is itself invertible (independent of whether a rollback plan is actually offered — see `rollback.possible`)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "rollback": {
+      "type": "object",
+      "required": ["possible", "steps"],
+      "properties": {
+        "possible": {
+          "type": "boolean",
+          "description": "Whether a rollback path is offered at all."
+        },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Ordered rollback steps. MUST be non-empty when possible=true; MUST be empty when possible=false (a plan MUST NOT claim rollback steps it does not actually support)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "possible": { "const": true } }, "required": ["possible"] },
+          "then": { "properties": { "steps": { "minItems": 1 } } }
+        },
+        {
+          "if": { "properties": { "possible": { "const": false } }, "required": ["possible"] },
+          "then": { "properties": { "steps": { "maxItems": 0 } } }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "issuedAtUtc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "default": null,
+      "description": "UTC instant this migration plan was authored (FB-RAT-COM-004)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,34 @@
+{
+  "id": "01J8ZB0000000000000000R2",
+  "targetId": "01J8ZA0000000000000000T1",
+  "operation": {
+    "operationClass": "AGENT_LOOP",
+    "command": "loop.run",
+    "args": ["--loop-id", "01J8ZL0000000000000000L1"],
+    "workingDirectory": null
+  },
+  "workingRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "environment": { "envVars": {} },
+  "secretHandles": [
+    { "handleId": "01J8ZH0000000000000000S1", "purpose": "anthropic.api_key" }
+  ],
+  "budget": {
+    "wallClockSeconds": null,
+    "maxOutputBytes": 20971520,
+    "sessionReauthorization": { "maxSessionSeconds": 1800, "requiresUserReauth": true },
+    "thermalStateObservabilityRequired": true,
+    "thermalPausePolicyRef": null
+  },
+  "authorityGrant": {
+    "grantId": "01J8ZG0000000000000000A2",
+    "scopes": ["execution.agentLoop.run"]
+  },
+  "expectedOutputs": [],
+  "idempotencyKey": null,
+  "sideEffectExternal": false,
+  "externalDuplicateBehavior": null,
+  "fgsType": "SPECIAL_USE",
+  "openEnded": true,
+  "specialUseJustification": "Runs an open-ended agent Loop (GraphRunner) the user explicitly started from Develop > Loops; no standard FGS type fits agent-loop work per Android's foreground-service-type guidance.",
+  "unknownFields": {}
+}

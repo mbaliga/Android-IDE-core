@@ -1,0 +1,46 @@
+Fixture: fixtures/devices/adversarial/disconnect-mid-flash.adversarial.json
+Schema: schemas/devices/operation.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+DeviceOperation op-4002 reports state: SUCCEEDED with verification.state: VERIFIED
+(method: READ_BACK_HASH, verifiedAtUtc: 2026-08-07T10:31:00Z) — satisfying this schema's own
+SUCCEEDED-requires-VERIFIED structural rule. But three internal signals contradict a clean,
+verified success:
+
+  1. protocol.progressPercent is 62, not 100 — the transfer this operation describes was not
+     complete.
+  2. receipt.sideEffects[0].description reads "Flash memory partially overwritten before
+     disconnect" — the receipt's own free text names a disconnect mid-transfer.
+  3. A READ_BACK_HASH verification requires exchanging protocol bytes with a currently-connected
+     device; a device that disconnected mid-write (as sideEffects[0] states) cannot have produced
+     a genuine read-back at verifiedAtUtc.
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/devices/operation.schema.json has no cross-field rule tying `protocol.progressPercent` to
+`state`, and no way to authenticate that a claimed `verification.method` was genuinely performed
+against a live device rather than fabricated by a producer optimistically assuming the transfer
+"probably finished." The SUCCEEDED-requires-VERIFIED if/then is satisfied by the mere PRESENCE of
+`verification.state: VERIFIED` — it cannot verify the verification itself really happened.
+Likewise nothing here cross-references the underlying DeviceConnection (schemas/devices/
+connection.schema.json) — which, in the real scenario this fixture stands in for, would have
+already transitioned to DISCONNECTED or STATE_UNKNOWN by the time this operation record was
+written.
+
+REQUIRED REAL BEHAVIOR (FB-RAT-DEV-006 — disconnect after erase but before verification is
+FAILED_SIDE_EFFECTS_POSSIBLE or TARGET_STATE_UNKNOWN, never generic failure, and never a
+fabricated success)
+
+A real Device Broker implementation MUST watch the underlying DeviceConnection's state alongside
+any in-flight DeviceOperation whose `protocol.sideEffectsPossible` is true. The instant that
+connection transitions to DISCONNECTED or STATE_UNKNOWN while a destructive transfer is in
+flight (progressPercent < 100, verification not yet performed), the operation MUST be resolved to
+FAILED_SIDE_EFFECTS_POSSIBLE (if the broker has enough information to confirm side effects
+occurred, as this fixture's own receipt text implies) or TARGET_STATE_UNKNOWN (if it does not) —
+and MUST NOT be allowed to reach SUCCEEDED with a VERIFIED verification result under any
+circumstances, since VERIFIED requires a genuine, freshly-performed protocol exchange against a
+device that is actually still connected at the moment of verification.
+
+Rejection code: DEVICE_VERIFICATION_AFTER_DISCONNECT_REJECTED
+Correct terminal state: FAILED_SIDE_EFFECTS_POSSIBLE or TARGET_STATE_UNKNOWN — never SUCCEEDED.

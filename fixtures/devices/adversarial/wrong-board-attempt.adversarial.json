@@ -1,0 +1,36 @@
+{
+  "operationId": "op-4001",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0046",
+  "operationKind": "FLASH",
+  "artifactId": "fw-esp32-devkitc-blink-v9",
+  "preconditions": {
+    "identityConfidenceAtLeast": "CONFIRMED",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9030",
+    "destructiveActionExplicitlyAuthorized": true,
+    "authorizedPrincipal": "agent-run:wp1-device-flash-4001",
+    "authorizedAtUtc": "2026-08-07T11:20:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 15,
+    "sideEffectsPossible": true
+  },
+  "state": "IN_PROGRESS",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": null,
+  "unknownFields": {}
+}

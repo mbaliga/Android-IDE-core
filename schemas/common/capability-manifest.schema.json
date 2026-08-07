@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/common/capability-manifest.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. CapabilityManifest per FB-RAT-COM-011 — used by LSP/DAP/execution/devices/model providers/extensions to declare supported operations, limits, versions, and target requirements. Typically carried as the `payload` of a ContractEnvelope<CapabilityManifest> (see envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc from that outer envelope; `manifestId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId (a manifest can be re-wrapped in a fresh envelope on re-issue without changing identity).",
+  "title": "CapabilityManifest",
+  "type": "object",
+  "required": ["manifestId", "subjectKind", "supportedOperations", "limits", "versions"],
+  "properties": {
+    "manifestId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this manifest (FB-RAT-COM-002), independent of the subject's display name."
+    },
+    "subjectKind": {
+      "type": "string",
+      "enum": ["LSP", "DAP", "EXECUTION", "DEVICE", "MODEL_PROVIDER", "EXTENSION"],
+      "description": "Which capability-ladder family this manifest describes."
+    },
+    "subjectId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Stable ID of the concrete subject (a specific language server, a specific device, a specific model provider) this manifest was produced for (FB-RAT-COM-002)."
+    },
+    "supportedOperations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Operation names the subject claims support for, e.g. 'textDocument/completion' (LSP), 'device.flash' (DEVICE), 'model.stream' (MODEL_PROVIDER). MAY be empty for a subject that is reachable but currently offers no operations (e.g. mid-handshake)."
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": { "type": ["number", "string", "boolean"] },
+      "description": "Freeform numeric/string/boolean limits (e.g. maxConcurrentOperations, maxPayloadBytes, rateLimitPerMinute). Kept as an open map because limit vocabulary is subject-kind-specific; a subject-kind-specific profile document MAY narrow this with its own JSON Schema `allOf`."
+    },
+    "versions": {
+      "type": "object",
+      "required": ["subjectVersion"],
+      "properties": {
+        "subjectVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The concrete subject's own version string (e.g. the language server's version, the device firmware version, the model provider API version)."
+        },
+        "protocolVersion": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Wire-protocol version, when the subject kind speaks one (e.g. LSP/DAP protocol version)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "targetRequirements": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": true,
+      "description": "Environment preconditions for this subject to function (minSdk, abi, os, network reachability, minimum RAM, etc.). Open map, subject-kind-specific — see FB-RAT-STR-007 (16GB ARM64 flagship benchmark target) for the kind of value this typically records for on-device subjects."
+    },
+    "producer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 },
+            "instanceId": { "type": ["string", "null"] }
+          },
+          "additionalProperties": true
+        },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Optional inline ProducerRef, when this manifest is consumed outside a ContractEnvelope wrapper (e.g. embedded in a larger response body). Prefer the outer envelope's producer when one is present."
+    },
+    "issuedAtUtc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "default": null,
+      "description": "UTC instant this manifest was issued, when distinct from the outer envelope's createdAtUtc (FB-RAT-COM-004) — e.g. a manifest cached and re-wrapped in a fresh envelope keeps its original issuedAtUtc."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true
+}

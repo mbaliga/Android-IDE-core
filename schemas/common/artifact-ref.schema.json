@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ArtifactRef per FB-RAT-COM-011 — a digest-addressed reference to a byte artifact (build output, imported file, model weights, log bundle, etc.). Typically carried as the `payload` of a ContractEnvelope<ArtifactRef> (see envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc from that outer envelope; `id` below is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "ArtifactRef",
+  "type": "object",
+  "required": ["id", "mediaType", "digest", "sizeBytes", "storageLocation", "verificationState"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this artifact (FB-RAT-COM-002), independent of storageLocation or filename — a moved or re-hosted artifact keeps the same id."
+    },
+    "mediaType": {
+      "type": "string",
+      "pattern": "^[\\w.+-]+/[\\w.+-]+$",
+      "description": "IANA media type, e.g. 'application/json', 'application/zip', 'application/octet-stream'."
+    },
+    "digest": { "$ref": "#/$defs/IntegrityRef" },
+    "sizeBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Exact byte length of the artifact (FB-RAT-COM-005) — MUST equal `digest.byteLength`; kept as a separate top-level field because ArtifactRef is frequently filtered/sorted by size without needing to reach into `digest`."
+    },
+    "producerReceipt": {
+      "oneOf": [
+        { "$ref": "#/$defs/ProducerReceiptRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Provenance of this artifact (FB-RAT-COM-008 — 'every execution/model/import result records source location, project revision, initiating principal, evidence links'). Null only for artifacts predating this convention or synthesized for a fixture/test; a real producer MUST populate it."
+    },
+    "storageLocation": {
+      "type": "object",
+      "required": ["kind", "locator"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["LOCAL_FS", "CONTENT_ADDRESSED_STORE", "GIT_HOST", "REMOTE_URL"]
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kind-specific locator string: an absolute local path (LOCAL_FS), a CAS key (CONTENT_ADDRESSED_STORE), a git blob/tree ref (GIT_HOST, per the REST-only GitContentsApi/GitTreeApi convention — no JGit dependency in this constellation), or a URL (REMOTE_URL). A reader MUST treat this as untrusted input and MUST reject a LOCAL_FS locator containing a '..' path-traversal segment or resolving outside the expected root."
+        }
+      },
+      "additionalProperties": true
+    },
+    "verificationState": {
+      "type": "string",
+      "enum": ["UNVERIFIED", "VERIFIED", "FAILED", "EXPIRED"],
+      "description": "Whether digest+sizeBytes have been independently re-checked against the bytes at storageLocation since this ArtifactRef was produced. A consumer MUST NOT treat UNVERIFIED the same as VERIFIED for any security- or integrity-sensitive decision."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ProducerRef": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "ProducerReceiptRef": {
+      "type": "object",
+      "required": ["receiptObjectId", "producer", "sourceLocation", "projectRevision", "initiatingPrincipal"],
+      "properties": {
+        "receiptObjectId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The ContractEnvelope.objectId of the ExecutionReceipt/ImportReceipt that produced this artifact (FB-RAT-COM-002)."
+        },
+        "producer": { "$ref": "#/$defs/ProducerRef" },
+        "sourceLocation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the artifact came from (file path, URL, device path, git ref) — FB-RAT-COM-008 provenance minimum."
+        },
+        "projectRevision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project/repo revision (e.g. git commit SHA) in effect when this artifact was produced — FB-RAT-COM-008."
+        },
+        "initiatingPrincipal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who or what initiated production of this artifact (user id, service account, agent name) — FB-RAT-COM-008."
+        },
+        "evidenceLinks": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional links/refs to supporting evidence (logs, receipts, screenshots) — FB-RAT-COM-008."
+        }
+      },
+      "additionalProperties": true
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": ["SHA-256", "SHA-384", "SHA-512"],
+          "description": "Digest algorithm; SHA-256 or stronger only (FB-RAT-COM-005)."
+        },
+        "digestHex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]+$",
+          "description": "Lowercase-hex digest of the exact bytes described by byteLength."
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact byte length of the digested content (FB-RAT-COM-005)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-256" } } },
+          "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } }
+        },
+        {
+          "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-384" } } },
+          "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } }
+        },
+        {
+          "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-512" } } },
+          "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } }
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

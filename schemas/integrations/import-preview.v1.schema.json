@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/import-preview.v1.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ImportPreview is named but never specified in the source pack (WP-1 task brief §6) — designed here as step 4 ('Preview') of the six-step manual import grammar (INT-011, docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md): new/changed/duplicate/conflicting/rejected records, computed AFTER Validate (step 3) and BEFORE any mutation, so the user can make an informed Confirm decision (step 5, INT-007 'no silent partial import'). schemaVersion pinned to major 1, FB-RAT-COM-003.",
+  "title": "ImportPreview",
+  "description": "The read-only preview Core computes for one source snapshot before any Incident/CustomerIssue/AuditFinding is created or mutated. Carries no side effects itself — it is what the user reviews at the Preview step, and what an eventual ImportReceipt (schemas/integrations/import-receipt.v1.schema.json) confirms a subset (or all) of, via `previewId`.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "previewId", "sourceType", "sourceDigest", "generatedAt",
+    "newRecords", "changedRecords", "duplicateRecords", "conflictingRecords", "rejectedRecords"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this preview shape. A reader MUST reject any schemaVersion whose major is not '1' (FB-RAT-COM-003)."
+    },
+    "previewId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this specific preview computation (FB-RAT-COM-002) — an ImportReceipt backlinks to this id, not to a re-derived preview."
+    },
+    "sourceType": { "$ref": "#/$defs/ImportSourceType" },
+    "sourceDigest": { "$ref": "#/$defs/IntegrityRef" },
+    "sourceLocation": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Where this snapshot was read from (a file path, or repo+branch+commit for the Assay lane) — provenance for the eventual receipt's backlink (FB-RAT-COM-008)."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this preview was computed (FB-RAT-COM-004)."
+    },
+    "newRecords": { "type": "array", "items": { "$ref": "#/$defs/PreviewNewRecord" } },
+    "changedRecords": { "type": "array", "items": { "$ref": "#/$defs/PreviewChangedRecord" } },
+    "duplicateRecords": { "type": "array", "items": { "$ref": "#/$defs/PreviewDuplicateRecord" } },
+    "conflictingRecords": { "type": "array", "items": { "$ref": "#/$defs/PreviewConflictingRecord" } },
+    "rejectedRecords": { "type": "array", "items": { "$ref": "#/$defs/PreviewRejectedRecord" } },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ImportSourceType": {
+      "type": "string",
+      "enum": ["CSAPP_ISSUES_MANIFEST", "ASSAY_REPO_INDEX"],
+      "description": "Which lane produced the snapshot this preview/receipt concerns — CSApp's issues-manifest.v1 file, or Assay's assay-index.v1 repo output."
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true,
+      "description": "Duplicated from schemas/common/artifact-ref.schema.json's $defs/IntegrityRef per this repo's cross-file convention (docs/ratified/COMMON_CONVENTIONS.md §5) rather than $ref'd across files. Digest of the EXACT bytes read at snapshot time (FB-RAT-COM-005) — recomputed and compared by Core before trusting the source; a mismatch is IMPORT_DIGEST_MISMATCH."
+    },
+    "ImportErrorCode": {
+      "description": "The closed IMPORT_* / PROOF_MISSING vocabulary plus the open IMPORT_INVALID_<FIELD> record-level family (registry-hygiene fix — see docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md's error taxonomy and docs/ratified/IMPORT_RECEIPT_V1.md).",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "IMPORT_UNSUPPORTED_MAJOR", "IMPORT_PROJECT_MISMATCH", "IMPORT_DIGEST_MISMATCH",
+            "IMPORT_DUPLICATE_SNAPSHOT", "IMPORT_RECORD_CONFLICT", "IMPORT_PARTIAL_SOURCE",
+            "IMPORT_SOURCE_UNAVAILABLE", "PROOF_MISSING"
+          ]
+        },
+        { "type": "string", "pattern": "^IMPORT_INVALID_[A-Z0-9_]+$" }
+      ]
+    },
+    "PreviewNewRecord": {
+      "type": "object",
+      "required": ["sourceId", "recordKind", "summary"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "recordKind": { "type": "string", "enum": ["CUSTOMER_ISSUE", "AUDIT_FINDING"] },
+        "summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "PreviewChangedRecord": {
+      "type": "object",
+      "required": ["sourceId", "existingIncidentId", "changedFields", "summary"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "existingIncidentId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The Incident this source record previously produced (INT-016 — imports create/update Incidents, never Tasks)."
+        },
+        "changedFields": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "PreviewDuplicateRecord": {
+      "type": "object",
+      "required": ["sourceId", "priorReceiptId"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "priorReceiptId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The ImportReceipt.receiptId that already imported this exact record at this exact digest (IMPORT_DUPLICATE_SNAPSHOT — view-only, INT-006)."
+        },
+        "priorImportedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+      },
+      "additionalProperties": true
+    },
+    "PreviewConflictingRecord": {
+      "type": "object",
+      "required": ["sourceId", "conflictingFields", "summary"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "existingIncidentId": { "type": ["string", "null"], "default": null },
+        "conflictingFields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Fields where the source's value is incompatible with the existing record's identity data (IMPORT_RECORD_CONFLICT) — requires an explicit user choice; both values are retained in the eventual receipt, never silently overwritten (INT-024)."
+        },
+        "summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "PreviewRejectedRecord": {
+      "type": "object",
+      "required": ["sourceLocation", "errorCode"],
+      "properties": {
+        "sourceLocation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where within the source this record was found (e.g. an issue id, a SARIF result pointer, a JSON Pointer path) — NOT a filesystem path in the general case, but a reader resolving one into a filesystem/repo path MUST apply the same '..'-segment rejection as any other LOCAL_FS-style locator (see fixtures/integrations/adversarial/import-receipt-path-traversal-sourcelocation.adversarial.json)."
+        },
+        "errorCode": { "$ref": "#/$defs/ImportErrorCode" },
+        "detail": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    }
+  }
+}

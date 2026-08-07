@@ -1,0 +1,19 @@
+{
+  "handleId": "01J8ZH0000000000000000H1",
+  "requestId": "01J8ZB0000000000000000R1",
+  "targetId": "01J8ZA0000000000000000T1",
+  "state": "SUCCEEDED",
+  "stateReason": null,
+  "enteredStateAtUtc": "2026-08-07T09:22:11Z",
+  "heartbeat": {
+    "lastHeartbeatUtc": "2026-08-07T09:22:11Z",
+    "heartbeatIntervalSeconds": 15,
+    "missedConsecutive": 0
+  },
+  "cancellationMode": "COOPERATIVE",
+  "knownStoppedDescription": null,
+  "reconnectToken": null,
+  "reconnectAttempt": null,
+  "resumedFromHandleId": null,
+  "unknownFields": {}
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "01J9B0000000000000000RC1",
+  "sourceType": "CSAPP_ISSUES_MANIFEST",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "1ec02cdcc218b1fc73ccfcb61d70faf443998c5342631c4bbae16c50df498d2b",
+    "byteLength": 812
+  },
+  "sourceLocation": "csapp-export://csapp-proj-aarso-mobile/2026-08-01T09:00:00Z",
+  "previewId": "01J9C0000000000000000PV1",
+  "initiatedBy": "studio-user:jordan",
+  "decision": "FULL",
+  "createdAtUtc": "2026-08-01T09:05:00Z",
+  "created": [
+    { "sourceId": "csapp-iss-1001", "incidentId": "01J9D0000000000000000IN1" },
+    { "sourceId": "csapp-iss-1002", "incidentId": "01J9D0000000000000000IN2" }
+  ],
+  "updated": [],
+  "duplicates": [],
+  "rejected": [],
+  "unknownFields": {}
+}

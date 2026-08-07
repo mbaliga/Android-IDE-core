@@ -1,0 +1,28 @@
+Structural validation result: PASSES schemas/common/capability-manifest.schema.json.
+`supportedOperations` is only constrained to be an array of non-empty strings — JSON
+Schema has no per-subjectKind operation vocabulary to check against, so this fixture is
+adversarial at the semantic/authority layer only.
+
+Required behavior from a real implementation (not just structural validation):
+  1. A capability-authority engine (see WP-0 survey (c) — Execution Contract + Authority
+     engine, create-new) MUST maintain a fixed operation-name vocabulary per subjectKind
+     (e.g. MODEL_PROVIDER -> 'model.*', DEVICE -> 'device.*', LSP -> 'textDocument/*' /
+     'workspace/*', DAP -> debug-adapter operation names, EXECUTION -> 'exec.*',
+     EXTENSION -> 'ext.*').
+  2. Any operation name in `supportedOperations` outside the manifest's own subjectKind
+     vocabulary — here a MODEL_PROVIDER manifest claiming 'device.flash' and the
+     unrecognized 'system.exec' — MUST be rejected or stripped before this manifest is
+     used to grant capability to anything. Silently trusting the full list is a contract
+     bypass (FB-RAT-COM-012) and a privilege-escalation vector: a compromised or buggy
+     model-provider integration could otherwise claim device-flash or arbitrary-exec
+     capability it was never authorized for.
+  3. Recommended ErrorEnvelope for the rejection:
+       code: "CAPABILITY_VOCABULARY_VIOLATION"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Reject this manifest; do not grant any operation outside the subjectKind vocabulary. Escalate to the producer named in ProducerRef for investigation."
+       userMessage: "A capability was refused because the requesting component asked for permissions it isn't allowed to have."
+  4. `system.exec` in particular has no legitimate vocabulary anywhere in this
+     constellation (no subjectKind maps to raw system exec) and MUST always be rejected,
+     independent of subjectKind.

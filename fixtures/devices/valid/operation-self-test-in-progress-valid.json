@@ -1,0 +1,36 @@
+{
+  "operationId": "op-3002",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0045",
+  "operationKind": "SELF_TEST",
+  "artifactId": null,
+  "preconditions": {
+    "identityConfidenceAtLeast": "CONFIRMED",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9002",
+    "destructiveActionExplicitlyAuthorized": false,
+    "authorizedPrincipal": "agent-run:wp1-device-selftest-3002",
+    "authorizedAtUtc": "2026-08-07T10:20:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 40,
+    "sideEffectsPossible": false
+  },
+  "state": "IN_PROGRESS",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": null,
+  "unknownFields": {}
+}

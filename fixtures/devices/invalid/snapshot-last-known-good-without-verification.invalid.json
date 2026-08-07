@@ -1,0 +1,15 @@
+{
+  "snapshotId": "snap-5003",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionStateAtCapture": "READY",
+  "firmwareArtifactId": "fw-arduino-uno-blink-v3",
+  "firmwareDigest": null,
+  "verification": {
+    "state": "FAILED",
+    "method": "READ_BACK_HASH",
+    "verifiedAtUtc": "2026-08-07T10:12:00Z"
+  },
+  "lastKnownGood": true,
+  "capturedAtUtc": "2026-08-07T10:12:01Z",
+  "unknownFields": {}
+}

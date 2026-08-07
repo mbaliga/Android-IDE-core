@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/project.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Project per FB-RAT-WS-001 (Workspace Kernel is authoritative for projects). Typically carried as the `payload` of a ContractEnvelope<Project> (see schemas/common/envelope.schema.json); `projectId` below is this object's own FB-RAT-COM-002 stable ID. `resourceUri`'s ResourceUri shape ($defs below) mirrors resource-uri.schema.json — duplicated locally rather than cross-file $ref'd, same standalone-file tradeoff COMMON_CONVENTIONS.md documents for IntegrityRef; the two copies MUST be kept in sync by hand.",
+  "title": "Project",
+  "type": "object",
+  "required": ["projectId", "workspaceId", "displayName", "rootUri"],
+  "properties": {
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this project (FB-RAT-COM-002), independent of `displayName` or `rootUri` — moving or renaming a project's root MUST NOT change this."
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The owning `Workspace.workspaceId` (FB-RAT-WS-001). A Project MUST belong to exactly one Workspace."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-legible project name. Display-only; never an identity key."
+    },
+    "rootUri": { "$ref": "#/$defs/ResourceUri" },
+    "repositoryStateId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Stable ID of this project's RepositoryState, when the project's root is a git-tracked working tree. Null for a project that is not (yet) git-tracked. RepositoryState's full shape is documented in WORKSPACE_KERNEL_SPEC.md §5 (no standalone repository-state.schema.json in this work package — see that document's scope note) rather than schema-validated here; this field is only the forward-pointing stable-ID link."
+    },
+    "taskDefinitionIds": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Stable `TaskDefinition.taskDefinitionId` values scoped to this project (FB-RAT-WS-001 — the kernel is authoritative for tasks). TaskDefinition's full shape is documented in WORKSPACE_KERNEL_SPEC.md §5, not schema-validated in this work package."
+    },
+    "languageSessionIds": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Stable `LanguageSession.languageSessionId` values currently active for this project (FB-RAT-WS-001 — the kernel is authoritative for language sessions). LanguageSession's full shape is documented in WORKSPACE_KERNEL_SPEC.md §5, not schema-validated in this work package."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ResourceUri": {
+      "type": "object",
+      "required": ["provider", "raw"],
+      "properties": {
+        "provider": { "type": "string", "enum": ["LOCAL", "SAF", "SSH", "SNAPSHOT", "VIRTUAL"] },
+        "raw": { "type": "string", "minLength": 1, "pattern": "^(local|saf|ssh|snapshot|virtual)://\\S+$" },
+        "displayPath": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "LOCAL" } } }, "then": { "properties": { "raw": { "pattern": "^local://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SAF" } } }, "then": { "properties": { "raw": { "pattern": "^saf://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SSH" } } }, "then": { "properties": { "raw": { "pattern": "^ssh://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SNAPSHOT" } } }, "then": { "properties": { "raw": { "pattern": "^snapshot://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "VIRTUAL" } } }, "then": { "properties": { "raw": { "pattern": "^virtual://\\S+$" } } } }
+      ]
+    }
+  }
+}

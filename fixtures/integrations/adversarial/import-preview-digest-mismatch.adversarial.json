@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "previewId": "01J9C0000000000000000PVB",
+  "sourceType": "CSAPP_ISSUES_MANIFEST",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "00000000000000000000000000000000000000000000000000000000000000ff",
+    "byteLength": 1084
+  },
+  "sourceLocation": "fixtures/integrations/valid/issues-manifest-baseline-valid.json",
+  "generatedAt": "2026-08-06T10:05:00Z",
+  "newRecords": [
+    { "sourceId": "csapp-iss-1001", "recordKind": "CUSTOMER_ISSUE", "summary": "Crash on markdown-heavy reply (SEV2)" }
+  ],
+  "changedRecords": [],
+  "duplicateRecords": [],
+  "conflictingRecords": [],
+  "rejectedRecords": [],
+  "unknownFields": {}
+}

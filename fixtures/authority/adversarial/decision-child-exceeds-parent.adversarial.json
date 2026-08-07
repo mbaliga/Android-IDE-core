@@ -1,0 +1,13 @@
+{
+  "decisionId": "decision-adv-0001-child-exceeds-parent",
+  "requestObjectId": "devreq-0501-flash-from-loop-run",
+  "requestingPrincipalId": "principal-loop-run-0482",
+  "requestedCapabilityId": "fb.device.flash",
+  "requestedResourceScope": { "kind": "DEVICE", "locator": "usb-device-arduino-uno-01" },
+  "matchedGrantId": null,
+  "outcome": "DENY",
+  "reasonCode": "AUTHORITY_CHILD_EXCEEDS_PARENT",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-01T02:05:00Z",
+  "evidenceLinks": ["principal-loop-run-0482", "principal-user-jordan-01", "grant-repo-read-core-0001"]
+}

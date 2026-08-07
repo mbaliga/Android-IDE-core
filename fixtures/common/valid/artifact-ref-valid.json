@@ -1,0 +1,30 @@
+{
+  "id": "01J8Z4K9P3R5T7V9W1X3Y5Z7AB",
+  "mediaType": "application/vnd.android.package-archive",
+  "digest": {
+    "algorithm": "SHA-256",
+    "digestHex": "7743a49bf42f5b901f4abb34e588ed0f860fef14766f96d0709c81f7afbe4273",
+    "byteLength": 40
+  },
+  "sizeBytes": 40,
+  "producerReceipt": {
+    "receiptObjectId": "01J8Z5M1Q4S6U8W1Y2A4C6E8GH",
+    "producer": {
+      "name": "core-engine.builds.ci-trigger",
+      "version": "0.13.0",
+      "instanceId": null
+    },
+    "sourceLocation": "github.com/owner/android-ide-core@apk-dist:aarso-sd.apk",
+    "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6789",
+    "initiatingPrincipal": "gh-actions:build-test#4821",
+    "evidenceLinks": [
+      "https://github.com/owner/android-ide-core/actions/runs/4821"
+    ]
+  },
+  "storageLocation": {
+    "kind": "GIT_HOST",
+    "locator": "github.com/owner/android-ide-core:apk-dist:aarso-sd.apk"
+  },
+  "verificationState": "VERIFIED",
+  "unknownFields": {}
+}

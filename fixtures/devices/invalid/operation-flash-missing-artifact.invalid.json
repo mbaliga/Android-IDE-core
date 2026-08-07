@@ -1,0 +1,36 @@
+{
+  "operationId": "op-3010",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0045",
+  "operationKind": "FLASH",
+  "artifactId": null,
+  "preconditions": {
+    "identityConfidenceAtLeast": "PROBABLE",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": false,
+    "powerWiringAssumptionsAcknowledged": false
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9010",
+    "destructiveActionExplicitlyAuthorized": false,
+    "authorizedPrincipal": "user:owner",
+    "authorizedAtUtc": null
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": null,
+    "sideEffectsPossible": false
+  },
+  "state": "PENDING_PRECONDITIONS",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": null,
+  "unknownFields": {}
+}

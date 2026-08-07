@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0.0",
+  "runId": "01J9E0000000000000000RN1",
+  "generatedAt": "2026-08-06T02:14:00Z",
+  "tests": [
+    {
+      "testId": "01J9F0000000000000000PT1",
+      "targetFindingRef": "findings.sarif#/runs/0/results/2",
+      "testKind": "UNIT",
+      "sourcePath": "tests/proving/test_sql_injection_login.py",
+      "status": "PASSING",
+      "description": "Confirms the parameterized-query fix closes the SQLi finding.",
+      "lastRunAtUtc": "2026-08-06T02:13:40Z"
+    },
+    {
+      "testId": "01J9F0000000000000000PT2",
+      "targetFindingRef": "findings.sarif#/runs/0/results/5",
+      "testKind": "EXPLOIT_POC",
+      "sourcePath": "tests/proving/test_hardcoded_secret_poc.py",
+      "status": "FAILING",
+      "description": "Minimal reproduction showing the hardcoded secret is still readable.",
+      "lastRunAtUtc": "2026-08-06T02:13:55Z"
+    },
+    {
+      "testId": "01J9F0000000000000000PT3",
+      "targetFindingRef": "findings.sarif#/runs/0/results/6",
+      "testKind": "REGRESSION",
+      "sourcePath": "tests/proving/test_path_traversal_regression.py",
+      "status": "NOT_RUN",
+      "description": null,
+      "lastRunAtUtc": null
+    }
+  ],
+  "unknownFields": {}
+}

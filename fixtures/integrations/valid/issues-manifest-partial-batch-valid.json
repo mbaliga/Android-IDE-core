@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0.0",
+  "exportId": "01J9A0000000000000000EX3",
+  "exportedAt": "2026-08-04T09:00:00Z",
+  "producer": { "app": "csapp", "version": "2.4.1" },
+  "projectRef": { "externalId": "csapp-proj-aarso-mobile" },
+  "issues": [
+    {
+      "id": "csapp-iss-2001",
+      "title": "Export button unresponsive on tablet layout",
+      "detail": "Reproduces on a 10-inch tablet only; CSApp marks this export itself as a partial/incremental batch (see the accompanying note — this manifest models the source producer flagging the export run as partial, which surfaces as IMPORT_PARTIAL_SOURCE at Validate time, requiring explicit partial-import confirmation before Preview).",
+      "severity": "SEV4",
+      "reporterRef": "csapp-user-10101",
+      "occurredAt": "2026-08-04T07:10:00Z",
+      "updatedAt": "2026-08-04T07:10:00Z",
+      "sourceRevision": null,
+      "status": "open"
+    },
+    {
+      "id": "csapp-iss-2002",
+      "title": "Notification sound doesn't respect silent mode",
+      "detail": "Second record in the same partial batch export.",
+      "severity": "SEV3",
+      "reporterRef": "csapp-user-10102",
+      "occurredAt": "2026-08-04T07:20:00Z",
+      "updatedAt": "2026-08-04T07:20:00Z",
+      "sourceRevision": null,
+      "status": "open"
+    }
+  ],
+  "unknownFields": {
+    "producerPartialExportFlag": true
+  }
+}

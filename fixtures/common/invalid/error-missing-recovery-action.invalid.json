@@ -1,0 +1,9 @@
+{
+  "code": "GIT_AUTH_EXPIRED",
+  "severity": "ERROR",
+  "retryable": true,
+  "sideEffectState": "NONE",
+  "detail": "GitHub REST contents API returned 401 for GET /repos/o/r/contents/README.md; token last refreshed 2026-08-06T10:02:11Z.",
+  "userMessage": "Your GitHub connection expired. Reconnect it to keep syncing this project.",
+  "objectId": "01J8Z1FVZ0T7Q8W3B7K2R6M4XN"
+}

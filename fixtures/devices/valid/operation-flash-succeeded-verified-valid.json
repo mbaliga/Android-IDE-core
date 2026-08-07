@@ -1,0 +1,48 @@
+{
+  "operationId": "op-3001",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0045",
+  "operationKind": "FLASH",
+  "artifactId": "fw-arduino-uno-blink-v3",
+  "preconditions": {
+    "identityConfidenceAtLeast": "PROBABLE",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9001",
+    "destructiveActionExplicitlyAuthorized": true,
+    "authorizedPrincipal": "user:owner",
+    "authorizedAtUtc": "2026-08-07T10:05:01Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 100,
+    "sideEffectsPossible": true
+  },
+  "state": "SUCCEEDED",
+  "verification": {
+    "state": "VERIFIED",
+    "method": "READ_BACK_HASH",
+    "verifiedAtUtc": "2026-08-07T10:10:00Z"
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": {
+    "finishedAtUtc": "2026-08-07T10:10:01Z",
+    "exitState": "SUCCEEDED",
+    "sideEffects": [
+      {
+        "description": "Flash memory overwritten with new firmware image",
+        "reversible": false,
+        "occurredAtUtc": "2026-08-07T10:06:00Z"
+      }
+    ],
+    "errorEnvelope": null,
+    "snapshotAfterId": "snap-5001"
+  },
+  "unknownFields": {}
+}

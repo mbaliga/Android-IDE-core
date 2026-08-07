@@ -1,0 +1,26 @@
+{
+  "id": "01J8ZA0000000000000000T1",
+  "type": "LOCAL_ANDROID",
+  "displayName": "This phone",
+  "trust": "TRUSTED",
+  "hostFingerprint": null,
+  "arch": "arm64-v8a",
+  "capabilities": {
+    "manifestId": "01J8ZA0000000000000000C1",
+    "subjectKind": "EXECUTION",
+    "subjectId": "01J8ZA0000000000000000T1",
+    "supportedOperations": ["execution.oneShotCommand", "execution.terminalSession", "execution.deviceFlash"],
+    "limits": { "maxConcurrentOperations": 2, "maxOutputBytes": 52428800 },
+    "versions": { "subjectVersion": "0.13.0", "protocolVersion": null },
+    "targetRequirements": { "minSdk": 31, "abi": "arm64-v8a" },
+    "producer": { "name": "core-engine.execution.local-android", "version": "0.13.0", "instanceId": null },
+    "issuedAtUtc": "2026-08-07T08:00:00Z",
+    "unknownFields": {}
+  },
+  "connectivity": { "kind": "ALWAYS_ON_LOCAL", "lastSeenReachableUtc": "2026-08-07T09:00:00Z" },
+  "cost": { "tier": "FREE", "notes": null },
+  "provenanceStyle": "LOCAL_DEVICE_DIRECT",
+  "visibilityContract": null,
+  "fgsType": "NONE",
+  "unknownFields": {}
+}

@@ -1,0 +1,16 @@
+{
+  "grantId": "grant-adv-mismatch-0001",
+  "principalId": "principal-local-agent-persona-primary",
+  "capabilityIds": ["fb.device.flash"],
+  "authorityRung": "OBSERVE",
+  "resourceScope": { "kind": "DEVICE", "locator": "usb-device-arduino-uno-01" },
+  "constraints": { "purpose": "device-flash-firmware-update", "additionalConstraints": {} },
+  "expiresAtUtc": "2026-09-01T00:00:00Z",
+  "confirmationPolicy": { "mode": "ALWAYS_REQUIRED", "aboveRung": null },
+  "delegationRule": {
+    "delegable": false,
+    "maxDelegatedRung": null,
+    "transitiveDelegationAllowed": false,
+    "requiresFreshUserApprovalForWidening": true
+  }
+}

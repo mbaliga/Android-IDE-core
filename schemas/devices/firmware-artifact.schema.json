@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/devices/firmware-artifact.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. FirmwareArtifact per FB-RAT-DEV-002 (device object model). Typically carried as the `payload` of a ContractEnvelope<FirmwareArtifact> (see schemas/common/envelope.schema.json). `firmwareArtifactId` is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "FirmwareArtifact",
+  "description": "A firmware image that can be flashed to a device: the underlying byte artifact (digest, storage, verification, build provenance — reused wholesale from schemas/common/artifact-ref.schema.json, not redefined), which boards it is compatible with (FB-RAT-DEV-007 wrong-board block needs this), its memory-layout expectations, and its signing status. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §2/§4.",
+  "type": "object",
+  "required": ["firmwareArtifactId", "artifact", "boardCompatibility", "memoryLayout", "signing"],
+  "properties": {
+    "firmwareArtifactId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this firmware artifact (FB-RAT-COM-002), independent of `artifact.id` — the two are typically equal but are named separately because a FirmwareArtifact can in principle wrap a pointer to an ArtifactRef minted by a different producer (e.g. a build system) without adopting that producer's id scheme wholesale."
+    },
+    "artifact": {
+      "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json",
+      "description": "The underlying byte artifact — digest (FB-RAT-COM-005), sizeBytes, storageLocation, verificationState, and producerReceipt (FB-RAT-COM-008 build provenance — 'build receipt' in the object model brief), reused as-is from schemas/common/artifact-ref.schema.json. Not redefined here."
+    },
+    "boardCompatibility": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/BoardRef" },
+      "description": "FB-RAT-DEV-007 (wrong-board block): the boards this firmware image is declared compatible with. Non-empty — a firmware artifact with no declared compatibility target cannot be structurally checked against a DeviceIdentity.board before erase, which is exactly the check FB-RAT-DEV-007 requires; see fixtures/devices/adversarial/wrong-board-attempt.adversarial.json for the DeviceOperation-level fixture exercising the mismatch this field enables detecting."
+    },
+    "memoryLayout": {
+      "$ref": "#/$defs/MemoryLayout"
+    },
+    "signing": {
+      "$ref": "#/$defs/SigningInfo"
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "BoardRef": {
+      "type": "object",
+      "required": ["catalogRef", "displayName"],
+      "properties": {
+        "catalogRef": {
+          "type": "string",
+          "enum": ["ARDUINO_CLI", "PLATFORMIO", "UNCATALOGED"],
+          "description": "FB-RAT-DEV-009: interoperate with Arduino CLI/PlatformIO metadata, never own a separate board catalog. Duplicated locally from schemas/devices/device-identity.schema.json's $defs/CatalogRef per this repo's convention (docs/ratified/COMMON_CONVENTIONS.md §5) of duplicating small shared sub-shapes across schema files rather than cross-file $ref'ing into another document's $defs."
+        },
+        "catalogId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "The catalog's own board identifier, e.g. an Arduino CLI FQBN ('arduino:avr:uno') or a PlatformIO board id ('esp32dev')."
+        },
+        "displayName": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true,
+      "description": "A DeviceOperation's wrong-board check (FB-RAT-DEV-007) compares a DeviceIdentity.board entry against this array using (catalogRef, catalogId) when catalogId is non-null on both sides, falling back to displayName equality only when either side is UNCATALOGED — this matching rule is documented here because a JSON Schema structural constraint alone cannot express cross-object matching; docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4 states it as a provider-gate obligation."
+    },
+    "MemoryLayout": {
+      "type": "object",
+      "required": ["flashBytes"],
+      "properties": {
+        "flashBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Size in bytes of the flash region this firmware image is expected to occupy — a flash preflight (step 3) compares this against the target board's known flash capacity, when that capacity is available from the board catalog."
+        },
+        "ramBytes": { "type": ["integer", "null"], "minimum": 0, "default": null },
+        "eepromBytes": { "type": ["integer", "null"], "minimum": 0, "default": null },
+        "flashStartAddress": {
+          "type": ["string", "null"],
+          "pattern": "^0x[0-9A-Fa-f]+$",
+          "default": null,
+          "description": "Hex-string flash start address, when the target protocol requires one to be specified explicitly (e.g. some DFU/UF2 targets). Null when the protocol/board pairing determines this implicitly."
+        }
+      },
+      "additionalProperties": true
+    },
+    "SigningInfo": {
+      "type": "object",
+      "required": ["signed"],
+      "properties": {
+        "signed": {
+          "type": "boolean",
+          "description": "Whether this firmware image carries a cryptographic signature at all. Most hobbyist/embedded firmware (Arduino sketches, ESP32 app images built locally) is legitimately unsigned — `signed: false` is an expected, common, non-error state, not a defect."
+        },
+        "signatureScheme": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Free-text signature scheme identifier when signed=true (e.g. 'ESP32 Secure Boot V2', 'STM32 X-CUBE signed image'). Null when signed=false."
+        },
+        "verified": {
+          "type": ["boolean", "null"],
+          "default": null,
+          "description": "Whether the signature (when present) has been independently verified against a trusted key by this constellation, as opposed to merely being present. Null when signed=false, or when signed=true but verification has not yet been attempted."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

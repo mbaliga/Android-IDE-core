@@ -1,0 +1,16 @@
+{
+  "sequence": 412,
+  "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+  "resourceUri": {
+    "provider": "LOCAL",
+    "raw": "local:///storage/emulated/0/Android-IDE-core/README.md",
+    "unknownFields": {}
+  },
+  "opType": "INSERT",
+  "byteRange": { "startByte": 4821, "endByteExclusive": 4821 },
+  "content": null,
+  "recordedAtUtc": "2026-08-07T10:14:58Z",
+  "originKind": "AGENT",
+  "originPrincipal": "agent-run:wp1-workspace-kernel-4821",
+  "unknownFields": {}
+}

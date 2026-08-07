@@ -1,0 +1,14 @@
+{
+  "id": "01J8ZA0000000000000000TX",
+  "type": "SSH_HOST",
+  "displayName": "shady-box.example",
+  "trust": "TRUST_ON_FIRST_USE",
+  "hostFingerprint": "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "arch": "x86_64",
+  "capabilities": null,
+  "connectivity": { "kind": "INTERMITTENT_NETWORK", "lastSeenReachableUtc": null },
+  "cost": { "tier": "FREE", "notes": null },
+  "provenanceStyle": "USER_INITIATED_REMOTE",
+  "fgsType": "NONE",
+  "unknownFields": {}
+}

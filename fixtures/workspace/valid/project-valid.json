@@ -1,0 +1,19 @@
+{
+  "projectId": "01J8ZK3N5Q7S9U1W3Y5A7C9E1G",
+  "workspaceId": "01J8ZK1M3P5R7T9V1X3Z5B7D9F",
+  "displayName": "android-ide-core",
+  "rootUri": {
+    "provider": "SSH",
+    "raw": "ssh://host-9f21e3/home/dev/projects/android-ide-core",
+    "displayPath": "android-ide-core",
+    "unknownFields": {}
+  },
+  "repositoryStateId": "01J8ZN2S4U6W8Y1A3C5E7G9J1L",
+  "taskDefinitionIds": [
+    "01J8ZP4U6W8Y1A3C5E7G9J1L3N"
+  ],
+  "languageSessionIds": [
+    "01J8ZQ6W8Y1A3C5E7G9J1L3N5P"
+  ],
+  "unknownFields": {}
+}

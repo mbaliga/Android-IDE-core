@@ -1,0 +1,20 @@
+Structural validation result: PASSES schemas/common/envelope.schema.json.
+`integrity.digestHex` is a syntactically well-formed 64-hex-char SHA-256 string, so
+Draft202012Validator reports no structural error — this fixture is adversarial precisely
+because JSON Schema cannot recompute a hash over `payload` and compare it.
+
+Required behavior from a real implementation (not just structural validation):
+  1. On decode, recompute SHA-256 over the canonical serialized bytes of `payload` and
+     compare against `integrity.digestHex` byte-for-byte.
+  2. On mismatch, the envelope MUST be rejected before `payload` is trusted for any use
+     (FB-RAT-COM-005 integrity; FB-RAT-COM-012 no contract bypass — a caller that reads
+     `payload` without checking `integrity` first is bypassing the envelope).
+  3. Recommended ErrorEnvelope for the rejection:
+       code: "ENVELOPE_INTEGRITY_MISMATCH"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Re-fetch or re-produce the envelope from its source of truth; do not retry the same bytes."
+       userMessage: "This item failed an integrity check and was not used."
+  4. This check MUST run before any idempotencyKey-based dedupe logic touches `payload`,
+     so a corrupted envelope cannot poison retry/dedupe state.

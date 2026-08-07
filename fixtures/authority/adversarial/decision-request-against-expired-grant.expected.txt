@@ -1,0 +1,24 @@
+Scenario (FB-RAT-AUTH-005 "time-bound" + task-brief-required "grant-expiry case... must deny, not
+silently renew"):
+
+fixtures/authority/valid/grant-ssh-remote-exec-now-expired-valid.json (grantId
+grant-ssh-remote-exec-homepi-0009) declares expiresAtUtc="2026-07-01T00:00:00Z". This decision
+record's decidedAtUtc is "2026-08-07T09:00:00Z" — over five weeks after that grant expired — yet
+the request still cites it as matchedGrantId and the correct outcome is DENY.
+
+Both timestamps individually validate fine against the `date-time` format keyword; JSON Schema
+draft 2020-12 has no keyword that compares two `date-time` strings against each other (or against
+"now") to determine which is later. That comparison — "is decidedAtUtc after this grant's
+expiresAtUtc?" — is unavoidably a policy-engine runtime check, which is why a schema-valid record
+showing the WRONG outcome (e.g. ALLOW) would sail through structural validation undetected.
+
+Required real-implementation behavior:
+- MUST compare the current decision instant against `Grant.expiresAtUtc` for every grant it
+  resolves, on every check — not just once at grant-issuance time.
+- MUST return outcome=DENY, reasonCode=AUTHORITY_GRANT_EXPIRED for any request evaluated at or
+  after a matched grant's expiresAtUtc.
+- MUST NOT silently renew, auto-extend, or treat an expired grant as still active "since nothing
+  revoked it" — expiry is not equivalent to revocation and needs no separate revoke action to take
+  effect; per grant.schema.json's own expiresAtUtc description, continuing access after expiry
+  requires an entirely fresh Grant (new grantId, new expiresAtUtc), issued through the same
+  explicit issuance path as the original, never an implicit side effect of a late-arriving request.

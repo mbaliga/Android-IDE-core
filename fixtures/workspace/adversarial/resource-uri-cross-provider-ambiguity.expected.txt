@@ -1,0 +1,34 @@
+Structural validation result: each array element PASSES schemas/workspace/resource-uri.schema.json
+individually. (The array wrapper itself is a fixture-authoring convenience — resource-uri.schema.json
+describes one ResourceUri object; this file holds two so the pairing that creates the ambiguity risk
+is visible in one fixture.)
+
+Why this is adversarial rather than merely "two unrelated valid objects": both elements share the
+exact same `displayPath` ("Android-IDE-core/README.md") while pointing at two DIFFERENT real files —
+one on the device's local filesystem, one on a remote SSH-mirrored checkout. JSON Schema has no way
+to check "two objects elsewhere in the system must not be confused with each other" — that is a
+semantic obligation, not a structural one, exactly the class of thing this constellation's fixture
+format cannot fully verify (per the WP-1 task brief's instruction to name it here instead).
+
+Required behavior from a real implementation (not just structural validation), per FB-RAT-WS-002
+("local/SAF/SSH/snapshot/virtual MUST NOT share ambiguous raw paths"):
+  1. Any code path that establishes identity, equality, deduplication, cache-keying, or
+     access-control for a resource MUST key off the full `(provider, raw)` pair — never off
+     `displayPath` alone, and never off a path string with the provider scheme stripped.
+  2. A DocumentBuffer, RecoverySnapshot.bufferSnapshots entry, or BufferJournalEntry that
+     resolves `resourceUri` MUST treat these two fixture entries as two entirely unrelated
+     resources, even though a human-facing breadcrumb would legitimately render them
+     identically ("Android-IDE-core/README.md").
+  3. Recommended ErrorEnvelope if a resolver ever DOES detect it about to conflate two
+     distinct (provider, raw) pairs under one identity key (e.g. a cache implemented
+     incorrectly on displayPath):
+       code: "WORKSPACE_RESOURCE_IDENTITY_AMBIGUOUS"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Re-key the cache/index on (provider, raw) instead of displayPath; treat the two entries as distinct resources."
+       userMessage: "Two files with the same name were about to be treated as the same file. This has been stopped to avoid overwriting the wrong one."
+  4. A UI surface that shows `displayPath` to a user in a context where two providers could
+     collide (e.g. a search results list mixing LOCAL and SSH results) SHOULD additionally
+     surface the provider (an icon plus text label per FB-RAT-COM-009 — never an icon alone)
+     so a human reader also has the disambiguating signal, not just the machine.

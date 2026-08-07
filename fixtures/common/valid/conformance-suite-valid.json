@@ -1,0 +1,50 @@
+{
+  "suiteId": "01J8Z7P5T8V1X3Z5B7D9F1H3JK",
+  "name": "CommonContracts envelope+error conformance",
+  "contractRef": "schemas/common/envelope.schema.json",
+  "testClasses": [
+    {
+      "testClass": "GOLDEN_SERIALIZATION",
+      "jvmTestable": "YES",
+      "notes": null
+    },
+    {
+      "testClass": "STATE_TRANSITION",
+      "jvmTestable": "YES",
+      "notes": "VerificationState/SideEffectState enum transitions"
+    },
+    {
+      "testClass": "ADVERSARIAL",
+      "jvmTestable": "YES",
+      "notes": "unsupported-major, digest-mismatch, path-traversal fixtures"
+    },
+    {
+      "testClass": "PROVIDER_CONFORMANCE",
+      "jvmTestable": "PARTIAL",
+      "notes": "cloud provider SSE shape checkable; on-device llama.cpp path is owner-verified"
+    },
+    {
+      "testClass": "RECOVERY",
+      "jvmTestable": "PARTIAL",
+      "notes": "decode-time recovery logic is JVM-testable; crash-recovery UI flow is device-only"
+    },
+    {
+      "testClass": "PERFORMANCE",
+      "jvmTestable": "NO",
+      "notes": "no device/emulator in the build container"
+    },
+    {
+      "testClass": "ACCESSIBILITY",
+      "jvmTestable": "PARTIAL",
+      "notes": "userMessage presence/non-emptiness is JVM-testable; screen-reader behavior is device-only"
+    },
+    {
+      "testClass": "COMPATIBILITY",
+      "jvmTestable": "YES",
+      "notes": "MigrationPlan fixtures + reject-unknown-major fixture"
+    }
+  ],
+  "fixtureDirectoryRef": "fixtures/common",
+  "definitionOfReady": true,
+  "unknownFields": {}
+}

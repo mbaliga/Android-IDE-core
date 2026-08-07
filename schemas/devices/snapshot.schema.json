@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/devices/snapshot.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceSnapshot per FB-RAT-DEV-002 (device object model) and FB-RAT-DEV-005 (verification before good state). Typically carried as the `payload` of a ContractEnvelope<DeviceSnapshot> (see schemas/common/envelope.schema.json). `snapshotId` is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "DeviceSnapshot",
+  "description": "A point-in-time belief about what firmware a device is running and whether that belief is verified. FB-RAT-DEV-005: update last-known-good only after protocol/read-back/version/self-test verification — `lastKnownGood` is structurally forced false unless `verification.state` is VERIFIED. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §5.",
+  "type": "object",
+  "required": ["snapshotId", "deviceIdentityId", "connectionStateAtCapture", "verification", "lastKnownGood", "capturedAtUtc"],
+  "properties": {
+    "snapshotId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this snapshot (FB-RAT-COM-002). Snapshots are append-only (FB-RAT-COM-006, general convention) — a corrected belief about device state is a NEW snapshot, never an in-place edit of an old one."
+    },
+    "deviceIdentityId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References the DeviceIdentity.deviceIdentityId this snapshot describes (schemas/devices/device-identity.schema.json)."
+    },
+    "connectionStateAtCapture": {
+      "type": "string",
+      "enum": ["DISCOVERED", "PERMISSION_REQUIRED", "CONNECTING", "READY", "BOOTLOADER", "BUSY", "DISCONNECTED", "STATE_UNKNOWN", "UNSUPPORTED"],
+      "description": "The DeviceConnection.state (schemas/devices/connection.schema.json) at the instant this snapshot was captured. Duplicated locally per this repo's shared-sub-shape convention (docs/ratified/COMMON_CONVENTIONS.md §5)."
+    },
+    "firmwareArtifactId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "References the FirmwareArtifact.firmwareArtifactId this snapshot believes is currently flashed on the device, when known. Null when no firmware identity is known (e.g. a freshly-discovered device before any flash/read-back has happened in this constellation's history)."
+    },
+    "firmwareDigest": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntegrityRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "The digest actually read back from the device (when the verification method supports a read-back digest), independent of `firmwareArtifactId` — this is what was directly OBSERVED on-device, which MAY differ from the artifact's own recorded digest if verification failed or used a different method (e.g. a version-string handshake that doesn't produce a full-image digest)."
+    },
+    "verification": {
+      "$ref": "#/$defs/SnapshotVerification"
+    },
+    "lastKnownGood": {
+      "type": "boolean",
+      "description": "FB-RAT-DEV-005: true only once `verification.state` is VERIFIED (see the if/then below) — a snapshot MUST NOT claim last-known-good status on the strength of an operation merely 'completing' without independent verification."
+    },
+    "capturedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this snapshot was captured (FB-RAT-COM-004)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "lastKnownGood": { "const": true } },
+        "required": ["lastKnownGood"]
+      },
+      "then": {
+        "properties": { "verification": { "type": "object", "required": ["state"], "properties": { "state": { "const": "VERIFIED" } } } }
+      },
+      "$comment": "FB-RAT-DEV-005: lastKnownGood=true requires verification.state=VERIFIED — a snapshot cannot claim good-state status from an unverified or failed check."
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "SnapshotVerification": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["NOT_PERFORMED", "VERIFIED", "FAILED", "SKIPPED"],
+          "description": "Mirrors schemas/execution/receipt.schema.json's verification.state vocabulary for the same FB-RAT-EXE-009-shaped reason applied to devices: success/completion and verification are kept structurally separate."
+        },
+        "method": {
+          "type": ["string", "null"],
+          "enum": ["PROTOCOL_RESPONSE", "READ_BACK_HASH", "VERSION_HANDSHAKE", "SELF_TEST", null],
+          "default": null,
+          "description": "Flash contract step 6's four verification methods (docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4). Null when state is NOT_PERFORMED."
+        },
+        "verifiedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+      },
+      "additionalProperties": true
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"], "description": "Digest algorithm; SHA-256 or stronger only (FB-RAT-COM-005)." },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true,
+      "description": "Duplicated from schemas/common/*.schema.json's $defs/IntegrityRef per this repo's convention (docs/ratified/COMMON_CONVENTIONS.md §5)."
+    }
+  }
+}

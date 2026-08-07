@@ -1,0 +1,16 @@
+{
+  "grantId": "grant-bad-widening-0001",
+  "principalId": "principal-local-agent-persona-primary",
+  "capabilityIds": ["fb.exec.local_process"],
+  "authorityRung": "EXECUTE_REVERSIBLE",
+  "resourceScope": { "kind": "EXECUTION_TARGET", "locator": "target-local-android-this-phone" },
+  "constraints": { "purpose": null, "additionalConstraints": {} },
+  "expiresAtUtc": "2026-09-01T00:00:00Z",
+  "confirmationPolicy": { "mode": "NEVER_REQUIRED", "aboveRung": null },
+  "delegationRule": {
+    "delegable": true,
+    "maxDelegatedRung": "EXECUTE_DESTRUCTIVE",
+    "transitiveDelegationAllowed": false,
+    "requiresFreshUserApprovalForWidening": true
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/issues-manifest.v1.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. IssuesManifest per INT-013 (the CSApp file lane's exported shape) and INT-015 (source status is descriptive only; Studio maps to Incident state after user confirmation). schemaVersion is pinned to major 1 on purpose, per FB-RAT-COM-003 restated in docs/ratified/COMMON_CONVENTIONS.md — a reader meeting an unsupported major MUST reject before construction (IMPORT_UNSUPPORTED_MAJOR, docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md's error taxonomy). This document does not redefine ContractEnvelope/ErrorEnvelope/ArtifactRef from schemas/common/*; CSApp's export is intentionally a flat, self-contained file (not wrapped in a ContractEnvelope) because it is produced by a fully independent app that MUST remain standalone-useful (INT-002) with zero dependency on this constellation's envelope library.",
+  "title": "IssuesManifest",
+  "description": "CSApp's file-lane export: one snapshot of that app's issue backlog for one project, read by Fonebrew Core only on an explicit user Import/Refresh action (INT-001, INT-012). Dedupe key across imports is (projectRef.externalId, issues[].id) (INT-006) — updatedAt plus optional sourceRevision on an issue distinguish a changed-issue re-import from a duplicate-snapshot re-import at the same digest. CSApp never writes Fonebrew Tasks or Incidents directly (INT-008) — this file is read-only input to Core's import pipeline (schemas/integrations/import-preview.v1.schema.json, then import-receipt.v1.schema.json); Core owns turning an issue into a neutral CustomerIssue record and, later, an Incident.",
+  "type": "object",
+  "required": ["schemaVersion", "exportId", "exportedAt", "producer", "projectRef", "issues"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this manifest shape. A reader MUST reject any schemaVersion whose major is not '1' with IMPORT_UNSUPPORTED_MAJOR, source untouched (FB-RAT-COM-003)."
+    },
+    "exportId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this specific export snapshot, independent of projectRef/display name (FB-RAT-COM-002). Distinct from any individual issue's id."
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant CSApp produced this export (FB-RAT-COM-004)."
+    },
+    "producer": { "$ref": "#/$defs/CsAppProducerRef" },
+    "projectRef": { "$ref": "#/$defs/CsAppProjectRef" },
+    "issues": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/CsAppIssue" },
+      "description": "May be empty (a project with no open issues is a legitimate export, not an error)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003). A future MINOR's optional evidence-bundle field (INT-014, EXPERIMENTAL — see docs/non_ratified/EXPERIMENTAL_DECISIONS.md) is deliberately NOT modeled as a named property in this v1 schema; a producer that includes one today lands here or under `additionalProperties`, and Core MUST treat it as opaque passthrough, not attachment evidence, until that experimental design is ratified."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "CsAppProducerRef": {
+      "type": "object",
+      "required": ["app", "version"],
+      "properties": {
+        "app": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable producer app identifier, e.g. 'csapp'. Field name is `app` (not `name`) to mirror the source pack's own worked field list exactly."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CSApp's own release version producing this export (FB-RAT-COM-003 producerVersion)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "CsAppProjectRef": {
+      "type": "object",
+      "required": ["externalId"],
+      "properties": {
+        "externalId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CSApp's own stable identifier for the project this export concerns. Half of the (projectRef.externalId, issues[].id) dedupe key (INT-006). A Fonebrew-side project match/mismatch decision (IMPORT_PROJECT_MISMATCH) compares this value against the Studio project the user is importing into — never auto-mapped."
+        }
+      },
+      "additionalProperties": true
+    },
+    "IssueSeverity": {
+      "type": "string",
+      "enum": ["SEV1", "SEV2", "SEV3", "SEV4"],
+      "description": "CSApp's own closed severity vocabulary, SEV1 (highest) through SEV4 (lowest). Distinct from AuditFinding's SARIF-derived severity vocabulary (schemas/integrations/assay-index.v1.schema.json's lane) — INCIDENT_SOURCE_AND_PROOF_CONTRACT.md's unified Incident normalizes both under one display, it does not collapse them into a shared wire enum."
+    },
+    "CsAppIssue": {
+      "type": "object",
+      "required": ["id", "title", "detail", "severity", "reporterRef", "occurredAt", "updatedAt"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CSApp's own stable per-issue id, scoped to projectRef.externalId. Half of the INT-006 dedupe key."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "detail": {
+          "type": "string",
+          "description": "Free-text body. Deliberately no maxLength here — a real importer applies its own byte-budget handling (see fixtures/integrations/valid/issues-manifest-oversized-valid.json)."
+        },
+        "severity": { "$ref": "#/$defs/IssueSeverity" },
+        "reporterRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque reference to the reporting identity, CSApp-side. Not a Fonebrew principal id — provenance (FB-RAT-COM-008) preserves it as-is."
+        },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Together with the optional sourceRevision below, distinguishes a changed-issue re-import (this value advanced) from a duplicate-snapshot re-import (identical export digest, INT-006)."
+        },
+        "sourceRevision": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Optional CSApp-side revision/version stamp for this issue, when CSApp tracks one. Null is valid — updatedAt alone is sufficient to detect a change."
+        },
+        "status": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "CSApp's own status text (e.g. 'open', 'triaged'). Descriptive only (INT-015) — Studio maps this to an Incident state only after explicit user confirmation at Preview/Confirm time; a reader MUST NOT auto-map this string onto an Incident lifecycle state."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

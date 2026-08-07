@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "01J9B0000000000000000RCA",
+  "sourceType": "ASSAY_REPO_INDEX",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "e5a4d50e7d8a10e9da1c23da5998c0a5833c9bca05e3eb80266b82d04e5ae2fb",
+    "byteLength": 4096
+  },
+  "sourceLocation": "github.com/owner/target-repo@assay-output:.assay/assay-index.v1.json",
+  "previewId": "01J9C0000000000000000PVA",
+  "initiatedBy": "studio-user:jordan",
+  "decision": "FULL",
+  "createdAtUtc": "2026-08-06T10:00:00Z",
+  "created": [],
+  "updated": [],
+  "duplicates": [],
+  "rejected": [
+    {
+      "sourceLocation": "../../../../data/data/dev.aarso.full/files/../../../../etc/passwd",
+      "errorCode": "IMPORT_INVALID_SOURCELOCATION",
+      "detail": "Adversarial: rejected-record sourceLocation containing '..' segments, escaping the run's own runs/<runId>/ tree."
+    }
+  ],
+  "unknownFields": {}
+}

@@ -1,0 +1,99 @@
+{
+  "receiptId": "01J8ZR0000000000000000E1",
+  "requestId": "01J8ZB0000000000000000R1",
+  "handleId": "01J8ZH0000000000000000H1",
+  "targetSnapshot": {
+    "id": "01J8ZA0000000000000000T1",
+    "type": "LOCAL_ANDROID",
+    "displayName": "This phone",
+    "trust": "TRUSTED",
+    "hostFingerprint": null,
+    "arch": "arm64-v8a"
+  },
+  "revision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "capsuleDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "43f6c46ea4c7f67d3cb1240f81f726047cdd92b679f603c2c5b6ab03b5465818",
+    "byteLength": 812
+  },
+  "timings": {
+    "queuedAtUtc": "2026-08-07T09:00:58Z",
+    "startedAtUtc": "2026-08-07T09:01:04Z",
+    "finishedAtUtc": "2026-08-07T09:22:11Z",
+    "durationMs": 1267000
+  },
+  "exitState": "SUCCEEDED",
+  "terminationCause": null,
+  "logs": {
+    "ref": {
+      "id": "01J8ZF0000000000000000L1",
+      "mediaType": "text/plain",
+      "digest": {
+        "algorithm": "SHA-256",
+        "digestHex": "d33b8ef94af9fca1a754fea6dc6c2e1433fea4ed047710262c587f066393dd10",
+        "byteLength": 39482
+      },
+      "sizeBytes": 39482,
+      "storageLocation": {
+        "kind": "LOCAL_FS",
+        "locator": "/data/user/0/dev.aarso.full/files/execution-logs/01J8ZR0000000000000000E1.log"
+      },
+      "verificationState": "VERIFIED",
+      "producerReceipt": null,
+      "unknownFields": {}
+    },
+    "excerpt": "868 tests, 0 failures. BUILD SUCCESSFUL in 21m 7s.",
+    "redactionApplied": true
+  },
+  "resourceSummary": {
+    "cpuSecondsUsed": 980.4,
+    "wallClockSecondsUsed": 1267.0,
+    "networkBytesUp": 0,
+    "networkBytesDown": 18432000,
+    "peakMemoryBytes": 2147483648,
+    "thermalStateObserved": "NOMINAL"
+  },
+  "outputs": [
+    {
+      "id": "01J8ZF0000000000000000O1",
+      "mediaType": "application/xml",
+      "digest": {
+        "algorithm": "SHA-256",
+        "digestHex": "43ab031d9dd456ae9b4c3a42a194eec6d6abb5251a82dca2a9ffd34b5ab3a1cb",
+        "byteLength": 5120
+      },
+      "sizeBytes": 5120,
+      "storageLocation": {
+        "kind": "LOCAL_FS",
+        "locator": "/data/user/0/dev.aarso.full/files/execution-logs/01J8ZR0000000000000000E1-test-report.xml"
+      },
+      "verificationState": "VERIFIED",
+      "producerReceipt": {
+        "receiptObjectId": "01J8ZR0000000000000000E1",
+        "producer": {
+          "name": "core-engine.execution.local-android",
+          "version": "0.13.0",
+          "instanceId": null
+        },
+        "sourceLocation": "/data/user/0/dev.aarso.full/workspace/android-ide-core",
+        "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+        "initiatingPrincipal": "owner",
+        "evidenceLinks": []
+      },
+      "unknownFields": {}
+    }
+  ],
+  "sideEffects": [],
+  "verification": {
+    "state": "VERIFIED",
+    "method": "gradle test-report parse: 868 tests, 0 failures, exit code 0",
+    "verifiedAtUtc": "2026-08-07T09:22:11Z"
+  },
+  "provenance": {
+    "sourceLocation": "/data/user/0/dev.aarso.full/workspace/android-ide-core",
+    "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+    "initiatingPrincipal": "owner",
+    "evidenceLinks": []
+  },
+  "unknownFields": {}
+}

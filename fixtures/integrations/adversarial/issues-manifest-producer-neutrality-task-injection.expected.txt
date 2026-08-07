@@ -1,0 +1,38 @@
+Structural validation result: PASSES schemas/integrations/issues-manifest.v1.schema.json.
+The `directTaskCreation` object on this fixture's one issue is not a named property of
+$defs/CsAppIssue — it lands under that object's `additionalProperties: true`, so the document
+validates cleanly. JSON Schema's `additionalProperties: true` cannot forbid a producer from
+attaching arbitrary extra data; this fixture is adversarial at the semantic/authority layer
+only.
+
+MUST BE REJECTED (or, more precisely, IGNORED-AS-AUTHORITATIVE) BY A REAL IMPLEMENTATION —
+this fixture is a negative example, not a template.
+
+Required behavior from a real implementation (not just structural validation):
+  1. Producer neutrality (INT-008): CSApp never writes Fonebrew Tasks; Assay never mutates
+     Incidents. Imports create/update Incidents, NEVER Tasks — Task creation is always a
+     separate, explicit Studio-side user action (INT-016). This is true regardless of what a
+     CSApp export payload itself claims or requests — CSApp has no authority to request Task
+     creation, board placement, or an Incident skip, and Core's import pipeline MUST NOT
+     grant it any just because the bytes showed up in `unknownFields`/passthrough.
+  2. A conformant Core reader MUST treat `directTaskCreation` (and any other unrecognized
+     property shaped like a command rather than data) as inert passthrough data ONLY — never
+     interpret it, never act on `skipIncident`, never create a Task or place a board column
+     from it. The normal pipeline still applies unmodified: this issue becomes exactly one
+     CustomerIssue -> (on Confirm) exactly one Incident, nothing more, nothing skipped.
+  3. Recommended ErrorEnvelope IF a Core implementation chooses to actively flag this rather
+     than silently ignore it (either behavior satisfies producer neutrality; flagging is the
+     more legible / accessible choice per FB-RAT-COM-009):
+       code: "IMPORT_PRODUCER_AUTHORITY_VIOLATION"
+       severity: "WARNING"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "This field was ignored. If task creation is wanted, create the task
+         manually in Studio after this issue is imported as an Incident."
+       userMessage: "This import tried to create a task directly. That isn't allowed from an
+         import — only Incidents are created automatically. Ignored the request, imported the
+         issue as an Incident instead."
+  4. This is the concrete integration-domain instance of FB-RAT-COM-012 ("no contract
+     bypass") and this repo's INT-003/INT-004 REJECTED boundaries (no shared databases/IPC
+     that would let one app act with another's authority) — accepting `directTaskCreation` at
+     face value would be exactly the kind of envelope/authority bypass those decisions forbid.

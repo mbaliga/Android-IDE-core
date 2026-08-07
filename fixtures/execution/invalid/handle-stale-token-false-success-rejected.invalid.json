@@ -1,0 +1,23 @@
+{
+  "handleId": "01J8ZH0000000000000000HX",
+  "requestId": "01J8ZB0000000000000000R2",
+  "targetId": "01J8ZA0000000000000000T1",
+  "state": "SUCCEEDED",
+  "stateReason": null,
+  "enteredStateAtUtc": "2026-08-07T11:47:02Z",
+  "heartbeat": {
+    "lastHeartbeatUtc": "2026-08-07T10:02:19Z",
+    "heartbeatIntervalSeconds": 15,
+    "missedConsecutive": 240
+  },
+  "cancellationMode": "UNSUPPORTED",
+  "knownStoppedDescription": null,
+  "reconnectToken": null,
+  "reconnectAttempt": {
+    "attemptedAtUtc": "2026-08-07T11:47:02Z",
+    "outcome": "STALE_TOKEN_UNKNOWN"
+  },
+  "resumedFromHandleId": null,
+  "unknownFields": {},
+  "$note": "MUST BE REJECTED: a reconnect() attempt that could not establish state (outcome=STALE_TOKEN_UNKNOWN) is paired with state=SUCCEEDED — a false-success claim FB-RAT-EXE-004 explicitly forbids ('if reconnect cannot establish state, report UNKNOWN rather than termination or success'). The compliant counterpart is fixtures/execution/valid/handle-reconnect-stale-token-unknown.json, which is identical except state=TARGET_STATE_UNKNOWN."
+}

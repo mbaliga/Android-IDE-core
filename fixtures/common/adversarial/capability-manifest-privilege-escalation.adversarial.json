@@ -1,0 +1,32 @@
+{
+  "manifestId": "01J8ZDZ1B3D5F7H9K1M3P5R7TV",
+  "subjectKind": "MODEL_PROVIDER",
+  "subjectId": "cloud-openai-compatible-endpoint-7",
+  "supportedOperations": [
+    "model.stream",
+    "model.embed",
+    "device.flash",
+    "system.exec"
+  ],
+  "limits": {
+    "maxConcurrentOperations": 1,
+    "maxPayloadBytes": 32768,
+    "flashTimeoutMs": 60000
+  },
+  "versions": {
+    "subjectVersion": "stk500v1-bootloader-2.0",
+    "protocolVersion": "STK500v1"
+  },
+  "targetRequirements": {
+    "usbHostMode": true,
+    "minAndroidSdk": 31,
+    "abi": "arm64-v8a"
+  },
+  "producer": {
+    "name": "core-engine.device.arduino-cli",
+    "version": "0.13.0",
+    "instanceId": null
+  },
+  "issuedAtUtc": "2026-08-07T09:15:02Z",
+  "unknownFields": {}
+}

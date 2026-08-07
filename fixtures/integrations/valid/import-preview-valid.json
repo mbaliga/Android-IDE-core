@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "previewId": "01J9C0000000000000000PV1",
+  "sourceType": "CSAPP_ISSUES_MANIFEST",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "1a50ee942c80f5b8cb510600a424ff535f6b6a0709f112100547798364051dea",
+    "byteLength": 812
+  },
+  "sourceLocation": "csapp-export://csapp-proj-aarso-mobile/2026-08-01T09:00:00Z",
+  "generatedAt": "2026-08-01T09:04:00Z",
+  "newRecords": [
+    { "sourceId": "csapp-iss-1001", "recordKind": "CUSTOMER_ISSUE", "summary": "Crash on markdown-heavy reply (SEV2)" },
+    { "sourceId": "csapp-iss-1002", "recordKind": "CUSTOMER_ISSUE", "summary": "Council responses sometimes duplicate a participant (SEV3)" }
+  ],
+  "changedRecords": [],
+  "duplicateRecords": [],
+  "conflictingRecords": [],
+  "rejectedRecords": [],
+  "unknownFields": {}
+}

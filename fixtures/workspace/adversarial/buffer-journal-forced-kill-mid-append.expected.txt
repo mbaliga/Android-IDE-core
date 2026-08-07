@@ -1,0 +1,37 @@
+Structural validation result: each array element PASSES schemas/workspace/buffer-journal-entry.schema.json
+individually. Neither entry is malformed on its own — sequence=40 and sequence=42 are each perfectly
+valid BufferJournalEntry objects. The defect only exists in the RELATIONSHIP between them (a missing
+sequence=41), which a single-document JSON Schema validation pass structurally cannot see.
+
+This is the fixture named in the WP-1 task brief as representing a scenario whose real test is NOT
+JSON-fixture-shaped: a forced-kill-mid-journal-append property. It is included here as a fixture,
+per the brief's explicit instruction, so the gap this scenario represents has SOMETHING checked-in
+and validated (the two entries individually pass their schema) — but the actual obligation below
+requires a JVM property-based test (e.g. kill the process/thread mid-`WorkspaceJournal.append()`
+at every possible byte offset of the underlying write, then assert the invariant holds on restart),
+not a jsonschema.validate() call. No such test exists in this work package; this fixture documents
+what it would need to assert.
+
+Required behavior from a real implementation:
+  1. `WorkspaceJournal.append()` MUST be all-or-nothing per entry: either sequence N is fully
+     durable (fsynced, or written as a complete WAL record before being acknowledged to the
+     caller) or it MUST behave, after any crash/kill, as if append(N) was never called at all.
+     A torn/partial append (e.g. a truncated record on disk from a kill mid-write) MUST be
+     detected and discarded on the next `restore()`, never replayed as if it were entry N.
+  2. `WorkspaceJournal.restore()` MUST return a `RecoverySnapshot` whose `lastJournalSequence`
+     is the highest sequence number that is FULLY durable and contiguous from the last
+     checkpoint — i.e. if entry 41 never made it to durable storage, `lastJournalSequence`
+     MUST be 40, not 42, even if a torn fragment of entry 42 is physically present on disk.
+     Replaying entry 42 without entry 41 would apply a byte-range edit computed against buffer
+     content state that entry 41 never actually mutated, corrupting the reconstituted buffer.
+  3. `DocumentBuffer.journalSequence` (schemas/workspace/document-buffer.schema.json) exists so
+     a reader CAN detect this class of gap at read time: journalSequence advancing by more than
+     1 between two observations for the same buffer without an intervening SET_FULL_CONTENT
+     entry is a signal worth investigating, though the authoritative check is still (1) and (2)
+     above at the journal-append layer, not buffer-side inference.
+  4. Recommended test shape for the next session with a JVM test runner available (this is a
+     specification of the missing test, not a claim that it has been written or run):
+     a property-based test that, for a range of simulated kill points inside `append()`'s
+     write path, asserts `restore()` after each simulated kill returns a `lastJournalSequence`
+     that is exactly the count of appends that completed strictly before the kill point — never
+     more, and never a value whose corresponding entry is only partially written on disk.

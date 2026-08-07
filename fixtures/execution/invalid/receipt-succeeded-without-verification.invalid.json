@@ -1,0 +1,26 @@
+{
+  "receiptId": "01J8ZR0000000000000000EX",
+  "requestId": "01J8ZB0000000000000000R1",
+  "handleId": "01J8ZH0000000000000000H1",
+  "targetSnapshot": {
+    "id": "01J8ZA0000000000000000T1",
+    "type": "LOCAL_ANDROID",
+    "displayName": "This phone",
+    "trust": "TRUSTED",
+    "hostFingerprint": null,
+    "arch": "arm64-v8a"
+  },
+  "revision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "capsuleDigest": { "algorithm": "SHA-256", "digestHex": "be527cbea8d4e5a29b36f662cb8d4343b8256446d8ead616061750478e11c7d1", "byteLength": 812 },
+  "timings": { "queuedAtUtc": "2026-08-07T09:00:58Z", "startedAtUtc": "2026-08-07T09:01:04Z", "finishedAtUtc": "2026-08-07T09:22:11Z", "durationMs": 1267000 },
+  "exitState": "SUCCEEDED",
+  "terminationCause": null,
+  "logs": { "ref": null, "excerpt": null, "redactionApplied": true },
+  "resourceSummary": {},
+  "outputs": [],
+  "sideEffects": [],
+  "verification": { "state": "NOT_PERFORMED", "method": null, "verifiedAtUtc": null },
+  "provenance": { "sourceLocation": "x", "projectRevision": "x", "initiatingPrincipal": "x", "evidenceLinks": [] },
+  "unknownFields": {},
+  "$note": "INVALID: exitState=SUCCEEDED requires verification.state=VERIFIED (FB-RAT-EXE-009); this fixture claims success with verification.state=NOT_PERFORMED, which MUST use SUCCEEDED_UNVERIFIED instead."
+}

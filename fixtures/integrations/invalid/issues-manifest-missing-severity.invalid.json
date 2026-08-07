@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "exportId": "01J9A0000000000000000EX9",
+  "exportedAt": "2026-08-06T09:00:00Z",
+  "producer": { "app": "csapp", "version": "2.4.1" },
+  "projectRef": { "externalId": "csapp-proj-aarso-mobile" },
+  "issues": [
+    {
+      "id": "csapp-iss-9001",
+      "title": "Missing severity field on purpose",
+      "detail": "This issue omits the required `severity` field — structural validation MUST fail.",
+      "reporterRef": "csapp-user-1",
+      "occurredAt": "2026-08-06T08:00:00Z",
+      "updatedAt": "2026-08-06T08:00:00Z"
+    }
+  ],
+  "unknownFields": {}
+}

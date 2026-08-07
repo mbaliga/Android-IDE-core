@@ -1,0 +1,14 @@
+{
+  "decisionId": "decision-0002-confirm-cloud-inference",
+  "requestObjectId": "councilreq-0044-cloud-completion",
+  "requestingPrincipalId": "principal-council-member-reviewer-01",
+  "requestedCapabilityId": "fb.model.cloud_inference",
+  "requestedResourceScope": { "kind": "NETWORK_DOMAIN", "locator": "api.anthropic.com" },
+  "matchedGrantId": "grant-cloud-inference-council-0007",
+  "outcome": "REQUIRE_CONFIRMATION",
+  "reasonCode": "AUTHORITY_CONFIRMATION_REQUIRED",
+  "confirmationPromptRef": "ui.copy.confirm.cloud_watched_object",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-07T10:15:00Z",
+  "evidenceLinks": ["grant-cloud-inference-council-0007"]
+}

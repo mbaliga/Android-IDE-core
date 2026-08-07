@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/common/envelope.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ContractEnvelope<T> per FB-RAT-COM-011 (common envelope shared concept). This document IS major version 1 of the ContractEnvelope contract; the schemaVersion pattern below pins to '1.x.x' on purpose so an envelope declaring an unsupported major (e.g. '2.0.0') is a structural validation failure, operationalizing FB-RAT-COM-003's 'readers reject unknown MAJOR' rule rather than leaving it as unchecked prose.",
+  "title": "ContractEnvelope",
+  "description": "Generic wrapper every serialized contract in the constellation carries its payload in (FB-RAT-COM-011). schemaVersion+producerVersion per FB-RAT-COM-003; objectId per FB-RAT-COM-002; createdAtUtc/sourceTimezone/sequence per FB-RAT-COM-004; integrity per FB-RAT-COM-005; idempotencyKey per FB-RAT-COM-006. `unknownFields` exists so a decoder that meets a MINOR-newer envelope than it knows about can still round-trip the fields it does not understand instead of dropping them (FB-RAT-COM-003).",
+  "type": "object",
+  "required": ["schemaVersion", "objectId", "createdAtUtc", "producer", "payload"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this envelope+payload contract shape. This schema is major version 1: a reader validating against THIS document MUST reject any schemaVersion whose major component is not '1' (FB-RAT-COM-003) — encoded structurally via the '^1\\.' pin rather than left to reader discipline. A future major-2 envelope shape is a new schema document, not a relaxed pattern here. Readers additionally MUST preserve unknown MINOR-level fields on round-trip (see `unknownFields`)."
+    },
+    "objectId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for the durable object this envelope carries, independent of display name/path (FB-RAT-COM-002). Producers SHOULD use a UUIDv4 or ULID string; readers MUST NOT assume a particular format beyond non-empty."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this envelope was produced (FB-RAT-COM-004). MUST be an RFC 3339 timestamp with a 'Z' or a numeric zero (or non-zero) UTC offset."
+    },
+    "sourceTimezone": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional IANA timezone name (e.g. 'Asia/Kolkata') of the originating principal's local clock, for display only (FB-RAT-COM-004). Ordering MUST NOT depend on this field — see `sequence`."
+    },
+    "sequence": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "default": null,
+      "description": "Optional monotonic sequence number. When present, readers MUST prefer it over createdAtUtc for ordering two envelopes from the same producer (FB-RAT-COM-004 — 'monotonic sequence preferred over wall-clock')."
+    },
+    "producer": { "$ref": "#/$defs/ProducerRef" },
+    "idempotencyKey": {
+      "type": ["string", "null"],
+      "description": "Caller-supplied key used to de-duplicate retried writes of this same logical event (FB-RAT-COM-006 — 'retries carry idempotency keys'). Null only when this envelope carries no retryable side effect (e.g. a pure read result)."
+    },
+    "integrity": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntegrityRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Digest+length over the serialized `payload` bytes, when payload is treated as an integrity-checked artifact (FB-RAT-COM-005). Null is valid for envelopes whose payload is not independently integrity-checked (e.g. a live in-memory state snapshot with no canonical byte form yet)."
+    },
+    "payload": {
+      "description": "The contract-specific body T. This generic envelope schema deliberately leaves payload unconstrained (no type restriction) — a specific contract narrows it, typically via `allOf` + `$ref` against this envelope plus a `properties/payload/$ref` to that contract's own payload schema."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize (e.g. from a newer MINOR of this schema). Present so a round-trip (decode → re-encode) does not silently drop data (FB-RAT-COM-003). Encoders SHOULD merge this bag back into the top-level object rather than nesting it under this key in the wire form; it is modeled as an explicit field here because JSON Schema has no native 'preserve-and-passthrough' keyword."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ProducerRef": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable producer identifier (module or service name), e.g. 'core-engine.workspace-kernel'."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "producerVersion — the producing component's own release version (FB-RAT-COM-003), independent of schemaVersion."
+        },
+        "instanceId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Optional per-install/per-run identifier, for provenance (FB-RAT-COM-008) without being personally identifying."
+        }
+      },
+      "additionalProperties": true
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": ["SHA-256", "SHA-384", "SHA-512"],
+          "description": "Digest algorithm; SHA-256 or stronger only (FB-RAT-COM-005)."
+        },
+        "digestHex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]+$",
+          "description": "Lowercase-hex digest of the exact bytes described by byteLength."
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact byte length of the digested content (FB-RAT-COM-005)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-256" } } },
+          "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } }
+        },
+        {
+          "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-384" } } },
+          "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } }
+        },
+        {
+          "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-512" } } },
+          "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } }
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

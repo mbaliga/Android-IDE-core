@@ -1,0 +1,9 @@
+{
+  "principalId": "principal-user-jordan-01",
+  "kind": "USER",
+  "displayName": "You",
+  "parentPrincipalId": null,
+  "rootUserPrincipalId": null,
+  "status": "ACTIVE",
+  "createdAtUtc": "2026-01-15T09:00:00Z"
+}

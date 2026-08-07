@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/execution/handle.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionHandle per FB-RAT-EXE-001. Typically carried as the `payload` of a ContractEnvelope<ExecutionHandle> (see schemas/common/envelope.schema.json). `handleId` is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "ExecutionHandle",
+  "description": "Live/in-flight handle to a started ExecutionRequest: state, heartbeat, declared cancellation semantics, and (when applicable) a reconnect token. Structurally operationalizes FB-RAT-EXE-002 (lifecycle), FB-RAT-EXE-003 (every provider declares cancellation semantics + reports what is known to have stopped), FB-RAT-EXE-004 (reconnect uncertainty MUST report UNKNOWN rather than false termination or success), and FB-RAT-EXE-005 (Android recovery posture — assume the process may die; journal work; support resume/restart/explicit migration). See docs/ratified/EXECUTION_CONTRACT.md §2 for the full lifecycle transition table this `state` enum encodes.",
+  "type": "object",
+  "required": ["handleId", "requestId", "targetId", "state", "enteredStateAtUtc", "heartbeat", "cancellationMode"],
+  "properties": {
+    "handleId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this handle (FB-RAT-COM-002). A resumed/migrated handle after process death (FB-RAT-EXE-005) gets a NEW handleId — see `resumedFromHandleId` for the link back, rather than reusing the old id, because the old handle's last-known state remains a distinct historical fact even if it turns out to have been wrong (e.g. TARGET_STATE_UNKNOWN that a resume later resolves)."
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References the ExecutionRequest.id (schemas/execution/request.schema.json) this handle was started from."
+    },
+    "targetId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References the ExecutionTarget.id (schemas/execution/target.schema.json) this handle is running (or ran) on."
+    },
+    "state": {
+      "$ref": "#/$defs/ExecutionState"
+    },
+    "stateReason": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Free-text reason for the current state, mirroring core-engine's GraphRunner.stoppedBecause pattern (WP-0 survey §1(d)) — e.g. 'budget:wallClock', 'user cancelled', 'host key changed, awaiting trust decision', 'reconnect: token stale'. Required non-null whenever `state` is one of the terminal-or-uncertain states (see the if/then below) — FB-RAT-COM-009 accessibility: this is the textual-semantics carrier for a state that is not plain success, so it must stand on its own without relying on color/icon."
+    },
+    "enteredStateAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this handle entered its current `state` (FB-RAT-COM-004)."
+    },
+    "heartbeat": {
+      "type": "object",
+      "required": ["heartbeatIntervalSeconds"],
+      "properties": {
+        "lastHeartbeatUtc": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "default": null,
+          "description": "UTC instant of the last confirmed liveness signal from the provider for this handle. Null before the first heartbeat arrives. A reader MUST treat a stale `lastHeartbeatUtc` (older than a few multiples of `heartbeatIntervalSeconds`) as grounds to attempt `reconnect()`, not as grounds to assume success or failure either way — the process may simply have been SIGKILLed by the Android 12+ phantom-process killer (platform grounding) with no chance to report anything."
+        },
+        "heartbeatIntervalSeconds": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Expected interval between heartbeats, or null if this provider/target does not support heartbeating (e.g. a CI_PIPELINE target where liveness is polled via the provider's own status API instead)."
+        },
+        "missedConsecutive": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null,
+          "description": "Count of consecutive expected heartbeats that did not arrive. Null when heartbeating is not supported for this target."
+        }
+      },
+      "additionalProperties": true
+    },
+    "cancellationMode": {
+      "type": "string",
+      "enum": ["COOPERATIVE", "FORCEFUL", "UNSUPPORTED"],
+      "description": "FB-RAT-EXE-003: every provider declares cancellation semantics up front. COOPERATIVE: the running operation is signaled and given a chance to wind down cleanly (e.g. SIGTERM, a graph-run cancellation flag). FORCEFUL: the provider can only hard-stop (e.g. SIGKILL, revoke a CI run token) with no cleanup guarantee. UNSUPPORTED: this provider/operation combination cannot be cancelled once started (e.g. an already-dispatched CI Actions run past its cancel window) — a caller MUST be told this BEFORE relying on cancel() rather than discovering it via a failed cancel() call."
+    },
+    "knownStoppedDescription": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "FB-RAT-EXE-003: what is known to have stopped, populated once a cancellation has been attempted (or the terminal state is CANCELLED). Null before any cancellation attempt. This is deliberately separate from `stateReason` — `stateReason` explains WHY the state is what it is, this field records WHAT the provider actually confirmed stopped (which may be partial, e.g. 'local process terminated; remote git push in flight at cancel time — outcome unknown')."
+    },
+    "reconnectToken": {
+      "oneOf": [
+        { "$ref": "#/$defs/ReconnectToken" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Opaque token a caller passes to ExecutionProvider.reconnect() to re-attach to this handle's underlying work after the requesting process/session died and restarted (FB-RAT-EXE-005). Null once the handle reaches a terminal state with no further reconnect possible, or for providers/operations where reconnect is not meaningful."
+    },
+    "reconnectAttempt": {
+      "oneOf": [
+        { "$ref": "#/$defs/ReconnectAttempt" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Record of the most recent reconnect() attempt against this handle (or its predecessor, if this handle was itself produced by a successful reconnect — see `resumedFromHandleId`), when one has occurred. Null if no reconnect has been attempted yet."
+    },
+    "resumedFromHandleId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "FB-RAT-EXE-005 (support resume/restart/explicit migration): when this handle was produced by resuming journaled work after the prior handle's owning process died, this is that prior handle's handleId. Null for a handle that was not resumed from anything."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "state": { "enum": ["FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED", "WAITING_USER"] } },
+        "required": ["state"]
+      },
+      "then": {
+        "required": ["stateReason"],
+        "properties": {
+          "stateReason": { "type": "string", "minLength": 1 }
+        }
+      },
+      "$comment": "FB-RAT-COM-009 accessibility: a non-plain-success state MUST carry a textual-semantics reason, not rely on the enum value alone (which a display surface might render as color/icon only)."
+    },
+    {
+      "if": {
+        "required": ["reconnectAttempt"],
+        "properties": {
+          "reconnectAttempt": {
+            "type": "object",
+            "required": ["outcome"],
+            "properties": {
+              "outcome": { "enum": ["STALE_TOKEN_UNKNOWN", "INVALID_TOKEN_UNKNOWN", "UNREACHABLE_UNKNOWN"] }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "state": { "const": "TARGET_STATE_UNKNOWN" }
+        }
+      },
+      "$comment": "FB-RAT-EXE-004: if reconnect cannot establish state, the handle MUST report TARGET_STATE_UNKNOWN, never a termination or success state. See fixtures/execution/invalid/handle-stale-token-false-success-rejected.invalid.json (violates this) and fixtures/execution/valid/handle-reconnect-stale-token-unknown.json (complies)."
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "ExecutionState": {
+      "type": "string",
+      "enum": [
+        "QUEUED", "PREPARING", "RUNNING", "WAITING_USER", "SUSPENDED", "VERIFYING",
+        "SUCCEEDED", "SUCCEEDED_UNVERIFIED",
+        "FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED"
+      ],
+      "description": "FB-RAT-EXE-002 lifecycle. Non-terminal: QUEUED, PREPARING, RUNNING, WAITING_USER, SUSPENDED, VERIFYING. Terminal: SUCCEEDED, SUCCEEDED_UNVERIFIED, FAILED_SAFE, FAILED_SIDE_EFFECTS_POSSIBLE, TARGET_STATE_UNKNOWN, CANCELLED. See docs/ratified/EXECUTION_CONTRACT.md §2 for the full from-state/trigger/to-state/receipt table — this schema enumerates the valid values but (being a single-snapshot schema) cannot itself enforce that a given transition between two handle snapshots was a legal edge in that table; that is a provider-side state-machine obligation, mirrored in the Kotlin sealed-interface encoding in contracts/kotlin/ExecutionContracts.kt."
+    },
+    "ReconnectToken": {
+      "type": "object",
+      "required": ["token", "issuedAtUtc"],
+      "properties": {
+        "token": { "type": "string", "minLength": 1, "description": "Opaque reconnect token. Never a secret value in the FB-RAT-EXE-007 sense (it authorizes re-attaching to already-authorized work, it does not itself grant new authority) but MUST still never be logged in plaintext alongside PII, per general log-hygiene practice." },
+        "issuedAtUtc": { "type": "string", "format": "date-time" },
+        "expiresAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null, "description": "Null means no explicit expiry was set by the provider — callers MUST NOT assume that means the token is valid forever; providers SHOULD set a real expiry." }
+      },
+      "additionalProperties": true
+    },
+    "ReconnectAttempt": {
+      "type": "object",
+      "required": ["attemptedAtUtc", "outcome"],
+      "properties": {
+        "attemptedAtUtc": { "type": "string", "format": "date-time" },
+        "outcome": {
+          "type": "string",
+          "enum": ["ESTABLISHED", "STALE_TOKEN_UNKNOWN", "INVALID_TOKEN_UNKNOWN", "UNREACHABLE_UNKNOWN"],
+          "description": "ESTABLISHED: reconnect succeeded and current handle state reflects confirmed target state. The three *_UNKNOWN outcomes are FB-RAT-EXE-004's 'cannot establish state' cases — each one forces `state: TARGET_STATE_UNKNOWN` via the top-level if/then, never a success or clean-termination state."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

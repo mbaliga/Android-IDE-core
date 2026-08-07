@@ -1,0 +1,29 @@
+Scenario (FB-RAT-AUTH-004 "no implicit privilege expansion"):
+
+principal-loop-run-0482 (kind LOOP_RUN, parentPrincipalId = principal-user-jordan-01) holds
+exactly one Grant — grant-repo-read-core-0001 — which authorizes fb.repo.read at the READ rung
+and nothing else. This decision record shows the loop run requesting fb.device.flash, which
+capability-ids.v1.json maps to the EXECUTE_DESTRUCTIVE rung, four rungs above anything the loop
+run (or, transitively, its human parent principal-user-jordan-01) was ever granted for this
+resource.
+
+This JSON is fully schema-valid against decision.schema.json: matchedGrantId=null is legal for a
+DENY outcome, reasonCode is an ordinary string matching the SCREAMING_SNAKE pattern, and nothing
+about the *shape* of this record is wrong. Structural validation cannot catch the real defect,
+because the real defect is relational: it requires walking requestingPrincipalId ->
+parentPrincipalId (schemas/authority/principal.schema.json) to the accountable USER, enumerating
+every Grant ever issued to that principal and its ancestors, and confirming none of them reaches
+EXECUTE_DESTRUCTIVE for this resource. No single JSON document can prove a negative like that.
+
+Required real-implementation behavior:
+- MUST walk the full Principal.parentPrincipalId chain before authorizing any capability whose
+  authorityRung exceeds what the immediate principal itself has been directly granted.
+- MUST return outcome=DENY, reasonCode=AUTHORITY_CHILD_EXCEEDS_PARENT (or an equivalent stable
+  code reserved for this condition) when the walk finds no grant, at any point in the chain
+  including the requesting principal itself, reaching the required rung for this resource.
+- MUST NOT substitute a parent's unrelated grant (e.g. the READ-rung grant-repo-read-core-0001
+  shown in evidenceLinks) as if it authorized a higher-rung, unrelated capability just because
+  the same principal happens to hold it.
+- MUST NOT silently escalate the child's effective rung to match its parent's rung on any other
+  resource "for convenience" — FB-RAT-AUTH-004 requires an explicit user escalation for that,
+  never an automatic one.

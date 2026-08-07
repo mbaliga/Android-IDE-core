@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/import-receipt.v1.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ImportReceipt per INT-024 (docs/ratified/IMPORT_RECEIPT_V1.md) — step 6 ('Receipt') of the six-step manual import grammar (INT-011): source digest, decisions, resulting objects, errors, backlinks. Append-only (FB-RAT-COM-006) — a correction is a NEW receipt, never an in-place edit of an existing one. schemaVersion pinned to major 1, FB-RAT-COM-003.",
+  "title": "ImportReceipt",
+  "description": "The durable record of one confirmed import action, produced only after the user's explicit Confirm (step 5, INT-005/INT-011). `rejected` records here are FINAL rejections carried into the receipt (structural or record-level errors, or user-declined conflicts) — distinct from ImportPreview.rejectedRecords, which is the pre-mutation forecast of the same vocabulary.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "receiptId", "sourceType", "sourceDigest", "initiatedBy", "decision",
+    "createdAtUtc", "created", "updated", "duplicates", "rejected"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this receipt shape. A reader MUST reject any schemaVersion whose major is not '1' (FB-RAT-COM-003)."
+    },
+    "receiptId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this receipt (FB-RAT-COM-002). Also usable as the idempotency anchor a retried Confirm tap resolves to, per FB-RAT-COM-006."
+    },
+    "sourceType": { "$ref": "#/$defs/ImportSourceType" },
+    "sourceDigest": { "$ref": "#/$defs/IntegrityRef" },
+    "sourceLocation": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Backlink to where the source was read from (file path, or repo+branch+commit for Assay) — FB-RAT-COM-008 provenance."
+    },
+    "previewId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Backlink to the ImportPreview.previewId the user reviewed before confirming (schemas/integrations/import-preview.v1.schema.json). Null only for a hypothetical direct-confirm path this domain does not otherwise define — every real flow in docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md goes through a preview first."
+    },
+    "initiatedBy": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The initiating principal (FB-RAT-COM-008) — who performed the explicit user action (INT-001) that produced this receipt. Every cross-app transfer begins with one; this field is where that action's actor is recorded."
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["FULL", "PARTIAL"],
+      "description": "FULL: every new/changed/duplicate-eligible record the preview offered was imported as offered. PARTIAL: the user explicitly excluded at least one otherwise-importable record (INT-007 'no silent partial import' — PARTIAL MUST correspond to an explicit confirmation step, never an implicit default). Records that were IMPORT_* rejected before the user ever saw a choice (schema/digest/project-mismatch failures) do not by themselves make a decision PARTIAL — that column is about user-elected exclusions."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this receipt was produced (FB-RAT-COM-004)."
+    },
+    "created": { "type": "array", "items": { "$ref": "#/$defs/ReceiptCreatedEntry" } },
+    "updated": { "type": "array", "items": { "$ref": "#/$defs/ReceiptUpdatedEntry" } },
+    "duplicates": { "type": "array", "items": { "$ref": "#/$defs/ReceiptDuplicateEntry" } },
+    "rejected": { "type": "array", "items": { "$ref": "#/$defs/ReceiptRejectedEntry" } },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ImportSourceType": {
+      "type": "string",
+      "enum": ["CSAPP_ISSUES_MANIFEST", "ASSAY_REPO_INDEX"]
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true,
+      "description": "Duplicated from schemas/common/artifact-ref.schema.json's $defs/IntegrityRef per this repo's cross-file convention (docs/ratified/COMMON_CONVENTIONS.md §5)."
+    },
+    "ImportErrorCode": {
+      "description": "Same closed+open vocabulary as import-preview.v1.schema.json's $defs/ImportErrorCode, duplicated per this repo's cross-file convention. See docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md's error taxonomy and docs/ratified/IMPORT_RECEIPT_V1.md's IMPORT_INVALID_<FIELD> family definition.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "IMPORT_UNSUPPORTED_MAJOR", "IMPORT_PROJECT_MISMATCH", "IMPORT_DIGEST_MISMATCH",
+            "IMPORT_DUPLICATE_SNAPSHOT", "IMPORT_RECORD_CONFLICT", "IMPORT_PARTIAL_SOURCE",
+            "IMPORT_SOURCE_UNAVAILABLE", "PROOF_MISSING"
+          ]
+        },
+        { "type": "string", "pattern": "^IMPORT_INVALID_[A-Z0-9_]+$" }
+      ]
+    },
+    "ReceiptCreatedEntry": {
+      "type": "object",
+      "required": ["sourceId", "incidentId"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "incidentId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Imports create/update Incidents, NEVER Tasks (INT-016) — this field is always an Incident id, by construction of this shape, not by a runtime check alone."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ReceiptUpdatedEntry": {
+      "type": "object",
+      "required": ["sourceId", "incidentId"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "incidentId": { "type": "string", "minLength": 1 },
+        "changedFields": { "type": "array", "items": { "type": "string" }, "default": [] }
+      },
+      "additionalProperties": true
+    },
+    "ReceiptDuplicateEntry": {
+      "type": "object",
+      "required": ["sourceId", "priorReceiptId"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "priorReceiptId": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "ReceiptRejectedEntry": {
+      "type": "object",
+      "required": ["sourceLocation", "errorCode"],
+      "properties": {
+        "sourceLocation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where within the source this rejected record was found. A reader that resolves this into an actual filesystem/repo path MUST reject any '..' segment first (see fixtures/integrations/adversarial/import-receipt-path-traversal-sourcelocation.adversarial.json — this field's type is a bare string, so JSON Schema cannot catch that case structurally)."
+        },
+        "errorCode": { "$ref": "#/$defs/ImportErrorCode" },
+        "detail": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    }
+  }
+}

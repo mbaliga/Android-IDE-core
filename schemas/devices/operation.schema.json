@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/devices/operation.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceOperation per FB-RAT-DEV-002 (device object model), operationalizing the 7-step flash contract (FB-RAT-DEV-004/005/006/007) and the FB-RAT-DEV-001 Device Broker's exclusive-lock + explicit-destructive-authority requirements. Typically carried as the `payload` of a ContractEnvelope<DeviceOperation> (see schemas/common/envelope.schema.json). `operationId` is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "DeviceOperation",
+  "description": "One device-broker-arbitrated operation (flash, erase, read-back verify, self-test, a serial session, or a debug session): preconditions, explicit destructive authority, the firmware artifact (when applicable), protocol progress, verification, rollback, and a terminal receipt. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4 for the full 7-step flash-contract table this schema structurally enforces the checkable half of.",
+  "type": "object",
+  "required": ["operationId", "deviceIdentityId", "connectionId", "operationKind", "preconditions", "authority", "protocol", "state", "verification", "rollback"],
+  "properties": {
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this operation (FB-RAT-COM-002)."
+    },
+    "deviceIdentityId": { "type": "string", "minLength": 1, "description": "References DeviceIdentity.deviceIdentityId (schemas/devices/device-identity.schema.json)." },
+    "connectionId": { "type": "string", "minLength": 1, "description": "References DeviceConnection.connectionId (schemas/devices/connection.schema.json) — the connection this operation runs over." },
+    "operationKind": {
+      "type": "string",
+      "enum": ["FLASH", "ERASE", "READ_BACK_VERIFY", "SELF_TEST", "SERIAL_SESSION", "DEBUG_SESSION"],
+      "description": "FB-RAT-DEV-001: the operation classes the Device Broker arbitrates (serial, flash, debug, plus the read-back-verify and self-test steps the flash contract itself requires, plus a standalone erase). FLASH and ERASE are the destructive classes the explicit-authority gate (§authority) applies to most directly."
+    },
+    "artifactId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "References FirmwareArtifact.firmwareArtifactId (schemas/devices/firmware-artifact.schema.json) — required non-null when operationKind is FLASH (see the if/then below), null for every other operationKind (ERASE writes no image; READ_BACK_VERIFY/SELF_TEST/SERIAL_SESSION/DEBUG_SESSION do not carry an image at all)."
+    },
+    "preconditions": {
+      "$ref": "#/$defs/OperationPreconditions"
+    },
+    "authority": {
+      "$ref": "#/$defs/OperationAuthority"
+    },
+    "protocol": {
+      "$ref": "#/$defs/OperationProtocol"
+    },
+    "state": {
+      "$ref": "#/$defs/DeviceOperationState"
+    },
+    "verification": {
+      "$ref": "#/$defs/OperationVerification"
+    },
+    "rollback": {
+      "$ref": "#/$defs/RollbackPlan"
+    },
+    "receipt": {
+      "oneOf": [
+        { "$ref": "#/$defs/OperationReceipt" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Non-null only once `state` has reached a terminal value (SUCCEEDED, FAILED_SAFE, FAILED_SIDE_EFFECTS_POSSIBLE, TARGET_STATE_UNKNOWN, CANCELLED) — flash contract step 7. Null while the operation is still PENDING_PRECONDITIONS/AUTHORIZED/IN_PROGRESS/VERIFYING."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "operationKind": { "const": "FLASH" } }, "required": ["operationKind"] },
+      "then": { "required": ["artifactId"], "properties": { "artifactId": { "type": "string", "minLength": 1 } } },
+      "$comment": "A FLASH operation MUST reference the firmware image it is writing."
+    },
+    {
+      "if": { "properties": { "state": { "const": "SUCCEEDED" } }, "required": ["state"] },
+      "then": { "properties": { "verification": { "type": "object", "required": ["state"], "properties": { "state": { "const": "VERIFIED" } } } } },
+      "$comment": "FB-RAT-DEV-005: SUCCEEDED requires verification.state=VERIFIED — flash contract step 6 gates step 7's last-known-good update. There is no 'succeeded unverified' terminal state for DeviceOperation, unlike ExecutionReceipt — an unverified completion is FAILED_SIDE_EFFECTS_POSSIBLE or TARGET_STATE_UNKNOWN, never a silent SUCCEEDED."
+    },
+    {
+      "if": {
+        "properties": { "operationKind": { "enum": ["FLASH", "ERASE"] }, "state": { "enum": ["IN_PROGRESS", "VERIFYING", "SUCCEEDED", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN"] } },
+        "required": ["operationKind", "state"]
+      },
+      "then": {
+        "properties": { "authority": { "type": "object", "required": ["destructiveActionExplicitlyAuthorized"], "properties": { "destructiveActionExplicitlyAuthorized": { "const": true } } } }
+      },
+      "$comment": "Flash contract step 4: a destructive (FLASH/ERASE) operation that has progressed past preconditions into IN_PROGRESS or beyond MUST carry explicit destructive authorization — it cannot have reached the erase/write stage any other way."
+    },
+    {
+      "if": { "properties": { "state": { "const": "FAILED_SAFE" } }, "required": ["state"] },
+      "then": { "properties": { "receipt": { "oneOf": [ { "type": "object", "properties": { "sideEffects": { "maxItems": 0 } } }, { "type": "null" } ] } } },
+      "$comment": "FB-RAT-DEV-007 (wrong-board block, and preconditions failures generally): FAILED_SAFE means the operation was blocked BEFORE any destructive action — its receipt (if present) MUST record zero side effects, never a generic/ambiguous failure that leaves open whether erase started."
+    },
+    {
+      "if": { "properties": { "state": { "const": "FAILED_SIDE_EFFECTS_POSSIBLE" } }, "required": ["state"] },
+      "then": { "required": ["receipt"], "properties": { "receipt": { "type": "object", "required": ["sideEffects"], "properties": { "sideEffects": { "type": "array", "minItems": 1 } } } } },
+      "$comment": "FB-RAT-DEV-006: disconnect after erase but before verification MUST resolve to FAILED_SIDE_EFFECTS_POSSIBLE (never a generic failure) and MUST record at least one side effect — see fixtures/devices/adversarial/disconnect-mid-flash.adversarial.json."
+    },
+    {
+      "if": { "properties": { "state": { "const": "TARGET_STATE_UNKNOWN" } }, "required": ["state"] },
+      "then": { "required": ["receipt"] },
+      "$comment": "FB-RAT-DEV-006's other permitted outcome for a disconnect whose destructive-progress point cannot even be established: a receipt MUST still exist, recording what is known."
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "OperationPreconditions": {
+      "type": "object",
+      "required": ["identityConfidenceAtLeast", "usbPermissionGranted", "boardFirmwareCompatibilityChecked", "powerWiringAssumptionsAcknowledged"],
+      "properties": {
+        "identityConfidenceAtLeast": {
+          "type": "string",
+          "enum": ["CONFIRMED", "PROBABLE", "UNCERTAIN", "UNKNOWN"],
+          "description": "Flash contract step 1/3: the minimum DeviceIdentity.confidence.level this operation requires before it may proceed past PENDING_PRECONDITIONS. A destructive operationKind (FLASH/ERASE) SHOULD require at least PROBABLE; requiring only UNCERTAIN or UNKNOWN for a destructive operation is a policy choice this schema permits representing but does not itself forbid — see docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4 for the provider-gate obligation this implies."
+        },
+        "usbPermissionGranted": {
+          "type": "boolean",
+          "description": "Flash contract step 2: mirrors DeviceConnection.usbPermissionGranted at the time this operation was created — duplicated here (rather than only read live from the connection) so a completed operation's own historical record is self-contained."
+        },
+        "boardFirmwareCompatibilityChecked": {
+          "type": "boolean",
+          "description": "Flash contract step 3: whether the DeviceIdentity.board vs FirmwareArtifact.boardCompatibility check (FB-RAT-DEV-007 wrong-board block) has been run. A destructive operationKind MUST NOT reach AUTHORIZED with this false — see docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4."
+        },
+        "powerWiringAssumptionsAcknowledged": {
+          "type": "boolean",
+          "description": "Flash contract step 3: whether power/wiring assumptions (e.g. 'board is USB-powered, no external supply required', 'ISP wiring confirmed by user') have been surfaced and acknowledged. Free-form by design — the exact assumptions vary per board/protocol family and are not enumerated in this contract."
+        }
+      },
+      "additionalProperties": true
+    },
+    "OperationAuthority": {
+      "type": "object",
+      "required": ["exclusiveLockId", "destructiveActionExplicitlyAuthorized", "authorizedPrincipal"],
+      "properties": {
+        "exclusiveLockId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FB-RAT-DEV-001: references the DeviceLock.lockId (schemas/devices/connection.schema.json) the Device Broker granted for this operation. Non-blank — a DeviceOperation cannot be modeled without holding the broker's exclusive lock, mirroring FB-RAT-COM-012 'no contract bypass' the same way ExecutionRequest.authorityGrant does in the execution domain."
+        },
+        "destructiveActionExplicitlyAuthorized": {
+          "type": "boolean",
+          "description": "Flash contract step 4: explicit, non-implicit authorization for a destructive action (erase/write), separate from merely holding the lock. A user or agent can hold the exclusive lock (e.g. to run a non-destructive SELF_TEST) without this being true; FLASH/ERASE operations require it true before progressing past AUTHORIZED (see the top-level if/then)."
+        },
+        "authorizedPrincipal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FB-RAT-COM-008 — who/what authorized this operation."
+        },
+        "authorizedAtUtc": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "default": null,
+          "description": "Null while state=PENDING_PRECONDITIONS (authorization not yet granted)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "OperationProtocol": {
+      "type": "object",
+      "required": ["family"],
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": ["CDC", "FTDI", "CP210X", "CH34X", "STK500", "UF2", "DFU", "ESP_BOOTLOADER", "CMSIS_DAP"],
+          "description": "Which of the nine FB-RAT-DEV-010 families this operation's wire protocol uses. Duplicated locally from schemas/devices/device-identity.schema.json's $defs/UsbFamily per this repo's shared-sub-shape convention (docs/ratified/COMMON_CONVENTIONS.md §5)."
+        },
+        "progressPercent": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "default": null,
+          "description": "Flash contract step 5: bootloader/transfer progress. Null before IN_PROGRESS begins, or for a protocol/transport that cannot report granular progress (some report only start/done)."
+        },
+        "sideEffectsPossible": {
+          "type": "boolean",
+          "default": false,
+          "description": "Flash contract step 5's 'recorded possible side effects': flips true the moment a destructive transfer (erase/write) actually begins, independent of whether the operation ultimately succeeds — this is the field a disconnect handler reads to decide between FAILED_SAFE (still false — nothing destructive started yet) and FAILED_SIDE_EFFECTS_POSSIBLE/TARGET_STATE_UNKNOWN (true — something may have happened)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "DeviceOperationState": {
+      "type": "string",
+      "enum": ["PENDING_PRECONDITIONS", "AUTHORIZED", "IN_PROGRESS", "VERIFYING", "SUCCEEDED", "FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED"],
+      "description": "Non-terminal: PENDING_PRECONDITIONS, AUTHORIZED, IN_PROGRESS, VERIFYING. Terminal: SUCCEEDED, FAILED_SAFE, FAILED_SIDE_EFFECTS_POSSIBLE, TARGET_STATE_UNKNOWN, CANCELLED. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4 for the full from-state/trigger/to-state table mapping this directly onto the 7-step flash contract; FAILED_SAFE is reached only from PENDING_PRECONDITIONS (FB-RAT-DEV-007 — wrong-board and other precondition failures happen strictly before erase), never from IN_PROGRESS or VERIFYING."
+    },
+    "OperationVerification": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": { "type": "string", "enum": ["NOT_PERFORMED", "VERIFIED", "FAILED", "SKIPPED"] },
+        "method": {
+          "type": ["string", "null"],
+          "enum": ["PROTOCOL_RESPONSE", "READ_BACK_HASH", "VERSION_HANDSHAKE", "SELF_TEST", null],
+          "default": null,
+          "description": "Flash contract step 6's four verification methods."
+        },
+        "verifiedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+      },
+      "additionalProperties": true
+    },
+    "RollbackPlan": {
+      "type": "object",
+      "required": ["possible", "steps"],
+      "properties": {
+        "possible": {
+          "type": "boolean",
+          "description": "Whether this operation has a defined rollback path. Honest default for FLASH/ERASE on many embedded targets is `false` — once erase has begun, the prior firmware is generally gone unless a full prior-image backup exists as a FirmwareArtifact to re-flash from, which is not the same as an in-protocol rollback."
+        },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "MUST be non-empty when possible=true, and MUST be empty when possible=false (mirrors schemas/common/migration-plan.schema.json's RollbackPlan pattern) — a plan MUST NOT claim rollback steps it does not actually support."
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "possible": { "const": true } }, "required": ["possible"] }, "then": { "properties": { "steps": { "minItems": 1 } } } },
+        { "if": { "properties": { "possible": { "const": false } }, "required": ["possible"] }, "then": { "properties": { "steps": { "maxItems": 0 } } } }
+      ],
+      "additionalProperties": true
+    },
+    "OperationReceipt": {
+      "type": "object",
+      "required": ["finishedAtUtc", "exitState", "sideEffects"],
+      "properties": {
+        "finishedAtUtc": { "type": "string", "format": "date-time" },
+        "exitState": {
+          "type": "string",
+          "enum": ["SUCCEEDED", "FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED"],
+          "description": "The terminal subset of DeviceOperationState — mirrors the outer `state` at the instant this receipt was written."
+        },
+        "sideEffects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description", "reversible"],
+            "properties": {
+              "description": { "type": "string", "minLength": 1 },
+              "reversible": { "type": ["boolean", "null"] },
+              "occurredAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+            },
+            "additionalProperties": true
+          },
+          "description": "Flash contract steps 5-7: real-world effects this operation is known (or believed) to have caused. Required non-empty when exitState=FAILED_SIDE_EFFECTS_POSSIBLE (see the top-level if/then)."
+        },
+        "errorEnvelope": {
+          "oneOf": [
+            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/error.schema.json" },
+            { "type": "null" }
+          ],
+          "default": null,
+          "description": "Reused as-is from schemas/common/error.schema.json (not redefined here). Non-null on any failed/uncertain exitState; null for SUCCEEDED."
+        },
+        "snapshotAfterId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "References the DeviceSnapshot.snapshotId (schemas/devices/snapshot.schema.json) taken immediately after this operation, when one was taken. This is the snapshot whose lastKnownGood field is expected to flip true for a SUCCEEDED+VERIFIED flash (FB-RAT-DEV-005)."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

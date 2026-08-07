@@ -1,0 +1,18 @@
+{
+  "decisionId": "decision-adv-0002-transitive-delegation",
+  "requestObjectId": "gitreq-0777-push-remote-from-studio-workflow",
+  "requestingPrincipalId": "principal-studio-workflow-release-checklist-01",
+  "requestedCapabilityId": "fb.repo.push_remote",
+  "requestedResourceScope": { "kind": "REPOSITORY", "locator": "github.com/example-owner/android-ide-core" },
+  "matchedGrantId": null,
+  "outcome": "DENY",
+  "reasonCode": "AUTHORITY_TRANSITIVE_DELEGATION_REJECTED",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-07T12:00:00Z",
+  "evidenceLinks": [
+    "principal-studio-workflow-release-checklist-01",
+    "principal-loop-run-0482",
+    "principal-local-agent-persona-primary",
+    "principal-user-jordan-01"
+  ]
+}

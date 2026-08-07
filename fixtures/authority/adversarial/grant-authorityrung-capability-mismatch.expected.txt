@@ -1,0 +1,37 @@
+Scenario (cross-registry integrity — grant.schema.json's capabilityIds/authorityRung
+description):
+
+This Grant declares authorityRung="OBSERVE" (the lowest rung — read-only, no side effects) while
+capabilityIds=["fb.device.flash"]. schemas/loops/registries/capability-ids.v1.json's frozen entry
+for "fb.device.flash" declares authorityRung="EXECUTE_DESTRUCTIVE" (the second-highest rung —
+"Flash/erase firmware on a connected device. Requires exclusive device-operation lock + explicit
+destructive authority"). The Grant is lying about its own rung, whether by producer bug or by a
+deliberate attempt to smuggle a destructive capability under a harmless-looking authorityRung
+label.
+
+Both `authorityRung` (a valid ladder enum value) and each string in `capabilityIds` (a
+syntactically valid fb.* reverse-DNS ID) are independently well-formed, so this document is fully
+schema-valid. Catching the mismatch requires joining against capability-ids.v1.json, a SEPARATE
+document this schema deliberately does not embed or $ref (per the task instruction to treat that
+registry as a cross-referenced, not redefined, dependency) — no single-document JSON Schema
+validation pass can perform that join.
+
+Why this matters: grant.schema.json's own top-level `allOf` structurally caps
+`delegationRule.maxDelegatedRung` at this Grant's declared `authorityRung` (FB-RAT-AUTH-004's
+narrowing guarantee). If a downstream policy engine trusts the declared OBSERVE rung instead of
+the true EXECUTE_DESTRUCTIVE rung, this grant could legally declare
+`delegationRule: {delegable: true, maxDelegatedRung: "OBSERVE"}` — which LOOKS maximally narrow
+but is actually delegating "erase a connected device's firmware" authority to a child principal
+under an OBSERVE label, completely defeating the narrowing check by lying about the baseline it
+narrows from.
+
+Required real-implementation behavior:
+- MUST, at grant-issuance time, resolve every entry in `capabilityIds` against
+  capability-ids.v1.json and confirm each one's registered `authorityRung` equals this Grant's own
+  declared `authorityRung`.
+- MUST refuse to issue (reject at construction, proposed code
+  AUTHORITY_RUNG_CAPABILITY_MISMATCH) any Grant where they disagree, rather than issuing it and
+  hoping downstream consumers happen to re-derive the true rung themselves.
+- MUST re-validate this invariant on load for any already-persisted Grant before using it in a
+  decision (defense in depth against a corrupted or hand-edited grant store), not only at the
+  original issuance path.

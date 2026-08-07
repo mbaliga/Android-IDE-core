@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "exportId": "01J9A0000000000000000EX2",
+  "exportedAt": "2026-08-03T09:00:00Z",
+  "producer": { "app": "csapp", "version": "2.4.1" },
+  "projectRef": { "externalId": "csapp-proj-aarso-mobile" },
+  "issues": [
+    {
+      "id": "csapp-iss-1001",
+      "title": "Crash on markdown-heavy reply",
+      "detail": "Same source id (csapp-iss-1001) as issues-manifest-baseline-valid.json, but reporterRef and occurredAt differ — this is the IMPORT_RECORD_CONFLICT scenario (same source ID, incompatible identity data) an ImportPreview.conflictingRecords entry MUST surface when compared against the already-imported record; the manifest itself is structurally valid, the conflict is a cross-import comparison Core performs, not a schema violation.",
+      "severity": "SEV2",
+      "reporterRef": "csapp-user-99999",
+      "occurredAt": "2026-06-01T00:00:00Z",
+      "updatedAt": "2026-08-03T08:55:00Z",
+      "sourceRevision": "rev-14b",
+      "status": "reopened"
+    }
+  ],
+  "unknownFields": {}
+}

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/proving-tests.v1.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ProvingTests is named but never specified in the source pack (WP-1 task brief §6) — designed here: a container for the detailed proving-test entries an AssayIndex.provingTests summary (schemas/integrations/assay-index.v1.schema.json) points at, living at runs/<runId>/proving-tests.v1.json alongside the generated sources at tests/proving/. A proving test is what INCIDENT_SOURCE_AND_PROOF_CONTRACT.md's proof-gated resolution (INT-021) can accept as satisfying the proof requirement for an Assay-sourced Incident. schemaVersion pinned to major 1, FB-RAT-COM-003.",
+  "title": "ProvingTests",
+  "description": "Container for one Assay run's proving-test entries. `runId` MUST equal the owning AssayIndex.runId this file is filed under — the two are always read together, never independently trusted.",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "generatedAt", "tests"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this container shape. A reader MUST reject any schemaVersion whose major is not '1' with IMPORT_UNSUPPORTED_MAJOR (FB-RAT-COM-003)."
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "MUST equal the owning AssayIndex.runId (INT-019's dedupe key) — this file has no independent identity apart from the run that produced it."
+    },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ProvingTestEntry" },
+      "description": "May be empty — a run that found nothing provable yet (e.g. all findings are informational) is legitimate."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ProvingTestKind": {
+      "type": "string",
+      "enum": ["UNIT", "INTEGRATION", "EXPLOIT_POC", "REGRESSION", "OTHER"],
+      "description": "What kind of generated test proves/disproves the linked finding. EXPLOIT_POC is a minimal reproduction, not a weaponized artifact — Assay owns what it generates (SOLE finding/proof source rule); this schema only describes the shape."
+    },
+    "ProvingTestStatus": {
+      "type": "string",
+      "enum": ["PASSING", "FAILING", "NOT_RUN", "ERROR"],
+      "description": "PASSING/FAILING require the test to have actually run at least once (see the if/then below forcing lastRunAtUtc). NOT_RUN is the only status legitimately paired with a null lastRunAtUtc."
+    },
+    "ProvingTestEntry": {
+      "type": "object",
+      "required": ["testId", "targetFindingRef", "testKind", "sourcePath", "status"],
+      "properties": {
+        "testId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable ID for this proving test, independent of sourcePath (FB-RAT-COM-002) — the same value a SARIF result's `properties.provingTestRef` (docs/ratified/ASSAY_REPO_CONTRACT_V1.md's SARIF profile) points back at."
+        },
+        "targetFindingRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to the SARIF result this test proves or disproves, e.g. 'findings.sarif#/runs/0/results/12' or the underlying scanner's own stable rule+location key. Assay's own choice of reference scheme; Core treats it as opaque."
+        },
+        "testKind": { "$ref": "#/$defs/ProvingTestKind" },
+        "sourcePath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to the repo root, under tests/proving/, to the generated test source. A reader MUST reject any path containing a '..' segment before opening it (same LOCAL_FS path-traversal obligation as schemas/common/artifact-ref.schema.json)."
+        },
+        "status": { "$ref": "#/$defs/ProvingTestStatus" },
+        "description": {
+          "type": ["string", "null"],
+          "default": null
+        },
+        "lastRunAtUtc": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "default": null,
+          "description": "Required (non-null) whenever status is not NOT_RUN — a test cannot be reported PASSING/FAILING/ERROR without having actually run once (structurally enforced below)."
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "not": { "const": "NOT_RUN" } } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["lastRunAtUtc"],
+            "properties": { "lastRunAtUtc": { "type": "string", "format": "date-time" } }
+          }
+        }
+      ]
+    }
+  }
+}

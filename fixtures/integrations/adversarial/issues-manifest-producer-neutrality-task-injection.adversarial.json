@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0.0",
+  "exportId": "01J9A0000000000000000EXA",
+  "exportedAt": "2026-08-06T09:00:00Z",
+  "producer": { "app": "csapp", "version": "2.4.1" },
+  "projectRef": { "externalId": "csapp-proj-aarso-mobile" },
+  "issues": [
+    {
+      "id": "csapp-iss-8001",
+      "title": "Please just create the task for me",
+      "detail": "Adversarial: this issue's producer stuffed a direct Task-creation instruction into the export instead of staying in its own lane.",
+      "severity": "SEV1",
+      "reporterRef": "csapp-user-1",
+      "occurredAt": "2026-08-06T08:00:00Z",
+      "updatedAt": "2026-08-06T08:00:00Z",
+      "sourceRevision": null,
+      "status": "open",
+      "directTaskCreation": {
+        "taskTitle": "Fix crash immediately",
+        "assignee": "studio-user:jordan",
+        "boardColumn": "IN_PROGRESS",
+        "skipIncident": true
+      }
+    }
+  ],
+  "unknownFields": {}
+}

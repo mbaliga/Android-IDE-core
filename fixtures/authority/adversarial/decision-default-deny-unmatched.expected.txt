@@ -1,0 +1,24 @@
+Scenario (FB-RAT-AUTH-003 "default deny: deny when no matching grant exists"):
+
+principal-local-agent-persona-primary requests fb.release.publish (PUBLISH_OR_RELEASE, the
+highest rung on the ladder, user-only per capability-ids.v1.json's own description of that
+capability) against a STORE_CHANNEL resource it has never been granted anything against. No Grant
+anywhere references this principal+capability+resource combination.
+
+This record is schema-valid: it is the ONE case decision.schema.json's own if/then partially
+covers structurally (reasonCode=AUTHORITY_DEFAULT_DENY forces matchedGrantId to be exactly
+null) — but that if/then can only check the SHAPE of a record a policy engine already produced;
+it cannot verify that the engine actually searched every Grant in the store before concluding
+"nothing matched," nor that it did not fall back to some other implicit outcome first. Proving the
+search was exhaustive is a policy-engine runtime property, not a document-shape property.
+
+Required real-implementation behavior:
+- MUST treat "no matching Grant found" as the ONLY path to reasonCode=AUTHORITY_DEFAULT_DENY, and
+  MUST reach it deterministically for any principal/capability/resource combination with zero
+  matching grants (FB-RAT-AUTH-003).
+- MUST NOT default to ALLOW under any configuration, code path, or missing-policy condition —
+  "no policy loaded" and "policy loaded but nothing matches" both resolve to DENY, never to an
+  implicit permissive fallback.
+- MUST NOT require an explicit "deny-list" entry for this specific combination to produce this
+  result — default-deny means absence of a grant IS the deny condition, not merely a fallback of
+  last resort after some other check fails.

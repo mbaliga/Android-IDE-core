@@ -1,0 +1,36 @@
+{
+  "operationId": "op-4020",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0049",
+  "operationKind": "ERASE",
+  "artifactId": null,
+  "preconditions": {
+    "identityConfidenceAtLeast": "PROBABLE",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-7777-EXPIRED-FROM-OP-1999",
+    "destructiveActionExplicitlyAuthorized": true,
+    "authorizedPrincipal": "agent-run:wp1-device-erase-4020",
+    "authorizedAtUtc": "2026-08-07T11:15:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 5,
+    "sideEffectsPossible": true
+  },
+  "state": "IN_PROGRESS",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": null,
+  "unknownFields": {}
+}

@@ -1,0 +1,6 @@
+{
+  "provider": "SSH",
+  "raw": "ssh://host-9f21e3/home/dev/projects/android-ide-core/README.md",
+  "displayPath": "android-ide-core/README.md",
+  "unknownFields": {}
+}

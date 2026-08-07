@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/assay-index.v1.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. AssayIndex per INT-018 (repo layout: .assay/assay-index.v1.json + runs/<run-id>/) and INT-019 (runId is the stable dedupe key). schemaVersion pinned to major 1, FB-RAT-COM-003. Not wrapped in a ContractEnvelope — Assay is a fully independent, standalone-useful app (INT-002) that MUST NOT depend on this constellation's envelope library to write its own repo output.",
+  "title": "AssayIndex",
+  "description": "The top-level manifest at .assay/assay-index.v1.json, committed by Assay to a user-selected branch after a scan run. Fonebrew Core reads this only when the user selects a repo+branch and taps 'Check branch' (INT-020 — Studio never invokes or polls Assay). findingFiles/provingTests here are SUMMARY entries (path/sha256/count, or path/count) pointing at the detailed content living alongside this index — findings.sarif (+ optional findings.json companion) and runs/<run-id>/proving-tests.v1.json (schemas/integrations/proving-tests.v1.schema.json) respectively; this schema does not repeat their contents.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "runId", "projectRef", "sourceCommit", "assayCommit", "tool",
+    "startedAt", "finishedAt", "findingFiles", "provingTests", "completeness"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this index shape. A reader MUST reject any schemaVersion whose major is not '1' with IMPORT_UNSUPPORTED_MAJOR (FB-RAT-COM-003)."
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable dedupe key for this Assay run (INT-019). Also names the runs/<runId>/ directory this index's findingFiles/provingTests paths are relative to."
+    },
+    "projectRef": { "$ref": "#/$defs/AssayProjectRef" },
+    "sourceCommit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The commit of the SCANNED repository (not the Assay output branch) this run's findings apply to — what Core resolves and reads when the user later promotes a finding into an Incident, so the source link stays pinned even if the branch moves on."
+    },
+    "assayCommit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The commit ON the Assay output branch that carries this exact index + runs/<runId>/ tree — the commit the user explicitly committed/pushed (INT-018 flow step 2)."
+    },
+    "tool": { "$ref": "#/$defs/AssayToolRef" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "findingFiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/FindingFileRef" },
+      "description": "One entry per findings output file this run produced (typically one findings.sarif, optionally a findings.json normalized companion)."
+    },
+    "provingTests": { "$ref": "#/$defs/ProvingTestsSummary" },
+    "completeness": {
+      "type": "string",
+      "enum": ["COMPLETE", "PARTIAL", "FAILED"],
+      "description": "Whether every configured scanner (MobSF/OSV-Scanner/Semgrep/Gitleaks per this repo's SOLE-finding-source rule) ran to completion. COMPLETE means all did; PARTIAL/FAILED require `explanation` (structurally enforced below) — a run MUST NOT silently under-report scanner coverage."
+    },
+    "explanation": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Human-readable reason, required non-blank whenever completeness is PARTIAL or FAILED (e.g. 'OSV-Scanner timed out after 10m; MobSF/Semgrep/Gitleaks completed'). MUST be null-or-absent to non-blank only per the if/then below — never a placeholder string standing in for a real reason."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "completeness": { "enum": ["PARTIAL", "FAILED"] } },
+        "required": ["completeness"]
+      },
+      "then": {
+        "required": ["explanation"],
+        "properties": { "explanation": { "type": "string", "minLength": 1 } }
+      }
+    }
+  ],
+  "$defs": {
+    "AssayProjectRef": {
+      "type": "object",
+      "required": ["gitRemote"],
+      "properties": {
+        "gitRemote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scanned repository's git remote URL, the primary identity Core matches against when the user selects repo+branch."
+        },
+        "fonebrewProjectHint": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Optional Fonebrew project id Assay was told about at scan time, offered as a convenience default only — Core MUST still require the explicit repo+branch selection + 'Check branch' tap (INT-012, INT-020) before reading anything; this hint is never auto-applied."
+        }
+      },
+      "additionalProperties": true
+    },
+    "AssayToolRef": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "FindingFileRef": {
+      "type": "object",
+      "required": ["path", "sha256", "count"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to runs/<runId>/, e.g. 'findings.sarif'. A reader MUST reject any path containing a '..' segment (see fixtures/integrations/adversarial for the equivalent common-domain pattern this mirrors) before opening it."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Digest of the exact bytes at `path` (FB-RAT-COM-005). Core MUST recompute and compare this before trusting the file's contents — an index claiming a digest that does not match the actual bytes is IMPORT_DIGEST_MISMATCH."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of findings/results in this file, for a cheap pre-parse sanity count."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ProvingTestsSummary": {
+      "type": "object",
+      "required": ["path", "count"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to runs/<runId>/ to the detailed proving-tests.v1.json file (schemas/integrations/proving-tests.v1.schema.json), typically 'proving-tests.v1.json'."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of proving-test entries in that file, matching its own `tests` array length."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
