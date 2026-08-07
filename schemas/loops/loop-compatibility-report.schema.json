@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-compatibility-report.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopCompatibilityReport per docs/ratified/loops/LOOP_COMPATIBILITY_CONTRACT.md §1-§11 (FB-RAT-CMP-001..007). Ten axes (§2, FB-RAT-CMP-001) each resolve to one of five outcomes (§3, FB-RAT-CMP-004); overall outcome is the worst axis outcome under §3's strict precedence order (UNSUPPORTED > BLOCKED > DEGRADED > COMPATIBLE_WITH_BINDINGS > COMPATIBLE) — encoded structurally below via allOf/if/then/contains, not left as prose alone. `phoneAuthoritative` is pinned `const: true` (§6, FB-RAT-CMP-005): this schema has no representable shape for a marketplace- or browser-produced report, because §6 requires those be labeled a 'preview against a declared profile' and MUST NOT be cached or reused as if authoritative — a genuinely different, unmodeled object, not a false value of this field.",
+  "title": "LoopCompatibilityReport",
+  "description": "The phone-authoritative evaluation of whether a specific installing phone can understand, install, bind, and run a specific LoopPackage release, across all ten compatibility axes, without hiding degradation or silently substituting an unsafe resource (LOOP_COMPATIBILITY_CONTRACT.md §1). Produced by the PARSED_VALIDATED-to-COMPATIBILITY_EVALUATED transition (LOOP_IMPORT_ACTIVATION_CONTRACT.md §3) and re-run whenever the §10 cache key changes or a destructive/publish-class execution is about to start.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "reportId", "loopId", "semanticVersion", "packageDigest",
+    "phoneAuthoritative", "axisOutcomes", "overallOutcome", "cacheKey", "evaluatedAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this report's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "reportId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this report (FB-RAT-COM-002)."
+    },
+    "loopId": { "type": "string", "minLength": 1 },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "packageDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "packageContentDigest of the release being evaluated (floop-container-format.v1.json)."
+    },
+    "phoneAuthoritative": {
+      "const": true,
+      "description": "FB-RAT-CMP-005: the installing phone MUST be the sole authoritative evaluator. See this schema's top-level $comment for why there is no false-value counterpart object in this schema — a non-authoritative preview is a different, unmodeled shape, per LOOP_COMPATIBILITY_CONTRACT.md §6."
+    },
+    "axisOutcomes": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/AxisOutcome" },
+      "allOf": [
+        { "contains": { "properties": { "axis": { "const": "SCHEMA" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "ENGINE" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "NODE_TYPE" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "CAPABILITY" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "MODEL_CLASS" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "EXECUTION_TARGET" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "PLATFORM_DISTRIBUTION" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "DEVICE" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "RESOURCE" } }, "required": ["axis"] } },
+        { "contains": { "properties": { "axis": { "const": "POLICY" } }, "required": ["axis"] } }
+      ],
+      "description": "Exactly the ten axes LOOP_COMPATIBILITY_CONTRACT.md §2 (FB-RAT-CMP-001) requires — no fewer, and (via minItems=maxItems=10 combined with the ten `contains` clauses, each requiring a distinct axis value present) no duplicates or omissions either: ten required-distinct values in an array capped at length 10 forces exactly one entry per axis."
+    },
+    "overallOutcome": {
+      "$ref": "#/$defs/CompatibilityOutcome",
+      "description": "Derived from the worst per-axis outcome under §3's strict precedence order — structurally enforced by the `allOf` below, not merely documented."
+    },
+    "cacheKey": {
+      "$ref": "#/$defs/CacheKey",
+      "description": "LOOP_COMPATIBILITY_CONTRACT.md §10's exact six-field cache key tuple. A cached report MUST NOT be reused once any one of these six fields changes on the installing phone (§10's CACHED_VALID-to-CACHED_STALE transition), and MUST be re-evaluated regardless of cache validity immediately before any EXECUTE_DESTRUCTIVE-or-above or PUBLISH_OR_RELEASE-class execution (§10's MUST_REVALIDATE row)."
+    },
+    "evaluatedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this evaluation ran (FB-RAT-COM-004)."
+    },
+    "producer": {
+      "oneOf": [
+        { "$ref": "#/$defs/ProducerRef" },
+        { "type": "null" }
+      ],
+      "default": null
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "axisOutcomes": { "contains": { "properties": { "outcome": { "const": "UNSUPPORTED" } }, "required": ["outcome"] } }
+        },
+        "required": ["axisOutcomes"]
+      },
+      "then": { "properties": { "overallOutcome": { "const": "UNSUPPORTED" } } },
+      "$comment": "§3 precedence 1 (highest): any UNSUPPORTED axis finding forces overall UNSUPPORTED, regardless of what else is present."
+    },
+    {
+      "if": {
+        "properties": {
+          "axisOutcomes": {
+            "allOf": [
+              { "not": { "contains": { "properties": { "outcome": { "const": "UNSUPPORTED" } }, "required": ["outcome"] } } },
+              { "contains": { "properties": { "outcome": { "const": "BLOCKED" } }, "required": ["outcome"] } }
+            ]
+          }
+        },
+        "required": ["axisOutcomes"]
+      },
+      "then": { "properties": { "overallOutcome": { "const": "BLOCKED" } } },
+      "$comment": "§3 precedence 2: BLOCKED wins only in the absence of a higher-precedence UNSUPPORTED finding."
+    },
+    {
+      "if": {
+        "properties": {
+          "axisOutcomes": {
+            "allOf": [
+              { "not": { "contains": { "properties": { "outcome": { "const": "UNSUPPORTED" } }, "required": ["outcome"] } } },
+              { "not": { "contains": { "properties": { "outcome": { "const": "BLOCKED" } }, "required": ["outcome"] } } },
+              { "contains": { "properties": { "outcome": { "const": "DEGRADED" } }, "required": ["outcome"] } }
+            ]
+          }
+        },
+        "required": ["axisOutcomes"]
+      },
+      "then": { "properties": { "overallOutcome": { "const": "DEGRADED" } } },
+      "$comment": "§3 precedence 3."
+    },
+    {
+      "if": {
+        "properties": {
+          "axisOutcomes": {
+            "allOf": [
+              { "not": { "contains": { "properties": { "outcome": { "const": "UNSUPPORTED" } }, "required": ["outcome"] } } },
+              { "not": { "contains": { "properties": { "outcome": { "const": "BLOCKED" } }, "required": ["outcome"] } } },
+              { "not": { "contains": { "properties": { "outcome": { "const": "DEGRADED" } }, "required": ["outcome"] } } },
+              { "contains": { "properties": { "outcome": { "const": "COMPATIBLE_WITH_BINDINGS" } }, "required": ["outcome"] } }
+            ]
+          }
+        },
+        "required": ["axisOutcomes"]
+      },
+      "then": { "properties": { "overallOutcome": { "const": "COMPATIBLE_WITH_BINDINGS" } } },
+      "$comment": "§3 precedence 4."
+    },
+    {
+      "if": {
+        "properties": {
+          "axisOutcomes": {
+            "allOf": [
+              { "not": { "contains": { "properties": { "outcome": { "const": "UNSUPPORTED" } }, "required": ["outcome"] } } },
+              { "not": { "contains": { "properties": { "outcome": { "const": "BLOCKED" } }, "required": ["outcome"] } } },
+              { "not": { "contains": { "properties": { "outcome": { "const": "DEGRADED" } }, "required": ["outcome"] } } },
+              { "not": { "contains": { "properties": { "outcome": { "const": "COMPATIBLE_WITH_BINDINGS" } }, "required": ["outcome"] } } }
+            ]
+          }
+        },
+        "required": ["axisOutcomes"]
+      },
+      "then": { "properties": { "overallOutcome": { "const": "COMPATIBLE" } } },
+      "$comment": "§3 precedence 5 (lowest): every axis is COMPATIBLE."
+    }
+  ],
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ProducerRef": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "CompatibilityAxis": {
+      "type": "string",
+      "enum": [
+        "SCHEMA", "ENGINE", "NODE_TYPE", "CAPABILITY", "MODEL_CLASS",
+        "EXECUTION_TARGET", "PLATFORM_DISTRIBUTION", "DEVICE", "RESOURCE", "POLICY"
+      ],
+      "description": "LOOP_COMPATIBILITY_CONTRACT.md §2's ten axes (FB-RAT-CMP-001), verbatim."
+    },
+    "CompatibilityOutcome": {
+      "type": "string",
+      "enum": ["COMPATIBLE", "COMPATIBLE_WITH_BINDINGS", "DEGRADED", "BLOCKED", "UNSUPPORTED"],
+      "description": "LOOP_COMPATIBILITY_CONTRACT.md §3's five-value outcome enum (FB-RAT-CMP-004), in descending recoverability / ascending severity as listed: COMPATIBLE, COMPATIBLE_WITH_BINDINGS, DEGRADED, BLOCKED, UNSUPPORTED. FB-RAT-IMP-007 (owned by LOOP_IMPORT_ACTIVATION_CONTRACT.md) consumes this exact enum for its COMPATIBILITY_EVALUATED transition."
+    },
+    "RemediationType": {
+      "type": "string",
+      "enum": [
+        "BIND_RESOURCE", "INSTALL_TRUSTED_CAPABILITY", "CHOOSE_ALTERNATE_RELEASE",
+        "ENABLE_PERMISSION", "SELECT_REMOTE_TARGET", "LOWER_AUTHORITY", "UPDATE_ENGINE",
+        "RUN_MIGRATION", "CONTACT_PUBLISHER", "ABANDON_IMPORT"
+      ],
+      "description": "LOOP_COMPATIBILITY_CONTRACT.md §11's closed, machine-checkable remediation-action enum."
+    },
+    "AxisFinding": {
+      "type": "object",
+      "required": ["code", "severity"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^LOOP-[A-Z]+-[0-9]{3}$",
+          "description": "A rule code from loop-validation-rules.v1.json — for compatibility findings, typically the LOOP-COMPAT namespace (e.g. LOOP-COMPAT-001, LOOP-COMPAT-002), though any namespace's code MAY appear here when an axis's finding is grounded in a non-LOOP-COMPAT rule."
+        },
+        "severity": { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        "message": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "AxisOutcome": {
+      "type": "object",
+      "required": ["axis", "outcome", "reason"],
+      "properties": {
+        "axis": { "$ref": "#/$defs/CompatibilityAxis" },
+        "outcome": {
+          "$ref": "#/$defs/CompatibilityOutcome",
+          "description": "FB-RAT-IMP-007: this axis's own outcome, one of the same five values `overallOutcome` draws from."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actionable reason text for this axis's outcome (LOOP_COMPATIBILITY_CONTRACT.md §1 — 'without hiding degradation'). MUST NOT be empty even when `outcome` is COMPATIBLE — state plainly what was checked and that it passed, not just omit reasoning for the passing case."
+        },
+        "remediationType": {
+          "oneOf": [
+            { "$ref": "#/$defs/RemediationType" },
+            { "type": "null" }
+          ],
+          "default": null,
+          "description": "§11's closed remediation action, required whenever `outcome` is not COMPATIBLE (see the `if`/`then` below) — a non-compatible axis outcome with no remediation path leaves the user stuck with no next step, which §11 exists to prevent."
+        },
+        "findings": {
+          "type": "array",
+          "default": [],
+          "items": { "$ref": "#/$defs/AxisFinding" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "not": { "const": "COMPATIBLE" } } },
+            "required": ["outcome"]
+          },
+          "then": { "required": ["remediationType"], "properties": { "remediationType": { "$ref": "#/$defs/RemediationType" } } },
+          "$comment": "LOOP_COMPATIBILITY_CONTRACT.md §11: any non-COMPATIBLE axis outcome MUST carry a remediationType (non-null) — an unresolvable finding with no path forward is still ABANDON_IMPORT, never a silent absence."
+        }
+      ],
+      "additionalProperties": true
+    },
+    "CacheKey": {
+      "type": "object",
+      "required": ["packageDigest", "engineVersion", "capabilityInventoryDigest", "policyDigest", "deviceOsProfile", "distributionFlavor"],
+      "properties": {
+        "packageDigest": { "$ref": "#/$defs/IntegrityRef" },
+        "engineVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "capability-ids.v1.json's engineVersion at evaluation time."
+        },
+        "capabilityInventoryDigest": {
+          "$ref": "#/$defs/IntegrityRef",
+          "description": "Digest over the installing phone's currently-installed capability inventory."
+        },
+        "policyDigest": {
+          "$ref": "#/$defs/IntegrityRef",
+          "description": "Digest over the principal's currently-held policy/grant state (CAPABILITY_AUTHORITY_MODEL.md)."
+        },
+        "deviceOsProfile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A stable, non-personally-identifying device/OS classification string — MUST NOT be a value capable of re-identifying one specific physical unit (LOOP_COMPATIBILITY_CONTRACT.md §8's same DeviceIdentity.family/board-not-usbDescriptor discipline applies here by the same reasoning)."
+        },
+        "distributionFlavor": {
+          "type": "string",
+          "enum": ["full", "play"],
+          "description": "DISTRIBUTION_CAPABILITY_SPLIT.md's `dist` Gradle dimension flavor names (FB-RAT-DIST-001), lowercase to match the flavor's own wire vocabulary rather than this corpus's usual SCREAMING_SNAKE convention."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

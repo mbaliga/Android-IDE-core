@@ -1,0 +1,16 @@
+{
+  "nodeId": "node-summarize-thread",
+  "iterationIndex": 0,
+  "callIndex": 0,
+  "recordedPromptDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+    "byteLength": 812
+  },
+  "recordedOutput": {
+    "summary": "Three participants agreed to ship v1.0.0 next Tuesday."
+  },
+  "recordedDecision": null,
+  "stale": false,
+  "recordedAtUtc": "2026-07-15T08:00:00Z"
+}

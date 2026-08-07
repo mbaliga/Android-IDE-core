@@ -1,0 +1,11 @@
+{
+  "comparisonId": "authdiff-0002",
+  "generatedAtUtc": "2026-08-07T10:05:00Z",
+  "comparisonContext": "LINEAGE_COMPARISON",
+  "perCapability": [
+    { "capabilityId": "fb.repo.read", "before": "READ", "after": "READ", "direction": "UNCHANGED" },
+    { "capabilityId": "fb.device.flash", "before": null, "after": "EXECUTE_DESTRUCTIVE", "direction": "ADDED" },
+    { "capabilityId": "fb.exec.local_process", "before": "EXECUTE_REVERSIBLE", "after": "EXECUTE_EXTERNAL", "direction": "WIDENED" }
+  ],
+  "requiresFreshApproval": true
+}

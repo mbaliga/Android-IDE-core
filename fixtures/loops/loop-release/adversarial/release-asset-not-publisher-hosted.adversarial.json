@@ -1,0 +1,16 @@
+{
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.1.0",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "abababababababababababababababababababababababababababababababab",
+    "byteLength": 200
+  },
+  "publisherKeyFingerprint": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+  "releaseAssetUrl": "https://cdn.fonebrew-hosted-mirror.example/uploads/loop-fb-triage-inbox-1.1.0.floop",
+  "publishedAtUtc": "2026-07-18T09:00:00Z",
+  "signatureRef": {
+    "signatureAssetUrl": "https://cdn.fonebrew-hosted-mirror.example/uploads/loop-fb-triage-inbox-1.1.0.floop.sig.json",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0.0",
+  "shareId": "share-0001",
+  "releaseIdentity": {
+    "loopId": "loop.demo.hello-file",
+    "semanticVersion": "1.0.0",
+    "packageContentDigest": { "algorithm": "SHA-256", "digestHex": "bd0744455f140b0c49f72b83b21489ea512354a54ae7d43bef4e0489fd31181e", "byteLength": 4096 }
+  },
+  "engineVersion": "1.0.0",
+  "terminalState": "SUCCEEDED_VERIFIED",
+  "terminalReasonCategory": "ALL_REQUIRED_VERIFIERS_PASSED",
+  "nodeStateSummary": {
+    "publishedLoop": true,
+    "totalNodeCountBucket": "ONE_TO_FIVE",
+    "nodeOutcomeCountBuckets": [ { "outcome": "SUCCEEDED", "countBucket": "ONE_TO_FIVE" } ],
+    "nodeIds": ["n1", "n2"]
+  },
+  "bucketingVersion": "fb-share-bucket-1",
+  "durationBucket": "TEN_SECONDS_TO_ONE_MINUTE",
+  "retryCountBucket": "ZERO",
+  "aggregateCostBucket": "UNDER_ONE_CENT",
+  "aggregateTokensBucket": "ONE_THOUSAND_TO_TEN_THOUSAND",
+  "localCloudRatio": { "computed": true, "ratioVersion": "fb-ratio-1", "localFraction": 1.0, "remoteFraction": 0.0, "ciFraction": 0.0 },
+  "capabilityCategories": ["workspace", "model"],
+  "verificationClaim": {
+    "label": "SELF_SIGNED_RECEIPT",
+    "claimText": "The same signing key produced this receipt and any other receipts under it (pseudonymous continuity only). This does NOT prove a genuine Fonebrew runtime, a specific device, or an unmodified app produced it, and does NOT prove the loop is safe, correct, representative, or suitable for another user.",
+    "signingKeyFingerprint": "a3f5c9d1e7b2846f0193a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7"
+  },
+  "createdAtUtc": "2026-08-07T09:12:00Z"
+}

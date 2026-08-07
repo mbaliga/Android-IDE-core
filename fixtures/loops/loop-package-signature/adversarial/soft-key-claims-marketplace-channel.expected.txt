@@ -1,0 +1,20 @@
+Schema verdict: VALID against loop-package-signature.schema.json.
+keyProvenance=SOFT_KEY correctly pairs with softKeyScope="UNLISTED_DRAFT_ONLY" (the schema's
+own if/then is satisfied); releaseChannel is a free-form non-empty string, so "MARKETPLACE" is
+independently well-formed. Nothing in this schema cross-checks releaseChannel's VALUE against
+keyProvenance/softKeyScope.
+
+Real rejection: a SOFT_KEY-provenance signature is, by this same record's own softKeyScope
+declaration, restricted to UNLISTED_DRAFT_ONLY use — binding it to releaseChannel "MARKETPLACE"
+is a direct self-contradiction. This is exactly the transition
+docs/ratified/loops/LOOP_WEB_STUDIO_SPEC.md §13 names explicitly:
+
+  SOFT_SIGNED_DRAFT --(author attempts marketplace publish directly)--> REJECTED_INSUFFICIENT_SIGNATURE
+
+No loop-validation-rules.v1 code covers this — that registry governs package/definition content
+(LOOP-PKG-*, LOOP-ID-*, etc.), not the signature-tier-vs-release-channel policy check, which is
+owned by the Web Studio signing state machine (cited above) and LOOP_MARKETPLACE_CONTRACT.md's
+listing/release model. Enforcement point: marketplace ingestion MUST reject any signature record
+where keyProvenance=SOFT_KEY and releaseChannel names a marketplace/listed channel, independent of
+softKeyScope's self-declared value — a soft key cannot self-upgrade its own trust tier by lying
+about the channel any more than by omitting softKeyScope entirely.

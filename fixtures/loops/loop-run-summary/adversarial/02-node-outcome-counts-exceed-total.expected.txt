@@ -1,0 +1,19 @@
+Schema validation: PASSES (this document is schema-valid against loop-run-summary.schema.json).
+
+Real rejection: internal arithmetic inconsistency, not a named FB-RAT-* or LOOP-* rule code (no
+existing frozen registry code covers this particular cross-field consistency check as of this
+freeze — flagged here as a genuine schema gap, not mapped to a code that does not apply).
+`nodeStateSummary.totalNodeCount = 2`, but `nodeOutcomeCounts` sums to 5 (3 SUCCEEDED + 1 FAILED +
+1 RETRIED) — more outcomes are reported than the run actually had nodes for. A consumer trusting
+`totalNodeCount` as the run's real size while trusting `nodeOutcomeCounts` for a breakdown would be
+misled about how much retry/failure activity actually occurred relative to run size, which matters
+directly for this document's downstream purpose: `nodeOutcomeCounts` (via its bucketed
+loop-result-share.schema.json counterpart) is exactly the "per-node counts" §4's coarse-bucketing
+requirement exists to protect from becoming a re-identifying fingerprint, so an internally
+inconsistent count undermines the bucketing's own accuracy before it is even computed.
+
+Why the schema cannot catch this: `totalNodeCount` and `nodeOutcomeCounts` are independent sibling
+fields with no `sum(nodeOutcomeCounts[].count) <= totalNodeCount` constraint expressed anywhere in
+this schema (JSON Schema draft 2020-12 has no built-in cross-array-to-integer arithmetic-sum
+keyword). Enforcing this requires a validator that sums the array and compares it against the
+sibling integer — a semantic/computed check, not a structural one this schema encodes.

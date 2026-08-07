@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-fork-lineage.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ForkLineage realizes LOOP_ENGINEERING_SPEC_V2.1 §2.9's ForkLineage concept, detailed normatively in LOOP_FORK_LINEAGE_CONTRACT.md (FB-RAT-LIN-001..007; LIN-007 DEFERRED). Field-list expansion beyond the task brief's literal enumeration (forkId, parentReleaseRef, forkReason, authorshipContributions, licenseRef, attributionRequired, upstreamRelationship, lastComparedAgainstUpstream) is grounded directly in that document's §2 'Objects' list and §3/§5/§9/§11 normative text, not invented: `initiatingActor`+`createdAtUtc` (§3, required fork-creation fields), `lineageEvents` (§2's append-only lineage-event vocabulary — FORK_CREATED..LOCAL_FORK_DELETED, seven values, verbatim), `appliedUpstreamOperations` (§2's 'Applied upstream change set', §7/§10), `licenseCompatibilityFinding` (§5's publish-time LOOP-LINEAGE-002 gate), `publication` (§11's derivative-publication declarations), and `authorityDiffSinceFork` (this same work package's standalone authority-diff.schema.json, consumed here per that document's own header note). `lastComparedAgainstUpstream` is a pointer to a loop-semantic-diff.schema.json document (written by the sibling definition-authoring group, cross-referenced by ID here, never embedded) — per the task brief, 'this is exactly where FB-RAT-LIN-004's per-category diff and FB-RAT-LIN-005's independent authority diff get consumed,' so this document does not re-derive the nine-category report or the four-condition blocking-review group; `authorityDiffSinceFork` below is a DIFFERENT, narrower field — the capability-only comparison between this fork's CURRENT authority requests and its PARENT's requests AT FORK TIME (§3), independent of any later upstream-comparison session §10 walks through.",
+  "title": "ForkLineage",
+  "description": "A provenance record connecting a derivative draft or release to its parent release(s), applied upstream changes, authorship, attribution, and license (LOOP_FORK_LINEAGE_CONTRACT.md, FB-RAT-LIN-001..006). Created at fork time (§3) and updated in place as lineage events accumulate (§2, §12 'lineage events are append-only') — this schema does not itself enforce append-only growth of `lineageEvents`/`appliedUpstreamOperations` across successive versions of the same document (a store-level obligation over time, not a single-instance structural property, matching this corpus's established pattern for the same class of gap — see loop-installation.schema.json's identical immutability-invariant caveat).",
+  "type": "object",
+  "required": [
+    "schemaVersion", "forkId", "parentReleaseRef", "attributionRequired", "licenseRef",
+    "authorshipContributions", "initiatingActor", "createdAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "forkId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The fork draft's own draftId (LOOP_ENGINEERING_SPEC_V2.1 §14 'draftId identifies mutable authoring state and is never reused after deletion'), minted at fork time (§2 'Fork draft identity', §3)."
+    },
+    "parentReleaseRef": {
+      "$ref": "#/$defs/ReleaseIdentity",
+      "description": "§3's Parent reference — the immutable {loopId, semanticVersion, packageDigest} tuple this fork was created from (§2: 'every lineage object below names a parent by this tuple, never by a mutable pointer such as a listing URL'). `packageDigest` here matches this work package's task-brief field name; the underlying value is exactly LOOP_PACKAGE_SPEC.md's packageContentDigest (naming-drift note per loop-release.schema.json's own precedent, not a semantic conflict)."
+    },
+    "forkReason": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "§3: 'an optional, user-supplied fork reason.'"
+    },
+    "initiatingActor": {
+      "$ref": "#/$defs/ActorClass",
+      "description": "§3: 'the initiating actor,' using §2's actor-class vocabulary (LOOP_ENGINEERING_SPEC_V2.1 §15, reused not reinvented per §3's own cross-reference)."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fork time (§3, FB-RAT-COM-004, UTC)."
+    },
+    "authorshipContributions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/AuthorshipContribution" },
+      "description": "§2's Contribution/author record, one per contributing author — required non-empty: a fork with zero recorded authorship is exactly LOOP-LINEAGE-001's 'missing parent attribution' condition (loop-validation-rules.v1.json)."
+    },
+    "licenseRef": {
+      "$ref": "#/$defs/LicenseRef",
+      "description": "§2's License and attribution record, §5's carry-through obligation."
+    },
+    "attributionRequired": {
+      "type": "boolean",
+      "description": "Whether the parent's license/terms require attribution to be preserved and displayed (§5). This is a declared FACT about the parent's terms, not itself the enforcement — §5's preservation obligations apply regardless of this flag's value; the flag exists so a consuming UI knows whether to surface attribution prominently."
+    },
+    "upstreamRelationship": {
+      "oneOf": [{ "$ref": "#/$defs/UpstreamRelationship" }, { "type": "null" }],
+      "default": null,
+      "description": "NONE: fork has diverged and tracks no ongoing upstream relationship. TRACKING: fork's lineage still references its parent family for future upstream-comparison sessions (§6, §10). REBASED: fork owner performed a manual rebase (§6's fifth choice) — outside §10's automated machine. Null before any upstream-relationship posture has been established."
+    },
+    "lastComparedAgainstUpstream": {
+      "oneOf": [{ "$ref": "#/$defs/DurableObjectRef" }, { "type": "null" }],
+      "default": null,
+      "description": "Pointer to the most recent loop-semantic-diff.schema.json document produced by §10's COMPARING -> DIFF_READY transition (sourceKind=LINEAGE_COMPARISON) — carries BOTH the nine-category §8 report and the §9 blocking-review-group in one referenced object, per this document's header note. Null before any comparison has run."
+    },
+    "authorityDiffSinceFork": {
+      "oneOf": [{ "$ref": "#/$defs/AuthorityDiff" }, { "type": "null" }],
+      "default": null,
+      "description": "The narrower, standalone authority-diff.schema.json shape (this work package's cross-domain reusable object) — a capability-only comparison between this fork's CURRENT authority requests and its parent's requests AT FORK TIME, independent of any later upstream-comparison session. Distinct from `lastComparedAgainstUpstream`'s fuller diff. Null when no such comparison has been computed."
+    },
+    "appliedUpstreamOperations": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/AppliedUpstreamOperation" },
+      "description": "§2's Applied upstream change set — §7/§10: 'each accepted upstream operation MUST be applied to a new local revision individually, never batched.' Append-only in practice (§12); this schema does not itself enforce monotonic growth (see this document's top-level description)."
+    },
+    "lineageEvents": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/LineageEvent" },
+      "description": "§2's append-only lineage-event record — at minimum FORK_CREATED, UPSTREAM_COMPARED, UPSTREAM_OPERATION_APPLIED, FORK_REVISION_CREATED_FROM_UPSTREAM, SUBLOOP_EXTRACTED, DERIVATIVE_PUBLISHED, LOCAL_FORK_DELETED (verbatim, §2). This is the enforcement surface LOOP-LINEAGE-001 (loop-validation-rules.v1.json) checks against."
+    },
+    "licenseCompatibilityFinding": {
+      "oneOf": [{ "$ref": "#/$defs/LicenseChangeFinding" }, { "type": "null" }],
+      "default": null,
+      "description": "§5: 'A derivative's declared license MUST be checked for compatibility with its parent's license before the derivative may publish... blocked from publication' if INCOMPATIBLE (LOOP-LINEAGE-002, loop-validation-rules.v1.json). Null before this fork has ever been evaluated for publication. See this schema's allOf: `publication` MUST NOT be present unless this is exactly COMPATIBLE."
+    },
+    "publication": {
+      "oneOf": [{ "$ref": "#/$defs/DerivativePublication" }, { "type": "null" }],
+      "default": null,
+      "description": "§11: FB-RAT-LIN-006's declared-derivative fields, populated only once this fork has actually been published. Null for an unpublished (or not-yet-evaluated-for-publication) fork."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "properties": { "publication": { "type": "object" } }, "required": ["publication"] },
+      "then": { "properties": { "licenseCompatibilityFinding": { "const": "COMPATIBLE" } }, "required": ["licenseCompatibilityFinding"] },
+      "$comment": "§5/LOOP-LINEAGE-002: a fork whose license is not COMPATIBLE with its parent MUST be blocked from publication — a non-null `publication` therefore requires licenseCompatibilityFinding=COMPATIBLE. This schema cannot verify the CONVERSE (that publication.publishedLoopId actually differs from parentReleaseRef.loopId unless ownership was transferred, §11) — cross-field string-inequality is not expressible generically in JSON Schema without knowing the compared value ahead of time; documented here as an acknowledged gap, matching this corpus's established pattern (see loop-draft.schema.json's own acknowledged VALID-with-ERROR-findings gap) rather than left unstated."
+    }
+  ],
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "DurableObjectRef": {
+      "type": "object",
+      "required": ["objectId"],
+      "properties": {
+        "objectId": { "type": "string", "minLength": 1 },
+        "digest": { "oneOf": [{ "$ref": "#/$defs/IntegrityRef" }, { "type": "null" }], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "ReleaseIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+        "packageDigest": { "$ref": "#/$defs/IntegrityRef" }
+      },
+      "additionalProperties": true
+    },
+    "ActorClass": {
+      "type": "string",
+      "enum": ["USER", "DISTILLER", "AI_PROPOSAL", "IMPORT_MIGRATION", "UPSTREAM_APPLY"]
+    },
+    "AuthorshipContribution": {
+      "type": "object",
+      "required": ["contributorId", "contributionDescription"],
+      "properties": {
+        "contributorId": { "type": "string", "minLength": 1 },
+        "contributionDescription": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "LicenseRef": {
+      "type": "object",
+      "properties": {
+        "spdxId": { "type": ["string", "null"], "default": null },
+        "licenseFileRef": { "type": ["string", "null"], "default": null },
+        "customLicenseText": { "type": ["string", "null"], "default": null }
+      },
+      "anyOf": [
+        { "required": ["spdxId"], "properties": { "spdxId": { "type": "string", "minLength": 1 } } },
+        { "required": ["licenseFileRef"], "properties": { "licenseFileRef": { "type": "string", "minLength": 1 } } },
+        { "required": ["customLicenseText"], "properties": { "customLicenseText": { "type": "string", "minLength": 1 } } }
+      ],
+      "additionalProperties": true,
+      "description": "At least one of the three MUST be a non-blank string — feeds LOOP-LINEAGE-* checks. Same shape as LoopDefinitionContracts.kt's LicenseRef, duplicated locally."
+    },
+    "UpstreamRelationship": { "type": "string", "enum": ["NONE", "TRACKING", "REBASED"] },
+    "LicenseChangeFinding": { "type": "string", "enum": ["COMPATIBLE", "INCOMPATIBLE", "NOT_EVALUATED"] },
+    "AuthorityRung": {
+      "type": "string",
+      "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE"]
+    },
+    "AuthorityDiff": {
+      "type": "object",
+      "required": ["comparisonId", "generatedAtUtc", "perCapability", "requiresFreshApproval"],
+      "properties": {
+        "comparisonId": { "type": "string", "minLength": 1 },
+        "generatedAtUtc": { "type": "string", "format": "date-time" },
+        "comparisonContext": { "oneOf": [{ "type": "string", "enum": ["UPDATE_GATE", "LINEAGE_COMPARISON", "OTHER"] }, { "type": "null" }], "default": "LINEAGE_COMPARISON" },
+        "perCapability": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": ["capabilityId", "direction"],
+            "properties": {
+              "capabilityId": { "type": "string", "pattern": "^fb\\.[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+              "before": { "oneOf": [{ "$ref": "#/$defs/AuthorityRung" }, { "type": "null" }], "default": null },
+              "after": { "oneOf": [{ "$ref": "#/$defs/AuthorityRung" }, { "type": "null" }], "default": null },
+              "direction": { "type": "string", "enum": ["WIDENED", "NARROWED", "UNCHANGED", "ADDED", "REMOVED"] }
+            },
+            "additionalProperties": true
+          }
+        },
+        "requiresFreshApproval": { "type": "boolean" }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": { "properties": { "perCapability": { "contains": { "properties": { "direction": { "enum": ["ADDED", "WIDENED"] } }, "required": ["direction"] } } }, "required": ["perCapability"] },
+          "then": { "properties": { "requiresFreshApproval": { "const": true } } }
+        },
+        {
+          "if": { "not": { "properties": { "perCapability": { "contains": { "properties": { "direction": { "enum": ["ADDED", "WIDENED"] } }, "required": ["direction"] } } }, "required": ["perCapability"] } },
+          "then": { "properties": { "requiresFreshApproval": { "const": false } } }
+        }
+      ],
+      "description": "Duplicated locally from authority-diff.schema.json, per this corpus's standalone-schema convention — same shape, same structural requiresFreshApproval enforcement."
+    },
+    "AppliedUpstreamOperation": {
+      "type": "object",
+      "required": ["opId", "appliedAtUtc", "beforeSemanticDigest", "afterSemanticDigest", "sourceSemanticDiffRef"],
+      "properties": {
+        "opId": { "type": "string", "minLength": 1, "description": "The loop-semantic-diff.schema.json SemanticOperation.opId that was accepted and applied (§7, §10)." },
+        "appliedAtUtc": { "type": "string", "format": "date-time" },
+        "beforeSemanticDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "afterSemanticDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "sourceSemanticDiffRef": { "$ref": "#/$defs/DurableObjectRef" }
+      },
+      "additionalProperties": true
+    },
+    "LineageEvent": {
+      "type": "object",
+      "required": ["eventId", "eventType", "occurredAtUtc", "actor"],
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "FORK_CREATED", "UPSTREAM_COMPARED", "UPSTREAM_OPERATION_APPLIED",
+            "FORK_REVISION_CREATED_FROM_UPSTREAM", "SUBLOOP_EXTRACTED", "DERIVATIVE_PUBLISHED",
+            "LOCAL_FORK_DELETED"
+          ],
+          "description": "§2's exact seven event kinds, verbatim."
+        },
+        "occurredAtUtc": { "type": "string", "format": "date-time" },
+        "actor": { "$ref": "#/$defs/ActorClass" },
+        "relatedRef": { "oneOf": [{ "$ref": "#/$defs/DurableObjectRef" }, { "type": "null" }], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "DerivativePublication": {
+      "type": "object",
+      "required": ["publishedLoopId"],
+      "properties": {
+        "publishedLoopId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "§11: 'A published derivative MUST receive a new, stable loop family ID, distinct from its parent's, unless ownership of the parent family is formally transferred.'"
+        },
+        "listingRef": { "oneOf": [{ "$ref": "#/$defs/DurableObjectRef" }, { "type": "null" }], "default": null, "description": "Pointer to the loop-listing.schema.json record, once published." },
+        "testsInheritedUnchanged": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "testsChangedOrAdded": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "upstreamContributionIntended": { "type": "boolean", "default": false },
+        "ownershipTransferred": {
+          "type": "boolean",
+          "default": false,
+          "description": "§3, §11: true only when the parent publisher's policy explicitly transferred ownership of the parent family to this fork's publisher — the sole condition under which `publishedLoopId` MAY equal the parent's loopId."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,31 @@
+Schema validation: PASSES (this document is schema-valid against loop-draft.schema.json).
+
+Real rejection: violates semantic-digest.v1.json's own conformanceRule, not a loop-validation-rules.v1.json
+LOOP-* code (this concept belongs to the digest registry, not the rule-code registry, and per the
+task instruction not to invent a new code for a concept a registry already covers, none is invented
+here — the registry's own conformanceRule text is the citation):
+
+  conformanceRule (semantic-digest.v1.json): "a loop-engine release is non-conformant if it
+  produces a different semanticDigest for a package that differs only in excluded fields... "
+
+  exclusionListV1 (semantic-digest.v1.json): ["presentation", "layout", "x", "y", "notes"] — matched
+  by exact key name at ANY depth, including a node's own `presentation` object (this fixture's
+  `graph.definition.nodes[0].presentation.x`/`.y`).
+
+This revision record's `operationList` contains exactly one operation, and its own `description`
+states plainly that only `presentation.x`/`presentation.y` on node `n1` changed. Yet
+`resultingSemanticDigest` ("...bb") differs from `baseSemanticDigest` ("...aa"). Per the frozen
+registry, a layout-only edit — dragging a card's canvas position — MUST NOT change the semantic
+digest at all, because `presentation`/`x`/`y` are excluded from the semantic-digest computation
+before canonicalization ever runs. A digest that moved anyway means either the digest was computed
+incorrectly (the producer failed to apply the exclusion list before hashing) or `resultingSemanticDigest`
+is simply fabricated/stale — either way, a real semantic change may be hiding behind a claimed
+presentation-only operation.
+
+Why the schema cannot catch this: `loop-draft.schema.json` treats `baseSemanticDigest` and
+`resultingSemanticDigest` as opaque, independently-typed `sha256:...` strings, and `operationList`
+entries as opaque description/targetType records — nothing in this schema (or in
+loop-definition.v2.schema.json) recomputes a digest from `graph.definition` to cross-check either
+string. Verifying this claim requires actually running the semantic-digest.v1.json algorithm
+(EXCLUDE → CANONICALIZE → DIGEST) over the before/after `graph.definition` snapshots and comparing
+— a validator-time computation, not a JSON Schema structural check.

@@ -1,0 +1,32 @@
+Schema validation: PASSES (this document is schema-valid against loop-semantic-diff.schema.json).
+
+Real rejection: violates FB-RAT-LIN-005 ("Any upstream or fork change that widens capabilities or
+side effects is highlighted independently of ordinary graph changes.", LOOP_FORK_LINEAGE_CONTRACT.md
+§9) — not a loop-validation-rules.v1.json LOOP-* code (LIN-005 is a ratified decision, not a
+registry rule code; the closest machine-checkable sibling is LOOP-COMPAT-002, which enforces the
+same invariant at install/update time rather than at comparison time — see LOOP_FORK_LINEAGE_CONTRACT.md
+§9's own cross-reference between the two enforcement points).
+
+`op-1`'s own `description`/`beforeValue`/`afterValue` state plainly that node n1's requested
+capability moved from `fb.repo.read` (authorityRung READ, capability-ids.v1.json) to
+`fb.device.flash` (authorityRung EXECUTE_DESTRUCTIVE) — an authority widening by any reading, and
+also a destructive-path introduction (a new EXECUTE_DESTRUCTIVE-rung capability becomes reachable
+through n1 that was not reachable before). It is correctly filed under the ordinary
+`categorizedFindings.authority`/`.capability` buckets (§8's nine-category report). But
+`authorityDiffSummary.perCapability` is empty — no WIDENED/ADDED entry for `fb.device.flash` at
+all — and `blockingReviewGroup.authorityWidening` and `.destructivePathIntroduced` are both
+`false`, with `acknowledgedByUser` also `false`. Per §9, this exact class of change MUST be pulled
+OUT into the always-visible blocking review group and MUST be explicitly acknowledged before any
+operation from this comparison may be applied. As authored, a UI trusting only
+`authorityDiffSummary` (the surface §9 says MUST be shown, separately from ordinary findings) would
+never show the user that this diff contains an authority widening at all — it would only appear
+buried in the ordinary `categorizedFindings.authority` list.
+
+Why the schema cannot catch this: `categorizedFindings` and `authorityDiffSummary` are independent
+sibling objects. This schema does not (and structurally cannot, without a computed cross-object
+join keyed on the actual before/after AuthorityRung values embedded in free-form
+`beforeValue`/`afterValue` fields) require that every operation whose content represents a rung
+increase also produces a corresponding `PerCapabilityAuthorityDelta` entry and a `true` blocking-group
+flag. Detecting this requires interpreting `SemanticOperation.beforeValue`/`afterValue` against
+capability-ids.v1.json's `authorityLadder` ordering — semantic interpretation, not JSON Schema
+structural validation.

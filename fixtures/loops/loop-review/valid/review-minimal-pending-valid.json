@@ -1,0 +1,26 @@
+{
+  "reviewId": "review-0002",
+  "releaseIdentity": {
+    "loopId": "loop-fb-release-notes-drafter",
+    "semanticVersion": "2.3.1",
+    "packageDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d",
+      "byteLength": 310
+    }
+  },
+  "ratings": {
+    "usefulness": 3,
+    "reliability": 3,
+    "understandability": 3,
+    "efficiency": 3,
+    "safety": 4
+  },
+  "workedForMe": false,
+  "freeText": "",
+  "reviewerRef": {
+    "pseudonymousId": "gh:another-reviewer"
+  },
+  "moderationState": "PENDING",
+  "createdAtUtc": "2026-07-21T11:00:00Z"
+}

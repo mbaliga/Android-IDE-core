@@ -1,0 +1,27 @@
+Schema verdict: VALID against loop-release.schema.json.
+releaseAssetUrl and signatureRef.signatureAssetUrl are both well-formed URIs; this schema checks
+URL shape only (per its own field description) and cannot determine which infrastructure actually
+hosts the bytes at that URL.
+
+Why this is semantically dangerous: the host "cdn.fonebrew-hosted-mirror.example" is not the
+declared publisher's own GitHub Releases infrastructure. LOOP_MARKETPLACE_CONTRACT.md §11 states
+plainly: ".floop package assets hosted on publishers' own GitHub Releases — never Fonebrew-hosted
+user content. Fonebrew's registry repository holds only the index and metadata; the bytes of every
+package live on infrastructure the publisher, not Fonebrew, controls and is responsible for." A
+release whose asset is instead served from Fonebrew-adjacent infrastructure violates this rule
+directly, and also undermines the "this model carries no DSA or GDPR hosting duties at all"
+argument §11 makes precisely because Fonebrew never hosts user content.
+
+Real rejection code: none frozen in loop-validation-rules.v1.json — this is a registry
+submission-review (PR-merge-time) integrity check specific to FB-RAT-MKT-009's realization, not a
+LoopPackage validation-rules finding (the .floop bytes themselves may be entirely well-formed).
+Per this work package's instruction not to invent a rule code for a concept the frozen registry
+does not cover, this is cited directly against the ratified decision text (LOOP_MARKETPLACE_
+CONTRACT.md §11, FB-RAT-MKT-009) rather than a LOOP-* code. Flagged as a PROPOSED gap for the
+Amendments-phase agent: loop-validation-rules.v1.json currently has no rule code for "release
+asset host does not match declared publisher's own release infrastructure" — a candidate for a
+future LOOP-PKG or a new LOOP-MKT namespace addition, not self-ratified here.
+
+Remediation: reject the submission PR at registry review time; require releaseAssetUrl (and
+signatureRef.signatureAssetUrl) to resolve to the same GitHub owner/repo the publisher's key
+fingerprint and prior releases are already associated with.

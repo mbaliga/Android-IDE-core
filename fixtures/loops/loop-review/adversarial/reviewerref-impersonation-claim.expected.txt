@@ -1,0 +1,29 @@
+Schema verdict: VALID against loop-review.schema.json.
+reviewerRef.pseudonymousId is a non-blank string and freeText is a non-blank string; nothing in
+this schema cross-checks a pseudonymousId's plausibility or a freeText claim's truthfulness — both
+are exactly what the field descriptions say they are (an opaque pseudonymous string and free text),
+not independently fact-checked.
+
+Why this is semantically dangerous: pseudonymousId "gh:fonebrew-official-team-account" is crafted
+to impersonate an authoritative Fonebrew-affiliated identity, and freeText claims an unearned
+"Verified official Fonebrew team review... Play-Store-safe... requires no review" endorsement.
+LOOP_MARKETPLACE_CONTRACT.md §6 states directly that "a publisher profile MUST NOT be presented in
+a way that implies Fonebrew endorsement merely because a signature verifies" — the same principle
+applies to a review falsely claiming Fonebrew-team authorship to short-circuit a reader's own
+safety judgment. loop-review.schema.json's own reviewerRef description is explicit that
+pseudonymousId is "NOT a real-world verified identity" and carries no proof of who actually holds
+it beyond whatever the submission PR process establishes (e.g. the actual GitHub handle that
+opened the PR, which this fixture's pseudonymousId does not have to match at all — a string field
+cannot enforce that correspondence).
+
+Real rejection code: none frozen in loop-validation-rules.v1.json — this is exactly the class of
+"contextual abuse (harassment, fraud, deceptive capability claims) that no automated check can
+decide" LOOP_MARKETPLACE_CONTRACT.md §10 reserves for human moderation review, not a
+deterministic or heuristic LOOP-PKG finding. No rule code is invented here per this work package's
+instruction; this is flagged as a human-moderation matter, citing LOOP_MARKETPLACE_CONTRACT.md §10
+and §6 directly rather than a rule code that does not exist.
+
+Remediation: a human moderator investigates whether the submitting GitHub identity on the PR
+actually has any Fonebrew affiliation; absent verification, the review is rejected or, if already
+published, moved to LIMITED or DELISTED (§10's moderation state table) for a deceptive-identity
+claim — not something an automated schema or rule-code check can resolve on its own.

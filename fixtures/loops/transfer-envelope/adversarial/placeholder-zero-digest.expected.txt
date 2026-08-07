@@ -1,0 +1,19 @@
+Schema verdict: VALID against transfer-envelope.schema.json.
+digestHex is 64 lowercase-hex characters and byteLength is a non-negative integer, so the
+IntegrityRef shape check passes; the schema has no way to know a real SHA-256 of non-trivial
+content is never all-zero.
+
+Real rejection: an all-zero digestHex (with byteLength 0) cannot be a genuine SHA-256 of an actual
+.floop archive — it is a stub/placeholder standing in for "digest not yet known". Accepting it
+would defeat the entire purpose of the expected-digest check LOOP_ENGINEERING_SPEC_V2.1.md §21
+requires ("Every transfer is represented by a user-initiated envelope containing expected media
+type and expected digest"): a placeholder expected digest can never produce a real
+"declared-digest / actual-digest mismatch" rejection once real bytes arrive, silently defeating
+floop-container-format.v1.json's pathRules.adversarialClasses_MUST_reject entry for exactly that
+mismatch class.
+
+No frozen loop-validation-rules.v1 code governs this pre-transfer envelope boundary specifically
+(that registry scopes package/definition content, not this object). Enforcement point: the
+transfer-initiation API MUST refuse to construct a TransferEnvelope until a real digest is known —
+"expected digest not yet available" is not itself a valid transfer state, it is a reason to defer
+starting the transfer.

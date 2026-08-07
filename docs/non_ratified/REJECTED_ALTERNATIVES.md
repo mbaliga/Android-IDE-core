@@ -22,6 +22,10 @@ its topic label is later reworded.
 | `FB-RAT-AUTH-007` | Automatic authority inheritance | Reject automatic or transitive delegation that can expand scope without user approval. | REJECTED |
 | `FB-RAT-INT-003` | Shared backend or database | Reject shared databases, account backends, background services, broadcasts, and automatic synchronization for v1. | REJECTED |
 | `FB-RAT-INT-004` | V1 app-to-app IPC | Reject direct IPC/AIDL as the v1 integration mechanism; use files and repository artifacts. | REJECTED |
+| `FB-RAT-PKG-003` | Executable payloads | Reject DEX, JAR, native libraries, binaries, scripts intended for direct execution, and hidden plugin installers in marketplace packages. | REJECTED |
+| `FB-RAT-WEB-004` | Browser-held operational credentials | Reject storing Fonebrew execution credentials in the browser marketplace service. | REJECTED |
+| `FB-RAT-PHN-003` | Precision edge dragging as primary input | Reject drag-a-wire as the only or primary way to connect nodes on a phone. | REJECTED |
+| `FB-RAT-LBX-005` | Browser as real editor, phone as player | Reject any architecture in which imported loops cannot be understood, edited, repaired, forked, and exported entirely on the phone. | REJECTED |
 
 ## Notes per entry
 
@@ -64,3 +68,35 @@ IPC/AIDL specifically as the mechanism by which companion apps import content in
 v1. A future session extending an import lane MUST route it through files/repository artifacts
 per this rule; a future session touching the ASOM daemon relationship is operating outside this
 rule's scope entirely and does not need an exception filed against it.
+
+### `FB-RAT-PKG-003` — Executable payloads
+
+This is the load-bearing rejection behind `LOOP_PACKAGE_SPEC.md`'s declarative-only content
+policy and `LOOP_MARKETPLACE_CONTRACT.md`'s Play interpreter/VM carve-out positioning. Adversarial
+coverage already exists: `schemas/loops/registries/loop-validation-rules.v1.json` rule code
+`LOOP-PKG-002` ("forbidden executable payload") and `fixtures/loops/loop-package-manifest/
+adversarial/` are the concrete enforcement surface. This document does not own that rule code or
+those fixtures; it only cites the rejection they enforce.
+
+### `FB-RAT-WEB-004` — Browser-held operational credentials
+
+Direct consequence of `FB-RAT-WEB-002`/`FB-RAT-WEB-003` (no secrets in web drafts or packages; no
+private-resource execution by default). `LOOP_WEB_STUDIO_SPEC.md`'s corrected publisher-signing
+flow (move signing to the phone, browser emits an unsigned package) is the concrete design
+response to this rejection — a browser that held operational credentials would not need that
+correction in the first place.
+
+### `FB-RAT-PHN-003` — Precision edge dragging as primary input
+
+Superseded, not merely rejected: `FB-RAT-PHN-004` (tap connection grammar — Select node → Connect
+from here → Select destination → Label/condition → Preview) is the ratified replacement.
+`LOOP_PHONE_AUTHORING_SPEC.md` treats drag as optional pointer-mode sugar (`FB-RAT-LBX-006`) over
+the canonical tap grammar, never the primary or only path.
+
+### `FB-RAT-LBX-005` — Browser as real editor, phone as player
+
+This is the architectural inverse of `FB-RAT-LBX-002` (phone-primary product law) and
+`FB-RAT-PHN-007` (phone completeness gate) — rejecting it is what makes those two decisions
+meaningful rather than aspirational. `LOOP_DUAL_SURFACE_ARCHITECTURE.md` and
+`LOOP_PHONE_AUTHORING_SPEC.md` both depend on this rejection holding; if it were ever reversed,
+both documents would need a structural rewrite, not a patch.

@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-validation-report.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopValidationReport per loop-validation-rules.v1.json's own top-level description: 'A validation report MUST include this rulesetVersion, the semantic digest of the definition being validated, the surface implementation identity, and findings sorted deterministically (by namespace, then code, then nodeId/edgeId).' `findings[].code` MUST be a code from that frozen registry — this schema cross-references it (pattern + duplicated namespace enum) rather than re-enumerating all 24 current rules, so an additive registry minor bump never forces a schema change (matching loop-package-manifest.schema.json's CapabilityRequest precedent).",
+  "title": "LoopValidationReport",
+  "description": "The output of the CONTAINER_VERIFIED-to-PARSED_VALIDATED transition (LOOP_IMPORT_ACTIVATION_CONTRACT.md §3): schema/graph/engine-policy validation against loop-validation-rules.v1.json, run before anything is created or changed. Also produced independently at build time (LOOP_ENGINEERING_SPEC_V2.1 §20's build pipeline step 2, VALIDATE_SEMANTIC_GRAPH) and re-run whenever a definition changes.",
+  "type": "object",
+  "required": ["schemaVersion", "reportId", "rulesetVersion", "semanticDigest", "surfaceImplementation", "findings", "createdAtUtc"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this report's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "reportId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this report (FB-RAT-COM-002)."
+    },
+    "rulesetVersion": {
+      "const": "fb-loop-validation-rules-1",
+      "description": "loop-validation-rules.v1.json's own `rulesetVersion` value, cross-referenced not redefined — pinned as the sole valid value while that registry stays at its current frozen major (a future registry MAJOR bump is a new `rulesetVersion` string, and a new const here, not a relaxed pattern)."
+    },
+    "semanticDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The definition.json being validated, digested per semantic-digest.v1.json's chosen 'sha256:<hex>' serialization — NOT floop-container-format.v1.json's packageContentDigest (a different, wider digest over the whole semantic file set)."
+    },
+    "semanticDigestVersion": {
+      "const": "fb-semantic-digest-1",
+      "default": "fb-semantic-digest-1",
+      "description": "semantic-digest.v1.json's own `semanticDigestVersion` value, paired with `semanticDigest` above (mirrors LoopBuildReceipt's identical pairing in contracts/kotlin/LoopPackageContracts.kt)."
+    },
+    "surfaceImplementation": {
+      "$ref": "#/$defs/SurfaceImplementation",
+      "description": "Which validator produced this report — phone or browser, and its own build identity (LOOP_DUAL_SURFACE_ARCHITECTURE.md: both surfaces MUST independently validate; a report is only ever trusted as evidence of ITS OWN surface's validation pass, never assumed to also speak for the other surface)."
+    },
+    "findings": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/Finding" },
+      "description": "MUST be sorted deterministically by (namespace, then code, then nodeId/edgeId) per loop-validation-rules.v1.json's own top-level description. This is a documented ordering invariant, not one JSON Schema's array-validation vocabulary can express structurally (there is no native 'items sorted by these fields' keyword) — see fixtures/loops/loop-validation-report/adversarial for the schema-valid-but-unsorted case."
+    },
+    "highestSeverity": {
+      "oneOf": [
+        { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Convenience rollup: the most severe value across `findings[].severity` (ERROR > WARNING > INFO), or null when `findings` is empty. Not independently authoritative — a consumer MUST NOT trust this field over recomputing it from `findings` when the two disagree; see the `allOf` below for the one direction this schema DOES check structurally."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this report was produced (FB-RAT-COM-004)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "findings": { "contains": { "properties": { "severity": { "const": "ERROR" } }, "required": ["severity"] } } },
+        "required": ["findings"]
+      },
+      "then": { "properties": { "highestSeverity": { "const": "ERROR" } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "findings": {
+            "allOf": [
+              { "not": { "contains": { "properties": { "severity": { "const": "ERROR" } }, "required": ["severity"] } } },
+              { "contains": { "properties": { "severity": { "const": "WARNING" } }, "required": ["severity"] } }
+            ]
+          }
+        },
+        "required": ["findings"]
+      },
+      "then": { "properties": { "highestSeverity": { "const": "WARNING" } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "findings": {
+            "allOf": [
+              { "not": { "contains": { "properties": { "severity": { "const": "ERROR" } }, "required": ["severity"] } } },
+              { "not": { "contains": { "properties": { "severity": { "const": "WARNING" } }, "required": ["severity"] } } },
+              { "contains": { "properties": { "severity": { "const": "INFO" } }, "required": ["severity"] } }
+            ]
+          }
+        },
+        "required": ["findings"]
+      },
+      "then": { "properties": { "highestSeverity": { "const": "INFO" } } }
+    }
+  ],
+  "$defs": {
+    "SurfaceImplementation": {
+      "type": "object",
+      "required": ["surface", "name", "version"],
+      "properties": {
+        "surface": {
+          "type": "string",
+          "enum": ["PHONE", "BROWSER"],
+          "description": "LOOP_DUAL_SURFACE_ARCHITECTURE.md's two surfaces — which one ran this validation pass."
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "ValidationNamespace": {
+      "type": "string",
+      "enum": [
+        "LOOP-ID", "LOOP-GRAPH", "LOOP-SCHEMA", "LOOP-CAP", "LOOP-BUDGET",
+        "LOOP-VERIFY", "LOOP-PKG", "LOOP-COMPAT", "LOOP-TEST", "LOOP-LINEAGE"
+      ],
+      "description": "loop-validation-rules.v1.json's `namespaces[].prefix` list, duplicated verbatim. A finding's `namespace` field exists (rather than requiring every reader to re-parse it out of `code`) specifically so the required sort key (namespace, then code, then nodeId/edgeId) has a field to sort on without string-parsing `code` at read time."
+    },
+    "Finding": {
+      "type": "object",
+      "required": ["namespace", "code", "severity", "objectType", "message"],
+      "properties": {
+        "namespace": {
+          "$ref": "#/$defs/ValidationNamespace",
+          "description": "MUST equal the LOOP-<NAMESPACE> segment of `code` (i.e. `code` with its trailing '-NNN' suffix removed) — this schema does not cross-check the two structurally beyond both being independently valid (namespace against the closed enum above, code against the pattern below), because a strict cross-field regex-equality check is not expressible in portable draft 2020-12 without duplicating the full 10-way namespace branch as another `if`/`then` chain; see fixtures/loops/loop-validation-report/adversarial for the schema-valid-but-mismatched case."
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^LOOP-[A-Z]+-[0-9]{3}$",
+          "description": "A rule code from loop-validation-rules.v1.json (e.g. 'LOOP-PKG-006'). This schema checks shape only; membership in the frozen registry is validated by the rule engine, not here — an additive registry minor bump never requires a schema change."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["ERROR", "WARNING", "INFO"],
+          "description": "loop-validation-rules.v1.json's `severityLevels`, verbatim. The registry's OWN severity for a given code is authoritative — a producer MUST NOT emit a severity other than the one that code's registry entry declares; this schema cannot check that cross-reference structurally."
+        },
+        "objectType": {
+          "type": "string",
+          "minLength": 1,
+          "description": "e.g. 'node', 'edge', 'definition', 'file', 'bindingProfile' — matches the rule's own `objectType` field in loop-validation-rules.v1.json."
+        },
+        "nodeId": { "type": ["string", "null"], "default": null },
+        "edgeId": { "type": ["string", "null"], "default": null },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The rule's `messageTemplate` with placeholders resolved against this specific finding's location/values."
+        },
+        "remediation": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Copy of the rule's own `remediation` text, or a finding-specific refinement of it."
+        },
+        "nonDismissible": {
+          "type": ["boolean", "null"],
+          "default": null,
+          "description": "Copy of the rule's own `nonDismissible` flag when present (currently only LOOP-PKG-006, invisible/control Unicode) — a UI MUST NOT offer a dismiss action for a finding carrying this as true, regardless of severity."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

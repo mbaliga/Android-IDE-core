@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0"
+  },
+  "capabilityRequests": [
+    { "capabilityId": "fb.repo.read", "justification": "Read the target repository to triage open issues." }
+  ],
+  "compatibilityDeclaration": {
+    "engineVersionRange": ">=1.0.0 <2.0.0"
+  },
+  "packageInventory": [
+    { "path": "manifest.json", "byteLength": 812, "sha256": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c", "classification": "semanticFile" },
+    { "path": "definition.json", "byteLength": 4096, "sha256": "9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f", "classification": "semanticFile" },
+    { "path": "definition.bpmn", "byteLength": 5210, "sha256": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e", "classification": "derivedFile" }
+  ],
+  "packageContentDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    "byteLength": 190
+  },
+  "signatureRef": null,
+  "license": null,
+  "provenance": null
+}

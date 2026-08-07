@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "forkId": "draft-fork-bad-0002",
+  "parentReleaseRef": {
+    "loopId": "loop.demo.hello-file",
+    "semanticVersion": "1.0.0",
+    "packageDigest": { "algorithm": "SHA-256", "digestHex": "bd0744455f140b0c49f72b83b21489ea512354a54ae7d43bef4e0489fd31181e", "byteLength": 4096 }
+  },
+  "initiatingActor": "USER",
+  "createdAtUtc": "2026-08-07T10:21:00Z",
+  "authorshipContributions": [
+    { "contributorId": "user-jbk4bvkqsq", "contributionDescription": "Rewrote the verifier." }
+  ],
+  "licenseRef": { "spdxId": "GPL-3.0-only" },
+  "attributionRequired": true,
+  "licenseCompatibilityFinding": "INCOMPATIBLE",
+  "publication": {
+    "publishedLoopId": "loop.demo.hello-file-gpl-fork"
+  }
+}

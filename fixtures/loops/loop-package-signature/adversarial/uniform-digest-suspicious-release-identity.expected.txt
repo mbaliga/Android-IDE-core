@@ -1,0 +1,18 @@
+Schema verdict: VALID against loop-package-signature.schema.json.
+releaseIdentity.packageContentDigest.digestHex is 64 lowercase-hex characters ("aaaa...a"
+repeated), so the IntegrityRef shape check passes; the schema has no way to know a genuine
+SHA-256 output is (astronomically) never a single repeated byte pattern across 32 bytes.
+
+Real rejection: this is not a loop-validation-rules.v1 finding at all — it is exactly what
+docs/ratified/loops/LOOP_PACKAGE_SPEC.md §11's own signature-verification state table already
+governs. A verifier MUST independently recompute the actual package's packageContentDigest
+(floop-container-format.v1.json) from the received bytes and compare it against the digest bound
+inside this signature record:
+
+  SIGNATURE_PRESENT --(verifier checks signature against the bound tuple)--> SIGNATURE_INVALID
+
+An all-repeated-byte digest that does not match the independently recomputed digest of the actual
+archive fails that comparison and lands in SIGNATURE_INVALID, which LOOP_PACKAGE_SPEC.md §11
+states explicitly "is rejected outright — it is never treated as equivalent to UNSIGNED." No new
+rule code is needed or invented here; the existing SIGNATURE_INVALID -> REJECTED transition in
+that state table is the real rejection authority.

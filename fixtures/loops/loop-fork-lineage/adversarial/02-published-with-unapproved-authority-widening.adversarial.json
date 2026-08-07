@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0.0",
+  "forkId": "draft-fork-adv-0002",
+  "parentReleaseRef": {
+    "loopId": "loop.demo.hello-file",
+    "semanticVersion": "1.0.0",
+    "packageDigest": { "algorithm": "SHA-256", "digestHex": "bd0744455f140b0c49f72b83b21489ea512354a54ae7d43bef4e0489fd31181e", "byteLength": 4096 }
+  },
+  "forkReason": "Add automatic remote push after each run.",
+  "initiatingActor": "USER",
+  "createdAtUtc": "2026-08-07T10:40:00Z",
+  "authorshipContributions": [
+    { "contributorId": "user-jbk4bvkqsq", "contributionDescription": "Added fb.repo.push_remote to node n3." }
+  ],
+  "licenseRef": { "spdxId": "MIT" },
+  "attributionRequired": true,
+  "authorityDiffSinceFork": {
+    "comparisonId": "authdiff-fork-adv-0002",
+    "generatedAtUtc": "2026-08-07T10:41:00Z",
+    "comparisonContext": "LINEAGE_COMPARISON",
+    "perCapability": [
+      { "capabilityId": "fb.repo.push_remote", "before": null, "after": "EXECUTE_EXTERNAL", "direction": "ADDED" }
+    ],
+    "requiresFreshApproval": true
+  },
+  "licenseCompatibilityFinding": "COMPATIBLE",
+  "publication": {
+    "publishedLoopId": "loop.demo.hello-file-autopush-fork",
+    "testsInheritedUnchanged": ["fixture-n1-basic"],
+    "testsChangedOrAdded": [],
+    "upstreamContributionIntended": false,
+    "ownershipTransferred": false
+  }
+}

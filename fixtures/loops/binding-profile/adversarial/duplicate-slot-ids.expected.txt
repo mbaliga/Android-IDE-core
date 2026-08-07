@@ -1,0 +1,17 @@
+Schema verdict: VALID against binding-profile.schema.json.
+This schema validates each slotBindings[] entry independently and has no native 'unique by key'
+keyword to reject two entries sharing the same slotId (as opposed to whole-item duplication, which
+`uniqueItems` would catch — these two entries differ in every other field).
+
+Real rejection code: LOOP-ID-001
+  "Duplicate identity '{id}' used by more than one {objectType}."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-ID-001) — objectType's own
+  declared vocabulary is "definition|node|edge|slot", and a binding slot IS a "slot" in that sense:
+  slotId 'model.writer' must resolve to exactly one binding within a single BindingProfile, or a
+  consumer resolving this slot has no deterministic answer for which of the two entries (a local
+  on-device model vs. a cloud model — materially different authority/residency implications) is
+  actually in effect for this activation.
+
+Remediation: reject the profile at binding-resolution time; a slot resolves to exactly one
+selected provider per profile. If a resolution genuinely supersedes a prior one, the prior entry
+MUST be removed, not left alongside the new one.

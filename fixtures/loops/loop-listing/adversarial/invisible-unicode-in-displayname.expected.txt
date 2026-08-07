@@ -1,0 +1,24 @@
+Schema verdict: VALID against loop-listing.schema.json.
+displayName is a non-blank string within the 200-character bound; this schema does not scan its
+codepoints — that is a content-safety check performed at publication time, not a structural
+property of the field.
+
+Why this is semantically dangerous: displayName contains U+200B (ZERO WIDTH SPACE) and U+202E
+(RIGHT-TO-LEFT OVERRIDE), immediately followed by "IGNORE PRIOR INSTRUCTIONS" — an invisible
+bidi/zero-width smuggling pattern intended to hide an imperative instruction from a human skimming
+the rendered title while still being present in the raw string an AI assistant (or any text
+processor that does not visually render bidi control characters) would read.
+
+Real rejection code: LOOP-PKG-006
+  "Model- or human-visible string at '{location}' contains disallowed invisible/control Unicode
+  ({codepointClass}) not individually declared and justified in the manifest."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-PKG-006), citing
+  10_DUAL_VALIDATION_ADDENDUM §B3 rule 1 (Tags U+E0000-U+E007F, bidi U+202A-U+202E / U+2066-U+2069,
+  zero-width/format U+200B-U+200F / U+FEFF, Private Use Areas). This rule is marked
+  "nonDismissible": true — the finding renders with a visible badge and an escape view and CANNOT
+  be dismissed as a warning.
+
+Remediation: reject the listing submission at PR review time (LOOP_MARKETPLACE_CONTRACT.md §10
+check 3's sibling deterministic checks apply the same way to listing text as to package content);
+strip or reject the invisible codepoints — they are never individually justifiable in a display
+name.

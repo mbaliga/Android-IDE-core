@@ -1,0 +1,21 @@
+{
+  "listingId": "listing-fb-triage-inbox",
+  "referencedReleases": [
+    {
+      "loopId": "loop-fb-triage-inbox",
+      "semanticVersion": "1.0.0",
+      "packageDigest": {
+        "algorithm": "SHA-256",
+        "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "byteLength": 190
+      }
+    }
+  ],
+  "displayName": "Inbox Triage Loop",
+  "description": "Reads a GitHub repo's open issues and drafts a triage summary.",
+  "category": "productivity",
+  "compatibilityDeclaration": {
+    "verified": true
+  },
+  "lastUpdatedUtc": "2026-07-15T09:05:00Z"
+}

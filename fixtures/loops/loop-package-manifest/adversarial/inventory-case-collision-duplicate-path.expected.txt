@@ -1,0 +1,15 @@
+Schema verdict: VALID against loop-package-manifest.schema.json.
+Each packageInventory[] entry is individually well-formed (non-blank path, valid sha256, valid
+classification); nothing in this schema compares distinct entries' normalized paths against each
+other for collisions.
+
+Real rejection code: LOOP-PKG-003
+  "Path or canonicalization error at 'schemas/input.json': duplicate normalized paths
+  ('schemas/Input.JSON' and 'schemas/input.json' both normalize to the same byte-compared path)."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-PKG-003), citing
+  floop-container-format.v1.json pathRules — "caseSensitivity: paths are compared byte-for-byte
+  after NFC normalization; case-insensitive collisions across entries... MUST be rejected as
+  duplicate-normalized-path" and "duplicateNormalizedPaths: PROHIBITED — two entries that
+  normalize to the same path is a rejection, not a silent last-write-wins".
+
+Remediation: reject the package; do not silently pick either entry as the "real" one.

@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportId": "compat-report-missing-axis",
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.0.0",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+    "byteLength": 190
+  },
+  "phoneAuthoritative": true,
+  "axisOutcomes": [
+    {
+      "axis": "SCHEMA",
+      "outcome": "COMPATIBLE",
+      "reason": "SCHEMA requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "ENGINE",
+      "outcome": "COMPATIBLE",
+      "reason": "ENGINE requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "NODE_TYPE",
+      "outcome": "COMPATIBLE",
+      "reason": "NODE_TYPE requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "CAPABILITY",
+      "outcome": "COMPATIBLE",
+      "reason": "CAPABILITY requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "MODEL_CLASS",
+      "outcome": "COMPATIBLE",
+      "reason": "MODEL_CLASS requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "EXECUTION_TARGET",
+      "outcome": "COMPATIBLE",
+      "reason": "EXECUTION_TARGET requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "PLATFORM_DISTRIBUTION",
+      "outcome": "COMPATIBLE",
+      "reason": "PLATFORM_DISTRIBUTION requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "DEVICE",
+      "outcome": "COMPATIBLE",
+      "reason": "DEVICE requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    },
+    {
+      "axis": "RESOURCE",
+      "outcome": "COMPATIBLE",
+      "reason": "RESOURCE requirement checked and satisfied by the installed phone's own state.",
+      "remediationType": null,
+      "findings": []
+    }
+  ],
+  "overallOutcome": "COMPATIBLE",
+  "cacheKey": {
+    "packageDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+      "byteLength": 190
+    },
+    "engineVersion": "1.0.0",
+    "capabilityInventoryDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "7162e2708e42be379ced4db4c8a32b32877689ff054f5c0c57f062e4536f1946",
+      "byteLength": 2048
+    },
+    "policyDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "18b8f2bf10f79a87c17fc79bd92bc2300b223cea19f33efa18dc8cea117be37c",
+      "byteLength": 1024
+    },
+    "deviceOsProfile": "arm64-v8a-android16-highend-unified-ram",
+    "distributionFlavor": "full"
+  },
+  "evaluatedAtUtc": "2026-08-01T10:00:03Z"
+}

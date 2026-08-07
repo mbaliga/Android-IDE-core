@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageIdentity": {
+    "loopId": "loop-fb-release-notes-drafter",
+    "semanticVersion": "2.3.1"
+  },
+  "capabilityRequests": [
+    { "capabilityId": "fb.repo.read", "justification": "Read commit history since the last tag." },
+    {
+      "capabilityId": "fb.network.egress",
+      "justification": "Fetch the release template from the publisher's own docs host.",
+      "egressAllowlist": ["docs.example-publisher.dev"]
+    }
+  ],
+  "compatibilityDeclaration": {
+    "engineVersionRange": ">=1.0.0 <2.0.0",
+    "notes": "No device or USB capabilities requested; browser and phone builders both satisfy this range."
+  },
+  "packageInventory": [
+    { "path": "manifest.json", "byteLength": 1180, "sha256": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c", "classification": "semanticFile" },
+    { "path": "definition.json", "byteLength": 6144, "sha256": "9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f", "classification": "semanticFile" },
+    { "path": "definition.bpmn", "byteLength": 7300, "sha256": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e", "classification": "derivedFile" },
+    { "path": "docs/README.md", "byteLength": 900, "sha256": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a", "classification": "semanticFile" },
+    { "path": "signatures/publisher-signature.json", "byteLength": 640, "sha256": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f", "classification": "signatureFile" }
+  ],
+  "packageContentDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d",
+    "byteLength": 310
+  },
+  "signatureRef": {
+    "path": "signatures/publisher-signature.json",
+    "sha256": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+  },
+  "license": "Apache-2.0",
+  "provenance": {
+    "producer": { "name": "fonebrew-web-studio", "version": "0.4.0", "instanceId": null },
+    "sourceDraftRevision": "draft-rev-00042",
+    "createdAtUtc": "2026-07-30T10:15:00Z"
+  }
+}

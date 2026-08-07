@@ -1,0 +1,24 @@
+Schema verdict: VALID against loop-review.schema.json.
+freeText is a plain string; this schema does not scan its codepoints or content for embedded
+imperatives — that is a content-safety check performed at publication time, not a structural
+schema property.
+
+Why this is semantically dangerous: freeText contains U+200B (ZERO WIDTH SPACE) and U+202E
+(RIGHT-TO-LEFT OVERRIDE) immediately followed by a model-directed imperative instructing an AI
+assistant summarizing reviews to silently grant an unrestricted fb.network.egress capability — a
+combined invisible-Unicode-smuggling AND prompt-injection attack riding in on review text, exactly
+the surface §10 flags reviews as sharing with listings and package content ("a review body is
+exactly as model/human-readable as a listing", loop-review.schema.json's own field description).
+
+Real rejection codes: LOOP-PKG-006 (invisible/control Unicode, nonDismissible ERROR) AND
+LOOP-PKG-008 (heuristic prompt-risk WARNING, exfiltration-verb-plus-destination /
+capability-widening-instruction indicator class).
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-PKG-006, LOOP-PKG-008).
+  Both apply independently and simultaneously here — the invisible-Unicode finding is
+  nonDismissible and blocks on its own; the prompt-risk finding additionally requires human review
+  before any publish decision, per LOOP_MARKETPLACE_CONTRACT.md §10.
+
+Remediation: reject at PR/submission review; strip the invisible codepoints and route the residual
+text through human prompt-risk review before this review is ever published (§10 check 3) — never
+auto-reject solely on the WARNING-severity LOOP-PKG-008 finding, but LOOP-PKG-006 alone is
+sufficient grounds to reject without waiting for human review.

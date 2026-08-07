@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageIdentity": {
+    "loopId": "loop-fb-notes-sync",
+    "semanticVersion": "1.0.0"
+  },
+  "capabilityRequests": [],
+  "compatibilityDeclaration": {
+    "engineVersionRange": ">=1.0.0 <2.0.0"
+  },
+  "packageInventory": [
+    { "path": "definition.json", "byteLength": 2048, "sha256": "9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f", "classification": "semanticFile" },
+    { "path": "schemas/Input.JSON", "byteLength": 512, "sha256": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c", "classification": "semanticFile" },
+    { "path": "schemas/input.json", "byteLength": 511, "sha256": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e", "classification": "semanticFile" }
+  ],
+  "packageContentDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    "byteLength": 90
+  }
+}

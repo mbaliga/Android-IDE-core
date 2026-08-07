@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/package-fixture-record.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. PackageFixtureRecord = one entry under a .floop package's fixtures/ directory (floop-container-format.v1.json requiredTopLevelLayout: 'keyed per fixture-keying.v1 (nodeId, iterationIndex, callIndex) — NOT tests/fixtures/'). Keying resolved at LOOP_WEB_STUDIO_SPEC.md §6 (10_DUAL_VALIDATION_ADDENDUM.md §D 'Fixture keying is unspecified'): keying by node ID alone breaks on retries, by ordinal alone breaks on branch changes, by prompt hash alone breaks on every prompt edit — hence the three-part key plus a recorded-but-non-binding prompt digest.",
+  "title": "PackageFixtureRecord",
+  "description": "A single recorded simulation/replay/fault-injection fixture, keyed on (nodeId, iterationIndex, callIndex). Feeds LOOP-TEST-001 (a node with no required fixture and no explicit test-coverage declaration is a build finding) and LOOP-TEST-002 (a fixture whose recorded prompt digest no longer matches the node's current prompt is STALE, a WARNING, never a silent miss or silent wrong-match).",
+  "type": "object",
+  "required": ["nodeId", "iterationIndex", "callIndex", "recordedOutput", "recordedDecision"],
+  "properties": {
+    "nodeId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable node ID this fixture replays for (FB-RAT-PKG-009 — node IDs are stable across surfaces, canonicalization, import, export, and semantic-preserving layout changes)."
+    },
+    "iterationIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Which iteration of a repeat group / loop cycle this recording is for (0-based). Distinguishes fixtures on nodes inside a bounded cycle (LOOP-GRAPH-004) from a single fixture silently reused across every pass."
+    },
+    "callIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Which call within a single node visit this recording is for (0-based) — a node may invoke its underlying model/tool more than once per visit (e.g. retry-with-backoff); callIndex disambiguates which attempt this fixture replays."
+    },
+    "recordedPromptDigest": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntegrityRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Digest of the model/tool-directed prompt text in effect when this fixture was recorded. NON-BINDING: carried alongside the (nodeId, iterationIndex, callIndex) key, never as part of it. Null for node categories with no prompt text to digest (e.g. a deterministic or typed-tool node). A mismatch against the node's CURRENT prompt digest at validation time marks this fixture STALE (LOOP-TEST-002) — a visible WARNING finding, never a silent miss and never a silent match against the wrong prompt."
+    },
+    "recordedOutput": {
+      "description": "The recorded/mocked output value this fixture replays for a model-inference, typed-tool, verifier, or artifact-import/export node — shape is whatever that node's own declared output schema (schemas/ in the package) requires; NOT independently constrained by this schema, which only knows this is 'some JSON value or null'. Null when this fixture instead records a decision (see recordedDecision) rather than a value-typed output — see the sibling-field note below."
+    },
+    "recordedDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/RecordedDecision" },
+        { "type": "null" }
+      ],
+      "description": "The recorded human-decision-fixture outcome this fixture replays for a human-decision node (LOOP_ENGINEERING_SPEC_V2.1.md §8 test modes; LOOP_WEB_STUDIO_SPEC.md §6 'human-decision fixtures'). Null when this fixture instead records a value-typed output (see recordedOutput) rather than a decision."
+    },
+    "stale": {
+      "type": ["boolean", "null"],
+      "default": null,
+      "description": "Advisory/cache field: whether the validator last found recordedPromptDigest to disagree with the node's current prompt digest (LOOP-TEST-002). Null when this record has not yet been checked against a live definition. recordedPromptDigest itself remains the source of truth — a consumer MUST NOT trust a cached `stale: false` without re-checking against the current definition; this field exists so a UI can render a badge without recomputing on every read, not as an independently authoritative fact."
+    },
+    "recordedAtUtc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "default": null,
+      "description": "UTC instant this fixture was captured (FB-RAT-COM-004)."
+    }
+  },
+  "not": {
+    "properties": {
+      "recordedOutput": { "const": null },
+      "recordedDecision": { "const": null }
+    },
+    "required": ["recordedOutput", "recordedDecision"]
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "RecordedDecision": {
+      "type": "object",
+      "required": ["decisionValue"],
+      "properties": {
+        "decisionValue": {
+          "description": "The recorded human choice this fixture replays — shape is whatever the node's declared decision schema requires."
+        },
+        "decidedByFixtureAuthor": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Who recorded this decision fixture, for audit only — never a claim about who would decide at real run time."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

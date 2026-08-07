@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0"
+  },
+  "capabilityRequests": [],
+  "compatibilityDeclaration": {
+    "engineVersionRange": ">=1.0.0 <2.0.0"
+  },
+  "packageInventory": [
+    { "path": "definition.json", "byteLength": 4096, "sha256": "9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f", "classification": "semanticFile" }
+  ]
+}

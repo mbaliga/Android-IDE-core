@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-package-manifest.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopPackageManifest = the .floop container's REQUIRED manifest.json (schemas/loops/registries/floop-container-format.v1.json requiredTopLevelLayout). That registry defines the archive bytes, path rules, packageInventory classifications, and packageContentDigest algorithm this schema's fields must agree with byte-for-byte; a conflict between this schema and that registry is this schema's error and the registry wins (docs/ratified/loops/LOOP_PACKAGE_SPEC.md, 'the registry wins'). schemaVersion below is what floop-container-format.v1.json's pathRules.adversarialClasses_MUST_reject calls out as 'unknown major schema version in manifest.json' — a reader MUST reject an unrecognized major before doing anything else with this document.",
+  "title": "LoopPackageManifest",
+  "description": "The manifest.json member of a .floop LoopPackage archive: package identity, capability requests, a compatibility summary, the per-file packageInventory, packageContentDigest, an optional pointer to the detached signature, license, and provenance. Definition.json remains the sole source of SEMANTIC identity (semantic-digest.v1.json) — this manifest is the archive's identity/trust/inventory record, not a copy of loop semantics.",
+  "type": "object",
+  "required": ["schemaVersion", "packageIdentity", "capabilityRequests", "compatibilityDeclaration", "packageInventory", "packageContentDigest"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this manifest shape. A reader MUST reject a manifest declaring an unsupported MAJOR before doing anything else — this is the 'unknown major schema version in manifest.json' adversarial class floop-container-format.v1.json's pathRules names explicitly."
+    },
+    "packageIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion"],
+      "properties": {
+        "loopId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable human/version identity of the loop family, independent of packageContentDigest (LOOP_PACKAGE_SPEC.md §2 — human/version identity vs exact content identity MUST NOT be conflated). Stable across content changes within a version lineage."
+        },
+        "semanticVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+          "description": "SemVer 2.0.0 string (LOOP_PACKAGE_SPEC.md §12, FB-RAT-PKG-006 — immutable releases; a breaking change bumps MAJOR)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "capabilityRequests": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/CapabilityRequest" },
+      "description": "Every capability the package's nodes request, drawn from capability-ids.v1.json's reverse-DNS namespace. This schema validates the ID's SYNTACTIC shape only (fb.<category>.<action>) — membership in the frozen registry and the authorityRung it implies are validated by the loop-validation-rules.v1 engine (LOOP-CAP-001), deliberately not re-enumerated here so this schema does not need a change every time capability-ids.v1.json grows an additive entry."
+    },
+    "compatibilityDeclaration": {
+      "type": "object",
+      "required": ["engineVersionRange"],
+      "properties": {
+        "engineVersionRange": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SemVer range syntax (e.g. '>=1.0.0 <2.0.0') resolved against the installing phone's engineVersion (capability-ids.v1.json 'engineVersion' — the loop contract/engine surface version, decoupled from the app's own release version). Out-of-range is a compatibility finding, never a silent block or silent accept."
+        }
+      },
+      "additionalProperties": true,
+      "description": "A build-time compatibility summary embedded in manifest.json per floop-container-format.v1.json's requiredTopLevelLayout ('capability requests, compatibility declaration' as manifest.json content). The full multi-axis compatibility declaration for a PUBLIC release additionally lives in the separate compatibility.json file (LOOP_PACKAGE_SPEC.md §10, LOOP_COMPATIBILITY_CONTRACT.md governs its shape in detail) — this object is not a substitute for that file and does not re-derive its axis vocabulary."
+    },
+    "packageInventory": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/PackageInventoryEntry" },
+      "contains": {
+        "type": "object",
+        "properties": { "path": { "const": "definition.json" }, "classification": { "const": "semanticFile" } },
+        "required": ["path", "classification"]
+      },
+      "minContains": 1,
+      "description": "Per-file inventory: path, byteLength, sha256, and exactly one classification per entry (floop-container-format.v1.json 'packageInventory' — matched here field-for-field, including the field names themselves). MUST contain an entry for definition.json (container-REQUIRED, classified semanticFile) — every other top-level member floop-container-format.v1.json enumerates or an unknown-but-safe file MUST also be classified here, never left out of the inventory."
+    },
+    "packageContentDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "SHA-256 digest per floop-container-format.v1.json's packageContentDigest: computed over the JCS-canonicalized, deterministically sorted (normalizedPath, byteLength, sha256) tuple list for every semanticFile entry in packageInventory above — NOT over raw archive bytes. `byteLength` here is the byte length of that canonicalized JSON array (the thing actually hashed), not the archive size. Represented as this repo's common IntegrityRef object shape (matching ArtifactRef.digest and every other digest field in this constellation) rather than the 'sha256:<hex>' inline-string form semantic-digest.v1.json chose for its own narrower field — floop-container-format.v1.json specifies the algorithm and what is hashed, not a serialization form, so this is a schema-authoring choice, not a registry conflict; see the reconciliation note in this work package's report."
+    },
+    "signatureRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/SignatureRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Pointer to the detached loop-package-signature.v1 record under signatures/ (floop-container-format.v1.json), or null for an unsigned package (LOOP_PACKAGE_SPEC.md §11 — local unsigned packages remain importable only with a visible warning and narrower default authority; a published release MUST be signed)."
+    },
+    "license": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "SPDX license identifier (or free-text fallback) mirroring the optional top-level LICENSE file's declared license. Null when the package carries no LICENSE file — permitted at the container level (floop-container-format.v1.json marks LICENSE OPTIONAL) but a public release additionally REQUIRES both this declaration and the LICENSE file (LOOP_PACKAGE_SPEC.md §10, FB-RAT-PKG-008)."
+    },
+    "provenance": {
+      "oneOf": [
+        { "$ref": "#/$defs/ManifestProvenance" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Lightweight embedded provenance summary. A public release additionally REQUIRES the fuller, separate provenance.json file (LOOP_PACKAGE_SPEC.md §10) — this field is not a substitute for that file, only a quick-reference mirror of a subset of it."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": ["SHA-256", "SHA-384", "SHA-512"],
+          "description": "floop-container-format.v1.json pins SHA-256 for packageContentDigest specifically; SHA-384/512 are accepted here only for forward compatibility with a future MAJOR registry bump and MUST NOT be produced against the current fb-loop-canon-1 / packageContentDigest definition, which is SHA-256 only."
+        },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "CapabilityRequest": {
+      "type": "object",
+      "required": ["capabilityId"],
+      "properties": {
+        "capabilityId": {
+          "type": "string",
+          "pattern": "^fb\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+          "description": "e.g. 'fb.repo.read', 'fb.network.egress' — see capability-ids.v1.json for the frozen membership list and authorityRung mapping; unrecognized IDs are a LOOP-CAP-001 build/import finding, not a schema error, so new additive registry entries never require a schema change."
+        },
+        "justification": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Human-readable reason this node needs the capability, surfaced in the authority-review UI (CAPABILITY_AUTHORITY_MODEL.md)."
+        },
+        "egressAllowlist": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Exact destination host(s) this request is scoped to. REQUIRED non-empty when capabilityId is 'fb.network.egress' (LOOP-PKG-007, loop-validation-rules.v1.json — 'a granted External capability is never a general network grant')."
+        }
+      },
+      "if": { "properties": { "capabilityId": { "const": "fb.network.egress" } }, "required": ["capabilityId"] },
+      "then": { "properties": { "egressAllowlist": { "type": "array", "minItems": 1 } } },
+      "additionalProperties": true
+    },
+    "PackageInventoryEntry": {
+      "type": "object",
+      "required": ["path", "byteLength", "sha256", "classification"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Normalized archive-relative path (floop-container-format.v1.json pathRules: forward-slash only, no leading slash, no '.' or '..' segments, NFC-normalized, max 255 bytes). This schema checks shape only (non-empty, length ceiling) — full adversarial rejection (traversal, duplicate-normalized-path collisions, drive/UNC prefixes) is a semantic check against the frozen pathRules, deliberately not re-derived as a single regex here; see this schema's adversarial/ fixtures for a schema-valid-but-rule-rejected traversal example."
+        },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Lowercase-hex SHA-256 of this entry's own file bytes (floop-container-format.v1.json packageInventory: 'path, byteLength, sha256')."
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["semanticFile", "derivedFile", "signatureFile"],
+          "description": "Matches floop-container-format.v1.json packageInventory.classifications exactly: semanticFile participates in packageContentDigest; derivedFile (e.g. definition.bpmn) is regenerable and excluded; signatureFile is excluded by construction from the digest it signs."
+        }
+      },
+      "additionalProperties": true
+    },
+    "SignatureRef": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^signatures/",
+          "description": "Archive-relative path under signatures/ (floop-container-format.v1.json), e.g. 'signatures/publisher-signature.json', pointing at a loop-package-signature.v1 record."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Digest of the signature file's own bytes, for integrity-on-extract — distinct from the signedDigest carried inside the signature record itself."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ManifestProvenance": {
+      "type": "object",
+      "properties": {
+        "producer": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 },
+            "instanceId": { "type": ["string", "null"] }
+          },
+          "additionalProperties": true,
+          "description": "Identity+version of the surface/builder that produced this package (mirrors CommonContracts.kt ProducerRef — duplicated locally, not $ref'd, per this corpus's standalone-schema convention)."
+        },
+        "sourceDraftRevision": { "type": ["string", "null"], "default": null },
+        "createdAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+      },
+      "additionalProperties": true
+    }
+  }
+}

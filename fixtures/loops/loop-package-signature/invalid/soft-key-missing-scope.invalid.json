@@ -1,0 +1,18 @@
+{
+  "signatureAlgorithm": "Ed25519",
+  "publisherKeyFingerprint": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e",
+  "signedDigest": "MEUCIQDx7Y8k3f9v0y2ZxG6h8QeR1sT4uW7vB2cD5eF9gH1jKgIgY3nM6oP0qR8sT1uV3wX5yZ7aB9cD1eF3gH5jK7mN9pR1s==",
+  "releaseIdentity": {
+    "loopId": "loop-fb-scratch-experiment",
+    "semanticVersion": "0.1.0",
+    "packageContentDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "byteLength": 128
+    }
+  },
+  "canonicalizationVersion": "fb-loop-canon-1",
+  "releaseChannel": "UNLISTED_DRAFT",
+  "signedAtUtc": "2026-08-01T09:30:00Z",
+  "keyProvenance": "SOFT_KEY"
+}

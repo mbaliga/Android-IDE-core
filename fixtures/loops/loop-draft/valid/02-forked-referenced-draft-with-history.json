@@ -1,0 +1,56 @@
+{
+  "draftId": "draft-01HXYZFORK00000000000000",
+  "revision": 2,
+  "graph": {
+    "mode": "REFERENCED",
+    "referencedDefinitionRef": {
+      "loopId": "loop.demo.hello-file",
+      "semanticVersion": "1.0.0",
+      "packageDigest": "sha256:379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c"
+    }
+  },
+  "presentation": { "stageViewScrollOffsetPx": 240, "lastFocusedView": "STAGE" },
+  "validationState": {
+    "status": "VALID",
+    "lastValidatedAtUtc": "2026-08-07T12:00:00Z",
+    "findings": [],
+    "rulesetVersion": "fb-loop-validation-rules-1"
+  },
+  "testWorkspaceRef": {
+    "id": "test-workspace-01HXYZ",
+    "mediaType": "application/zip",
+    "digest": { "algorithm": "SHA-256", "digestHex": "379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c", "byteLength": 10240 },
+    "sizeBytes": 10240,
+    "storageLocation": { "kind": "LOCAL_FS", "locator": "/data/user/0/dev.aarso/files/test-workspaces/tw1.zip" },
+    "verificationState": "VERIFIED"
+  },
+  "sourceSurface": "PHONE",
+  "localHistory": [
+    {
+      "revisionNumber": 1,
+      "actorClass": "IMPORT_MIGRATION",
+      "timestampUtc": "2026-08-07T11:00:00Z",
+      "baseSemanticDigest": "sha256:ee145d8e1208ea835d2e12c00665320780c866ff6c71b06a76f75c9fcc0ba45a",
+      "resultingSemanticDigest": "sha256:6613e0633d892ea9ad839c4a43729bd6917c136eae950ea837683ae590873aa1",
+      "operationList": [
+        { "opId": "op-1", "opType": "ADD", "targetType": "NODE", "targetId": "n4", "description": "Forked from installed release loop.demo.hello-file@1.0.0 and added a follow-up node." }
+      ],
+      "validationState": { "status": "VALID", "findings": [] },
+      "authorityVerificationDelta": { "authorityWidened": false, "verificationWeakened": false, "details": null },
+      "idempotencyKey": "journal-entry-1"
+    },
+    {
+      "revisionNumber": 2,
+      "actorClass": "USER",
+      "timestampUtc": "2026-08-07T11:30:00Z",
+      "baseSemanticDigest": "sha256:6613e0633d892ea9ad839c4a43729bd6917c136eae950ea837683ae590873aa1",
+      "resultingSemanticDigest": "sha256:e440bc0177ad056939372349e0bb8054004c7048dca1289a26b0acd9498e1d63",
+      "operationList": [
+        { "opId": "op-2", "opType": "MODIFY_PROPERTY", "targetType": "BUDGET", "targetId": null, "description": "Increased wallClockSeconds budget." }
+      ],
+      "validationState": { "status": "VALID", "findings": [] },
+      "authorityVerificationDelta": { "authorityWidened": false, "verificationWeakened": false, "details": null },
+      "idempotencyKey": "journal-entry-2"
+    }
+  ]
+}

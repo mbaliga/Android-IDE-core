@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "activation-receipt-3d19",
+  "receiptType": "LOOP_ACTIVATION",
+  "installationId": "install-3d19ee02",
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.0.0",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+    "byteLength": 190
+  },
+  "source": {
+    "transferChannel": "HTTPS_URL",
+    "expectedMediaType": "application/zip",
+    "expectedDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+      "byteLength": 190
+    },
+    "sourceDescription": "https://example-releases.invalid/loop-fb-triage-inbox/1.0.0.floop",
+    "initiatedByUser": true
+  },
+  "signatureState": "IMPORTED_SIGNED_VERIFIED",
+  "compatibilityOutcome": "DEGRADED",
+  "validationRulesetVersion": "fb-loop-validation-rules-1",
+  "validationFindings": [
+    {
+      "code": "LOOP-GRAPH-002",
+      "severity": "WARNING",
+      "objectType": "node",
+      "message": "Node 'legacy-summarizer' is unreachable from the start node."
+    }
+  ],
+  "boundSlots": [
+    {
+      "slotId": "model.writer",
+      "selectedProviderId": "local-model-llama-3-8b-instruct",
+      "substitutionPolicy": "DECLARED_EQUIVALENTS",
+      "substitutionReason": "Declared exact model unavailable on-device; bound to a declared equivalent with the same required capability tags."
+    }
+  ],
+  "bindingProfileDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "39266d1a97d7267523d7f4533b6c24518e6d8c9148cb445b7edf75cbd97ebfe4",
+    "byteLength": 300
+  },
+  "grantedAuthoritySummary": [
+    {
+      "authorityRung": "READ",
+      "capabilityIds": [
+        "fb.repo.read"
+      ]
+    },
+    {
+      "authorityRung": "PROPOSE",
+      "capabilityIds": [
+        "fb.repo.propose_change"
+      ]
+    }
+  ],
+  "authorityGrantIds": [
+    "grant-repo-read-01",
+    "grant-repo-propose-01"
+  ],
+  "simulationResult": {
+    "outcome": "SUCCEEDED",
+    "gapAcknowledgedByUser": null
+  },
+  "installedAtUtc": "2026-08-01T10:00:42Z",
+  "engineVersion": "1.0.0",
+  "producer": {
+    "name": "dev.aarso.full",
+    "version": "0.13.0"
+  },
+  "warnings": []
+}

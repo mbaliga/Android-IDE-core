@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-semantic-diff.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopSemanticDiff — the object model shared by two producers per the WP-1L task brief: (1) an AI-assisted structural edit proposal (LOOP_ENGINEERING_SPEC_V2.1 §6, LOOP_PHONE_AUTHORING_SPEC.md §8's BASE_REVISION→PROPOSED→APPLIED/DISCARDED machine, FB-RAT-PHN-006) and (2) a lineage/upstream-comparison diff (LOOP_FORK_LINEAGE_CONTRACT.md §8/§9, FB-RAT-LIN-004/FB-RAT-LIN-005). Filename note: this work package's SCHEMAS TO WRITE list names the file `loop-semantic-diff.schema.json` (no version segment); the per-schema instructions prose elsewhere calls it `loop-semantic-diff.v1.schema.json` — the file list is treated as authoritative since it is the explicit deliverable enumeration, and this discrepancy is flagged in the authoring report for the Amendments-phase agent, not silently resolved by renaming either party's expectation. Cross-references, does not redefine: loop-validation-rules.v1.json (findings codes), capability-ids.v1.json (authorityLadder, capability IDs).",
+  "title": "LoopSemanticDiff",
+  "description": "A categorized semantic diff between a base revision and a proposed/comparison target — nine separate finding categories (FB-RAT-LIN-004, never flattened into one undifferentiated list) plus an independently-surfaced license-change flag and an independently-surfaced authority/verification blocking review group (FB-RAT-LIN-005). Produced either by an AI-assisted edit proposal (sourceKind=AI_PROPOSAL) or a fork/upstream lineage comparison (sourceKind=LINEAGE_COMPARISON) — both are the same reported shape per LOOP_ENGINEERING_SPEC_V2.1 §6's proposal fields and LOOP_FORK_LINEAGE_CONTRACT.md §8/§9's diff report.",
+  "type": "object",
+  "required": [
+    "diffId", "sourceKind", "generatedAtUtc", "baseRevision", "semanticOperations",
+    "categorizedFindings", "licenseChange", "behaviorExplanation", "validationResult",
+    "authorityDiffSummary"
+  ],
+  "properties": {
+    "diffId": { "type": "string", "minLength": 1, "description": "Stable identity for this diff instance (FB-RAT-COM-002 style)." },
+    "sourceKind": {
+      "type": "string",
+      "enum": ["AI_PROPOSAL", "LINEAGE_COMPARISON"],
+      "description": "AI_PROPOSAL: Distiller/AI-assisted structural edit (§6, FB-RAT-PHN-006) awaiting user approval. LINEAGE_COMPARISON: fork-vs-upstream-parent comparison (LOOP_FORK_LINEAGE_CONTRACT.md §10's COMPARING→DIFF_READY transition)."
+    },
+    "generatedAtUtc": { "type": "string", "format": "date-time" },
+    "baseRevision": { "$ref": "#/$defs/BaseRevisionRef" },
+    "semanticOperations": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/SemanticOperation" },
+      "description": "§6 'semantic operations' — the flat operation list every categorizedFindings entry below references by opId."
+    },
+    "categorizedFindings": { "$ref": "#/$defs/CategorizedFindings" },
+    "licenseChange": { "$ref": "#/$defs/LicenseChange" },
+    "behaviorExplanation": { "type": "string", "minLength": 1, "description": "§6 'behavior explanation' — human-readable summary of what changes in observed behavior." },
+    "validationResult": { "$ref": "#/$defs/DiffValidationResult" },
+    "authorityDiffSummary": { "$ref": "#/$defs/AuthorityDiffSummary" },
+    "unknownFields": { "type": "object", "default": {}, "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)." }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "AuthorityRung": {
+      "type": "string",
+      "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE"],
+      "description": "capability-ids.v1.json's authorityLadder, duplicated locally per this repo's convention rather than cross-file $ref'd."
+    },
+    "BaseRevisionRef": {
+      "type": "object",
+      "properties": {
+        "draftId": { "type": ["string", "null"], "default": null },
+        "draftRevisionNumber": { "type": ["integer", "null"], "minimum": 0, "default": null },
+        "releaseRef": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["loopId", "semanticVersion", "packageDigest"],
+              "properties": {
+                "loopId": { "type": "string", "minLength": 1 },
+                "semanticVersion": { "type": "string", "minLength": 1 },
+                "packageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+              },
+              "additionalProperties": true
+            },
+            { "type": "null" }
+          ],
+          "default": null
+        }
+      },
+      "anyOf": [
+        { "required": ["draftId", "draftRevisionNumber"], "properties": { "draftId": { "type": "string", "minLength": 1 }, "draftRevisionNumber": { "type": "integer" } } },
+        { "required": ["releaseRef"], "properties": { "releaseRef": { "type": "object" } } }
+      ],
+      "additionalProperties": true,
+      "description": "The 'base revision' this diff was computed against (§6) — either a LoopDraft revision (schemas/loops/loop-draft.schema.json's draftId+revision) or an immutable release identity tuple subset (LOOP_FORK_LINEAGE_CONTRACT.md §10 'comparison MUST occur only against immutable snapshots')."
+    },
+    "SemanticOperation": {
+      "type": "object",
+      "required": ["opId", "opType", "targetType", "description"],
+      "properties": {
+        "opId": { "type": "string", "minLength": 1 },
+        "opType": { "type": "string", "enum": ["ADD", "REMOVE", "REPLACE", "REORDER", "MODIFY_PROPERTY"] },
+        "targetType": {
+          "type": "string",
+          "enum": ["DOCUMENTATION", "SCHEMA", "NODE", "EDGE", "CAPABILITY", "AUTHORITY", "BUDGET", "TEST", "COMPATIBILITY"],
+          "description": "One of LOOP_FORK_LINEAGE_CONTRACT.md §8's nine FB-RAT-LIN-004 categories (license changes are NOT a targetType value here — they are reported only through the sibling `licenseChange` object, per §8's 'MUST additionally be surfaced as its own flag alongside these nine categories, rather than folded into Documentation')."
+        },
+        "targetId": { "type": ["string", "null"], "default": null, "description": "nodeId/edgeId/gatewayId/slotId this operation concerns, when targetType names an addressable graph object; null for definition-wide changes (e.g. objective text)." },
+        "description": { "type": "string", "minLength": 1 },
+        "beforeValue": {},
+        "afterValue": {}
+      },
+      "additionalProperties": true
+    },
+    "CategorizedFindings": {
+      "type": "object",
+      "required": ["documentation", "schema", "node", "edge", "capability", "authority", "budget", "test", "compatibility"],
+      "properties": {
+        "documentation": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "schema": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "node": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "edge": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "capability": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "authority": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "budget": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "test": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } },
+        "compatibility": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false,
+      "description": "FB-RAT-LIN-004 'Lineage comparison reports node, edge, schema, capability, authority, budget, test, documentation, and compatibility changes separately' — LOOP_FORK_LINEAGE_CONTRACT.md §8's exact nine categories, structurally closed (`additionalProperties: false`) so a producer cannot silently add a tenth bucket or flatten two categories together. Each array holds `SemanticOperation.opId` values from `semanticOperations` above — this schema does NOT cross-check that a listed opId's own `targetType` actually matches the category key it is filed under (array of opaque ID strings, no join); see fixtures/loops/loop-semantic-diff/adversarial/ for the resulting schema-valid-but-miscategorized case this leaves open, and LOOP_FORK_LINEAGE_CONTRACT.md §8 for the normative 'never flattened' obligation a validator enforces instead."
+    },
+    "LicenseChange": {
+      "type": "object",
+      "required": ["changed"],
+      "properties": {
+        "changed": { "type": "boolean" },
+        "previousLicenseRef": { "type": ["object", "null"], "default": null, "additionalProperties": true },
+        "newLicenseRef": { "type": ["object", "null"], "default": null, "additionalProperties": true },
+        "compatibilityFinding": { "type": ["string", "null"], "enum": ["COMPATIBLE", "INCOMPATIBLE", "NOT_EVALUATED", null], "default": null }
+      },
+      "allOf": [
+        { "if": { "properties": { "changed": { "const": true } }, "required": ["changed"] }, "then": { "required": ["newLicenseRef", "compatibilityFinding"], "properties": { "newLicenseRef": { "type": "object" } } } }
+      ],
+      "additionalProperties": true,
+      "description": "LOOP_FORK_LINEAGE_CONTRACT.md §8: 'A change to the package's declared license MUST additionally be surfaced as its own flag alongside these nine categories, rather than folded into Documentation.' compatibilityFinding feeds LOOP-LINEAGE-002 ('declared license incompatible with parent release license')."
+    },
+    "DiffFinding": {
+      "type": "object",
+      "required": ["code", "severity", "objectType", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^LOOP-[A-Z]+-[0-9]{3}$" },
+        "severity": { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        "objectType": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "remediation": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "DiffValidationResult": {
+      "type": "object",
+      "required": ["status", "findings"],
+      "properties": {
+        "status": { "type": "string", "enum": ["NOT_VALIDATED", "VALIDATING", "VALID", "INVALID"] },
+        "findings": { "type": "array", "default": [], "items": { "$ref": "#/$defs/DiffFinding" } },
+        "rulesetVersion": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "description": "§6 'validation result' — the post-apply (or post-comparison) validation state, duplicated locally from the same small shape schemas/loops/loop-draft.schema.json's ValidationState uses, per this repo's cross-file convention of duplicating small shared shapes rather than $ref'ing into another document's $defs."
+    },
+    "PerCapabilityAuthorityDelta": {
+      "type": "object",
+      "required": ["capabilityId", "direction"],
+      "properties": {
+        "capabilityId": { "type": "string", "pattern": "^fb\\.[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+        "before": { "oneOf": [ { "$ref": "#/$defs/AuthorityRung" }, { "type": "null" } ], "default": null, "description": "Null when this capability is newly requested (direction=ADDED)." },
+        "after": { "oneOf": [ { "$ref": "#/$defs/AuthorityRung" }, { "type": "null" } ], "default": null, "description": "Null when this capability is being dropped (direction=REMOVED)." },
+        "direction": { "type": "string", "enum": ["WIDENED", "NARROWED", "UNCHANGED", "ADDED", "REMOVED"] }
+      },
+      "additionalProperties": true
+    },
+    "BlockingReviewGroup": {
+      "type": "object",
+      "required": ["authorityWidening", "verificationWeakening", "destructivePathIntroduced", "schemaBreakage", "acknowledgedByUser"],
+      "properties": {
+        "authorityWidening": { "type": "boolean", "description": "FB-RAT-LIN-005 condition 1: any requested capability's authority rung moves higher, or a new capability is requested above the loop's prior maximum." },
+        "verificationWeakening": { "type": "boolean", "description": "FB-RAT-LIN-005 condition 2: a verifier removed, its severity lowered, or a terminal-state mapping that previously required verification no longer does." },
+        "destructivePathIntroduced": { "type": "boolean", "description": "FB-RAT-LIN-005 condition 3: a new node/edge makes an EXECUTE_DESTRUCTIVE-rung capability reachable that was not reachable before." },
+        "schemaBreakage": { "type": "boolean", "description": "FB-RAT-LIN-005 condition 4: an input/output schema change that is not backward-compatible per LOOP_COMPATIBILITY_CONTRACT.md §7." },
+        "acknowledgedByUser": { "type": "boolean", "description": "MUST be explicitly acknowledged before any operation from this comparison may be applied, and MUST NOT be bundled into a single 'approve all' action that also covers ordinary categorizedFindings (LOOP_FORK_LINEAGE_CONTRACT.md §9)." },
+        "acknowledgedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+      },
+      "allOf": [
+        { "if": { "properties": { "acknowledgedByUser": { "const": true } }, "required": ["acknowledgedByUser"] }, "then": { "required": ["acknowledgedAtUtc"], "properties": { "acknowledgedAtUtc": { "type": "string", "format": "date-time" } } } }
+      ],
+      "additionalProperties": true,
+      "description": "LOOP_FORK_LINEAGE_CONTRACT.md §9 (FB-RAT-LIN-005): four diff conditions pulled OUT of the ordinary nine-category categorizedFindings above into a separate, always-visible, blocking review group. This schema does not itself cross-check that every categorizedFindings.authority/node/edge/schema entry which structurally qualifies as one of these four conditions is actually reflected here — see fixtures/loops/loop-semantic-diff/adversarial/ for the resulting schema-valid-but-dangerous case (a widening operation present in the ordinary findings but silently absent from this independent group)."
+    },
+    "AuthorityDiffSummary": {
+      "type": "object",
+      "required": ["perCapability", "blockingReviewGroup"],
+      "properties": {
+        "perCapability": { "type": "array", "default": [], "items": { "$ref": "#/$defs/PerCapabilityAuthorityDelta" } },
+        "blockingReviewGroup": { "$ref": "#/$defs/BlockingReviewGroup" }
+      },
+      "additionalProperties": true,
+      "description": "§6 'authority-diff summary', reported independently of ordinary graph changes per FB-RAT-LIN-005 and FB-RAT-PHN-006 ('Authority-widening changes MUST be visually separated from ordinary graph edits, not interleaved with them in one undifferentiated list')."
+    }
+  }
+}

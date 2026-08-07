@@ -1,0 +1,16 @@
+{
+  "draftId": "draft-01HXYZFRESH0000000000000",
+  "revision": 0,
+  "graph": {
+    "mode": "EMBEDDED",
+    "definition": {
+      "loopId": "loop.demo.in-progress",
+      "objective": "A brand-new draft, still being authored — deliberately incomplete (no nodes yet) to demonstrate that `graph.definition` is NOT required to satisfy loop-definition.v2.schema.json's strict required-field list while a draft is in progress."
+    }
+  },
+  "presentation": { "stageViewScrollOffsetPx": 0, "lastFocusedView": "INTENT" },
+  "validationState": { "status": "NOT_VALIDATED", "lastValidatedAtUtc": null, "findings": [], "rulesetVersion": null },
+  "testWorkspaceRef": null,
+  "sourceSurface": "PHONE",
+  "localHistory": []
+}

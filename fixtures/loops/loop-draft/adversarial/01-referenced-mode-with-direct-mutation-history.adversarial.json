@@ -1,0 +1,30 @@
+{
+  "draftId": "draft-adversarial-direct-mutation",
+  "revision": 1,
+  "graph": {
+    "mode": "REFERENCED",
+    "referencedDefinitionRef": {
+      "loopId": "loop.demo.hello-file",
+      "semanticVersion": "1.0.0",
+      "packageDigest": "sha256:379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c"
+    }
+  },
+  "presentation": {},
+  "validationState": { "status": "VALID", "findings": [] },
+  "testWorkspaceRef": null,
+  "sourceSurface": "PHONE",
+  "localHistory": [
+    {
+      "revisionNumber": 1,
+      "actorClass": "USER",
+      "timestampUtc": "2026-08-07T13:00:00Z",
+      "baseSemanticDigest": "sha256:379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c",
+      "resultingSemanticDigest": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "operationList": [
+        { "opId": "op-1", "opType": "MODIFY_PROPERTY", "targetType": "NODE", "targetId": "n2", "description": "Edited node n2's prompt text directly, without ever flipping graph.mode away from REFERENCED into an EMBEDDED (forked) graph." }
+      ],
+      "validationState": { "status": "VALID", "findings": [] },
+      "authorityVerificationDelta": { "authorityWidened": false, "verificationWeakened": false, "details": null }
+    }
+  ]
+}

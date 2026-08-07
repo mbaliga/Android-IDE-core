@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0.0",
+  "shareId": "share-0002",
+  "releaseIdentity": {
+    "loopId": "loop.demo.private-triage",
+    "semanticVersion": "0.3.1",
+    "packageContentDigest": { "algorithm": "SHA-256", "digestHex": "0e3be411b7079976d870e6810041b2191c2332416c398391b075e7be435b94fa", "byteLength": 2048 }
+  },
+  "engineVersion": "1.0.0",
+  "terminalState": "FAILED_SAFE",
+  "terminalReasonCategory": "VALIDATION_FAILURE",
+  "nodeStateSummary": {
+    "publishedLoop": false,
+    "totalNodeCountBucket": "ZERO",
+    "nodeOutcomeCountBuckets": [],
+    "nodeIds": []
+  },
+  "bucketingVersion": "fb-share-bucket-1",
+  "durationBucket": "UNDER_10_SECONDS",
+  "retryCountBucket": "ZERO",
+  "aggregateCostBucket": "ZERO",
+  "aggregateTokensBucket": "ZERO",
+  "localCloudRatio": { "computed": false, "ratioVersion": "fb-ratio-1" },
+  "capabilityCategories": [],
+  "verificationClaim": {
+    "label": "UNSIGNED",
+    "claimText": "This receipt is unsigned: no local signing key was available. No continuity claim can be made at all."
+  },
+  "createdAtUtc": "2026-08-07T09:34:00Z"
+}

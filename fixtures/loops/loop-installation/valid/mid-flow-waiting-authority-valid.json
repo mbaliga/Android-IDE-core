@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0.0",
+  "installationId": "install-8f2c1a90",
+  "releaseIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0",
+    "packageContentDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+      "byteLength": 190
+    }
+  },
+  "source": {
+    "transferChannel": "HTTPS_URL",
+    "expectedMediaType": "application/zip",
+    "expectedDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+      "byteLength": 190
+    },
+    "sourceDescription": "https://example-releases.invalid/loop-fb-triage-inbox/1.0.0.floop",
+    "initiatedByUser": true
+  },
+  "signatureState": "SIGNATURE_VALID_REVOCATION_CHECKED",
+  "compatibilityReportRef": {
+    "objectId": "compat-report-2b9e",
+    "digest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2948e450dbfa4a23b2f94cc4c3bdbc3926dcebed9b668c95c720ee4043358c30",
+      "byteLength": 512
+    }
+  },
+  "bindingProfileRef": {
+    "objectId": "binding-profile-77aa",
+    "digest": null
+  },
+  "authorityGrants": [],
+  "installationState": "WAITING_AUTHORITY",
+  "receipts": [
+    {
+      "objectId": "event-acquiring-01"
+    },
+    {
+      "objectId": "event-snapshotted-01"
+    },
+    {
+      "objectId": "event-container-verified-01"
+    },
+    {
+      "objectId": "validation-report-2b9e"
+    }
+  ],
+  "createdAtUtc": "2026-08-01T10:00:00Z",
+  "updatedAtUtc": "2026-08-01T10:00:07Z"
+}

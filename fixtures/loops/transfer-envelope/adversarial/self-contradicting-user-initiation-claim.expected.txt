@@ -1,0 +1,19 @@
+Schema verdict: VALID against transfer-envelope.schema.json.
+initiatedByUser is const:true and IS true here, so the schema's structural check is satisfied —
+the schema can only verify the field's TYPE/VALUE, it cannot verify the claim is TRUTHFUL, and
+sourceDescription is free text the schema does not cross-check against initiatedByUser.
+
+Real rejection: this envelope's own sourceDescription discloses the fetch was NOT actually
+user-initiated ("Nightly CI job auto-synced... no user tap or approval was involved"), which
+directly contradicts the field it is paired with. There is no frozen loop-validation-rules.v1
+code for this — that registry's namespaces (LOOP-ID/GRAPH/SCHEMA/CAP/BUDGET/VERIFY/PKG/COMPAT/
+TEST/LINEAGE) govern package and definition content, not the pre-import TRANSFER boundary this
+object represents.
+
+Normative basis for rejection (not a rule code, a MUST-level invariant): LOOP_ENGINEERING_SPEC_V2.1.md
+§21 / FB-RAT-IMP-002 — "no model, tool, shell, remote, device, or side-effecting node may execute
+during parsing, validation, preview, or installation" presupposes the transfer that produced the
+bytes was itself genuinely user-initiated; a producer that cannot truthfully assert this MUST NOT
+construct a TransferEnvelope at all. Enforcement point: the transfer-acceptance API boundary
+(application code), which MUST refuse to construct this object from an automated fetch — not a
+downstream validation-report finding.

@@ -1,0 +1,17 @@
+Schema verdict: VALID against package-fixture-record.schema.json.
+`stale` is a plain boolean and the schema treats it as an advisory cache field with no
+cross-check against a live node definition — it has no way to know this fixture's recordedAtUtc
+(2026-01-10) predates a later prompt edit, or that recordedPromptDigest no longer matches the
+node's CURRENT prompt.
+
+Real rejection code: LOOP-TEST-002
+  "Fixture (node-summarize-thread, 0, 0) has a recorded prompt digest that no longer matches the
+  current node prompt."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-TEST-002, WARNING severity).
+  Remediation: "Fixture is marked STALE, not silently missing or silently matching; regenerate the
+  fixture against the current prompt."
+
+The validator MUST recompute staleness by comparing recordedPromptDigest against the node's
+CURRENT prompt digest at validation time — a cached `stale: false` embedded in the fixture record
+itself is never authoritative on its own (package-fixture-record.schema.json's own description
+says as much); trusting it blindly would let a genuinely stale fixture silently pass as fresh.

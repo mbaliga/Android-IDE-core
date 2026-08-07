@@ -1,0 +1,30 @@
+{
+  "listingId": "listing-fb-triage-inbox",
+  "referencedReleases": [
+    {
+      "loopId": "loop-fb-triage-inbox",
+      "semanticVersion": "1.0.0",
+      "packageDigest": {
+        "algorithm": "SHA-256",
+        "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+        "byteLength": 190
+      },
+      "channel": "stable",
+      "recommended": true
+    }
+  ],
+  "displayName": "Inbox Triage Loop",
+  "description": "Reads a GitHub repo's open issues and drafts a triage summary. No network egress beyond the configured repo host.",
+  "category": "productivity",
+  "compatibilityDeclaration": {
+    "verified": false,
+    "declaredAxes": {
+      "platformDistribution": "full+play",
+      "device": "arm64-v8a phone"
+    },
+    "engineVersionRange": ">=1.0.0 <2.0.0",
+    "evidenceRefs": []
+  },
+  "lastUpdatedUtc": "2026-07-15T09:05:00Z",
+  "publisherKeyFingerprint": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c"
+}

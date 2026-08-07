@@ -1,0 +1,20 @@
+Schema validation: PASSES (this document is schema-valid against authority-diff.schema.json).
+
+Real rejection: `before: "OBSERVE"` -> `after: "EXECUTE_DESTRUCTIVE"` is a move UP
+capability-ids.v1.json's authorityLadder (OBSERVE is rung index 0; EXECUTE_DESTRUCTIVE is rung index
+6 of 8) -- by the ladder's own ordering this is a WIDENING, not a NARROWING. The entry is mislabeled
+`direction: "NARROWED"`. Because this schema's structural allOf keys its requiresFreshApproval check
+on the literal string value of `direction` (only ADDED/WIDENED entries force requiresFreshApproval=
+true), a mislabeled NARROWED entry sails through both allOf branches unpunished and
+requiresFreshApproval=false validates cleanly -- exactly the FB-RAT-IMP-008 / FB-RAT-LIN-005 case
+this whole object exists to surface, hidden by a single wrong enum value.
+
+Why the schema cannot catch this: AuthorityRung is an unordered JSON Schema string enum -- nothing
+in the schema encodes capability-ids.v1.json's authorityLadder as an ORDERING a validator could
+compare `before` against `after` with. Detecting "after is higher on the ladder than before, so
+direction cannot legitimately be NARROWED or UNCHANGED" requires a validator that has loaded
+capability-ids.v1.json's authorityLadder array and computed each rung's ordinal position --
+semantic interpretation external to this schema document, not structural JSON Schema validation.
+The closest machine-checkable sibling is again LOOP-COMPAT-002 (loop-validation-rules.v1.json),
+whose engine-side implementation IS expected to resolve authorityLadder ordering when it runs, even
+though this schema cannot express that check declaratively.

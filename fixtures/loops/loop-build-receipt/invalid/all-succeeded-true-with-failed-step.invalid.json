@@ -1,0 +1,86 @@
+{
+  "buildReceiptId": "receipt-bad-0001",
+  "sourceDraftRevision": "draft-rev-00044",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "stepName": "FREEZE_DRAFT_REVISION",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 2,
+      "stepName": "VALIDATE_SEMANTIC_GRAPH",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 3,
+      "stepName": "CANONICALIZE",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 4,
+      "stepName": "SCAN_FORBIDDEN_CONTENT",
+      "outcome": "FAILED",
+      "detail": null
+    },
+    {
+      "stepNumber": 5,
+      "stepName": "RUN_REQUIRED_FIXTURES",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 6,
+      "stepName": "GENERATE_COMPAT_PROVENANCE_DOCS",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 7,
+      "stepName": "INVENTORY_FILES",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 8,
+      "stepName": "COMPUTE_CONTENT_DIGEST",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 9,
+      "stepName": "SIGN_RELEASE_IDENTITY",
+      "outcome": "SKIPPED",
+      "detail": null
+    },
+    {
+      "stepNumber": 10,
+      "stepName": "EMIT_BUILD_RECEIPT",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    }
+  ],
+  "allStepsSucceeded": true,
+  "semanticDigest": "sha256:3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+  "semanticDigestVersion": "fb-semantic-digest-1",
+  "validationRulesetVersion": "fb-loop-validation-rules-1",
+  "validationFindings": [],
+  "testSuiteResults": null,
+  "canonicalizationVersion": "fb-loop-canon-1",
+  "fileInventoryDigest": null,
+  "packageContentDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e",
+    "byteLength": 310
+  },
+  "signatureAction": null,
+  "builderProducer": {
+    "name": "aarso-loop-builder",
+    "version": "1.0.0"
+  },
+  "warnings": [],
+  "createdAtUtc": "2026-07-30T10:20:00Z"
+}

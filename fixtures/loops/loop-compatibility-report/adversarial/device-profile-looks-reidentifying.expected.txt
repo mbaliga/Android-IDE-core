@@ -1,0 +1,18 @@
+Schema verdict: VALID against loop-compatibility-report.schema.json.
+`cacheKey.deviceOsProfile` is only checked for minLength:1 — any non-empty string, including one
+that embeds a serial number and an IMEI, satisfies that structurally.
+
+Real rejection basis: docs/ratified/loops/LOOP_COMPATIBILITY_CONTRACT.md §8 (no dedicated
+loop-validation-rules.v1.json code exists for this — §8 states a device-identity discipline for
+compatibility CLAIMS, not a rule this registry encodes as a machine-checkable code; applied here
+by the same reasoning to this report's own cache-key field, so this fixture deliberately does not
+cite a LOOP-* code):
+  "'Device class' here MUST be the DeviceIdentity.family/board classification
+  (DEVICE_STATE_AND_SAFETY_SPEC.md §2.1), never usbDescriptor vendor/product-plus-serial or any
+  other value capable of re-identifying one specific physical unit."
+A value embedding a serial number and an IMEI is exactly the re-identifying shape §8 prohibits,
+even though `deviceOsProfile`'s own field description states the same constraint in this schema.
+
+Remediation: reject or hash-truncate before persisting; `deviceOsProfile` MUST be limited to a
+family/board/OS-version classification string, never a value that could re-identify one physical
+device.

@@ -1,0 +1,45 @@
+{
+  "diffId": "diff-lineage-0007",
+  "sourceKind": "LINEAGE_COMPARISON",
+  "generatedAtUtc": "2026-08-07T16:00:00Z",
+  "baseRevision": {
+    "releaseRef": { "loopId": "loop.demo.hello-file", "semanticVersion": "1.0.0", "packageDigest": "sha256:379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c" }
+  },
+  "semanticOperations": [
+    { "opId": "op-1", "opType": "MODIFY_PROPERTY", "targetType": "AUTHORITY", "targetId": "n1", "description": "Node n1's requested capability changed from fb.repo.read (READ) to fb.repo.push_remote (EXECUTE_EXTERNAL).", "beforeValue": "fb.repo.read", "afterValue": "fb.repo.push_remote" },
+    { "opId": "op-2", "opType": "MODIFY_PROPERTY", "targetType": "COMPATIBILITY", "targetId": null, "description": "minEngineVersion raised from 1.0.0 to 1.1.0." }
+  ],
+  "categorizedFindings": {
+    "documentation": [],
+    "schema": [],
+    "node": [],
+    "edge": [],
+    "capability": ["op-1"],
+    "authority": ["op-1"],
+    "budget": [],
+    "test": [],
+    "compatibility": ["op-2"]
+  },
+  "licenseChange": {
+    "changed": true,
+    "previousLicenseRef": { "spdxId": "Apache-2.0" },
+    "newLicenseRef": { "spdxId": "Apache-2.0" },
+    "compatibilityFinding": "COMPATIBLE"
+  },
+  "behaviorExplanation": "The upstream parent release widened node n1's requested capability from a read-only repository capability to an external push capability, and raised the minimum engine version.",
+  "validationResult": { "status": "VALID", "findings": [], "rulesetVersion": "fb-loop-validation-rules-1" },
+  "authorityDiffSummary": {
+    "perCapability": [
+      { "capabilityId": "fb.repo.read", "before": "READ", "after": null, "direction": "REMOVED" },
+      { "capabilityId": "fb.repo.push_remote", "before": null, "after": "EXECUTE_EXTERNAL", "direction": "ADDED" }
+    ],
+    "blockingReviewGroup": {
+      "authorityWidening": true,
+      "verificationWeakening": false,
+      "destructivePathIntroduced": false,
+      "schemaBreakage": false,
+      "acknowledgedByUser": true,
+      "acknowledgedAtUtc": "2026-08-07T16:05:00Z"
+    }
+  }
+}

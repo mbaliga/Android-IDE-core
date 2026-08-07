@@ -1,0 +1,20 @@
+Schema validation: PASSES (this document is schema-valid against loop-result-share.schema.json).
+
+Real rejection: `terminalState: "FAILED_SAFE"` paired with
+`terminalReasonCategory: "ALL_REQUIRED_VERIFIERS_PASSED"` is internally contradictory —
+ALL_REQUIRED_VERIFIERS_PASSED is the category loop-run.schema.json's own TerminalReasonCategory
+$def grounds specifically in the SUCCEEDED_VERIFIED row of LOOP_ENGINEERING_SPEC_V2.1 §9's
+transition table ("Every reachable terminal node is reached; every verifier marked
+requiredForSuccess... has a passing result... -> SUCCEEDED_VERIFIED"), never in the FAILED_SAFE
+row (whose own categories are VALIDATION_FAILURE or NODE_FAILURE_NO_SIDE_EFFECTS). A consumer of
+this shared result would read "all required verifiers passed" as reassuring detail about a run
+that actually failed — the opposite of what happened.
+
+Why the schema cannot catch this: `terminalState` and `terminalReasonCategory` are validated
+independently, each against its own closed enum — this schema has no allOf/if-then pairing that
+restricts which TerminalReasonCategory values are legal companions for which TerminalRunState
+value (unlike, say, the SELF_SIGNED_RECEIPT/UNSIGNED <-> signingKeyFingerprint pairing this same
+schema DOES enforce for verificationClaim). Encoding the full state-to-reason-category compatibility
+matrix would require one allOf branch per TerminalRunState value cross-referencing which of the 14
+TerminalReasonCategory values loop-run.schema.json's own $def grounds in that state's §9 table row —
+not done here; left as a producer-side (and, ideally, a future registry-rule-code) obligation.

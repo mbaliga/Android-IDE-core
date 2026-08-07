@@ -1,0 +1,18 @@
+Schema verdict: VALID against loop-validation-report.schema.json.
+`namespace` is checked independently against the closed ten-value enum, and `code` is checked
+independently against the '^LOOP-[A-Z]+-[0-9]{3}$' pattern — this schema does not cross-check that
+`namespace` actually equals the LOOP-<NAMESPACE> segment of `code` (see this schema's own
+$defs/Finding/properties/namespace description for why: a strict cross-field equality check would
+need a 10-way if/then chain duplicating the whole namespace enum a second time). Here `namespace`
+is declared "LOOP-PKG" while `code` is "LOOP-CAP-001" — internally self-contradictory.
+
+Real rejection basis: this is a report-integrity defect internal to this document, not a rule
+loop-validation-rules.v1.json itself encodes (that registry defines what LOOP-CAP-001 MEANS —
+"Node ... requests capability ... unavailable or prohibited" — it has no separate code for "a
+report's own namespace field disagrees with its own code field"). A correct implementation derives
+`namespace` from `code`'s own prefix at write time and can never emit disagreeing values; this
+fixture models what happens when that invariant is violated by a buggy producer.
+
+Remediation: reject or auto-correct at ingestion — recompute `namespace` from `code`'s prefix
+rather than trusting the producer's separately-supplied value, or reject the whole report as
+malformed.

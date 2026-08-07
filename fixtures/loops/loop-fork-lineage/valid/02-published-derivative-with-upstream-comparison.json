@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "forkId": "draft-fork-0002",
+  "parentReleaseRef": {
+    "loopId": "loop.demo.hello-file",
+    "semanticVersion": "1.0.0",
+    "packageDigest": { "algorithm": "SHA-256", "digestHex": "bd0744455f140b0c49f72b83b21489ea512354a54ae7d43bef4e0489fd31181e", "byteLength": 4096 }
+  },
+  "forkReason": "Fork to add a Gitea-flavored publish step.",
+  "initiatingActor": "USER",
+  "createdAtUtc": "2026-08-01T08:00:00Z",
+  "authorshipContributions": [
+    { "contributorId": "user-jbk4bvkqsq", "contributionDescription": "Added the Gitea publish node and its capability request." }
+  ],
+  "licenseRef": { "spdxId": "Apache-2.0" },
+  "attributionRequired": true,
+  "upstreamRelationship": "TRACKING",
+  "lastComparedAgainstUpstream": { "objectId": "semantic-diff-0009" },
+  "authorityDiffSinceFork": {
+    "comparisonId": "authdiff-fork-0002",
+    "generatedAtUtc": "2026-08-07T10:05:00Z",
+    "comparisonContext": "LINEAGE_COMPARISON",
+    "perCapability": [
+      { "capabilityId": "fb.repo.push_remote", "before": null, "after": "EXECUTE_EXTERNAL", "direction": "ADDED" }
+    ],
+    "requiresFreshApproval": true
+  },
+  "appliedUpstreamOperations": [
+    { "opId": "op-7", "appliedAtUtc": "2026-08-05T09:00:00Z", "beforeSemanticDigest": "sha256:bd0744455f140b0c49f72b83b21489ea512354a54ae7d43bef4e0489fd31181e", "afterSemanticDigest": "sha256:0e3be411b7079976d870e6810041b2191c2332416c398391b075e7be435b94fa", "sourceSemanticDiffRef": { "objectId": "semantic-diff-0005" } }
+  ],
+  "lineageEvents": [
+    { "eventId": "lev-1", "eventType": "FORK_CREATED", "occurredAtUtc": "2026-08-01T08:00:00Z", "actor": "USER" },
+    { "eventId": "lev-2", "eventType": "UPSTREAM_COMPARED", "occurredAtUtc": "2026-08-05T08:55:00Z", "actor": "USER", "relatedRef": { "objectId": "semantic-diff-0005" } },
+    { "eventId": "lev-3", "eventType": "UPSTREAM_OPERATION_APPLIED", "occurredAtUtc": "2026-08-05T09:00:00Z", "actor": "USER", "relatedRef": { "objectId": "semantic-diff-0005" } },
+    { "eventId": "lev-4", "eventType": "DERIVATIVE_PUBLISHED", "occurredAtUtc": "2026-08-07T10:10:00Z", "actor": "USER" }
+  ],
+  "licenseCompatibilityFinding": "COMPATIBLE",
+  "publication": {
+    "publishedLoopId": "loop.demo.hello-file-gitea-fork",
+    "listingRef": { "objectId": "listing-0042" },
+    "testsInheritedUnchanged": ["fixture-n1-basic"],
+    "testsChangedOrAdded": ["fixture-n3-gitea-publish"],
+    "upstreamContributionIntended": false,
+    "ownershipTransferred": false
+  }
+}

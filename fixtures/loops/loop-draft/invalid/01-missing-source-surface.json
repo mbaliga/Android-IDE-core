@@ -1,0 +1,9 @@
+{
+  "draftId": "draft-invalid-missing-source-surface",
+  "revision": 0,
+  "graph": { "mode": "EMBEDDED", "definition": {} },
+  "presentation": {},
+  "validationState": { "status": "NOT_VALIDATED", "findings": [] },
+  "testWorkspaceRef": null,
+  "localHistory": []
+}

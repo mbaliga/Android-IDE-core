@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-draft.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopDraft per LOOP_ENGINEERING_SPEC_V2.1 §2.1 (mutable authoring state) and §15 (draft revision + concurrency contract). Cross-references, does not redefine: semantic-digest.v1.json (exclusionListV1 — presentation/layout metadata), loop-validation-rules.v1.json (validationState.findings[].code), loop-definition.v2.schema.json (the `graph` field's EMBEDDED mode is loosely typed on purpose — see that field's description for why a draft is deliberately NOT required to validate against the strict LoopDefinition schema at every autosave point). LOOP_PHONE_AUTHORING_SPEC.md §13's DRAFT_CLEAN/DIRTY_JOURNALED persistence state machine and §8's BASE_REVISION/PROPOSED/APPLIED/DISCARDED AI-proposal machine are phone-surface UI states layered on top of this wire object, not restated here — this schema models the durable LoopDraft object and its concurrency contract, not either UI state machine.",
+  "title": "LoopDraft",
+  "description": "Mutable authoring state with stable draft identity, revision, graph, presentation/layout metadata, validation state, test workspace reference, source surface, and local history (§2.1). A draft is not trusted or publishable until packaged (LOOP_ENGINEERING_SPEC_V2.1 §20). This file also defines, as sibling top-level $defs, the draft-revision/concurrency contract (§15): DraftMutationRequest (a proposed mutation against an expected revision) and DraftMutationConflictReport (the semantic-conflict rejection a stale mutation MUST receive — never last-write-wins).",
+  "type": "object",
+  "required": ["draftId", "revision", "graph", "presentation", "validationState", "testWorkspaceRef", "sourceSurface", "localHistory"],
+  "properties": {
+    "draftId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable draft identity, never reused after deletion (§14, §2.1). This schema cannot enforce non-reuse (that is a store-level obligation over time, not a single-document structural property)."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonically increasing revision counter. Every mutation is applied against an expected revision (§15) — see DraftMutationRequest below."
+    },
+    "graph": { "$ref": "#/$defs/DraftGraph" },
+    "presentation": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": true,
+      "description": "Draft-level presentation/layout metadata (viewport, card collapse state, etc.) — named after and excluded by the same key names semantic-digest.v1.json's exclusionListV1 drops from a packaged LoopDefinition's semantic digest ('presentation', 'layout', 'x', 'y', 'notes'). A draft's own graph.definition (when embedded) carries its own per-node presentation/notes fields per loop-definition.v2.schema.json; this top-level field is draft-surface-wide state (e.g. current Stage View scroll position) that has no per-node home at all."
+    },
+    "validationState": { "$ref": "#/$defs/ValidationState" },
+    "testWorkspaceRef": {
+      "oneOf": [
+        { "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "A test/fixture workspace bundle for this draft, reused as-is from schemas/common/artifact-ref.schema.json (not redefined here) — same cross-file $ref pattern schemas/execution/receipt.schema.json and schemas/devices/firmware-artifact.schema.json already use for a byte artifact reused wholesale. Null before any simulation/replay has produced a workspace."
+    },
+    "sourceSurface": {
+      "type": "string",
+      "enum": ["PHONE", "WEB"],
+      "description": "FB-RAT-LBX-001/§2.1: which authoring surface currently owns this draft. Phone and browser drafts do not silently merge (§15) — an explicit import/fork/comparison/selected-change application is the only bridge (LOOP_DUAL_SURFACE_ARCHITECTURE.md §11)."
+    },
+    "localHistory": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/DraftRevisionRecord" },
+      "description": "§15: append-only local history of revisions. Each entry records actor class, timestamp, base/resulting semantic digest, operation list, validation state, and authority/verification delta."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ActorClass": {
+      "type": "string",
+      "enum": ["USER", "DISTILLER", "AI_PROPOSAL", "IMPORT_MIGRATION", "UPSTREAM_APPLY"],
+      "description": "§15's exact actor-class vocabulary, the same one LOOP_FORK_LINEAGE_CONTRACT.md §3 reuses for lineage events (a lineage event and a draft revision are the same kind of fact, per LOOP_ENGINEERING_SPEC_V2.1 §15)."
+    },
+    "SemanticDigestString": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "semantic-digest.v1.json's output format: 'sha256:<lowercase-hex>' over definition.json minus exclusionListV1, per the fb-loop-canon-1 canonicalization profile. Not recomputed or verified by this schema."
+    },
+    "DraftGraph": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["EMBEDDED", "REFERENCED"],
+          "description": "EMBEDDED: the graph is authored inline in this draft. REFERENCED: this draft tracks an already-packaged/installed LoopDefinition it was forked from (§11 'imported packages remain editable on the phone through a forked draft'; FB-RAT-IMP-006 'editing an installed release creates a forked local draft rather than mutating it') — the draft has not yet diverged into its own embedded graph."
+        },
+        "definition": {
+          "type": ["object", "null"],
+          "default": null,
+          "additionalProperties": true,
+          "description": "Required (non-null) when mode=EMBEDDED (enforced below). Deliberately loosely typed here (a free-form object, NOT $ref'd against loop-definition.v2.schema.json's strict required-field list): a LoopDraft is explicitly 'not trusted or publishable until packaged' (§2.1) and is expected to be structurally incomplete for long stretches of an authoring session (e.g. mid-edit with no terminalNodeIds yet). validationState below is the honest signal of whether `definition` currently satisfies loop-definition.v2.schema.json in full — a build step (§20 step 2, 'validate the semantic graph') is what actually re-validates `definition` against that strict schema before a package may be produced; this schema does not pre-empt that step by rejecting legitimately in-progress drafts."
+        },
+        "referencedDefinitionRef": {
+          "type": ["object", "null"],
+          "default": null,
+          "properties": {
+            "loopId": { "type": "string", "minLength": 1 },
+            "semanticVersion": { "type": "string", "minLength": 1 },
+            "packageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          },
+          "required": ["loopId", "semanticVersion", "packageDigest"],
+          "additionalProperties": true,
+          "description": "Required (non-null) when mode=REFERENCED (enforced below) — the release identity tuple subset (§14) this draft was forked from or is tracking against (LOOP_FORK_LINEAGE_CONTRACT.md §10's 'immutable snapshot' comparison target)."
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "mode": { "const": "EMBEDDED" } }, "required": ["mode"] }, "then": { "required": ["definition"], "properties": { "definition": { "type": "object" } } } },
+        { "if": { "properties": { "mode": { "const": "REFERENCED" } }, "required": ["mode"] }, "then": { "required": ["referencedDefinitionRef"], "properties": { "referencedDefinitionRef": { "type": "object" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ValidationFinding": {
+      "type": "object",
+      "required": ["code", "severity", "objectType", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^LOOP-[A-Z]+-[0-9]{3}$", "description": "A stable code from loop-validation-rules.v1.json's namespace architecture (§19), e.g. 'LOOP-GRAPH-002'. Not cross-checked against the live registry by this schema — a code matching the pattern but not present in the registry is a validator-time error, not a schema one." },
+        "severity": { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        "objectType": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "remediation": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "ValidationState": {
+      "type": "object",
+      "required": ["status", "findings"],
+      "properties": {
+        "status": { "type": "string", "enum": ["NOT_VALIDATED", "VALIDATING", "VALID", "INVALID"] },
+        "lastValidatedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null },
+        "findings": { "type": "array", "default": [], "items": { "$ref": "#/$defs/ValidationFinding" } },
+        "rulesetVersion": { "type": ["string", "null"], "default": null, "description": "loop-validation-rules.v1.json's `rulesetVersion` ('fb-loop-validation-rules-1') in effect when `findings` was produced." }
+      },
+      "additionalProperties": true,
+      "description": "A validator MUST NOT report status=VALID while `findings` contains an ERROR-severity entry — this schema does not enforce that cross-field agreement structurally (status and findings are independent properties); see fixtures/loops/loop-draft/adversarial/ for the resulting schema-valid-but-dangerous case this leaves open."
+    },
+    "SemanticOperationSummary": {
+      "type": "object",
+      "required": ["opId", "opType", "description"],
+      "properties": {
+        "opId": { "type": "string", "minLength": 1 },
+        "opType": { "type": "string", "enum": ["ADD", "REMOVE", "REPLACE", "REORDER", "MODIFY_PROPERTY"] },
+        "targetType": { "type": ["string", "null"], "enum": ["NODE", "EDGE", "GATEWAY", "SCHEMA", "CAPABILITY", "BUDGET", "TEST", "DOCUMENTATION", "COMPATIBILITY", "LICENSE", "PRESENTATION", null], "default": null },
+        "targetId": { "type": ["string", "null"], "default": null },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "AuthorityVerificationDelta": {
+      "type": "object",
+      "required": ["authorityWidened", "verificationWeakened"],
+      "properties": {
+        "authorityWidened": { "type": "boolean" },
+        "verificationWeakened": { "type": "boolean" },
+        "details": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "description": "§15 'authority/verification delta' — the draft-revision-time echo of the same two blocking conditions LOOP_FORK_LINEAGE_CONTRACT.md §9 (FB-RAT-LIN-005) evaluates at lineage-comparison time."
+    },
+    "DraftRevisionRecord": {
+      "type": "object",
+      "required": ["revisionNumber", "actorClass", "timestampUtc", "baseSemanticDigest", "resultingSemanticDigest", "operationList", "validationState", "authorityVerificationDelta"],
+      "properties": {
+        "revisionNumber": { "type": "integer", "minimum": 0 },
+        "actorClass": { "$ref": "#/$defs/ActorClass" },
+        "timestampUtc": { "type": "string", "format": "date-time" },
+        "baseSemanticDigest": { "$ref": "#/$defs/SemanticDigestString" },
+        "resultingSemanticDigest": { "$ref": "#/$defs/SemanticDigestString" },
+        "operationList": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SemanticOperationSummary" } },
+        "validationState": { "$ref": "#/$defs/ValidationState" },
+        "authorityVerificationDelta": { "$ref": "#/$defs/AuthorityVerificationDelta" },
+        "idempotencyKey": { "type": ["string", "null"], "default": null, "description": "FB-RAT-COM-006: SHOULD be present so a retried journal write (LOOP_PHONE_AUTHORING_SPEC.md §13 DIRTY_JOURNALED) is not double-applied." }
+      },
+      "additionalProperties": true,
+      "description": "§15's exact revision-record shape: actor class, timestamp, base semantic digest, resulting semantic digest, operation list, validation state, authority/verification delta."
+    },
+    "DraftMutationRequest": {
+      "type": "object",
+      "required": ["draftId", "expectedRevision", "operations", "actorClass"],
+      "properties": {
+        "draftId": { "type": "string", "minLength": 1 },
+        "expectedRevision": { "type": "integer", "minimum": 0, "description": "§15: 'Every draft mutation is applied against an expected revision.' A mutation whose expectedRevision does not match the draft's current `revision` MUST be rejected with a DraftMutationConflictReport, never applied last-write-wins." },
+        "operations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SemanticOperationSummary" } },
+        "actorClass": { "$ref": "#/$defs/ActorClass" },
+        "idempotencyKey": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "description": "§15's draft-revision/concurrency contract, request side. A conforming store either applies this and appends a DraftRevisionRecord with revisionNumber = expectedRevision + 1, or rejects it with a DraftMutationConflictReport — there is no third outcome."
+    },
+    "DraftMutationConflictReport": {
+      "type": "object",
+      "required": ["draftId", "expectedRevision", "actualRevision", "conflictingRevisions", "semanticConflictDescription"],
+      "properties": {
+        "draftId": { "type": "string", "minLength": 1 },
+        "expectedRevision": { "type": "integer", "minimum": 0 },
+        "actualRevision": { "type": "integer", "minimum": 0 },
+        "conflictingRevisions": { "type": "array", "default": [], "items": { "$ref": "#/$defs/DraftRevisionRecord" }, "description": "The revision(s) applied between expectedRevision and actualRevision — what the stale mutation did not see." },
+        "semanticConflictDescription": { "type": "string", "minLength": 1 },
+        "resolutionOptions": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": true,
+      "description": "§15: 'A stale mutation is rejected with a semantic conflict report; it is not last-write-wins.' actualRevision MUST differ from expectedRevision for this report to be meaningful — a validator, not this schema (JSON Schema draft 2020-12 has no keyword comparing two sibling integer properties for inequality), enforces actualRevision != expectedRevision."
+    }
+  }
+}

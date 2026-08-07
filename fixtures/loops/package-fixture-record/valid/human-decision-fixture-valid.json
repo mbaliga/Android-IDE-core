@@ -1,0 +1,13 @@
+{
+  "nodeId": "node-approve-release",
+  "iterationIndex": 0,
+  "callIndex": 0,
+  "recordedPromptDigest": null,
+  "recordedOutput": null,
+  "recordedDecision": {
+    "decisionValue": "APPROVE",
+    "decidedByFixtureAuthor": "fixture-author-1"
+  },
+  "stale": null,
+  "recordedAtUtc": "2026-07-15T08:05:00Z"
+}
