@@ -41,18 +41,35 @@ whole pack.
   `INT-NNN` instead of the corpus-standard `FB-RAT-INT-NNN`; content coverage is complete, only
   the citation string format is inconsistent — left unfixed to avoid mis-editing ~90 citation
   instances under time pressure; flagged for the next session.
+- **WP-1L (loop contract corpus v2.1)** — DONE, gate **YELLOW→fixed to effectively green**. Full
+  detail: `docs/WP1L_GATE_REPORT.md`. Summary: de-duplicated the 12 dual-surface specs (each
+  shipped as a first-draft-plus-contradictory-second-pass) into `docs/ratified/loops/*.md`;
+  resolved the 3 conflicting `.floop` layouts and 2 conflicting import state machines into the
+  single 11-state machine, **verified byte-identical** between `LOOP_IMPORT_ACTIVATION_CONTRACT.md`
+  and the `loop-installation.v1` schema enum; resolved the P0-vs-P1 Registry contradiction to P1
+  (matches the no-hosted-marketplace scope boundary); renumbered the docx-corrupted ordered lists.
+  Emitted 21 loop JSON schemas (5 groups), 8 Kotlin files (`LoopDefinitionContracts.kt` through
+  `LoopRuntimeContracts.kt` — `LoopContracts.kt` from the base pack is superseded, not kept
+  alongside), 169 fixture files, and `AMENDMENTS.md` (the `FB-RAT-INT-003` supersession line for
+  `FB-RAT-MKT-001`, the 3 undeclared v2.1 deltas, the `Write` mapping row, the
+  `LoopRunState↔ExecutionState` mapping, the `derivesFrom` table, the `StudioApp`/`WebLoopStudio`
+  glossary fix, and the proposed-new-decisions section). 21/21 schemas valid, 127/127 valid
+  fixtures pass, 43/43 invalid rejected, 42/42 adversarial carry substantive `.expected.txt`, 0
+  dangling `LOOP-*` rule-code references. **Two genuine corpus defects the gate found were fixed
+  post-gate, not left flagged** (exact source text was already in hand from the register, so this
+  was transcription, not invention): `FB-RAT-LBX-002` was dangling (both
+  `LOOP_PHONE_AUTHORING_SPEC.md` and `LOOP_DUAL_SURFACE_ARCHITECTURE.md` pointed ownership at each
+  other) — fixed by correctly declaring it ACCEPTED in `LOOP_PHONE_AUTHORING_SPEC.md` per the
+  dual-surface register's own repository-effect column, plus adding that document's
+  previously-missing decision-IDs-cited footer; 14 DEFERRED/EXPERIMENTAL/REJECTED loop IDs were
+  cited as living in `docs/non_ratified/*.md` but had no row there — added all 14 (plus
+  `FB-RAT-LBX-008`, not flagged but also missing) with verbatim register text. Kotlin compilation
+  and unknown-field round-trip remain UNVERIFIED, same sandbox limits as WP-1 — the WP-1L gate
+  additionally flagged that its own 8 Kotlin files were not re-scanned lexically the way WP-1's
+  gate scanned its 6 (explicit, named gap, not a silent skip).
 
 ## What is NOT done yet in this repo
 
-- **WP-1L (loop contract corpus proper)** — the 12 dual-surface loop specs still need
-  de-duplication (each is a first draft with a contradictory second pass appended, per
-  `10_DUAL_VALIDATION_ADDENDUM.md` §B2), the 18+3 loop JSON schemas, the 8 loop Kotlin files
-  (`LoopDefinitionContracts.kt` etc.; `LoopContracts.kt` from the first pack is superseded and
-  must be deleted, not kept alongside), and `AMENDMENTS.md` (carrying the `FB-RAT-INT-003`
-  supersession line for `FB-RAT-MKT-001`, the three undeclared `LOOP-001..006` deltas in v2.1,
-  the `Write = {MODIFY_DRAFT, EXECUTE_REVERSIBLE}` mapping row, and the `derivesFrom` column for
-  ~13 restated decisions). WP-1L-G0 (the four frozen concepts) is done and is the precondition
-  for this.
 - **WP-2 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
@@ -73,19 +90,29 @@ whole pack.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` in full before touching anything WP-1 produced.
+1. Read `docs/WP1_GATE_REPORT.md` and `docs/WP1L_GATE_REPORT.md` in full before touching anything
+   WP-1/WP-1L produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus).
-3. Get a real Kotlin/Gradle toolchain available and run the two UNVERIFIED checks (compilation,
-   round-trip) from §WP-1 above.
-4. Proceed to WP-1L (loop contract corpus) — inputs are `fonebrew_handoff/09_DUAL_SURFACE_LOOP_BUILDER.md`,
-   `10_DUAL_VALIDATION_ADDENDUM.md` §E (merged artifact list), `inputs/dual_surface/specs/` (12
-   extracted spec texts), and the six registries already frozen under `schemas/loops/registries/`.
+3. Get a real Kotlin/Gradle toolchain available and run the UNVERIFIED checks from both gate
+   reports: compilation of all 14 `contracts/kotlin/*.kt` files (`./gradlew
+   :core-engine:compileFullDebugKotlin` or equivalent, per the WP-0 real-module-path correction),
+   and unknown-field round-trip preservation (needs a real deserializer, not just structural
+   design-evidence inspection).
+4. Proceed to **WP-2** (shared envelope/error/receipt runtime library — implement, not just
+   declare, the common library from `docs/ratified/COMMON_CONVENTIONS.md` /
+   `contracts/kotlin/CommonContracts.kt`, and wire it into `core-engine`). This is the first WP
+   that touches the actual app module rather than only adding contract-corpus files.
 5. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
    `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
    fully greenfield.
+6. Two owner-only calls are now ready for a decision, not blocking further build-out but worth
+   surfacing: the differentiator-first vs. substrate-first reordering (§Deviations above), and the
+   bounded-marketplace-backend phasing question (`08_OPEN_QUESTIONS.md` §E.1) — `LOOP_MARKETPLACE_CONTRACT.md`
+   already builds toward the static/Git-registry answer (b) by default per the master brief, but
+   the owner has not ruled on it.
 
 ## Commits
 
-See git log on branch `claude/fonebrew-development-clzu43` for the `[WP0]`/`[WP1L-G0]`/`[WP1]`
-prefixed commits implementing this state.
+See git log on branch `claude/fonebrew-development-clzu43` for the
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]` prefixed commits implementing this state.
