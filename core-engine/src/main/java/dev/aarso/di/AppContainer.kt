@@ -74,6 +74,17 @@ class AppContainer(context: Context) {
     val localWorkspaceProvider: dev.aarso.domain.workspace.LocalWorkspaceProvider =
         dev.aarso.domain.workspace.LocalWorkspaceProvider(context.applicationContext.filesDir)
 
+    /** Fonebrew handoff-pack WP-6: workspace-buffer lexical search, wiring the existing real
+     *  LexicalSearch engine (already used for conversation search, data/search/) into the
+     *  Workspace Kernel via WorkspaceSearchProjector. Deliberately in-memory, not a new
+     *  SQLDelight table -- see WorkspaceSearchIndex's own doc comment. No consumer wired in yet;
+     *  a future Develop-tab search surface calls .index()/.search() as buffers open/save. The
+     *  semantic stage stays the real, honest default (disabled) until an embedder ships. */
+    val workspaceSearchIndex: dev.aarso.domain.search.WorkspaceSearchIndex =
+        dev.aarso.domain.search.WorkspaceSearchIndex()
+    val semanticSearchProvider: dev.aarso.domain.search.SemanticSearchProvider =
+        dev.aarso.domain.search.DisabledSemanticSearchProvider
+
     /** Fonebrew handoff-pack WP-4: the real authority policy engine (default-deny, no transitive
      *  delegation, purpose/target/time binding -- docs/ratified/CAPABILITY_AUTHORITY_MODEL.md).
      *  Grant/principal storage is in-memory only this pass (no consumer or persistence need yet,
