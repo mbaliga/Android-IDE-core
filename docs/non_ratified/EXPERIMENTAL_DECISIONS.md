@@ -66,5 +66,33 @@ state, not a change this session is authorized to make on its own.
 
 ---
 
+### `FB-RAT-LANG-NEW-1` — Toolchain delivery-mechanism-to-distribution-flavor legality table
+
+**Proposed by:** the language-lanes domain agent (WP-9). Filed against `contracts/kotlin/
+LanguageLaneContracts.kt`'s `ToolchainDeliveryMechanism` enum and
+`core-engine/src/main/java/dev/aarso/domain/language/ToolchainDeliveryLegality.kt`.
+
+**Proposal text:** No `FB-RAT-*` decision ID exists for language-lane toolchain delivery at all —
+the whole domain is greenfield this build-out (`docs/WP9_GATE_REPORT.md` §0), grounded in
+`01_VALIDATION_REPORT.md` §B1/§B3's platform-feasibility findings (Android's W^X exec
+restriction; Play's interpreter/VM carve-out) rather than any prior ratified spec. WP-9 built a
+concrete per-mechanism, per-`DistFlavor` (`full`/`play`) legality table:
+`INTERPRETER_SCRIPTS`/`BUNDLED_JNILIBS`/`REMOTE` legal on both flavors; `PLAY_DYNAMIC_FEATURE`
+legal on `play` only (it IS Play's own delivery channel); `CAPSULE_APK` legal on `full`
+(sideload) only (a separately-installed signed APK via `PackageInstaller` is not a standard
+Play-distributed app capability). Each mapping is explained inline in
+`ToolchainDeliveryLegality.kt`'s own KDoc and is real, tested code (`ToolchainDeliveryLegalityTest.kt`,
+5 tests) — not merely asserted.
+
+**Status:** PROPOSED, not self-ratified. This is a reasoned starting position derived from
+documented platform constraints, not an owner ruling — `DISTRIBUTION_CAPABILITY_SPLIT.md`
+(FB-RAT-DIST-001/002/003, WP-1) is the sibling ratified document this table extends into a new
+domain without itself amending; a future ratification pass should either fold this table into
+that document under a proper `FB-RAT-DIST-*` or `FB-RAT-LANG-*` ID, or explicitly correct any of
+the four per-mechanism rulings above if real Play-policy testing contradicts them.
+
+---
+
 *(Later work packages: append new `FB-RAT-<domain>-NEW-<n>` entries below this line as you
-identify proposals of your own. Do not renumber `FB-RAT-WS-NEW-1` or insert ahead of it.)*
+identify proposals of your own. Do not renumber `FB-RAT-WS-NEW-1` or `FB-RAT-LANG-NEW-1`, or
+insert ahead of either.)*

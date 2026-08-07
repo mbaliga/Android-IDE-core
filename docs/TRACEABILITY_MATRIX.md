@@ -221,3 +221,50 @@ loop-validation-rules.v1.json` were cross-checked against every `LOOP-*` code re
 the new corpus is defined in the registry). Two registry codes are defined but never referenced by
 this corpus's schemas or fixtures — not a defect, just unused so far: `LOOP-CAP-002`,
 `LOOP-SCHEMA-001`.
+
+---
+
+# Part C — implementation phase (WP-2 through WP-10), regenerated for WP-11 closeout
+
+**Method.** Unlike Parts A/B (which map ratified *decision IDs* to the *contract corpus* that
+first ratified them), Part C answers a different question for the same corpus: does the
+**implementation** built across WP-2 through WP-10 actually correspond to what Parts A/B say was
+ratified, and did any implementation-phase work introduce a decision the corpus hadn't already
+made? Checked by re-reading every `docs/WP{2..10}{a,b,}_GATE_REPORT.md` and cross-referencing each
+one's own "Scope" line against the ratified document(s) it names.
+
+## What shipped, and which ratified artifact it implements
+
+| WP | What was built | Implements (already-ratified) | New decision IDs added? |
+|---|---|---|---|
+| WP-2 | `IdGenerator`/`Digest`/`JsonInterop`/`EnvelopeCodec`/`MigrationRunner`/`ReceiptStore` | `COMMON_CONVENTIONS.md` (Part A) | No |
+| WP-3 | `DocumentBufferMachine`/`WorkspaceProviderMachine`/`LocalWorkspaceProvider`/`BufferReplay`/`RoomWorkspaceJournal`/`AgentEditJournalAdapter` | `WORKSPACE_KERNEL_SPEC.md` (Part A) | No — but filed `FB-RAT-WS-NEW-1` as a proposal (git-library choice), see `docs/non_ratified/EXPERIMENTAL_DECISIONS.md` |
+| WP-4 | `AuthorityEngine`/`LocalProcessExecutionProvider`/`AuditedAuthorityEngine`/`SecretHandleBroker`/`SecretRedactionScanner` | `CAPABILITY_AUTHORITY_MODEL.md` + `EXECUTION_CONTRACT.md` (Part A) | No |
+| WP-5 | `SshExecutionProvider`/`CiActionsExecutionProvider` | `EXECUTION_CONTRACT.md` (Part A) | No |
+| WP-6 | `SearchContracts.kt` (new) + `WorkspaceSearchProjector`/`WorkspaceSearchIndex`/`SemanticSearchProvider` | **No prior ratified spec** — genuinely new domain, contract authored this pass | No — see "New domains" note below |
+| WP-7 | `IntegrationsCodec`/`ImportReceiptBuilder`/`CsAppImportLane`/`SarifParser`/`AssayImportLane` | `04_ARCHITECTURE_CONTRACTS`/`05_INTEGRATION_CONTRACTS` (integrations domain, Part A) | No |
+| WP-8 | `LoopRunDriver` | `LOOP_ENGINEERING_SPEC_V2.1.md` §9 (Part B) | No |
+| WP-8a | `LoopInstallationDriver` | `LOOP_IMPORT_ACTIVATION_CONTRACT.md` / `LoopActivationContracts.kt` (Part B) | No |
+| WP-8b | `TouchConnectionGrammar`/`SemanticDiffProposal`/`RunViewActionGuard`/`DraftPersistenceLifecycle`/`LoopDraftUndoStack`/`StageLinearizer` | `LOOP_PHONE_AUTHORING_SPEC.md` §3.2/§7/§8/§9/§13/§14 (Part B) | No — but implemented `FB-RAT-PHN-011` (already proposed by Part B's own source document, not invented by WP-8b) |
+| WP-9 | `LanguageLaneContracts.kt` (new) + `LspSessionMachine`/`DapSessionMachine`/`LanguageUriMapper`/`DiagnosticsOwnership`/`ToolchainDeliveryLegality` | **No prior ratified spec** — genuinely new domain, contract authored this pass | No — but filed `FB-RAT-LANG-NEW-1` as a proposal (toolchain delivery/flavor legality), see `docs/non_ratified/EXPERIMENTAL_DECISIONS.md` |
+| WP-10 | `DeviceConnectionMachine`/`DeviceOperationMachine`/`WrongBoardPreflight`/`DeviceBroker`/`FlashOperationDriver` + `Uf2Codec`/`DfuStatus`/`SlipFraming` | `DEVICE_STATE_AND_SAFETY_SPEC.md` (Part A) | No |
+
+**Result: zero new `FB-RAT-*` IDs were self-ratified during the implementation phase** — every WP
+either implemented an already-ratified artifact from Parts A/B, or (WP-6, WP-9) authored a
+genuinely new domain contract with no prior ratified spec to conflict with. Two proposals were
+filed for future ratification (`FB-RAT-WS-NEW-1`, `FB-RAT-LANG-NEW-1`), both in
+`docs/non_ratified/EXPERIMENTAL_DECISIONS.md`'s open proposals queue, neither self-ratified. One
+already-proposed-but-unratified decision (`FB-RAT-PHN-011`) was implemented as code without being
+newly ratified — its status in `docs/ratified/loops/LOOP_PHONE_AUTHORING_SPEC.md` and
+`AMENDMENTS.md` is unchanged by WP-8b.
+
+## New domains with no `FB-RAT-*` home yet (WP-6 search, WP-9 language lanes)
+
+Both `SearchContracts.kt` (WP-6) and `LanguageLaneContracts.kt` (WP-9) are real, `core-engine`
+JVM-tested contract files with no corresponding row anywhere in Parts A or B — they were never
+part of the 109-ID register this whole corpus traces. This is not a gap in Parts A/B (both
+predate these two work packages and correctly scope themselves to what existed when they ran); it
+is a genuine open item for whoever runs a future ratification pass: either domain could be
+formalized with its own `FB-RAT-SEARCH-*`/`FB-RAT-LANG-*` decision-ID sequence and folded into
+this matrix, or left as implementation-only contracts indefinitely (both are internally consistent
+and self-documented regardless). Flagged in `docs/NEXT_SESSIONS.md`, not resolved here.

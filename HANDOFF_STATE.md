@@ -16,8 +16,12 @@ breaks the Kotlin compiler on any file containing a backtick-quoted test name wi
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
 With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1549 tests, 0 failures, 1
-ignored** as of WP-10's completion (1489 at the end of WP-9, 1455 at the end of WP-8b) — this is
-the live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
+ignored** as of WP-10's completion (1489 at the end of WP-9, 1455 at the end of WP-8b) — unchanged
+through WP-11's closeout, which is documentation-only and adds no new tests; WP-11's own
+`docs/WP11_GATE_REPORT.md` additionally confirms `:core-engine:testPlayDebugUnitTest` matches
+this exact count (also 1549/0/0/1) and `:core-engine:checkLicense` passes — the real, complete CI
+gate, not just the `full`-flavor slice every per-WP report above ran individually. This is the
+live baseline the next session should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
 clzu43` branch (not `main` — see that repo's `settings.gradle.kts` pin comment and this repo's
@@ -382,9 +386,17 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## What is NOT done yet in this repo
 
-- **WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full staged plan and
-  `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the expected multi-session
-  shape of this build-out.
+**WP-0 through WP-11 are all complete** — this session's full staged plan
+(`fonebrew_handoff/06_WORK_PACKAGES.md`) is done. What remains is not a numbered work package but
+real scope, fully indexed in two new documents this WP-11 pass wrote:
+
+- **`docs/NEXT_SESSIONS.md`** — nine named P0/P1 items (Git depth, debugger, Android lane, docked
+  mode; embedded debug, Pi, backup/sync, ASOM contract, extensions), each with a concrete seam.
+- **`docs/OWNER_GATES.md`** — every real-hardware gate, GitHub/account-level action, and standing
+  owner decision this session could not close itself, consolidated in one place.
+- **`docs/WP11_GATE_REPORT.md`** — this closeout's own gate: the real, complete CI command
+  (`testFullDebugUnitTest` + `testPlayDebugUnitTest` + `checkLicense`) green on both flavors,
+  1549/0/0/1 each, first attempt.
 
 ## Deviations from the master prompt worth knowing about
 
@@ -397,13 +409,22 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   planned as buildable — out of scope for this entire build-out per the master prompt.
 - No owner-reserved decision in `08_OPEN_QUESTIONS.md` has been decided by this session. Where
   work touched one (e.g. the JGit-vs-libgit2-JNI git-library choice, proposed as
-  `FB-RAT-WS-NEW-1` in `docs/non_ratified/EXPERIMENTAL_DECISIONS.md`), it is recorded as a
-  **proposal**, not a ruling.
+  `FB-RAT-WS-NEW-1` in `docs/non_ratified/EXPERIMENTAL_DECISIONS.md`, WP-3; or WP-9's toolchain
+  delivery-mechanism/flavor legality table, proposed as `FB-RAT-LANG-NEW-1` in that same
+  register), it is recorded as a **proposal**, not a ruling. `docs/TRACEABILITY_MATRIX.md` Part C
+  (WP-11) confirms: zero new `FB-RAT-*` decision IDs were self-ratified across the entire WP-2
+  through WP-10 implementation phase.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP10_GATE_REPORT.md` in full before touching
-   anything those thirteen passes produced.
+> **WP-11 (closeout) is done.** The numbered work-package plan (`fonebrew_handoff/06_WORK_PACKAGES.md`)
+> is complete end to end. For genuinely new scope past this point, read `docs/NEXT_SESSIONS.md`
+> (nine named P0/P1 items, each with a seam) and `docs/OWNER_GATES.md` (everything needing a real
+> human/hardware/GitHub action) first — they supersede the mechanical per-WP list below as the
+> primary index; the list below is kept as the detailed, WP-by-WP record underneath both.
+
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP11_GATE_REPORT.md` in full before touching
+   anything those fourteen passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
    — not touched by WP-2 through WP-10.
@@ -498,5 +519,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`/`[WP9]`/`[WP10]`
-prefixed commits implementing this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`/`[WP9]`/`[WP10]`/`[WP11]`
+prefixed commits implementing this state — the complete WP-0 through WP-11 build-out.
