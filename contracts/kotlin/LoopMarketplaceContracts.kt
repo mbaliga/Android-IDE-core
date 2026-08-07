@@ -37,18 +37,11 @@
 // $defs entry in every schema so each one validates standalone — the standalone-file
 // requirement is a JSON Schema authoring constraint (no cross-file $ref), not a Kotlin one.
 //
-// NAME COLLISION WARNING (found while writing this file, not introduced by it, out of this
-// file's scope to fix): contracts/kotlin/LoopAuthoringContracts.kt and
-// contracts/kotlin/LoopPackageContracts.kt — both already in package dev.aarso.contracts.loops
-// before this file was added — each declare their OWN, DIFFERENT `data class ValidationFinding`
-// (LoopAuthoringContracts.kt's carries `FindingSeverity`; LoopPackageContracts.kt's carries
-// `LoopValidationSeverity`). Two same-named top-level classes in one package will not compile
-// together in the same source set. This file deliberately does not add a third
-// `ValidationFinding` (or any other name already used by either file — checked by grep against
-// both before writing this file) but does NOT fix the existing collision either, since neither
-// of those two files is this work package's assignment. Flagged here for whichever
-// Amendments-phase or integration session next runs kotlinc across the whole
-// dev.aarso.contracts.loops package — one of the two existing types needs renaming first.
+// NAME COLLISION — RESOLVED (WP-2 gate, real Gradle compile): the `ValidationFinding` collision
+// this comment used to flag between LoopAuthoringContracts.kt and LoopPackageContracts.kt is
+// fixed — LoopAuthoringContracts.kt's version (with `remediation`) is canonical, and
+// LoopPackageContracts.kt now carries `typealias LoopValidationSeverity = FindingSeverity`
+// instead of a second enum, so every pre-existing reference to either name still compiles.
 //
 // Why no sealed-interface state machine appears in this file: LOOP_MARKETPLACE_CONTRACT.md §10
 // already renders the moderation lifecycle (PENDING -> PUBLISHED -> LIMITED/DELISTED -> TAKEDOWN,

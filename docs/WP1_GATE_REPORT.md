@@ -410,3 +410,33 @@ Gate output (not part of the domain agents' corpus):
 docs/TRACEABILITY_MATRIX.md
 docs/WP1_GATE_REPORT.md
 ```
+
+## Addendum (WP-2, 2026-08-07) — "Kotlin compiles" upgraded from UNVERIFIED to REAL-VERIFIED
+
+This gate originally left "Kotlin compiles" UNVERIFIED because this sandbox had no `kotlinc`/
+Gradle toolchain (§5). During WP-2, a real Android SDK + JDK toolchain was successfully
+provisioned (`scripts/setup-android-sdk.sh`, plus a `LANG=C.utf8` fix for a JVM file-encoding bug
+that otherwise breaks Kotlin's synthetic lambda-class naming on any backtick-quoted test name
+containing non-ASCII characters — an em dash, in the case that surfaced it). `contracts/kotlin/`
+is now wired as an additional source directory into `core-engine`'s main source set
+(`core-engine/build.gradle.kts`), so every file this gate covers is part of a real
+`:core-engine:compileFullDebugKotlin` run.
+
+**First real compile attempt found one genuine defect this gate's brace-counting scan could not
+see**: `contracts/kotlin/IntegrationContracts.kt` compiled cleanly (the WP-1 gate's own lexical
+fix already caught that file's `*/`-in-KDoc bug), but two files from **WP-1L** —
+`LoopAuthoringContracts.kt` and `LoopPackageContracts.kt` — declared the same
+`data class ValidationFinding` in the same package (`dev.aarso.contracts.loops`), a real Kotlin
+redeclaration error no structural or lexical check in either the WP-1 or WP-1L gate could detect.
+Fixed (see `docs/WP1L_GATE_REPORT.md`'s own addendum for the full account, since the defect and
+its fix both live in WP-1L's files, not WP-1's). After the fix: **`:core-engine:compileFullDebugKotlin`
+BUILD SUCCESSFUL**, all 14 `contracts/kotlin/*.kt` files (this gate's 6 plus WP-1L's 8) compile
+together, and **`:core-engine:testFullDebugUnitTest` BUILD SUCCESSFUL, 1214 tests, 0 failures, 1
+ignored** — identical to the pre-existing baseline, confirming the new source directory
+introduced zero regressions to the shipping app.
+
+**Still not closed by this addendum:** unknown-field round-trip preservation (§6) remains
+UNVERIFIED — compiling the data classes proves they are syntactically and structurally sound, not
+that a real encode-decode-re-encode cycle actually preserves an `unknownFields` map end to end.
+That needs a real test exercising the round-trip, not just a successful compile — left for WP-2's
+own test-writing work or a later session.

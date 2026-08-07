@@ -428,25 +428,18 @@ data class BuildStepRecord(
     }
 }
 
-/** loop-validation-rules.v1.json severityLevels, verbatim — a narrower, domain-specific vocabulary than CommonContracts.kt's ErrorSeverity (which also carries CRITICAL for a different, general-purpose domain), so not reused here. */
-enum class LoopValidationSeverity { ERROR, WARNING, INFO }
-
-/** One finding from loop-validation-rules.v1.json, reported by stable code (LOOP_ENGINEERING_SPEC_V2.1.md §19). */
-data class ValidationFinding(
-    val code: String,
-    val severity: LoopValidationSeverity,
-    val objectType: String,
-    val message: String
-) {
-    init {
-        require(code.matches(Regex("^LOOP-[A-Z]+-[0-9]{3}$"))) {
-            "ValidationFinding.code must match LOOP-<NAMESPACE>-<3 digits> (got '$code'). " +
-                "Membership in the frozen registry is validated by the rule engine, not this type."
-        }
-        require(objectType.isNotBlank()) { "ValidationFinding.objectType must be non-blank." }
-        require(message.isNotBlank()) { "ValidationFinding.message must be non-blank." }
-    }
-}
+// ValidationFinding and its severity enum (FindingSeverity) are declared once, in
+// LoopAuthoringContracts.kt, and reused here — both files share the dev.aarso.contracts.loops
+// package. A real Gradle compile of this module (WP-2) caught a duplicate declaration here
+// (identical shape minus a `remediation` field, plus a redundant severity enum with the same
+// three values as FindingSeverity) that no earlier structural/lexical check could see, since
+// brace-counting and JSON-schema validation cannot detect a cross-file Kotlin redeclaration.
+// Fixed by consolidating on LoopAuthoringContracts.kt's version, which is the more complete of
+// the two (it carries `remediation`, matching loop-validation-rules.v1.json's registry shape).
+// LoopActivationContracts.kt and LoopCompatibilityContracts.kt both reference the old
+// `LoopValidationSeverity` name directly, so it stays available as a typealias rather than
+// forcing an edit to every call site across the corpus for a rename with no semantic content.
+typealias LoopValidationSeverity = FindingSeverity
 
 /** Summary of build step 5 (RUN_REQUIRED_FIXTURES). */
 data class TestSuiteResults(

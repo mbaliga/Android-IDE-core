@@ -6,6 +6,25 @@ Resume seam for the Fonebrew handoff-pack build-out (`fonebrew_handoff/` pack, p
 2026-08-07). Read this file first in any future session touching this work before re-reading the
 whole pack.
 
+## Build environment note (found during WP-2, worth knowing immediately)
+
+A real Android SDK + JDK toolchain IS obtainable in this sandbox — `scripts/setup-android-sdk.sh`
+works (dl.google.com is reachable), and `export ANDROID_HOME=<sdk path>` plus `echo
+"sdk.dir=<sdk path>" > local.properties` gets Gradle running. **One non-obvious fix is required:**
+the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="POSIX"`), which
+breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
+character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
+Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1214 tests, 0 failures, 1
+ignored** as of WP-2 — this is the live baseline every subsequent WP should keep green, not the
+guessed "868 tests" figure `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this
+session's additions). The NDK auto-install (`ndk;28.2.13676358`) does fail in this sandbox and
+the native `assembleFullDebug`/CMake path is NOT verified here — the JVM unit-test gate does not
+need it and works around it fine; do not spend time chasing the NDK unless a native build is
+actually required. `git submodule update --init hyle-design-system` (the native llama.cpp/
+stable-diffusion.cpp submodules are NOT needed for the JVM gate and are large — skip them) is
+required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
+
 ## WPs done, this repo
 
 - **WP-0 (preflight survey)** — DONE. `docs/WP0_SURVEY.md`. Read-only, no code changes. Key
@@ -63,10 +82,16 @@ whole pack.
   dual-surface register's own repository-effect column, plus adding that document's
   previously-missing decision-IDs-cited footer; 14 DEFERRED/EXPERIMENTAL/REJECTED loop IDs were
   cited as living in `docs/non_ratified/*.md` but had no row there — added all 14 (plus
-  `FB-RAT-LBX-008`, not flagged but also missing) with verbatim register text. Kotlin compilation
-  and unknown-field round-trip remain UNVERIFIED, same sandbox limits as WP-1 — the WP-1L gate
-  additionally flagged that its own 8 Kotlin files were not re-scanned lexically the way WP-1's
-  gate scanned its 6 (explicit, named gap, not a silent skip).
+  `FB-RAT-LBX-008`, not flagged but also missing) with verbatim register text.
+  **Superseded during WP-2:** Kotlin compilation is no longer UNVERIFIED — see the "Build
+  environment note" above and the addenda in both `docs/WP1_GATE_REPORT.md` and
+  `docs/WP1L_GATE_REPORT.md`. Real compilation caught a genuine cross-file `ValidationFinding`
+  redeclaration between `LoopAuthoringContracts.kt` and `LoopPackageContracts.kt` that three
+  separate WP-1L authoring agents had each individually flagged as a known risk but left
+  unresolved (correctly, since reconciling another file's declaration was outside each one's
+  assigned scope) — fixed via a `typealias`, zero regressions, full gate re-run confirmed green.
+  Unknown-field round-trip remains genuinely UNVERIFIED (needs a real runtime round-trip test, not
+  just a successful compile).
 
 ## What is NOT done yet in this repo
 

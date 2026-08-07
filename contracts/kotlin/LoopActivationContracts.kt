@@ -22,15 +22,15 @@
 // DistFlavor, and BindingSlotKind from LoopDefinitionContracts.kt; LoopValidationSeverity from
 // LoopPackageContracts.kt. None of these are redefined here.
 //
-// KNOWN PRE-EXISTING PACKAGE CONFLICT (not introduced or fixed by this file — flagged for the
-// integration pass): `dev.aarso.contracts.loops.ValidationFinding` is ALREADY declared twice in
-// this package — once in LoopAuthoringContracts.kt (`severity: FindingSeverity`) and once in
-// LoopPackageContracts.kt (`severity: LoopValidationSeverity`) — a genuine redeclaration this
-// package will not compile with as-is. This file deliberately does NOT add a third conflicting
-// declaration: the loop-validation-report.schema.json finding shape below is named
-// [ValidationReportFinding] instead of [ValidationFinding], specifically to avoid worsening that
-// collision. Reconciling the other two is out of this group's assigned scope (activation-
-// compatibility only) and is not attempted here.
+// RESOLVED (WP-2 gate, real Gradle compile): `dev.aarso.contracts.loops.ValidationFinding` was
+// declared twice in this package (LoopAuthoringContracts.kt and LoopPackageContracts.kt) — a
+// real redeclaration no structural/lexical WP-1L check could see. Fixed by keeping
+// LoopAuthoringContracts.kt's `ValidationFinding`/`FindingSeverity` as canonical (it carries
+// `remediation`, matching the registry shape) and replacing LoopPackageContracts.kt's duplicate
+// `LoopValidationSeverity` enum with `typealias LoopValidationSeverity = FindingSeverity`, so
+// every existing reference below (and in LoopCompatibilityContracts.kt) keeps compiling
+// unchanged. This file's own [ValidationReportFinding] type (below) was already deliberately
+// named to avoid the collision and needed no change.
 //
 // Toolchain constraint (binding): kotlinc-compilable with NO third-party dependencies —
 // stdlib + java.time.Instant only. No kotlinx-serialization, no kotlinx-datetime, no

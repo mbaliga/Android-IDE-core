@@ -86,6 +86,23 @@ android {
     kotlin {
         jvmToolchain(17)
     }
+
+    // Fonebrew handoff-pack contract corpus (WP-1/WP-1L): ../contracts/kotlin/*.kt are the
+    // neutral, kotlinc-target-only contract type declarations (ContractEnvelope, ErrorEnvelope,
+    // the loop object model, etc. — see docs/ratified/ + schemas/ alongside them at the repo
+    // root). They live outside any Gradle module by design (04_ARCHITECTURE_CONTRACTS.md §0's
+    // target layout puts them at the repo root, reusable across the constellation, not owned by
+    // one app module) but need a real compiler to verify against, which only a Gradle module
+    // provides in this repo (no standalone kotlinc in the build environment). Adding the
+    // directory as an extra main source root — rather than copying the files into
+    // core-engine's own package tree — keeps the repo-root location as the single source of
+    // truth; WP-2+ implementation code in domain/contracts/ imports these types directly.
+    sourceSets {
+        getByName("main") {
+            kotlin.srcDir("../contracts/kotlin")
+        }
+    }
+
     buildFeatures {
         compose = true
         // BuildConfig.DEBUG gates the echo dev stand-ins (no fake engine in release). This is

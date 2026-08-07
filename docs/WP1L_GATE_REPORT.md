@@ -294,3 +294,40 @@ Gate output (not part of the WP-1L pass's own corpus):
 docs/TRACEABILITY_MATRIX.md   (Part B appended; Part A untouched)
 docs/WP1L_GATE_REPORT.md
 ```
+
+## Addendum (WP-2, 2026-08-07) — real compile found and fixed a defect this gate could not see
+
+§7 of this report named "8 `Loop*.kt` files were not lexically re-scanned by this gate" as an
+explicit gap. During WP-2, a real Android SDK + JDK toolchain became available in this sandbox
+(`scripts/setup-android-sdk.sh` plus a `LANG=C.utf8` locale fix), and `contracts/kotlin/` — all 14
+files, this corpus's 8 plus WP-1's 6 — was wired into `core-engine`'s build as a real compiled
+source directory. **First compile attempt failed**, for exactly the reason a lexical scan cannot
+catch: `LoopAuthoringContracts.kt` and `LoopPackageContracts.kt` both declare
+`data class ValidationFinding` in the same package (`dev.aarso.contracts.loops`) — a genuine
+Kotlin redeclaration. Notably, **three separate WP-1L authoring-phase agents had already spotted
+this exact collision while writing their own files** and left explicit comments about it —
+`LoopActivationContracts.kt`'s header comment named it a "KNOWN PRE-EXISTING PACKAGE CONFLICT,"
+and `LoopMarketplaceContracts.kt`'s header called it a "NAME COLLISION WARNING" — but every agent
+correctly treated reconciling two OTHER files' declarations as out of its own assigned scope, and
+the cross-check gate that ran afterward validated schemas, fixtures, and rule-code references but
+never actually invoked a Kotlin compiler, so the flagged-but-unresolved collision survived the
+gate.
+
+**Fix:** kept `LoopAuthoringContracts.kt`'s `ValidationFinding`/`FindingSeverity` as canonical (it
+carries a `remediation` field, matching `loop-validation-rules.v1.json`'s registry shape more
+closely than the duplicate did), and replaced `LoopPackageContracts.kt`'s duplicate
+`LoopValidationSeverity` enum with `typealias LoopValidationSeverity = FindingSeverity` — so
+`LoopActivationContracts.kt` and `LoopCompatibilityContracts.kt`, which both reference
+`LoopValidationSeverity` directly, needed no changes at all. All three files' explanatory comments
+were updated to state the collision is resolved rather than pending. After the fix:
+**`:core-engine:compileFullDebugKotlin` BUILD SUCCESSFUL** (all 14 files), and
+**`:core-engine:testFullDebugUnitTest` BUILD SUCCESSFUL, 1214 tests, 0 failures, 1 ignored** —
+identical to the pre-change baseline.
+
+**Lesson for future gates in this corpus, stated plainly:** a structural/lexical cross-check (JSON
+validity, brace-balance scanning, decision-ID citation matching) is necessary but not sufficient
+for a Kotlin source corpus split across many parallel-authored files sharing one package — only an
+actual compiler invocation catches a same-package redeclaration, and multiple agents correctly
+identifying and flagging a risk is not the same as the risk being resolved. §7's "Kotlin
+compilation... UNVERIFIED" line in the summary table above should now be read as **superseded** by
+this addendum, not as still-open.
