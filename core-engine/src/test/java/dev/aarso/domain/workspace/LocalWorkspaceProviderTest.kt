@@ -3,8 +3,12 @@ package dev.aarso.domain.workspace
 import dev.aarso.contracts.workspace.ResourceProvider
 import dev.aarso.contracts.workspace.ResourceUri
 import dev.aarso.contracts.workspace.ResourceWrite
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -94,16 +98,16 @@ class LocalWorkspaceProviderTest {
     }
 
     @Test
-    fun `watch observes a write inside the watched directory`() = kotlinx.coroutines.runBlocking {
+    fun `watch observes a write inside the watched directory`() = runBlocking {
         // Deliberately runBlocking, not runTest: the watcher runs on a real background Thread
         // (java.nio.file.WatchService), so this needs real wall-clock time, not runTest's virtual
         // time -- see LocalWorkspaceProvider.watch()'s own doc comment on owner-verified timing.
         val (provider, _) = newProvider()
         val events = provider.watch(uri("."))
-        val collected = kotlinx.coroutines.withTimeout(5_000) {
-            val deferred = kotlinx.coroutines.async { events.first() }
+        val collected = withTimeout(5_000) {
+            val deferred = async { events.first() }
             // Give the WatchService thread a moment to register before the write happens.
-            kotlinx.coroutines.delay(300)
+            delay(300)
             provider.write(uri("watched.txt"), "hi".toByteArray(), expectedRevision = null)
             deferred.await()
         }
