@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1339 tests, 0 failures, 1
-ignored** as of WP-4's completion (1297 at the end of WP-3, 1250 at the end of WP-2) — this is the
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1350 tests, 0 failures, 1
+ignored** as of WP-5's completion (1339 at the end of WP-4, 1297 at the end of WP-3) — this is the
 live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -162,10 +162,31 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   `docs/WP4_GATE_REPORT.md` §3). **Flagged, not silently invented:** `RequireStrongerAuthority`
   needed an explicit `escalateToRung` mechanism to be reachable at all, since a single `fb.*`
   capability always sits at exactly one registry rung (§4 of that report).
+- **WP-5 (SSH + CI providers)** — DONE, gate **GREEN**, compiled and passed on the first real
+  Gradle attempt. Full detail: `docs/WP5_GATE_REPORT.md`. Summary: `SshExecutionProvider` adapts
+  the already-real `domain/remote` SSH spine (`RemoteSessionDriver`/`RemoteTransport`/
+  `KnownHosts`) into `ExecutionProvider`, serving both `SSH_HOST` and `RASPBERRY_PI` (a Pi target
+  is SSH-reachable, matching the existing Arduino-via-Pi precedent — one provider, not two).
+  `CiActionsExecutionProvider` adapts the already-real `domain/builds/CiTrigger` dispatch/
+  list-runs request-builders into `ExecutionProvider`, serving both `GITHUB_ACTIONS` and
+  `GITEA_ACTIONS`. `core-engine` JVM gate: **1350 tests, 0 failures** (up from 1339). A failed CI
+  run correctly reaches `FAILED_SIDE_EFFECTS_POSSIBLE`, never `FAILED_SAFE` (the dispatch's
+  external side effect already happened by the time a conclusion is known); `cancel()` on the CI
+  provider honestly reports `UNSUPPORTED` rather than pretending (no cancel-run request builder
+  exists in `CiTrigger` yet). One real design bug caught and fixed **before ever compiling**: a
+  first draft of `SshExecutionProvider.start()` would have reported `RUNNING` even when the user
+  rejected an unfamiliar host's trust key (`RemoteSessionDriver.open()` returns normally, not by
+  throwing, on a rejected trust decision) — caught by re-reading that already-real code's control
+  flow carefully rather than assuming it, fixed, regression-tested. **Honest gaps:** no real
+  loopback sshd exists in this sandbox (checked directly) so SSH tests fake the transport layer
+  only, same pattern `domain/remote`'s own pre-existing tests use; neither new provider is wired
+  into `AppContainer` (both need a resolved host/credential a UI surface must supply, not
+  something to guess); an SSH `WorkspaceProvider` (WP-3's domain, same spine) is a flagged
+  follow-up, not built this pass.
 
 ## What is NOT done yet in this repo
 
-- **WP-5 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-6 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -185,52 +206,57 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md`, `docs/WP1L_GATE_REPORT.md`, `docs/WP2_GATE_REPORT.md`,
-   `docs/WP3_GATE_REPORT.md`, and `docs/WP4_GATE_REPORT.md` in full before touching anything those
-   five passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP5_GATE_REPORT.md` in full before touching
+   anything those six passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2, WP-3, or WP-4.
-3. Proceed to **WP-5** (SSH + CI providers against the same conformance suites WP-4's local
-   provider used: an SSH `ExecutionProvider`/workspace provider reusing the already-real sshj lane
-   at `domain/remote/` — WP0_SURVEY.md §1(h) — over a loopback sshd in tests; GitHub Actions +
-   Gitea Actions `ExecutionProvider`s against recorded HTTP fixtures, not live network calls;
-   reconnect tokens; visible provenance fields end-to-end, per `06_WORK_PACKAGES.md`'s WP-5 entry).
-   A Room-backed `GrantStore`/`PrincipalStore` (WP-4 left both in-memory-only, §Open-thread 9
-   below) may be worth revisiting alongside WP-5 if SSH/CI providers turn out to need persisted
-   grants across a restart — check before assuming in-memory is still sufficient.
-4. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
+   — not touched by WP-2 through WP-5.
+3. Proceed to **WP-6** (Search contracts + wiring: index source/freshness/cancellation/result-
+   provenance/query-grammar/embedder-provider contracts; wire the already-real, already-wired
+   `LexicalSearch.kt`/`SearchIndexables.kt`/`SearchDriverFactory` (WP0_SURVEY.md §1(g) — "already
+   exists, already wired," not greenfield) into the Workspace Kernel; semantic-stage provider
+   interface behind a flag; keep the existing 24 lexical tests green post-wiring, per
+   `06_WORK_PACKAGES.md`'s WP-6 entry).
+4. An SSH `WorkspaceProvider` (WP-3's domain) reusing the same `domain/remote` spine
+   `SshExecutionProvider` (WP-5) already adapts is a flagged, not-yet-built follow-up — natural to
+   pick up whenever WP-6 or a later pass needs remote file access through the Workspace Kernel.
+6. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
    `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
    fully greenfield.
-5. Two owner-only calls are now ready for a decision, not blocking further build-out but worth
+7. Two owner-only calls are now ready for a decision, not blocking further build-out but worth
    surfacing: the differentiator-first vs. substrate-first reordering (§Deviations above), and the
    bounded-marketplace-backend phasing question (`08_OPEN_QUESTIONS.md` §E.1) — `LOOP_MARKETPLACE_CONTRACT.md`
    already builds toward the static/Git-registry answer (b) by default per the master brief, but
    the owner has not ruled on it.
-6. `Android-IDE-Studio`'s own `CLAUDE.md` (repo map + gate command) is stale — still describes the
+8. `Android-IDE-Studio`'s own `CLAUDE.md` (repo map + gate command) is stale — still describes the
    pre-de-fork monolithic `app/` layout and never mentions `core-engine`/`:core`. Not fixed here
    (out of this repo's scope) but worth a fix next time a session works in that repo directly.
-7. `Android-IDE-Studio`'s CI (PR #86) is red on a private cross-repo submodule access issue
+9. `Android-IDE-Studio`'s CI (PR #86) is red on a private cross-repo submodule access issue
    (`mbaliga/Android-IDE-core` returns "Repository not found" to the default `GITHUB_TOKEN`) that
    needs an owner-level fix (a PAT/deploy-key secret, or temporarily making the repo public) — not
    something further code changes here can resolve. See that PR's comment thread for the full
    diagnosis; local verification (both repos' real Gradle gates) is green regardless.
-8. Real Room-backed JVM testing (a genuine embedded SQLite driver, not the fake-DAO pattern) was
-   investigated during WP-3 and found non-trivial with this module's current Room setup (the
-   Android-`Context`-requiring `Room.databaseBuilder` overload, not Room's KMP/context-free one) —
-   flagged as a possible future toolchain improvement, not attempted mid-WP.
-9. WP-4's `AuthorityEngine`/`AuditedAuthorityEngine` have no persisted `Grant`/`Principal` store
-   yet (`InMemoryGrantStore`/`InMemoryPrincipalStore` only) — fine for this pass (no consumer
-   exists to need persistence across a restart), but worth a Room-backed store the moment WP-5's
-   SSH/CI providers or a real UI surface needs grants to survive a process death.
-10. `CapabilityRegistry.kt` (WP-4) mirrors `schemas/loops/registries/capability-ids.v1.json` by
+10. Real Room-backed JVM testing (a genuine embedded SQLite driver, not the fake-DAO pattern) was
+    investigated during WP-3 and found non-trivial with this module's current Room setup (the
+    Android-`Context`-requiring `Room.databaseBuilder` overload, not Room's KMP/context-free one) —
+    flagged as a possible future toolchain improvement, not attempted mid-WP.
+11. WP-4's `AuthorityEngine`/`AuditedAuthorityEngine` have no persisted `Grant`/`Principal` store
+    yet (`InMemoryGrantStore`/`InMemoryPrincipalStore` only) — WP-5's SSH/CI providers turned out
+    not to need one either (both are stateless adapters over existing spines); still worth a
+    Room-backed store the moment a real UI surface needs grants to survive a process death.
+12. `CapabilityRegistry.kt` (WP-4) mirrors `schemas/loops/registries/capability-ids.v1.json` by
     hand, manually cross-checked once (all 20 entries match) but not automatically kept in sync —
     a future registry addition (new `fb.*` IDs are additive/MINOR per that file's own `bumpRule`)
     needs a matching manual update here, or a real automated consistency test, whichever a later
     session has time for.
+13. Neither `SshExecutionProvider` nor `CiActionsExecutionProvider` (WP-5) is wired into
+    `AppContainer` — both need a resolved host/credential a UI surface must supply. See
+    `docs/WP5_GATE_REPORT.md` §5 for the full list of honest gaps (no loopback sshd in this
+    sandbox, `CiActionsExecutionProvider.cancel()` genuinely `UNSUPPORTED`, no SSH
+    `WorkspaceProvider` yet).
 
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]` prefixed commits implementing this
-state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]` prefixed commits implementing
+this state.
