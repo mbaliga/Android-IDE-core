@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1350 tests, 0 failures, 1
-ignored** as of WP-5's completion (1339 at the end of WP-4, 1297 at the end of WP-3) — this is the
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1359 tests, 0 failures, 1
+ignored** as of WP-6's completion (1350 at the end of WP-5, 1339 at the end of WP-4) — this is the
 live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -183,10 +183,24 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   into `AppContainer` (both need a resolved host/credential a UI surface must supply, not
   something to guess); an SSH `WorkspaceProvider` (WP-3's domain, same spine) is a flagged
   follow-up, not built this pass.
+- **WP-6 (search contracts + wiring)** — DONE, gate **GREEN**, compiled and passed on the first
+  real Gradle attempt, zero regression on the 30 pre-existing `LexicalSearchTest` tests. Full
+  detail: `docs/WP6_GATE_REPORT.md`. Summary: `contracts/kotlin/SearchContracts.kt` — the first
+  formal search contract this build-out has written (no prior ratified spec existed for this
+  domain); does NOT redefine an embedder interface (`dev.aarso.embedding.Embedder` already
+  satisfies that requirement, checked before writing anything). `WorkspaceSearchProjector` maps a
+  WP-3 `BufferSnapshotEntry` into the exact `SearchDoc` shape the real, already-shipped
+  `LexicalSearch` engine consumes — literally reusing the existing ranking code, not forking it.
+  `WorkspaceSearchIndex` is a deliberately in-memory "minimal functional search surface" (not a
+  new SQLDelight table — `CLAUDE.md`'s own rules flag that schema as a "do not unify" hazard zone,
+  and no live editing UI exists yet to populate a persistent index from anyway).
+  `SemanticSearchProvider` + `DisabledSemanticSearchProvider` is the honest disabled-flag default
+  the brief asks for — no speculative embedding pipeline invented. `core-engine` JVM gate: **1359
+  tests, 0 failures** (up from 1350).
 
 ## What is NOT done yet in this repo
 
-- **WP-6 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-7 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -206,20 +220,23 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP5_GATE_REPORT.md` in full before touching
-   anything those six passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP6_GATE_REPORT.md` in full before touching
+   anything those seven passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-5.
-3. Proceed to **WP-6** (Search contracts + wiring: index source/freshness/cancellation/result-
-   provenance/query-grammar/embedder-provider contracts; wire the already-real, already-wired
-   `LexicalSearch.kt`/`SearchIndexables.kt`/`SearchDriverFactory` (WP0_SURVEY.md §1(g) — "already
-   exists, already wired," not greenfield) into the Workspace Kernel; semantic-stage provider
-   interface behind a flag; keep the existing 24 lexical tests green post-wiring, per
-   `06_WORK_PACKAGES.md`'s WP-6 entry).
-4. An SSH `WorkspaceProvider` (WP-3's domain) reusing the same `domain/remote` spine
+   — not touched by WP-2 through WP-6.
+3. Proceed to **WP-7** (Integration lanes R1-R4: CSApp/Assay/Studio manual-integration lanes,
+   already contracted in WP-1's `ASSAY_REPO_CONTRACT_V1.md`/`CSAPP_ISSUES_MANIFEST_V1.md`/
+   `MANUAL_INTEGRATION_GRAMMAR.md`/`IMPORT_RECEIPT_V1.md` — this pass implements against those
+   already-ratified contracts, it does not design new ones, per `06_WORK_PACKAGES.md`'s WP-7
+   entry). Run the still-pending CSApp/Assay grep across all four constellation repos first
+   (item 6 below) before assuming those lanes are greenfield.
+4. `WorkspaceSearchIndex`/`SemanticSearchProvider` (WP-6) have no live consumer yet — a Develop-tab
+   search surface or a `WorkspaceJournal`-observing auto-indexer is a natural follow-up, not built
+   this pass (see `docs/WP6_GATE_REPORT.md` §5).
+5. An SSH `WorkspaceProvider` (WP-3's domain) reusing the same `domain/remote` spine
    `SshExecutionProvider` (WP-5) already adapts is a flagged, not-yet-built follow-up — natural to
-   pick up whenever WP-6 or a later pass needs remote file access through the Workspace Kernel.
+   pick up whenever a later pass needs remote file access through the Workspace Kernel.
 6. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
    `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
    fully greenfield.
@@ -258,5 +275,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]` prefixed commits implementing
-this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]` prefixed commits
+implementing this state.
