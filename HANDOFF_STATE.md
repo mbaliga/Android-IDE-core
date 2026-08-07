@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1489 tests, 0 failures, 1
-ignored** as of WP-9's completion (1455 at the end of WP-8b, 1410 at the end of WP-8a) — this is
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1549 tests, 0 failures, 1
+ignored** as of WP-10's completion (1489 at the end of WP-9, 1455 at the end of WP-8b) — this is
 the live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -342,12 +342,49 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   one, unlike WP-2/3/4/7's domains); no `AppContainer` wiring; no toolchain capsule fetch/
   install/verify (closer to WP-8a's `LoopInstallationDriver` territory than a language-lane
   concern) (`docs/WP9_GATE_REPORT.md` §5).
+- **WP-10 (Device Broker + flash safety contracts)** — DONE, gate **GREEN**, compiled and passed
+  on the first real Gradle attempt (one non-fatal compiler warning cleaned up after). Full
+  detail: `docs/WP10_GATE_REPORT.md`. Summary: implements (WP-1 already ratified the contracts)
+  `DEVICE_STATE_AND_SAFETY_SPEC.md`'s device object model into real, JVM-tested arbitration and a
+  driven flash contract. Five new files under `domain/device/broker/`: `DeviceConnectionMachine`
+  (§3's nine-state connection lifecycle, `STATE_UNKNOWN` kept structurally distinct from
+  `DISCONNECTED` throughout); `DeviceOperationMachine` (§4's nine-state flash-contract table, no
+  generic-failure event exists in its own vocabulary, mirroring `DeviceOperationState`'s already-
+  closed enum); `WrongBoardPreflight` (FB-RAT-DEV-007's exact named matcher — `(catalogRef,
+  catalogId)` when both sides are cataloged, `displayName` fallback otherwise — regression-tested
+  against the exact trap the spec names: the same `catalogId` string under two *different*
+  catalogs is not a match); `DeviceBroker` (FB-RAT-DEV-001's single-arbiter rule, closing the
+  exact "re-validate the CURRENT lock, not just a non-blank string" gap §1 names); and the
+  centerpiece `FlashOperationDriver` (drives the real seven-step flash contract around all four,
+  the same "adapter around already-real pieces" posture `LoopInstallationDriver` established —
+  lock acquired before precondition evaluation, released in a `finally` covering every exit path
+  including both disconnect-shaped terminals). Three new protocol codecs under `domain/device/
+  usb/` (STK500/IntelHex already existed): `Uf2Codec` (Microsoft UF2 512-byte block format),
+  `DfuStatus` (USB DFU 1.1 `GetStatus` codec + download-path state machine), `SlipFraming` (RFC
+  1055 SLIP framing under the ESP ROM bootloader protocol) — **honestly bounded confidence**: real
+  encode/decode round-trip correctness is JVM-proven, but the exact byte-level protocol constants
+  are sourced from general public documentation, not independently verified against real hardware
+  or an official spec text in this sandbox (flagged in each file's own KDoc and
+  `docs/WP10_GATE_REPORT.md` §4). `docs/DEVICE_GATE_CHECKLIST.md` — the brief's own named
+  deliverable — operationalizes §8's 20-cycle/interrupted-flash/wrong-board owner-run gate into a
+  concrete procedure; this session cannot execute any of it (no device in this sandbox). `core-
+  engine` JVM gate: **1549 tests, 0 failures** (up from 1489), 60 new tests across 8 classes. One
+  real bug caught and fixed *before* ever running Gradle, by re-reading the spec's own wording
+  against a first draft: `protocol.sideEffectsPossible` was initially derived from
+  `sideEffects.isNotEmpty()`, which is wrong for the `TARGET_STATE_UNKNOWN` branch (a transfer
+  that genuinely began but confirmed zero side effects in the receipt) — the field is meant to
+  track "did a destructive transfer begin," tracked with its own `transferBegan` flag instead
+  (`docs/WP10_GATE_REPORT.md` §2). **Honest scope boundary:** Android USB permission flow
+  (`UsbManager`/`PendingIntent`/`BroadcastReceiver`) not built (instrumented-test-only per the
+  brief, no `androidTest` source set exists for this domain); `DeviceBroker` in-memory only; no
+  real serial/USB transport wired to any new codec; `FlashOperationDriver`'s `performTransfer`/
+  `performVerification` are caller-supplied seams (`docs/WP10_GATE_REPORT.md` §5).
 
 ## What is NOT done yet in this repo
 
-- **WP-10 and WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
-  staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
-  expected multi-session shape of this build-out.
+- **WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full staged plan and
+  `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the expected multi-session
+  shape of this build-out.
 
 ## Deviations from the master prompt worth knowing about
 
@@ -365,21 +402,33 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP9_GATE_REPORT.md` in full before touching
-   anything those twelve passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP10_GATE_REPORT.md` in full before touching
+   anything those thirteen passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-9.
-3. Proceed to **WP-10** (Device Broker + flash safety contracts). WP-11 (closeout) follows.
+   — not touched by WP-2 through WP-10.
+3. Proceed to **WP-11** (closeout — regenerate the traceability matrix over what actually shipped,
+   refresh this file, write `NEXT_SESSIONS.md`, propose new `FB-RAT-*` entries for decisions made
+   this session, final `OWNER_GATES.md`).
 3f. WP-9's language lanes have no real LSP/DAP client spawning an actual subprocess yet (the
     state machines are the shape-law an adapter must obey), no JSON wire-format codec, no
     `AppContainer` wiring, and no toolchain capsule fetch/install/verify — see
     `docs/WP9_GATE_REPORT.md` §5 for the full list. `ToolchainDeliveryLegality`'s per-flavor
     table is a reasoned proposal, not an owner-ratified decision (no `FB-RAT-*` ID exists for it
     yet) — same posture as WP-3's `FB-RAT-WS-NEW-1` and WP-8b's `FB-RAT-PHN-011`.
-3a. `LoopRunDriver` (WP-8) has two honest, flagged integration gaps worth revisiting alongside
-    WP-10: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to a real
-    Device Broker or `AuthorityEngine` capability check yet (`docs/WP8_GATE_REPORT.md` §2/§5).
+3g. WP-10's `DeviceBroker`/`FlashOperationDriver` are real but in-memory-only, no Android USB
+    permission flow, no real serial/USB transport wired to `Uf2Codec`/`DfuStatus`/`SlipFraming`
+    (each is a pure frame codec one layer below where `Stk500` itself sits), and
+    `docs/DEVICE_GATE_CHECKLIST.md`'s entire real-hardware procedure is unexecuted by construction
+    — see `docs/WP10_GATE_REPORT.md` §5. The new `UF2`/`DFU`/`ESP_BOOTLOADER` codecs' exact
+    byte-level protocol constants are sourced from general public documentation, not verified
+    against real hardware or an official spec text (§4 of that report) — worth a real-hardware
+    cross-check the first time an owner has a matching board.
+3a. `LoopRunDriver` (WP-8) has two honest, flagged integration gaps worth revisiting now that
+    WP-10 exists: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to the
+    real `DeviceBroker` (WP-10) or `AuthorityEngine` (WP-4) capability check yet
+    (`docs/WP8_GATE_REPORT.md` §2/§5) — WP-10's `DeviceBroker` is now a real, JVM-tested
+    candidate for that binding seam, not just a named future concept.
 3b. `LoopInstallationDriver` (WP-8a) has the same shape of gap plus more: `resolveBindings`/
     `resolveAuthority`/`evaluateCompatibility`/`runSimulation` are all caller-supplied seams with
     no real implementation behind them yet, and §20's package **build** pipeline (the authoring-
@@ -449,5 +498,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`/`[WP9]`
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`/`[WP9]`/`[WP10]`
 prefixed commits implementing this state.
