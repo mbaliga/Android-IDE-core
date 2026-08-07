@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1410 tests, 0 failures, 1
-ignored** as of WP-8a's completion (1402 at the end of WP-8, 1394 at the end of WP-7) — this is
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1455 tests, 0 failures, 1
+ignored** as of WP-8b's completion (1410 at the end of WP-8a, 1402 at the end of WP-8) — this is
 the live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -278,10 +278,42 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   because `manifest.signatureRef != null`, not because a cryptographic signature was checked); no
   persistence of the outcome anywhere (matches the "no consumer yet" pattern every WP since WP-2
   has left for comparable pieces).
+- **WP-8b (phone authoring surfaces)** — DONE, gate **GREEN**, compiled and passed on the first
+  real Gradle attempt. Full detail: `docs/WP8b_GATE_REPORT.md`. Summary: builds the JVM-testable
+  domain-layer substrate under the five-view phone authoring UI `LOOP_PHONE_AUTHORING_SPEC.md`
+  specifies (Intent/Stage/Graph/Node Sheet/Run), not the Compose screens themselves — the same
+  domain-first, UI-later-and-owner-verified split WP-3/WP-4/WP-8 already established, explained in
+  full in that report's §4 rather than left implicit. Six new files under `domain/loop/authoring/`:
+  `TouchConnectionGrammar` (`FB-RAT-PHN-004`, the tap-connection state table replacing drag-a-wire
+  as primary); `SemanticDiffProposal` (`FB-RAT-PHN-006`, the AI-proposal review model + four-state
+  approve/reject machine, authority-widening operations kept visually separable); `RunViewActionGuard`
+  (`FB-RAT-PHN-008`, the Run View's intervention-action legality table — explicitly not the
+  canonical `RunState` machine — enforcing "no structural editing during a run" by construction:
+  there is no mutation verb in the vocabulary at all); `DraftPersistenceLifecycle` (§13's
+  interruption/recovery table plus a real `DraftEditJournal` proving the `FB-RAT-COM-006`
+  idempotency-key-dedup property as tested code); `LoopDraftUndoStack` (`FB-RAT-PHN-011` — flagged
+  honestly as **PROPOSED, not yet ratified** in the source spec itself, implemented anyway per its
+  own fully-specified "proposed shape" since the gap is real, same posture WP-3 took recording
+  `FB-RAT-WS-NEW-1` as a proposal rather than a ruling); `StageLinearizer` (§3.2's "Stage View
+  total by construction" requirement — per-gateway structurability via a bounded
+  single-entry-single-exit check, plus back-edge/cycle classification for bounded repeat groups).
+  `core-engine` JVM gate: **1455 tests, 0 failures** (up from 1410), 45 new tests across 7 classes,
+  zero regressions. One real bug caught while hand-deriving `StageLinearizer`'s non-structurable
+  test fixture, before ever running Gradle: the first draft let a sibling branch's own target node
+  become the "rejoin," collapsing a genuine crossing violation into a false-positive structurable
+  verdict — fixed by excluding branch targets from the rejoin-candidate set (`docs/WP8b_GATE_REPORT.md`
+  §3). **Honest scope boundary:** the five Compose screens themselves are not built this pass —
+  this container has no device/emulator and no Robolectric/Compose-UI-test harness in `core-engine`,
+  so hand-written screens here would compile at best and be otherwise unverified, exactly the class
+  of claim `CLAUDE.md`'s "Environment honesty" rule warns against (§4 of that report); `StageLinearizer`
+  is a bounded SESE approximation, not a full RPST/SPQR-tree implementation of the cited papers
+  (§6); no AI/Distiller wiring; `DraftEditJournal` is in-memory, not Room-backed (WP-3's journal
+  already proved the durable-append pattern generically for a different payload shape); no
+  `AppContainer` wiring for any of the six pieces.
 
 ## What is NOT done yet in this repo
 
-- **WP-8b through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-9 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -301,14 +333,13 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP8a_GATE_REPORT.md` in full before touching
-   anything those ten passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP8b_GATE_REPORT.md` in full before touching
+   anything those eleven passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-8a.
-3. Proceed to **WP-8b** (phone authoring surfaces — see `LOOP_PHONE_AUTHORING_SPEC.md` and the
-   existing free-form graph Loop editor under `ui/loops/` per `CLAUDE.md`'s repo map). WP-9
-   (language lanes), WP-10 (Device Broker + flash safety), WP-11 (closeout) follow in order.
+   — not touched by WP-2 through WP-8b.
+3. Proceed to **WP-9** (language lanes: TypeScript, Python). WP-10 (Device Broker + flash safety),
+   WP-11 (closeout) follow in order.
 3a. `LoopRunDriver` (WP-8) has two honest, flagged integration gaps worth revisiting alongside
     WP-10: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to a real
     Device Broker or `AuthorityEngine` capability check yet (`docs/WP8_GATE_REPORT.md` §2/§5).
@@ -318,6 +349,20 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
     side counterpart to WP-8a's import-side work) is a separate, not-yet-scoped future pass — see
     `docs/WP8a_GATE_REPORT.md` §4 for the full list (also: no real signature verification against
     `security/KeystoreSecret.kt`, no persistence of `InstallationOutcome`).
+3c. WP-8b's five Compose phone-authoring screens (Intent/Stage/Graph/Node Sheet/Run) are not built
+    — only their domain-layer substrate is (`docs/WP8b_GATE_REPORT.md` §0/§4). Building the real
+    screens needs either a device/emulator or a Robolectric/Compose-UI-test harness added to
+    `core-engine` (neither exists in this sandbox today) to have any verification loop at all —
+    flagged as a real prerequisite, not something to route around with unverified hand-written UI.
+3d. `FB-RAT-PHN-011` (undo/redo, WP-8b's `LoopDraftUndoStack`) is implemented but **not ratified**
+    — `LOOP_PHONE_AUTHORING_SPEC.md` §14 itself marks it `PROPOSED`. An owner/Amendments-phase
+    decision to accept, reject, or fold it into an existing ID is still open
+    (`docs/WP8b_GATE_REPORT.md` §5).
+3e. `StageLinearizer` (WP-8b) is a bounded single-entry-single-exit approximation of Stage View
+    structurability, not the full RPST/SPQR-tree algorithm the cited papers describe, and
+    §3.2's own golden corpus of irreducible graphs (its point 5) does not exist in this repository
+    yet — flagged as "scoped to WP-1L's fixture work" by the spec itself, still unclaimed
+    (`docs/WP8b_GATE_REPORT.md` §6).
 4. `WorkspaceSearchIndex`/`SemanticSearchProvider` (WP-6) have no live consumer yet — a Develop-tab
    search surface or a `WorkspaceJournal`-observing auto-indexer is a natural follow-up, not built
    this pass (see `docs/WP6_GATE_REPORT.md` §5).
@@ -367,5 +412,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`/`[WP8b]`
 prefixed commits implementing this state.
