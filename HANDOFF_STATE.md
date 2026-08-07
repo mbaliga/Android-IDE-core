@@ -15,8 +15,8 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1359 tests, 0 failures, 1
-ignored** as of WP-6's completion (1350 at the end of WP-5, 1339 at the end of WP-4) — this is the
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1394 tests, 0 failures, 1
+ignored** as of WP-7's completion (1359 at the end of WP-6, 1350 at the end of WP-5) — this is the
 live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
@@ -197,10 +197,32 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   `SemanticSearchProvider` + `DisabledSemanticSearchProvider` is the honest disabled-flag default
   the brief asks for — no speculative embedding pipeline invented. `core-engine` JVM gate: **1359
   tests, 0 failures** (up from 1350).
+- **WP-7 (Integration lanes R1-R4: CSApp/Assay/Studio)** — DONE, gate **GREEN**. Full detail:
+  `docs/WP7_GATE_REPORT.md`. Summary: implements (WP-1 already ratified the contracts) R1 (shared
+  grammar codec + `ImportReceiptBuilder`), R2 (CSApp file lane — `CsAppImportLane`: whole-source
+  duplicate-snapshot short-circuit, per-issue new/changed/conflicting/duplicate classification,
+  tolerant per-record parsing so a bad `severity`/timestamp rejects only that one record), R3
+  (Assay repo lane — `SarifParser` for the exact SARIF 2.1.0 profile subset ASSAY_REPO_CONTRACT_V1.md
+  §4 pins, `AssayImportLane`: `runId`-keyed dedupe, finding-file digest verification,
+  `completeness != COMPLETE` partial-source flagging). **R4 (Studio continuity) is correctly out of
+  scope** — the responsibility matrix explicitly puts "Studio priority/boards/incident workflow"
+  in Core's own "must not own" column; it belongs in `Android-IDE-Studio`, a separate repo.
+  `core-engine` JVM gate: **1394 tests, 0 failures** (up from 1359), all codec round-trips proven
+  against the REAL WP-1 fixture files (`fixtures/integrations/valid/*.json`, embedded verbatim),
+  not hand-invented test data. One real design bug found and fixed: a first-draft
+  `validateSchemaVersion(manifest)`/`validateSchemaVersion(index)` took an already-constructed
+  contract object, but `IssuesManifest`/`AssayIndex`'s own `init{}` blocks already reject an
+  unsupported major version at construction time — meaning the function could never actually
+  observe the condition it existed to detect. Fixed by checking the raw JSON string before
+  attempting the strict decode (see that report §2 — the same pattern the CSApp tolerant-parsing
+  path already needed for per-record severity/timestamp validation, §3 of that report). A
+  background research pass confirmed both `mbaliga/assay` and `mbaliga/csapp` are real but
+  pre-alpha (no live manifest/index files exist anywhere yet) — `csapp`'s own GitHub Issue #3
+  shows the other side is already aware of and blocked on this exact contract.
 
 ## What is NOT done yet in this repo
 
-- **WP-7 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-8 through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -220,26 +242,27 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP6_GATE_REPORT.md` in full before touching
-   anything those seven passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP7_GATE_REPORT.md` in full before touching
+   anything those eight passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-6.
-3. Proceed to **WP-7** (Integration lanes R1-R4: CSApp/Assay/Studio manual-integration lanes,
-   already contracted in WP-1's `ASSAY_REPO_CONTRACT_V1.md`/`CSAPP_ISSUES_MANIFEST_V1.md`/
-   `MANUAL_INTEGRATION_GRAMMAR.md`/`IMPORT_RECEIPT_V1.md` — this pass implements against those
-   already-ratified contracts, it does not design new ones, per `06_WORK_PACKAGES.md`'s WP-7
-   entry). Run the still-pending CSApp/Assay grep across all four constellation repos first
-   (item 6 below) before assuming those lanes are greenfield.
+   — not touched by WP-2 through WP-7.
+3. Proceed to **WP-8** (Loop engineering lifecycle around `GraphRunner` — the loop contract corpus
+   v2.1 from WP-1L now gets a real implementation layer: package/build/lifecycle machinery around
+   the existing, already-real `GraphRunner` execution engine, per `06_WORK_PACKAGES.md`'s WP-8
+   entry and `docs/ratified/loops/LOOP_ENGINEERING_SPEC_V2.1.md`). WP-8a (packages/transfer/
+   import/activation) and WP-8b (phone authoring surfaces) follow in the pack's own numbered order.
 4. `WorkspaceSearchIndex`/`SemanticSearchProvider` (WP-6) have no live consumer yet — a Develop-tab
    search surface or a `WorkspaceJournal`-observing auto-indexer is a natural follow-up, not built
    this pass (see `docs/WP6_GATE_REPORT.md` §5).
 5. An SSH `WorkspaceProvider` (WP-3's domain) reusing the same `domain/remote` spine
    `SshExecutionProvider` (WP-5) already adapts is a flagged, not-yet-built follow-up — natural to
    pick up whenever a later pass needs remote file access through the Workspace Kernel.
-6. A targeted grep for "CSApp"/"Assay" across all four constellation repos was recommended by
-   `docs/WP0_SURVEY.md` §1(f) but not yet run — do this before assuming the integration lanes are
-   fully greenfield.
+6. **Done, not open anymore:** the CSApp/Assay cross-repo grep `docs/WP0_SURVEY.md` §1(f)
+   recommended ran during WP-7 (a background research pass, not a manual grep) — confirmed clean
+   (no stray references in any of the four constellation repos beyond the WP-1 contract corpus
+   itself) and confirmed both `mbaliga/assay`/`mbaliga/csapp` are real but pre-alpha with no live
+   manifest/index data yet to import (see `docs/WP7_GATE_REPORT.md` §5).
 7. Two owner-only calls are now ready for a decision, not blocking further build-out but worth
    surfacing: the differentiator-first vs. substrate-first reordering (§Deviations above), and the
    bounded-marketplace-backend phasing question (`08_OPEN_QUESTIONS.md` §E.1) — `LOOP_MARKETPLACE_CONTRACT.md`
@@ -271,9 +294,12 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
     `docs/WP5_GATE_REPORT.md` §5 for the full list of honest gaps (no loopback sshd in this
     sandbox, `CiActionsExecutionProvider.cancel()` genuinely `UNSUPPORTED`, no SSH
     `WorkspaceProvider` yet).
+14. WP-7's CSApp/Assay import lanes (`CsAppImportLane`/`AssayImportLane`/`ImportReceiptBuilder`)
+    have no live pipeline wiring or `AppContainer` consumer, and no real Snapshot-step I/O
+    (reading actual files/repo commits) — see `docs/WP7_GATE_REPORT.md` §6 for the full list.
 
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]` prefixed commits
-implementing this state.
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]` prefixed
+commits implementing this state.
