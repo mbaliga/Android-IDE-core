@@ -15,9 +15,9 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1402 tests, 0 failures, 1
-ignored** as of WP-8's completion (1394 at the end of WP-7, 1359 at the end of WP-6) — this is the
-live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
+With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1410 tests, 0 failures, 1
+ignored** as of WP-8a's completion (1402 at the end of WP-8, 1394 at the end of WP-7) — this is
+the live baseline every subsequent WP should keep green, not the guessed "868 tests" figure
 `CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
 clzu43` branch (not `main` — see that repo's `settings.gradle.kts` pin comment and this repo's
@@ -237,10 +237,51 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   mid-graph pause concept. `SUCCEEDED_UNVERIFIED` maps to `REQUIRED_VERIFIER_INCOMPLETE` as an
   interpretation choice (the closed category vocabulary has no "no verifiers configured" value) —
   flagged, matching the same honesty standard WP-4/WP-6's own interpretation notes set.
+- **WP-8a (packages, transfer, import, activation)** — DONE, gate **GREEN**, compiled and passed
+  on the first real Gradle attempt. Full detail: `docs/WP8a_GATE_REPORT.md`. Summary:
+  `LoopInstallationDriver` drives WP-1L's real eleven-state `InstallationState` machine
+  (`LOOP_IMPORT_ACTIVATION_CONTRACT.md` §3, `contracts/kotlin/LoopActivationContracts.kt`) through
+  the ten-step import/activation main path — ACQUIRING→SNAPSHOTTED→CONTAINER_VERIFIED→
+  PARSED_VALIDATED→COMPATIBILITY_EVALUATED→PREVIEWED→WAITING_BINDINGS→WAITING_AUTHORITY→
+  READY_TO_SIMULATE→INSTALLABLE→INSTALLED — or one of five terminal off-ramps, exactly the same
+  "adapter around an already-real state machine" posture WP-8's `LoopRunDriver` established,
+  except import/activation is genuinely greenfield (nothing pre-existing to adapt, per
+  `docs/WP0_SURVEY.md`). Genuinely enforces FB-RAT-IMP-002 ("transfer moves inert bytes... no
+  model, tool, shell, remote, device, or side-effecting node may execute during parsing,
+  validation, preview, or installation") **by construction**: everything through `PREVIEWED` is
+  pure byte/JSON inspection, and the only injected suspend seams (`resolveBindings`/
+  `resolveAuthority`/`runSimulation`) are never called before `WAITING_BINDINGS`. `core-engine`
+  JVM gate: **1410 tests, 0 failures** (up from 1402). Fail-closed proven per-branch, not just by
+  final-state assertion: a digest mismatch is `REJECTED_UNSAFE` *before `parseManifest` is ever
+  called* (asserted directly, not inferred); a `BLOCKED`/`UNSUPPORTED` compatibility outcome never
+  reaches the binding-resolution seam; declining authority never reaches `runSimulation`. Every
+  transition the driver performs is checked against the real `InstallationState.isValidTransition`
+  internally (`reject()`'s own `require()`) — the same belt-and-suspenders discipline WP-8's
+  `assertLegalEventSequence` established, applied here as an always-on internal invariant instead
+  of a test-only helper. `LoopInstallation`'s own strict `init{}` invariants (non-null
+  `compatibilityReportRef` from `COMPATIBILITY_EVALUATED` onward; `bindingProfileRef` + a
+  terminal-imported `signatureState` + non-empty `receipts` specifically at `INSTALLED`) did real
+  correctness work again — same "the contract's own strictness does verification work no fixture
+  could" pattern WP-4/WP-7 already demonstrated. One real bug caught while authoring the test file,
+  before ever running Gradle: `ManifestSignatureRef`'s constructor was guessed as
+  `(id, keyProvenance, fingerprint)`; the real shape is `(path: String, sha256: String)` with a
+  `path.startsWith("signatures/")` requirement — fixed. **Honest scope boundary, not silently
+  folded in:** §20's package **build** pipeline (freeze/canonicalize/secret-scan/sign/
+  build-receipt — the *authoring*-side counterpart to this pass's *import*-side work) is not built
+  this pass, flagged as its own future-sized undertaking (a real canonical-JSON serializer matching
+  WP-1L-G0's `canonicalization.v1.json` profile plus real secret-scanning); no real compatibility
+  evaluator (`evaluateCompatibility` is caller-supplied — the state-machine plumbing is real, the
+  semver-range/capability-declaration comparison logic behind it is not); no real binding/authority
+  resolution UI or persistence (`resolveBindings`/`resolveAuthority` are seams, same shape as
+  WP-8's `LoopRunDriver` gap); no real signature verification (`security/KeystoreSecret.kt` exists
+  but isn't wired to this flow — a "signed" package is marked `IMPORTED_SIGNED_VERIFIED` purely
+  because `manifest.signatureRef != null`, not because a cryptographic signature was checked); no
+  persistence of the outcome anywhere (matches the "no consumer yet" pattern every WP since WP-2
+  has left for comparable pieces).
 
 ## What is NOT done yet in this repo
 
-- **WP-8a through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
+- **WP-8b through WP-11** — not started. See `fonebrew_handoff/06_WORK_PACKAGES.md` for the full
   staged plan and `fonebrew_handoff/06_WORK_PACKAGES.md`'s "Sizing honesty" section for the
   expected multi-session shape of this build-out.
 
@@ -260,18 +301,23 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 
 ## Open threads for the next session
 
-1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP8_GATE_REPORT.md` in full before touching
-   anything those nine passes produced.
+1. Read `docs/WP1_GATE_REPORT.md` through `docs/WP8a_GATE_REPORT.md` in full before touching
+   anything those ten passes produced.
 2. Fix the `INT-NNN` → `FB-RAT-INT-NNN` citation-format gap in the 5 integration docs (mechanical,
    low-risk once done carefully with full-document review, not sed-across-the-corpus). Still open
-   — not touched by WP-2 through WP-8.
-3. Proceed to **WP-8a** (packages/transfer/import/activation — `LOOP_ENGINEERING_SPEC_V2.1.md`
-   §20-22's package build pipeline, transfer/activation boundary, and update contract, plus WP-1L's
-   `LoopPackageContracts.kt`/`LoopActivationContracts.kt` — implementing already-ratified contracts,
-   same posture as WP-7). WP-8b (phone authoring surfaces) follows.
+   — not touched by WP-2 through WP-8a.
+3. Proceed to **WP-8b** (phone authoring surfaces — see `LOOP_PHONE_AUTHORING_SPEC.md` and the
+   existing free-form graph Loop editor under `ui/loops/` per `CLAUDE.md`'s repo map). WP-9
+   (language lanes), WP-10 (Device Broker + flash safety), WP-11 (closeout) follow in order.
 3a. `LoopRunDriver` (WP-8) has two honest, flagged integration gaps worth revisiting alongside
-    WP-8a/WP-10: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to a real
+    WP-10: `resolveBinding`/`resolveAuthority` are auto-resolve stubs, not wired to a real
     Device Broker or `AuthorityEngine` capability check yet (`docs/WP8_GATE_REPORT.md` §2/§5).
+3b. `LoopInstallationDriver` (WP-8a) has the same shape of gap plus more: `resolveBindings`/
+    `resolveAuthority`/`evaluateCompatibility`/`runSimulation` are all caller-supplied seams with
+    no real implementation behind them yet, and §20's package **build** pipeline (the authoring-
+    side counterpart to WP-8a's import-side work) is a separate, not-yet-scoped future pass — see
+    `docs/WP8a_GATE_REPORT.md` §4 for the full list (also: no real signature verification against
+    `security/KeystoreSecret.kt`, no persistence of `InstallationOutcome`).
 4. `WorkspaceSearchIndex`/`SemanticSearchProvider` (WP-6) have no live consumer yet — a Develop-tab
    search surface or a `WorkspaceJournal`-observing auto-indexer is a natural follow-up, not built
    this pass (see `docs/WP6_GATE_REPORT.md` §5).
@@ -321,5 +367,5 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
 ## Commits
 
 See git log on branch `claude/fonebrew-development-clzu43` for the
-`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`
+`[WP0]`/`[WP1L-G0]`/`[WP1]`/`[WP1L]`/`[WP2]`/`[WP3]`/`[WP4]`/`[WP5]`/`[WP6]`/`[WP7]`/`[WP8]`/`[WP8a]`
 prefixed commits implementing this state.
