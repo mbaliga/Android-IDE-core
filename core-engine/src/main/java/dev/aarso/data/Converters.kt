@@ -1,6 +1,9 @@
 package dev.aarso.data
 
 import androidx.room.TypeConverter
+import dev.aarso.domain.curation.BookmarkKind
+import dev.aarso.domain.curation.Fidelity
+import dev.aarso.domain.curation.GhostReason
 import dev.aarso.domain.tasks.TaskSource
 import dev.aarso.domain.tasks.TaskState
 import dev.aarso.domain.watch.WatchKind
@@ -67,6 +70,24 @@ class Converters {
 
     @TypeConverter
     fun toWatchKind(name: String): WatchKind = WatchKind.valueOf(name)
+
+    @TypeConverter
+    fun fromBookmarkKind(kind: BookmarkKind): String = kind.name
+
+    @TypeConverter
+    fun toBookmarkKind(name: String): BookmarkKind = BookmarkKind.valueOf(name)
+
+    @TypeConverter
+    fun fromFidelity(fidelity: Fidelity): String = fidelity.name
+
+    @TypeConverter
+    fun toFidelity(name: String): Fidelity = Fidelity.valueOf(name)
+
+    @TypeConverter
+    fun fromGhostReason(reason: GhostReason): String = reason.name
+
+    @TypeConverter
+    fun toGhostReason(name: String): GhostReason = GhostReason.valueOf(name)
 
     companion object {
         /** float32 array -> little-endian BLOB, for embedding vectors. */

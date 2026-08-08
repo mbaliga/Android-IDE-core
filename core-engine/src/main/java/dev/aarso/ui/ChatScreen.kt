@@ -116,6 +116,12 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
     val entropyColoring by viewModel.entropyColoring.collectAsState()
+    // The Conversation Instrument (STUDIO_UX_SPEC.md §4-5): verdicts/bookmarks/versions/
+    // compaction directives keyed by message id, for the per-bubble controls + curation sheet.
+    val verdicts by viewModel.verdicts.collectAsState()
+    val messageBookmarks by viewModel.messageBookmarks.collectAsState()
+    val versionsByTip by viewModel.versionsByTip.collectAsState()
+    val compactionDirectives by viewModel.compactionDirectives.collectAsState()
     var input by remember { mutableStateOf("") }
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
@@ -123,6 +129,10 @@ fun ChatScreen(
     var showMe by remember { mutableStateOf(false) }
     var actionStep by remember { mutableStateOf<PathView.Step?>(null) }
     var flagStep by remember { mutableStateOf<PathView.Step?>(null) }
+    // Curation sheet's "Mark branch as Version…" (STUDIO_UX_SPEC.md §4.4): a lightweight
+    // name-entry dialog, same shape as flagStep's own follow-on dialog above.
+    var versionNameStep by remember { mutableStateOf<PathView.Step?>(null) }
+    var versionNameInput by remember { mutableStateOf("") }
     // D1: dismissible "Connect your repos" home card (session-scoped dismissal).
     var connectDismissed by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -272,6 +282,30 @@ fun ChatScreen(
                             onSwitch = { dir -> viewModel.switchAlternative(step.node.id, dir) },
                             onLongPress = { actionStep = step },
                             highlighted = findOpen && currentFindHit?.nodeId == step.node.id,
+                            verdict = verdicts[step.node.id],
+                            bookmarked = messageBookmarks[step.node.id]?.any { it.ref.blockIndex == null } == true,
+                            // Chevron tap = one detent step per tap, cycling to a clear on the
+                            // third: null -> +1 -> +2 -> null (and the mirror for down). Tapping
+                            // the opposite chevron while the other polarity is set jumps to that
+                            // polarity's first detent, matching "the current judgment always
+                            // reflects the last chevron pressed."
+                            onVerdictUp = {
+                                val next = when (verdicts[step.node.id]?.grade) {
+                                    1 -> 2
+                                    2 -> null
+                                    else -> 1
+                                }
+                                if (next == null) viewModel.clearVerdict(step.node.id) else viewModel.setVerdict(step.node.id, next)
+                            },
+                            onVerdictDown = {
+                                val next = when (verdicts[step.node.id]?.grade) {
+                                    -1 -> -2
+                                    -2 -> null
+                                    else -> -1
+                                }
+                                if (next == null) viewModel.clearVerdict(step.node.id) else viewModel.setVerdict(step.node.id, next)
+                            },
+                            onToggleBookmark = { viewModel.toggleMessageBookmark(step.node.id) },
                         )
                     }
                     // Single streaming bubble — only when not in a council fan-out.
@@ -544,6 +578,21 @@ fun ChatScreen(
             onBranch = { viewModel.branchFrom(step.node.id); actionStep = null },
             onFlag = { flagStep = step; actionStep = null },
             onDismiss = { actionStep = null },
+            bookmarked = messageBookmarks[step.node.id]?.any { it.ref.blockIndex == null } == true,
+            onToggleBookmark = { viewModel.toggleMessageBookmark(step.node.id) },
+            onMarkVersion = { versionNameInput = ""; versionNameStep = step; actionStep = null },
+            directive = compactionDirectives[step.node.id],
+            onSetFidelity = { fidelity ->
+                val current = compactionDirectives[step.node.id]
+                viewModel.setCompactionDirective(step.node.id, current?.mustInclude ?: false, fidelity)
+            },
+            // Fixed per adversarial review: this used to hardcode Fidelity.F1 as the fallback
+            // when no directive existed yet, silently downgrading a message that auto-resolves
+            // higher (e.g. a +2-verdict message auto-floors to F3) the instant Must-include was
+            // touched. ChatViewModel.toggleMustInclude resolves the *actual* current fidelity
+            // via the same contract CompactionEngine uses, and preserves it.
+            onToggleMustInclude = { viewModel.toggleMustInclude(step.node.id) },
+            onRewind = { viewModel.rewindFrom(step.node.id); actionStep = null },
         )
     }
 
@@ -552,6 +601,32 @@ fun ChatScreen(
             content = step.node.content,
             modelId = step.node.modelId,
             onDismiss = { flagStep = null },
+        )
+    }
+
+    versionNameStep?.let { step ->
+        AlertDialog(
+            onDismissRequest = { versionNameStep = null },
+            title = { Text("Mark branch as Version") },
+            text = {
+                HyleField(
+                    value = versionNameInput,
+                    onValueChange = { versionNameInput = it },
+                    label = "Name",
+                    singleLine = true,
+                    placeholder = "e.g. auth-flow v2",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = versionNameInput.isNotBlank(),
+                    onClick = {
+                        viewModel.markVersion(step.node.id, versionNameInput.trim())
+                        versionNameStep = null
+                    },
+                ) { Text("Mark") }
+            },
+            dismissButton = { TextButton(onClick = { versionNameStep = null }) { Text("Cancel") } },
         )
     }
 }
@@ -843,13 +918,26 @@ private fun ModelRow(m: ModelOption, active: Boolean, onSelect: (String) -> Unit
     }
 }
 
-/** Long-press actions for one turn: the branch axis, plain copy, and (play) flagging. */
+/**
+ * Long-press actions for one turn (STUDIO_UX_SPEC.md §4.6's curation sheet, thumb-ordered):
+ * bookmark, mark-as-version, compaction directive (must-include + fidelity dial), rewind, the
+ * pre-existing branch/copy/flag actions. Not built this pass (flagged, not silently skipped):
+ * "Re-run with…" (needs Roundtable, PC-B, not built), "Convert → Task/Incident" (the spec marks
+ * this item "(Studio)"), "Quote in composer," "Read aloud," "Raw view" (no L4 view exists yet).
+ */
 @Composable
 private fun TurnActionsSheet(
     step: PathView.Step,
     onBranch: () -> Unit,
     onFlag: () -> Unit,
     onDismiss: () -> Unit,
+    bookmarked: Boolean = false,
+    onToggleBookmark: () -> Unit = {},
+    onMarkVersion: () -> Unit = {},
+    directive: dev.aarso.domain.curation.CompactionDirective? = null,
+    onSetFidelity: (dev.aarso.domain.curation.Fidelity) -> Unit = {},
+    onToggleMustInclude: () -> Unit = {},
+    onRewind: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -860,6 +948,51 @@ private fun TurnActionsSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            TextButton(onClick = onToggleBookmark, modifier = Modifier.fillMaxWidth()) {
+                Text(if (bookmarked) "Remove bookmark" else "Bookmark")
+            }
+            TextButton(onClick = onMarkVersion, modifier = Modifier.fillMaxWidth()) {
+                Text("Mark branch as Version…")
+            }
+            Text(
+                "Compaction",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, start = 16.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (fidelity in dev.aarso.domain.curation.Fidelity.entries) {
+                    val selected = directive?.fidelity == fidelity
+                    TextButton(
+                        onClick = { onSetFidelity(fidelity) },
+                        modifier = Modifier.semantics { contentDescription = "Fidelity ${fidelity.name}${if (selected) ", selected" else ""}" },
+                    ) {
+                        Text(
+                            fidelity.name,
+                            style = if (selected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium,
+                            color = if (selected) LocalHyleColors.current.violet else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Must-include (never dropped)",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = directive?.mustInclude == true, onCheckedChange = { onToggleMustInclude() })
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            TextButton(onClick = onRewind, modifier = Modifier.fillMaxWidth()) {
+                Text("Rewind from here")
+            }
             TextButton(onClick = onBranch, modifier = Modifier.fillMaxWidth()) {
                 Text("Branch from here — try a different route")
             }
@@ -1043,6 +1176,11 @@ private fun MessageTurn(
     onSwitch: (Int) -> Unit,
     onLongPress: () -> Unit,
     highlighted: Boolean = false,
+    verdict: dev.aarso.domain.curation.Verdict? = null,
+    bookmarked: Boolean = false,
+    onVerdictUp: () -> Unit = {},
+    onVerdictDown: () -> Unit = {},
+    onToggleBookmark: () -> Unit = {},
 ) {
     val fromUser = step.node.role == Role.USER
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1053,6 +1191,11 @@ private fun MessageTurn(
             stopped = step.node.metadata["stopped"] == "true",
             onLongPress = onLongPress,
             highlighted = highlighted,
+            verdict = verdict,
+            bookmarked = bookmarked,
+            onVerdictUp = onVerdictUp,
+            onVerdictDown = onVerdictDown,
+            onToggleBookmark = onToggleBookmark,
         )
         // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
         step.node.metadata["costMinor"]?.let { minor ->
@@ -1124,50 +1267,158 @@ private fun MessageBubble(
     stopped: Boolean,
     onLongPress: () -> Unit,
     highlighted: Boolean = false,
+    /** Curation Instrument additions (STUDIO_UX_SPEC.md §4.2/§4.3) — all optional/no-op by
+     *  default so every other [MessageBubble] call site (StreamingBubble etc. don't call this
+     *  composable, but any future one) keeps compiling unchanged. */
+    verdict: dev.aarso.domain.curation.Verdict? = null,
+    bookmarked: Boolean = false,
+    onVerdictUp: () -> Unit = {},
+    onVerdictDown: () -> Unit = {},
+    onToggleBookmark: () -> Unit = {},
 ) {
     val fromUser = role == Role.USER
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
     ) {
-        Card(
-            modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress).let {
-                // S9: the current find-in-chat hit's row (row-level marker — see InChatFind.kt's
-                // KDoc for why not a sub-string highlight).
-                if (highlighted) it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium) else it
-            },
-            colors = CardDefaults.cardColors(
-                containerColor = if (fromUser) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
+        Column(horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start) {
+            Card(
+                modifier = Modifier.combinedClickable(
+                    onClick = {},
+                    onLongClick = onLongPress,
+                    // Double-tap to bookmark (§4.3) — combinedClickable natively
+                    // disambiguates single/double/long, so this doesn't fight onLongClick.
+                    onDoubleClick = onToggleBookmark,
+                ).let {
+                    // S9: the current find-in-chat hit's row (row-level marker — see InChatFind.kt's
+                    // KDoc for why not a sub-string highlight).
+                    if (highlighted) it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium) else it
                 },
-            ),
-        ) {
-            Column(Modifier.padding(12.dp)) {
-                when {
-                    // An image turn: the node's payload is the generated file (§6).
-                    imagePath != null -> FileImage(
-                        path = imagePath,
-                        modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
-                    )
-                    fromUser || role == Role.SYSTEM -> Text(content)
-                    // Persisted model turns render as markdown (legibility); the
-                    // live stream keeps per-token entropy colouring instead. We run
-                    // the text through the JVM-tested StreamingMarkdown.reconcile so a
-                    // turn that was stopped mid-fence (a dangling ``` that would swallow
-                    // the rest of the bubble) renders cleanly; it's idempotent on
-                    // well-formed markdown, so a complete turn passes through unchanged.
-                    else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
-                }
-                if (stopped) {
-                    Text(
-                        "· stopped here",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                colors = CardDefaults.cardColors(
+                    containerColor = if (fromUser) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    },
+                ),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    when {
+                        // An image turn: the node's payload is the generated file (§6).
+                        imagePath != null -> FileImage(
+                            path = imagePath,
+                            modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+                        )
+                        fromUser || role == Role.SYSTEM -> Text(content)
+                        // Persisted model turns render as markdown (legibility); the
+                        // live stream keeps per-token entropy colouring instead. We run
+                        // the text through the JVM-tested StreamingMarkdown.reconcile so a
+                        // turn that was stopped mid-fence (a dangling ``` that would swallow
+                        // the rest of the bubble) renders cleanly; it's idempotent on
+                        // well-formed markdown, so a complete turn passes through unchanged.
+                        else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
+                    }
+                    if (stopped) {
+                        Text(
+                            "· stopped here",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
+            // Verdict + bookmark row (§4.2/§4.3 Regular-mode controls — the parity-gate
+            // requirement: every gesture ships with a tappable equivalent in the same PR. This
+            // *is* the shipped mechanism for v1; the spec's hold-drag gesture is additive sugar
+            // layered on the same setVerdict/toggleMessageBookmark calls, not built this pass —
+            // owner-verify territory for gesture-conflict tuning against the existing long-press,
+            // deliberately not risked without a device to test on).
+            // Fixed per adversarial review: the double-tap-to-bookmark gesture above is wired
+            // unconditionally on every role's Card, but this row used to render only for
+            // Role.ASSISTANT — a user/system message could be bookmarked with no visible pin and
+            // no way to un-bookmark it short of the same blind double-tap again. Verdict
+            // (useful/wrong) stays assistant-only (rating a user's own message is meaningless),
+            // but bookmarking is role-agnostic, so the row always shows, with verdict controls
+            // gated inside it instead of gating the whole row.
+            VerdictBookmarkRow(
+                verdict = verdict,
+                bookmarked = bookmarked,
+                showVerdict = role == Role.ASSISTANT,
+                onVerdictUp = onVerdictUp,
+                onVerdictDown = onVerdictDown,
+                onToggleBookmark = onToggleBookmark,
+            )
+        }
+    }
+}
+
+/**
+ * Regular-mode verdict + bookmark controls (STUDIO_UX_SPEC.md §4.2: "chevron buttons in the
+ * message overflow row"; §4.3 double-tap's tap equivalent). Colourblind-safe by construction
+ * (I3): up/down state is shape (filled vs outlined chevron) + a text label on selection, never
+ * hue alone — [MaterialTheme.colorScheme.primary]/[LocalHyleColors.current.violet] fill the
+ * *selected* glyph, but the outline-vs-filled distinction carries the meaning even without colour.
+ */
+@Composable
+private fun VerdictBookmarkRow(
+    verdict: dev.aarso.domain.curation.Verdict?,
+    bookmarked: Boolean,
+    onVerdictUp: () -> Unit,
+    onVerdictDown: () -> Unit,
+    onToggleBookmark: () -> Unit,
+    showVerdict: Boolean = true,
+) {
+    val grade = verdict?.grade
+    Row(
+        modifier = Modifier.padding(top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showVerdict) {
+            TextButton(
+                onClick = onVerdictDown,
+                modifier = Modifier.semantics {
+                    contentDescription = if (grade != null && grade < 0) "Rated down. Tap to clear." else "Rate down"
+                },
+            ) {
+                Text(
+                    if (grade != null && grade < 0) "▼" else "▽",
+                    color = if (grade != null && grade < 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
+                )
+            }
+            TextButton(
+                onClick = onVerdictUp,
+                modifier = Modifier.semantics {
+                    contentDescription = if (grade != null && grade > 0) "Rated up. Tap to clear." else "Rate up"
+                },
+            ) {
+                Text(
+                    if (grade != null && grade > 0) "▲" else "△",
+                    color = if (grade != null && grade > 0) LocalHyleColors.current.violet else MaterialTheme.colorScheme.outline,
+                )
+            }
+            if (grade != null) {
+                Text(
+                    when (grade) {
+                        2 -> "reference-grade"
+                        1 -> "useful"
+                        -1 -> "off"
+                        -2 -> "wrong"
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 2.dp),
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        TextButton(
+            onClick = onToggleBookmark,
+            modifier = Modifier.semantics {
+                contentDescription = if (bookmarked) "Bookmarked. Tap to remove." else "Bookmark message"
+            },
+        ) {
+            Text(if (bookmarked) "📌" else "📍", color = if (bookmarked) LocalHyleColors.current.violet else MaterialTheme.colorScheme.outline)
         }
     }
 }

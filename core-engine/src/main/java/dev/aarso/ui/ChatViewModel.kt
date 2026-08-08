@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -177,6 +178,8 @@ class ChatViewModel(
     private val councilStore: dev.aarso.data.CouncilStore,
     private val ledgerStore: dev.aarso.data.LedgerStore,
     private val catalogStore: dev.aarso.data.ModelCatalogStore,
+    private val curationStore: dev.aarso.data.CurationStore,
+    private val aarsoEventLog: dev.aarso.domain.mirror.AarsoEventLog,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -998,6 +1001,149 @@ class ChatViewModel(
         }
     }
 
+    // ---- The Conversation Instrument (STUDIO_UX_SPEC.md §4-5) --------------------------------
+
+    val verdicts: StateFlow<Map<String, dev.aarso.domain.curation.Verdict>> = curationStore.verdicts
+        .map { list -> list.associateBy { it.msgId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val messageBookmarks: StateFlow<Map<String, List<dev.aarso.domain.curation.MessageBookmark>>> = curationStore.bookmarks
+        .map { list -> list.groupBy { it.ref.msgId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val versionsByTip: StateFlow<Map<String, dev.aarso.domain.curation.Version>> = curationStore.versions
+        .map { list -> list.associateBy { it.branchTipMsgId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val compactionDirectives: StateFlow<Map<String, dev.aarso.domain.curation.CompactionDirective>> = curationStore.directives
+        .map { list -> list.associateBy { it.msgId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Verdict-drag / chevron action: sets or replaces the verdict on [msgId] (annotation only — never moves, files, or archives the message; see the curation data-model KDoc for the patent-design-around this is deliberately shaped around). */
+    fun setVerdict(msgId: String, grade: Int) {
+        viewModelScope.launch {
+            curationStore.setVerdict(msgId, grade)
+            aarsoEventLog.record(
+                dev.aarso.domain.mirror.AarsoEventKind.VERDICT,
+                """{"msgId":"$msgId","grade":$grade}""",
+                now = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    fun clearVerdict(msgId: String) {
+        viewModelScope.launch { curationStore.clearVerdict(msgId) }
+    }
+
+    /** Double-tap: pin the whole message, or un-pin if it's already pinned. */
+    fun toggleMessageBookmark(msgId: String, kind: dev.aarso.domain.curation.BookmarkKind = dev.aarso.domain.curation.BookmarkKind.REFERENCE) {
+        viewModelScope.launch {
+            val result = curationStore.toggleMessageBookmark(msgId, kind)
+            if (result != null) {
+                aarsoEventLog.record(
+                    dev.aarso.domain.mirror.AarsoEventKind.BOOKMARK,
+                    """{"msgId":"$msgId","kind":"${kind.name}"}""",
+                    now = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    /** Double-tap on a code block: pin that block specifically. */
+    fun toggleBlockBookmark(msgId: String, blockIndex: Int) {
+        viewModelScope.launch { curationStore.toggleBlockBookmark(msgId, blockIndex) }
+    }
+
+    /** Curation sheet: "Mark branch as Version." */
+    fun markVersion(branchTipMsgId: String, name: String, note: String? = null) {
+        viewModelScope.launch {
+            curationStore.markVersion(branchTipMsgId, name, note)
+            aarsoEventLog.record(
+                dev.aarso.domain.mirror.AarsoEventKind.VERSION,
+                """{"branchTipMsgId":"$branchTipMsgId","name":${org.json.JSONObject.quote(name)}}""",
+                now = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    /** Curation sheet's fidelity dial: an explicit user choice, so it always wins outright — mustInclude preserves whatever was already set. */
+    fun setCompactionDirective(msgId: String, mustInclude: Boolean, fidelity: dev.aarso.domain.curation.Fidelity) {
+        viewModelScope.launch { curationStore.setDirective(msgId, mustInclude, fidelity) }
+    }
+
+    fun clearCompactionDirective(msgId: String) {
+        viewModelScope.launch { curationStore.clearDirective(msgId) }
+    }
+
+    /**
+     * Curation sheet's Must-include toggle, kept deliberately independent of the fidelity dial
+     * (per [dev.aarso.domain.curation.CompactionDirective]'s own contract). Bug fixed here: a
+     * naive implementation that hardcodes a fallback fidelity (e.g. F1) when no directive exists
+     * yet would *silently downgrade* a message that currently auto-resolves higher — e.g. a
+     * +2-verdict message auto-floors to F3 with no directive at all; flipping Must-include must
+     * not be the thing that knocks it down to F1. Instead, when no directive exists, this first
+     * resolves what the fidelity *would already be* under the deterministic contract (same
+     * inputs [dev.aarso.domain.curation.CompactionEngine] would use) and preserves exactly that.
+     */
+    fun toggleMustInclude(msgId: String) {
+        viewModelScope.launch {
+            val current = curationStore.directiveFor(msgId)
+            val fidelity = current?.fidelity ?: resolveCurrentFidelity(msgId)
+            curationStore.setDirective(msgId, mustInclude = current?.mustInclude != true, fidelity = fidelity)
+        }
+    }
+
+    /** What [dev.aarso.domain.curation.CompactionContract] would resolve [msgId] to right now, absent any directive — i.e. its default fidelity under its current verdict/bookmark/version-spine signals. */
+    private suspend fun resolveCurrentFidelity(msgId: String): dev.aarso.domain.curation.Fidelity {
+        val verdict = curationStore.verdictFor(msgId)
+        val bookmarked = curationStore.bookmarksFor(msgId).isNotEmpty()
+        val versions = curationStore.versions.first()
+        val spineIds = runCatching { dev.aarso.domain.curation.VersionSpines.computeIds(repository.tree(), versions) }
+            .getOrDefault(emptySet())
+        return dev.aarso.domain.curation.CompactionContract.resolve(
+            msgId = msgId,
+            directive = null,
+            verdict = verdict,
+            isBookmarked = bookmarked,
+            isOnVersionSpine = msgId in spineIds,
+        ).fidelity
+    }
+
+    /**
+     * Curation sheet: "Rewind from here." Ghosts the branch that was active (if any existed
+     * below [nodeId]) and moves the active leaf to [nodeId] — the same primitive [branchFrom]
+     * uses, plus the ghost annotation (STUDIO_UX_SPEC.md §4.5). Nothing is deleted: the ghosted
+     * branch stays fully reachable via the existing alternative-branch (‹ ›) navigation.
+     */
+    fun rewindFrom(nodeId: String) {
+        if (transient.value.genPhase != GenPhase.IDLE) return
+        viewModelScope.launch {
+            val tree = repository.tree()
+            val currentLeaf = activeLeafId.value
+            if (currentLeaf != null) {
+                val isDescendant = runCatching { tree.pathToRoot(currentLeaf) }.getOrNull()
+                    ?.any { it.id == nodeId } == true
+                val now = System.currentTimeMillis()
+                val ghost = dev.aarso.domain.curation.Rewind.planGhost(
+                    currentLeafId = currentLeaf,
+                    rewindToId = nodeId,
+                    isDescendant = isDescendant,
+                    now = now,
+                )
+                if (ghost != null) {
+                    curationStore.recordGhost(ghost)
+                    aarsoEventLog.record(
+                        dev.aarso.domain.mirror.AarsoEventKind.REWIND,
+                        """{"ghostedLeaf":"${ghost.branchTipMsgId}","rewindTo":"$nodeId"}""",
+                        now = now,
+                    )
+                }
+            }
+            moveLeaf(nodeId)
+            recomputeStatusAsync()
+        }
+    }
+
     /**
      * Switch the model the conversation continues with (handoff §3). Re-renders
      * the path under the new template / tokenizer to re-measure context, and
@@ -1075,6 +1221,8 @@ class ChatViewModel(
                     c.councilStore,
                     c.ledgerStore,
                     c.modelCatalogStore,
+                    c.curationStore,
+                    c.aarsoEventLog,
                     app.applicationContext,
                 )
             }

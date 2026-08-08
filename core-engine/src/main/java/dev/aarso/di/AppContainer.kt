@@ -171,6 +171,29 @@ class AppContainer(context: Context) {
      *  CORE_PHASES.md P2). */
     val watchStore: dev.aarso.data.WatchStore = dev.aarso.data.WatchStore(database.watchDao())
 
+    /** The Conversation Instrument's data gateway (verdicts, message-level bookmarks, versions,
+     *  compaction directives, ghost branches, form state — STUDIO_UX_SPEC.md §5.1). */
+    val curationStore: dev.aarso.data.CurationStore = dev.aarso.data.CurationStore(
+        database.verdictDao(),
+        database.messageBookmarkDao(),
+        database.versionDao(),
+        database.compactionDirectiveDao(),
+        database.ghostBranchDao(),
+        database.formStateDao(),
+    )
+
+    /** The Aarso event log's write side (STUDIO_UX_SPEC.md §10) — off by default, per-signal
+     *  toggles; see [dev.aarso.domain.mirror.AarsoCaptureSettings]. No settings UI exists yet to
+     *  flip these on, so [aarsoCaptureSettings] currently always resolves to
+     *  [dev.aarso.domain.mirror.AarsoCaptureSettings.OFF] — wiring a real toggle is a named
+     *  follow-up, not a silent gap: the log is inert (writes nothing) until one exists. */
+    private var aarsoCaptureSettings: dev.aarso.domain.mirror.AarsoCaptureSettings =
+        dev.aarso.domain.mirror.AarsoCaptureSettings.OFF
+    val aarsoEventLog: dev.aarso.domain.mirror.AarsoEventLog = dev.aarso.domain.mirror.AarsoEventLog(
+        sink = dev.aarso.data.AarsoFileEventSink.forContext(context),
+        settings = { aarsoCaptureSettings },
+    )
+
     /** The free-tier guide (bundled JSON, Nooz-refreshed) + per-provider free-tier usage. */
     val freeTierStore: dev.aarso.data.FreeTierStore = dev.aarso.data.FreeTierStore(context)
     val freeTierUsageStore: dev.aarso.data.FreeTierUsageStore = dev.aarso.data.FreeTierUsageStore(context)
