@@ -93,7 +93,11 @@ import kotlinx.coroutines.launch
 /**
  * The spatial shell (redesign brief §1–§3): Chat is home; Chats parks off the
  * left edge, Settings off the right, Models beneath the thread's bottom
- * boundary, and the Tree sits on the z-axis as a semantic zoom. No tab bar.
+ * boundary, and the Tree sits on the z-axis as a semantic zoom. A persistent
+ * [BottomNavBar] gives all six of [SpatialTarget]'s rooms (Loops excepted — it
+ * stays a nested pinch destination) a direct tap target driven through the same
+ * [SpatialController.open] an edge-drag already produces; the gestures below are
+ * unchanged, the bar is a second, discoverable way onto them.
  *
  * Motion: every transition is finger-driven 1:1 and interruptible; release
  * settles on an eased cubic-bezier (0.4, 0, 0.2, 1), ~320 ms, no spring. Room
@@ -272,11 +276,16 @@ fun SpatialRoot() {
     val edgePx = with(density) { 56.dp.toPx() }
     val ac = LocalHyleColors.current
 
+    // The persistent bottom bar (see BottomNavBar.kt) gets its own reserved strip via
+    // `weight(1f)` on the spatial content below, rather than overlaying on top of it —
+    // so `controller.viewport`, captured from THIS inner Box's own onSizeChanged, already
+    // excludes the bar's height and every existing offset/parkDistance calculation below
+    // needs no change to stay correct above it.
+    Column(Modifier.fillMaxSize().background(ac.ink).systemBarsPadding()) {
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .background(ac.ink)
-            .systemBarsPadding()
+            .fillMaxWidth()
+            .weight(1f)
             .onSizeChanged { controller.viewport = it }
             .spatialEdgeDrag(controller, edgePx)
             .focusRequester(rootFocusRequester)
@@ -512,6 +521,8 @@ fun SpatialRoot() {
                 onDismiss = { searchOpen = false },
             )
         }
+    }
+    BottomNavBar(controller)
     }
 }
 
