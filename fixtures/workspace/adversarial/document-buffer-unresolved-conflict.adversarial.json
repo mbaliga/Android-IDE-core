@@ -1,0 +1,22 @@
+{
+  "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+  "resourceUri": {
+    "provider": "SSH",
+    "raw": "ssh://host-9f21e3/home/dev/projects/android-ide-core/docs/STATE.md",
+    "displayPath": "docs/STATE.md",
+    "unknownFields": {}
+  },
+  "state": "CONFLICTED",
+  "dirty": true,
+  "baseRevision": "rev-0000000388",
+  "contentRevision": "buf-rev-0000000401",
+  "encoding": "UTF-8",
+  "lineEndings": "LF",
+  "journalSequence": 401,
+  "conflictState": {
+    "remoteRevision": "rev-0000000402",
+    "detectedAtUtc": "2026-08-07T10:16:40Z",
+    "remoteSummary": "Remote docs/STATE.md advanced one revision past this buffer's baseRevision while local edits were still pending save."
+  },
+  "unknownFields": {}
+}

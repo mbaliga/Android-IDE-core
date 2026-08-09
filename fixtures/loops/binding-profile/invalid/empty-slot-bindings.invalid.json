@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "profileId": "binding-profile-empty-01",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+    "byteLength": 190
+  },
+  "slotBindings": [],
+  "resolvedAtUtc": "2026-08-01T10:00:05Z"
+}

@@ -1,0 +1,18 @@
+Schema verdict: VALID against loop-build-receipt.schema.json.
+allStepsSucceeded=true is consistent with steps[] (all SUCCEEDED, step 9 legitimately SKIPPED) and
+packageContentDigest is populated, satisfying the schema's allOf rules — nothing in this schema
+ties validationFindings[].severity back to allStepsSucceeded.
+
+Real rejection: an ERROR-severity finding coexisting with allStepsSucceeded=true is an internal
+contradiction. LOOP_ENGINEERING_SPEC_V2.1.md §19 / schemas/loops/registries/
+loop-validation-rules.v1.json's severityLevels establish ERROR as blocking; step 4
+(SCAN_FORBIDDEN_CONTENT) in LOOP_ENGINEERING_SPEC_V2.1.md §20's own pipeline exists precisely to
+catch what this finding names. The real rejection authority is the finding's own code —
+  LOOP-PKG-002: "File is a forbidden executable payload... Marketplace packages are
+  declarative-only; reference a capability ID instead."
+— combined with the general rule (not a new code) that a build pipeline MUST treat any
+ERROR-severity finding as build-blocking; a receipt claiming allStepsSucceeded=true while carrying
+one is the receipt-emission implementation's own bug, to be fixed at the pipeline level, not a gap
+this schema should try to close structurally (doing so would require this schema to embed the
+entire severity-blocking policy, duplicating loop-validation-rules.v1.json rather than
+cross-referencing it).

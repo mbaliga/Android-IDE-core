@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportId": "validation-report-severity-mismatch",
+  "rulesetVersion": "fb-loop-validation-rules-1",
+  "semanticDigest": "sha256:c63b890c5219db8a2871ad87bf40710bfa817b1e3e344abd9e55e5a49736c636",
+  "surfaceImplementation": {
+    "surface": "PHONE",
+    "name": "dev.aarso.full",
+    "version": "0.13.0"
+  },
+  "findings": [
+    {
+      "namespace": "LOOP-GRAPH",
+      "code": "LOOP-GRAPH-001",
+      "severity": "ERROR",
+      "objectType": "definition",
+      "message": "Missing explicit start node or no terminal node is reachable."
+    }
+  ],
+  "highestSeverity": "WARNING",
+  "createdAtUtc": "2026-08-01T10:00:03Z"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "01J8ZB0000000000000000RX",
+  "targetId": "01J8ZA0000000000000000T1",
+  "operation": {
+    "operationClass": "AGENT_LOOP",
+    "command": "loop.run",
+    "args": ["--loop-id", "01J8ZL0000000000000000L9"],
+    "workingDirectory": null
+  },
+  "workingRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "environment": { "envVars": {} },
+  "secretHandles": [],
+  "budget": {
+    "wallClockSeconds": null,
+    "maxOutputBytes": null,
+    "sessionReauthorization": { "maxSessionSeconds": 1800, "requiresUserReauth": true },
+    "thermalStateObservabilityRequired": true,
+    "thermalPausePolicyRef": null
+  },
+  "authorityGrant": { "grantId": "01J8ZG0000000000000000AX", "scopes": ["execution.agentLoop.run"] },
+  "expectedOutputs": [],
+  "idempotencyKey": null,
+  "sideEffectExternal": false,
+  "externalDuplicateBehavior": null,
+  "fgsType": "DATA_SYNC",
+  "openEnded": true,
+  "specialUseJustification": null,
+  "unknownFields": {},
+  "$note": "MUST BE REJECTED: openEnded=true paired with fgsType=DATA_SYNC. DATA_SYNC carries a hard 6h/rolling-24h ceiling with no extension (Service.onTimeout()) — an open-ended agent loop cannot honor that ceiling safely. See docs/ratified/EXECUTION_CONTRACT.md §3 (platform grounding) and schemas/execution/request.schema.json's first allOf/if/then block, which is what rejects this fixture structurally."
+}

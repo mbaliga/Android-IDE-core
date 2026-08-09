@@ -1,0 +1,36 @@
+{
+  "operationId": "op-3014",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0045",
+  "operationKind": "FLASH",
+  "artifactId": "fw-arduino-uno-blink-v3",
+  "preconditions": {
+    "identityConfidenceAtLeast": "PROBABLE",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9014",
+    "destructiveActionExplicitlyAuthorized": true,
+    "authorizedPrincipal": "user:owner",
+    "authorizedAtUtc": "2026-08-07T10:25:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 70,
+    "sideEffectsPossible": true
+  },
+  "state": "FAILED",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": null,
+  "unknownFields": {}
+}

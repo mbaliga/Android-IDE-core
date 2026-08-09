@@ -1,0 +1,18 @@
+Schema validation: PASSES (this document is schema-valid against loop-result-share.schema.json).
+
+Real rejection: `localCloudRatio` is documented (LOOP_RESULT_SHARING_CONTRACT.md §8) as a
+partition of execution work into local/remote/CI fractions — 0.9 + 0.9 + 0.9 = 2.7, not 1.0. A
+consumer treating these as a genuine partition (e.g. rendering a stacked bar or pie chart) would
+render nonsensical, misleadingly inflated proportions. §8's own text ("a run with zero eligible
+work reports 'no ratio computed,' never a default-to-zero percentage that would misrepresent it")
+establishes that this field is meant to be read as an honest, internally-consistent partition —
+this fixture breaks that expectation while remaining individually valid per-field (each fraction is
+independently within [0, 1], which is all this schema's `minimum`/`maximum` constraints check).
+
+Why the schema cannot catch this: `localFraction`, `remoteFraction`, and `ciFraction` are validated
+independently as three sibling `number` properties, each bounded to [0, 1] on its own. JSON Schema
+draft 2020-12 has no keyword for "these N sibling numeric properties must sum to exactly 1" — that
+is an arithmetic cross-field constraint, not a structural one this draft's vocabulary expresses.
+LoopRuntimeContracts.kt's `LocalCloudRatio` Kotlin type DOES enforce this (an explicit
+`require(abs(sum - 1.0) < 1e-6)` in its constructor) — this JSON document was authored directly,
+bypassing that guard, which is exactly the gap this adversarial fixture demonstrates.

@@ -1,0 +1,13 @@
+{
+  "decisionId": "decision-adv-0005-expired-grant",
+  "requestObjectId": "execreq-0808-ssh-build-dispatch",
+  "requestingPrincipalId": "principal-local-agent-persona-primary",
+  "requestedCapabilityId": "fb.exec.ssh_remote",
+  "requestedResourceScope": { "kind": "EXECUTION_TARGET", "locator": "target-ssh-home-pi-01" },
+  "matchedGrantId": "grant-ssh-remote-exec-homepi-0009",
+  "outcome": "DENY",
+  "reasonCode": "AUTHORITY_GRANT_EXPIRED",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-07T09:00:00Z",
+  "evidenceLinks": ["grant-ssh-remote-exec-homepi-0009"]
+}

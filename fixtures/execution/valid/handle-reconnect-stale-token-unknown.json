@@ -1,0 +1,22 @@
+{
+  "handleId": "01J8ZH0000000000000000H2",
+  "requestId": "01J8ZB0000000000000000R2",
+  "targetId": "01J8ZA0000000000000000T1",
+  "state": "TARGET_STATE_UNKNOWN",
+  "stateReason": "reconnect: presented token was stale (expired before the reconnect attempt); provider could not confirm whether the underlying agent-loop run is still executing, finished, or was killed.",
+  "enteredStateAtUtc": "2026-08-07T11:47:02Z",
+  "heartbeat": {
+    "lastHeartbeatUtc": "2026-08-07T10:02:19Z",
+    "heartbeatIntervalSeconds": 15,
+    "missedConsecutive": 240
+  },
+  "cancellationMode": "UNSUPPORTED",
+  "knownStoppedDescription": null,
+  "reconnectToken": null,
+  "reconnectAttempt": {
+    "attemptedAtUtc": "2026-08-07T11:47:02Z",
+    "outcome": "STALE_TOKEN_UNKNOWN"
+  },
+  "resumedFromHandleId": null,
+  "unknownFields": {}
+}

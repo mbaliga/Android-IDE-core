@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-installation.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopInstallation = the phone-local durable record of one package's journey through the eleven-state import/activation machine (docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §3, FB-RAT-IMP-001/007), from ACQUIRING through INSTALLED or one of the five terminal states. The `installationState` enum below is copied VERBATIM from that document's §3 — do not re-derive or approximate it; a conflict between this schema's enum and that document's table is this schema's error, and the document wins. `signatureState` is copied verbatim from docs/ratified/loops/LOOP_PACKAGE_SPEC.md §11's signature verification/revocation state table, for the same reason.",
+  "title": "LoopInstallation",
+  "description": "The local record of a verified (or in-progress, or rejected) LoopPackage on this phone. One LoopInstallation exists per import attempt, created at ACQUIRING and updated in place as the underlying attempt advances through docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §3's state machine — the record's OWN mutation is expected (it is a live session object), which is a different invariant from the one below about the PACKAGE BYTES it references. INVARIANT (documented, not structurally enforceable by JSON Schema — this schema cannot see a prior version of the same document to compare against): once `installationState` reaches `INSTALLED`, the installed package bytes identified by `releaseIdentity.packageContentDigest` are immutable (LOOP-ID-002, loop-validation-rules.v1.json) — a subsequent edit MUST fork a new local draft (a new, separate LoopInstallation lineage) rather than rewrite this record's `releaseIdentity` in place. Fields this schema deliberately leaves as forward pointers to sibling WP-1L schemas rather than inlining their full shape: `compatibilityReportRef`/`bindingProfileRef` point at loop-compatibility-report.schema.json / binding-profile.schema.json documents stored as their own durable objects, not embedded here.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "installationId", "releaseIdentity", "source", "installationState", "createdAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "installationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this installation record (FB-RAT-COM-002), stable across every state transition of the same import attempt."
+    },
+    "releaseIdentity": {
+      "$ref": "#/$defs/ReleaseIdentity",
+      "description": "{loopId, semanticVersion, packageContentDigest} — LOOP_ENGINEERING_SPEC_V2.1 §14's release identity tuple. This is the byte-identity the immutability invariant above is anchored to."
+    },
+    "source": {
+      "$ref": "#/$defs/TransferEnvelope",
+      "description": "The user-initiated transfer envelope this installation began from (schemas/loops/transfer-envelope.schema.json, LOOP_ENGINEERING_SPEC_V2.1 §21) — file, share-sheet, HTTPS URL, QR, or Git. Duplicated locally per this corpus's standalone-schema convention rather than cross-file $ref'd."
+    },
+    "signatureState": {
+      "oneOf": [
+        { "$ref": "#/$defs/PackageSignatureState" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Where this attempt sits in LOOP_PACKAGE_SPEC.md §11's signature verification/revocation state table. Null only before the CONTAINER_VERIFIED transition has run (signature verification is part of that transition, LOOP_IMPORT_ACTIVATION_CONTRACT.md §3) — see the allOf below for what installationState requires of this field."
+    },
+    "compatibilityReportRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/DurableObjectRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Pointer to the loop-compatibility-report.schema.json document this attempt's COMPATIBILITY_EVALUATED transition produced (docs/ratified/loops/LOOP_COMPATIBILITY_CONTRACT.md, FB-RAT-CMP-005 — the phone-authoritative report). Null before that transition has run."
+    },
+    "bindingProfileRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/DurableObjectRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Pointer to the binding-profile.schema.json document this attempt's binding resolution (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5) produced — the local, device-specific resolution of this package's abstract slots. Null before binding resolution completes (i.e. while still in WAITING_BINDINGS)."
+    },
+    "authorityGrants": {
+      "type": "array",
+      "default": [],
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Grant IDs (schemas/authority/grant.schema.json Grant.grantId — the WP-1 authority domain) issued during this attempt's WAITING_AUTHORITY review (LOOP_IMPORT_ACTIVATION_CONTRACT.md §6). Referenced by ID only, not embedded — the authority domain owns the full Grant shape; this array MUST NOT be treated as authoritative evidence of what a grant actually authorizes without resolving each ID against the Grant store."
+    },
+    "installationState": {
+      "$ref": "#/$defs/InstallationState",
+      "description": "THE MOST IMPORTANT FIELD. Exactly the eleven ordered states plus five terminal states LOOP_IMPORT_ACTIVATION_CONTRACT.md §3 resolves the pack's two colliding draft state machines into — copied verbatim, not re-derived."
+    },
+    "receipts": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/DurableObjectRef" },
+      "description": "Append-only list of per-transition receipt refs (FB-RAT-COM-006, LOOP_IMPORT_ACTIVATION_CONTRACT.md §3's 'Receipt' column) — the lightweight per-step events plus, on reaching INSTALLED, the full loop-activation-receipt.schema.json document. A correction is a NEW entry appended here, never an edit or removal of an existing one."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this record was created, i.e. when the ACQUIRING transition happened (FB-RAT-COM-004)."
+    },
+    "updatedAtUtc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "default": null,
+      "description": "UTC instant of the most recent state transition. Null only for a record still exactly at ACQUIRING with no further transition yet."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "installationState": { "const": "INSTALLED" } },
+        "required": ["installationState"]
+      },
+      "then": {
+        "required": ["compatibilityReportRef", "bindingProfileRef", "signatureState", "receipts"],
+        "properties": {
+          "compatibilityReportRef": { "$ref": "#/$defs/DurableObjectRef" },
+          "bindingProfileRef": { "$ref": "#/$defs/DurableObjectRef" },
+          "signatureState": {
+            "enum": [
+              "IMPORTED_SIGNED_VERIFIED", "IMPORTED_SIGNED_REVOCATION_UNKNOWN",
+              "IMPORTED_REVOKED_KEY_FLAGGED", "IMPORTED_UNSIGNED_NARROWED_GRANTS"
+            ]
+          },
+          "receipts": { "type": "array", "minItems": 1 }
+        }
+      },
+      "$comment": "FB-RAT-IMP-009: an INSTALLED record MUST have a resolved compatibility report, a resolved binding profile, a settled (non-transient) signature posture, and at least one receipt (the activation receipt this transition itself writes)."
+    },
+    {
+      "if": {
+        "properties": {
+          "installationState": {
+            "enum": [
+              "COMPATIBILITY_EVALUATED", "PREVIEWED", "WAITING_BINDINGS", "WAITING_AUTHORITY",
+              "READY_TO_SIMULATE", "INSTALLABLE", "INSTALLED", "BLOCKED_INCOMPATIBLE"
+            ]
+          }
+        },
+        "required": ["installationState"]
+      },
+      "then": { "required": ["compatibilityReportRef"] },
+      "$comment": "A compatibility report is produced by the COMPATIBILITY_EVALUATED transition and exists at or after that point on the main path, or at the one terminal state reachable specifically from that range (BLOCKED_INCOMPATIBLE, §3)."
+    }
+  ],
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ReleaseIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageContentDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+        },
+        "packageContentDigest": { "$ref": "#/$defs/IntegrityRef" }
+      },
+      "additionalProperties": true
+    },
+    "TransferEnvelope": {
+      "type": "object",
+      "required": ["transferChannel", "expectedMediaType", "expectedDigest", "sourceDescription", "initiatedByUser"],
+      "properties": {
+        "transferChannel": {
+          "type": "string",
+          "enum": ["FILE", "SHARE_SHEET", "HTTPS_URL", "QR", "GIT"],
+          "description": "LOOP_DUAL_SURFACE_ARCHITECTURE.md §7's canonical LoopPackage boundary crossings."
+        },
+        "expectedMediaType": { "type": "string", "pattern": "^[\\w.+-]+/[\\w.+-]+$" },
+        "expectedDigest": { "$ref": "#/$defs/IntegrityRef" },
+        "sourceDescription": { "type": "string", "minLength": 1 },
+        "initiatedByUser": {
+          "const": true,
+          "description": "FB-RAT-IMP-002: there is no representable false state — a transfer that was not user-initiated MUST NOT be represented by this object at all."
+        }
+      },
+      "additionalProperties": true
+    },
+    "DurableObjectRef": {
+      "type": "object",
+      "required": ["objectId"],
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The referenced document's own FB-RAT-COM-002 stable ID (its `reportId`/`profileId`/`receiptId`, as appropriate to what is being pointed at)."
+        },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/IntegrityRef" },
+            { "type": "null" }
+          ],
+          "default": null,
+          "description": "Optional integrity binding to the exact referenced document bytes at the time this ref was recorded (FB-RAT-COM-005). Null when the reference is a live pointer rather than a pinned snapshot."
+        }
+      },
+      "additionalProperties": true
+    },
+    "PackageSignatureState": {
+      "type": "string",
+      "enum": [
+        "PACKAGE_ACQUIRED", "SIGNATURE_PRESENT", "UNSIGNED",
+        "SIGNATURE_VALID_REVOCATION_CHECKED", "SIGNATURE_INVALID",
+        "SIGNATURE_VALID_REVOCATION_UNKNOWN", "REJECTED",
+        "IMPORTED_UNSIGNED_NARROWED_GRANTS", "IMPORTED_REVOKED_KEY_FLAGGED",
+        "IMPORTED_SIGNED_VERIFIED", "IMPORTED_SIGNED_REVOCATION_UNKNOWN"
+      ],
+      "description": "Copied verbatim from LOOP_PACKAGE_SPEC.md §11's from-state/event/to-state/notes table. `PACKAGE_ACQUIRED` is the pre-branch state (present only transiently; a real installation record's non-null signatureState has already branched past it)."
+    },
+    "InstallationState": {
+      "type": "string",
+      "enum": [
+        "ACQUIRING", "SNAPSHOTTED", "CONTAINER_VERIFIED", "PARSED_VALIDATED",
+        "COMPATIBILITY_EVALUATED", "PREVIEWED", "WAITING_BINDINGS", "WAITING_AUTHORITY",
+        "READY_TO_SIMULATE", "INSTALLABLE", "INSTALLED",
+        "CANCELLED", "REJECTED_UNSAFE", "REJECTED_POLICY", "BLOCKED_INCOMPATIBLE", "FAILED_SAFE"
+      ],
+      "description": "The first eleven values are the main-path sequence (LOOP_IMPORT_ACTIVATION_CONTRACT.md §3, ACQUIRING through INSTALLED, in order); the last five are the terminal states reachable from various points along that path (§3's terminal-states table): CANCELLED and FAILED_SAFE from any non-terminal state; REJECTED_UNSAFE from ACQUIRING..CONTAINER_VERIFIED; REJECTED_POLICY from CONTAINER_VERIFIED..WAITING_AUTHORITY; BLOCKED_INCOMPATIBLE from PARSED_VALIDATED..COMPATIBILITY_EVALUATED. Copied verbatim from that document's resolution of the pack's two colliding draft state machines — do not re-derive or approximate."
+    }
+  }
+}

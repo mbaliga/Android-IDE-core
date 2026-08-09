@@ -1,0 +1,5 @@
+{
+  "provider": "FTP",
+  "raw": "ftp://legacy-host/pub/project/README.md",
+  "unknownFields": {}
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0.0",
+  "exportId": "01J9A0000000000000000EX1",
+  "exportedAt": "2026-08-01T09:00:00Z",
+  "producer": { "app": "csapp", "version": "2.4.1" },
+  "projectRef": { "externalId": "csapp-proj-aarso-mobile" },
+  "issues": [
+    {
+      "id": "csapp-iss-1001",
+      "title": "Crash on markdown-heavy reply",
+      "detail": "User reports app crash when a model reply contains a large table. Repro attached in CSApp.",
+      "severity": "SEV2",
+      "reporterRef": "csapp-user-88231",
+      "occurredAt": "2026-07-28T14:12:00Z",
+      "updatedAt": "2026-07-29T08:05:00Z",
+      "sourceRevision": "rev-14",
+      "status": "triaged"
+    },
+    {
+      "id": "csapp-iss-1002",
+      "title": "Council responses sometimes duplicate a participant",
+      "detail": "Two council members returned near-identical text in one run.",
+      "severity": "SEV3",
+      "reporterRef": "csapp-user-40217",
+      "occurredAt": "2026-07-30T11:40:00Z",
+      "updatedAt": "2026-07-30T11:40:00Z",
+      "sourceRevision": null,
+      "status": "open"
+    }
+  ],
+  "unknownFields": {}
+}

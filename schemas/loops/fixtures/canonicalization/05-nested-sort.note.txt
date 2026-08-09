@@ -1,0 +1,1 @@
+Recursive key sorting applies at every depth, independently per object.

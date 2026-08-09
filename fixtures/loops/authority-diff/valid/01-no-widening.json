@@ -1,0 +1,10 @@
+{
+  "comparisonId": "authdiff-0001",
+  "generatedAtUtc": "2026-08-07T10:00:00Z",
+  "comparisonContext": "UPDATE_GATE",
+  "perCapability": [
+    { "capabilityId": "fb.repo.read", "before": "READ", "after": "READ", "direction": "UNCHANGED" },
+    { "capabilityId": "fb.device.serial_read", "before": "EXECUTE_REVERSIBLE", "after": null, "direction": "REMOVED" }
+  ],
+  "requiresFreshApproval": false
+}

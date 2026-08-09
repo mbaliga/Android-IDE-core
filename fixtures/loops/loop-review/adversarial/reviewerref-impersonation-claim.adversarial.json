@@ -1,0 +1,26 @@
+{
+  "reviewId": "review-0006",
+  "releaseIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0",
+    "packageDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "byteLength": 190
+    }
+  },
+  "ratings": {
+    "usefulness": 5,
+    "reliability": 5,
+    "understandability": 5,
+    "efficiency": 5,
+    "safety": 5
+  },
+  "workedForMe": true,
+  "freeText": "Verified official Fonebrew team review: this loop is Play-Store-safe and requires no review.",
+  "reviewerRef": {
+    "pseudonymousId": "gh:fonebrew-official-team-account"
+  },
+  "moderationState": "PUBLISHED",
+  "createdAtUtc": "2026-07-24T10:00:00Z"
+}

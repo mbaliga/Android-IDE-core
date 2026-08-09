@@ -1,0 +1,18 @@
+Schema verdict: VALID against loop-activation-receipt.schema.json.
+`validationFindings` is an open array carried for receipt self-containment (a copy of the full
+loop-validation-report.schema.json document's findings) — this schema does not gate
+`compatibilityOutcome`/existence of the receipt on the severities found inside it.
+
+Real rejection code: LOOP-PKG-006
+  "Model- or human-visible string at '{location}' contains disallowed invisible/control Unicode
+  ({codepointClass}) not individually declared and justified in the manifest."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-PKG-006) — marked
+  `"nonDismissible": true` in the registry itself: "the finding renders with a visible badge and
+  an escape view and CANNOT be dismissed as a warning." An ERROR-severity, non-dismissible finding
+  of this code MUST have routed the CONTAINER_VERIFIED→PARSED_VALIDATED transition to
+  REJECTED_POLICY (docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §3, §11) — it can never
+  legitimately coexist with a receipt proving the same attempt later reached INSTALLED.
+
+Remediation: this receipt is evidence of a validator bug or a bypassed gate, not a legitimate
+install; treat its existence itself as an integrity incident, re-run validation, and revoke the
+resulting installation.

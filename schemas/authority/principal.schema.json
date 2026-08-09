@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/authority/principal.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Principal per FB-RAT-AUTH-001..004 (GRANT MODEL 'Principals:' list). Typically carried as the `payload` of a ContractEnvelope<Principal> (see schemas/common/envelope.schema.json), inheriting schemaVersion/objectId/producer/createdAtUtc from that outer envelope — `principalId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId.",
+  "title": "Principal",
+  "description": "Something authority can be granted to: a human user, or one of five non-human actor kinds this constellation runs on the user's behalf (FB-RAT-AUTH-001 — scoped capabilities are always granted TO a specific principal, never to a broad ambient trust label like 'the agent'). `parentPrincipalId` is the structural spine FB-RAT-AUTH-004 (no implicit privilege expansion) and FB-RAT-AUTH-007 (REJECTED — no automatic/transitive authority inheritance) are built on: every non-USER principal MUST declare who spawned it, so a policy engine can walk the chain back to the accountable human and refuse to let a child hold more authority than its parent ever held (see docs/ratified/CAPABILITY_AUTHORITY_MODEL.md §7/§10 and fixtures/authority/adversarial/decision-child-exceeds-parent.adversarial.json).",
+  "type": "object",
+  "required": ["principalId", "kind", "displayName", "parentPrincipalId", "status", "createdAtUtc"],
+  "properties": {
+    "principalId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this principal (FB-RAT-COM-002), independent of displayName — a renamed Council member or a re-run loop keeps (or, for a fresh run, deliberately does NOT keep — see LOOP_RUN below) this identity contract."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["USER", "LOCAL_AGENT_PERSONA", "LOOP_RUN", "COUNCIL_MEMBER", "STUDIO_WORKFLOW", "IMPORTED_COMPANION_ARTIFACT"],
+      "description": "Closed vocabulary from the GRANT MODEL principal list. USER is the sole root of authority in this constellation (no principal outranks a USER; every grant an automated principal holds ultimately traces back to a USER's explicit action). LOCAL_AGENT_PERSONA: a configured on-device agent identity (e.g. a Develop→Agent session). LOOP_RUN: one execution of a GraphRunner loop (core-engine/src/main/java/dev/aarso/domain/loop/GraphRunner.kt) — a fresh run is a fresh principalId, it does not inherit a prior run's grants. COUNCIL_MEMBER: one participant in a council/mixture-of-agents session (never labelled 'MoE' in UI, per this repo's CLAUDE.md rule 3 — that naming rule is UI-only and does not change this wire vocabulary). STUDIO_WORKFLOW: an authoring/PM-surface automation. IMPORTED_COMPANION_ARTIFACT: a marketplace-imported package's runtime identity — the WP-0-survey-adjacent loop-validation-rules registry's LOOP-PKG-004 ('import never executes package content') and LOOP-CAP-001/002 checks are what this principal kind exists to be gated by once activated; import/parse itself never needs a live IMPORTED_COMPANION_ARTIFACT principal, only activation does."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable label, e.g. 'You', 'Repo Agent', 'Loop run #482', 'Council member: Reviewer', 'Studio: Release checklist', 'imported: acme.build-helper'. Display-only — MUST NOT be used as identity (FB-RAT-COM-002); see `principalId`."
+    },
+    "parentPrincipalId": {
+      "type": ["string", "null"],
+      "description": "The principal that spawned/configured this one. Structurally required to be `null` for `kind: USER` (a human user is the root of the authority tree in this model) and required non-null for every other kind (see the allOf/if/then below) — a non-human principal with no declared parent is not representable, precisely so FB-RAT-AUTH-004's 'child agents/tools cannot receive more authority than parent' has a chain to walk. This field names the IMMEDIATE parent only; a full lineage walk (needed to find the accountable USER) is a policy-engine-time traversal, not something this single-object schema performs — see `rootUserPrincipalId` for the optional denormalized shortcut."
+    },
+    "rootUserPrincipalId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional denormalized shortcut: the `principalId` of the USER-kind principal at the root of this principal's `parentPrincipalId` chain, resolved once by whichever producer walked the chain. Producers SHOULD populate it so a decision engine can avoid re-walking the chain on every check; a decision engine MUST NOT trust this field over an actual chain walk when the answer is safety-relevant (this field is a cache, not a source of truth — a stale or forged value here is exactly the kind of thing FB-RAT-AUTH-007 exists to guard against, so it carries no independent authority of its own). Null for `kind: USER` (its own principalId already is the root) and MAY be null for any other kind before the walk has been performed."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "REVOKED", "EXPIRED"],
+      "description": "ACTIVE: this principal may currently be matched by a Grant. REVOKED: a human explicitly ended this principal's standing (e.g. force-stopped a loop run, deactivated an imported companion artifact) — every Grant held by a REVOKED principal MUST be treated as unusable from the moment of revocation, without needing to individually revoke each Grant. EXPIRED: the principal's own natural lifetime ended (e.g. a LOOP_RUN whose run completed, a time-boxed STUDIO_WORKFLOW) — same effect as REVOKED for authority purposes, distinct only for display/audit ('it ran out' vs 'a human stopped it')."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this principal identity was first created (FB-RAT-COM-004)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "USER" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": { "parentPrincipalId": { "const": null } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "not": { "const": "USER" } } },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["parentPrincipalId"],
+        "properties": { "parentPrincipalId": { "type": "string", "minLength": 1 } }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

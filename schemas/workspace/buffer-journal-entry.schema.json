@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/buffer-journal-entry.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. BufferJournalEntry: named but never specified in the source pack — designed here per the WP-1 task brief's explicit instruction, under the common envelope conventions (FB-RAT-COM-002 identity is deliberately NOT re-declared per-entry; identity for an append-only log entry is its (bufferId, sequence) pair, not a separate objectId — see WORKSPACE_KERNEL_SPEC.md §7). This is WorkspaceJournal.append()'s parameter shape (FB-RAT-WS-005: human and agent edits share ONE transaction/journal/review/undo/conflict model — `originKind` is how that single stream stays legible about which lane produced a given entry, not a second write path).",
+  "title": "BufferJournalEntry",
+  "type": "object",
+  "required": ["sequence", "bufferId", "resourceUri", "opType", "recordedAtUtc", "originKind", "originPrincipal"],
+  "properties": {
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic sequence number for this entry, scoped to the owning WorkspaceJournal (FB-RAT-COM-004 — monotonic sequence preferred over wall-clock for ordering). Readers MUST detect a gap between a buffer's DocumentBuffer.journalSequence and the next entry it reads as a possible torn/lost append (see fixtures/workspace/adversarial/buffer-journal-forced-kill-mid-append.adversarial.json)."
+    },
+    "bufferId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The `DocumentBuffer.bufferId` this entry mutates."
+    },
+    "resourceUri": { "$ref": "#/$defs/ResourceUri" },
+    "opType": {
+      "type": "string",
+      "enum": ["INSERT", "DELETE", "REPLACE", "SET_FULL_CONTENT", "OPEN", "CLOSE", "DISCARD"],
+      "description": "The edit or lifecycle operation this entry records. INSERT/DELETE/REPLACE are byte-range text edits; SET_FULL_CONTENT replaces the whole buffer (e.g. an external reformat or a restored snapshot); OPEN/CLOSE/DISCARD are lifecycle markers with no content payload."
+    },
+    "byteRange": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["startByte", "endByteExclusive"],
+          "properties": {
+            "startByte": { "type": "integer", "minimum": 0 },
+            "endByteExclusive": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true,
+          "description": "Half-open [startByte, endByteExclusive) range this edit applies to, in the buffer's byte-offset space at the time of this entry. A reader MUST treat endByteExclusive < startByte as malformed (not structurally rejected here — JSON Schema 2020-12 has no cross-property comparison keyword without a `$data` extension this constellation does not depend on)."
+        },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Non-null only for INSERT/DELETE/REPLACE; null for SET_FULL_CONTENT/OPEN/CLOSE/DISCARD (structurally enforced below)."
+    },
+    "content": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The literal text this entry inserts/replaces-with, or the full buffer content for SET_FULL_CONTENT. Null for DELETE (nothing inserted) and for OPEN/CLOSE/DISCARD (no content payload). Non-null required for INSERT/REPLACE/SET_FULL_CONTENT (structurally enforced below)."
+    },
+    "recordedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this entry was recorded (FB-RAT-COM-004). `sequence`, not this field, is authoritative for ordering."
+    },
+    "originKind": {
+      "type": "string",
+      "enum": ["HUMAN", "AGENT"],
+      "description": "Which lane produced this edit (FB-RAT-WS-005 — a single unified journal covers both; this field is how the one stream stays legible about provenance, not a signal that a second write path exists)."
+    },
+    "originPrincipal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the specific human or agent principal that produced this entry (FB-RAT-COM-008 provenance minimum — initiating principal), e.g. a user id or an agent/run id."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "required": ["opType"], "properties": { "opType": { "enum": ["INSERT", "REPLACE", "SET_FULL_CONTENT"] } } },
+      "then": { "required": ["content"], "properties": { "content": { "type": "string" } } }
+    },
+    {
+      "if": { "required": ["opType"], "properties": { "opType": { "enum": ["DELETE", "OPEN", "CLOSE", "DISCARD"] } } },
+      "then": { "properties": { "content": { "type": "null" } } }
+    },
+    {
+      "if": { "required": ["opType"], "properties": { "opType": { "enum": ["INSERT", "DELETE", "REPLACE"] } } },
+      "then": { "required": ["byteRange"], "properties": { "byteRange": { "type": "object" } } }
+    },
+    {
+      "if": { "required": ["opType"], "properties": { "opType": { "enum": ["SET_FULL_CONTENT", "OPEN", "CLOSE", "DISCARD"] } } },
+      "then": { "properties": { "byteRange": { "type": "null" } } }
+    }
+  ],
+  "$defs": {
+    "ResourceUri": {
+      "type": "object",
+      "required": ["provider", "raw"],
+      "properties": {
+        "provider": { "type": "string", "enum": ["LOCAL", "SAF", "SSH", "SNAPSHOT", "VIRTUAL"] },
+        "raw": { "type": "string", "minLength": 1, "pattern": "^(local|saf|ssh|snapshot|virtual)://\\S+$" },
+        "displayPath": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "LOCAL" } } }, "then": { "properties": { "raw": { "pattern": "^local://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SAF" } } }, "then": { "properties": { "raw": { "pattern": "^saf://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SSH" } } }, "then": { "properties": { "raw": { "pattern": "^ssh://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SNAPSHOT" } } }, "then": { "properties": { "raw": { "pattern": "^snapshot://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "VIRTUAL" } } }, "then": { "properties": { "raw": { "pattern": "^virtual://\\S+$" } } } }
+      ]
+    }
+  }
+}

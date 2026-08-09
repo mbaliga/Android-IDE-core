@@ -1,0 +1,21 @@
+Schema validation: PASSES (this document is schema-valid against loop-fork-lineage.schema.json).
+
+Real rejection: `authorityDiffSinceFork.requiresFreshApproval: true` (per FB-RAT-IMP-008 /
+FB-RAT-LIN-005, this fork added `fb.repo.push_remote` at EXECUTE_EXTERNAL — a genuine authority
+widening relative to the parent) is present on a fork whose `publication` is ALSO populated, i.e.
+this fork has already been published. Nowhere in this document is there any field recording that
+the fresh-approval requirement was actually satisfied — no acknowledgement timestamp, no actor, no
+receipt reference tying a human's explicit approval to this specific widening before publication.
+LOOP_FORK_LINEAGE_CONTRACT.md §9 requires exactly this kind of finding be shown to, and explicitly
+acknowledged by, the fork owner "before any operation from that comparison may be applied" — and
+by extension before anything built on that operation (including publication) proceeds.
+
+Why the schema cannot catch this: `authorityDiffSinceFork` and `publication` are independent
+sibling fields with no allOf coupling requiring an approval record between them. This schema has no
+"authority-widening-acknowledged" field at all (unlike loop-semantic-diff.schema.json's
+BlockingReviewGroup.acknowledgedByUser/acknowledgedAtUtc, which DOES model exactly this for the
+broader upstream-comparison flow) — a gap specific to this document's narrower
+authorityDiffSinceFork field, flagged here rather than silently assumed safe. A future revision
+SHOULD add an equivalent acknowledgement pair to this schema's AuthorityDiff $def, or require
+`lastComparedAgainstUpstream`'s referenced loop-semantic-diff document's own BlockingReviewGroup to
+be resolved before `publication` may be set — not implemented in this freeze.

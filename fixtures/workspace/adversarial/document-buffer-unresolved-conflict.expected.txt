@@ -1,0 +1,32 @@
+Structural validation result: PASSES schemas/workspace/document-buffer.schema.json.
+This fixture is a legitimately well-formed CONFLICTED buffer — schema validation cannot flag it,
+because CONFLICTED is a normal, expected state in the DocumentBufferState machine
+(WORKSPACE_KERNEL_SPEC.md §4). The adversarial risk here is entirely in what a caller does NEXT
+with a structurally valid CONFLICTED buffer, which is outside what a JSON Schema can constrain.
+
+Required behavior from a real implementation (not just structural validation), per FB-RAT-WS-004
+("remote saves use source revisions, MUST NOT silently overwrite changed content") and FB-RAT-WS-005
+("human and agent edits share ONE transaction/journal/review/undo/conflict model"):
+  1. A save/write path that reaches a buffer whose `state` is CONFLICTED MUST NOT proceed
+     directly to WorkspaceProvider.write() with either the local or the remote content picked
+     automatically. It MUST first transition the buffer to MERGING (an explicit, visible step
+     in the same state machine — WORKSPACE_KERNEL_SPEC.md §4), and MERGING MUST require an
+     explicit resolution action (human or agent, through the SAME journal/review path per
+     FB-RAT-WS-005 — no silent auto-resolve branch, even for an agent-initiated edit) before
+     returning to OPEN_DIRTY and becoming savable again.
+  2. This applies identically whether the conflicting edit came from a human or an agent lane
+     (`BufferJournalEntry.originKind`) — FB-RAT-WS-005 forbids a second, hidden write path that
+     would let one lane "win" a conflict without going through the same review step the other
+     lane would need.
+  3. `conflictState.remoteSummary` exists specifically so this state has textual semantics
+     (FB-RAT-COM-009) independent of any conflict-marker color/icon a UI might also render —
+     a caller building an accessibility-conformant surface MUST be able to describe this
+     conflict to a user from `remoteSummary` alone.
+  4. Recommended ErrorEnvelope if a write is attempted against a CONFLICTED/MERGING buffer
+     without going through resolution first:
+       code: "WORKSPACE_BUFFER_WRITE_WHILE_CONFLICTED"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Resolve the conflict via the MERGING state before retrying the save."
+       userMessage: "This file has conflicting local and remote changes and cannot be saved until you resolve them."

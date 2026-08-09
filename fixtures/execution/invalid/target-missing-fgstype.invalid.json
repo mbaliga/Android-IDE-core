@@ -1,0 +1,14 @@
+{
+  "id": "01J8ZA0000000000000000TY",
+  "type": "LOCAL_ANDROID",
+  "displayName": "This phone",
+  "trust": "TRUSTED",
+  "hostFingerprint": null,
+  "arch": "arm64-v8a",
+  "capabilities": null,
+  "connectivity": { "kind": "ALWAYS_ON_LOCAL", "lastSeenReachableUtc": null },
+  "cost": { "tier": "FREE", "notes": null },
+  "provenanceStyle": "LOCAL_DEVICE_DIRECT",
+  "visibilityContract": null,
+  "unknownFields": {}
+}

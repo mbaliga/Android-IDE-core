@@ -1,0 +1,11 @@
+{
+  "transferChannel": "HTTPS_URL",
+  "expectedMediaType": "application/zip",
+  "expectedDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+    "byteLength": 20480
+  },
+  "initiatedByUser": false,
+  "sourceDescription": "Background sync fetched this automatically."
+}

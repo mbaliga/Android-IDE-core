@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0.0",
+  "summaryId": "summary-adv-0001",
+  "sourceRunRef": { "objectId": "run-adv-0001" },
+  "releaseIdentity": {
+    "loopId": "loop.demo.private-triage",
+    "semanticVersion": "0.3.1",
+    "packageContentDigest": { "algorithm": "SHA-256", "digestHex": "0e3be411b7079976d870e6810041b2191c2332416c398391b075e7be435b94fa", "byteLength": 2048 }
+  },
+  "engineVersion": "1.0.0",
+  "terminalState": "SUCCEEDED_VERIFIED",
+  "terminalReason": { "category": "ALL_REQUIRED_VERIFIERS_PASSED", "detail": "ok" },
+  "nodeStateSummary": {
+    "publishedLoop": true,
+    "totalNodeCount": 4,
+    "nodeOutcomeCounts": [ { "outcome": "SUCCEEDED", "count": 4 } ],
+    "nodeIds": ["triage-inbox-scan", "triage-sensitive-flag-check", "triage-escalate-to-oncall", "triage-write-summary"]
+  },
+  "durationSeconds": 12.0,
+  "retryCount": 0,
+  "aggregateCostUsd": 0.01,
+  "aggregateTokens": 900,
+  "localCloudRatio": { "computed": true, "ratioVersion": "fb-ratio-1", "localFraction": 1.0, "remoteFraction": 0.0, "ciFraction": 0.0 },
+  "capabilityCategories": ["workspace"],
+  "scanState": "SCANNED_CLEAN",
+  "verificationClaim": null,
+  "producedAtUtc": "2026-08-07T09:41:00Z"
+}

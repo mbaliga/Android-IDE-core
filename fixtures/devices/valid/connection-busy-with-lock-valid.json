@@ -1,0 +1,16 @@
+{
+  "connectionId": "conn-0045",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "state": "BUSY",
+  "stateReason": "Flash operation op-3001 in progress",
+  "enteredStateAtUtc": "2026-08-07T10:05:00Z",
+  "transportPath": "/dev/bus/usb/001/014",
+  "usbPermissionGranted": true,
+  "exclusiveLock": {
+    "lockId": "lock-9001",
+    "holderPrincipal": "agent-run:wp1-device-flash-3001",
+    "acquiredAtUtc": "2026-08-07T10:05:00Z",
+    "operationId": "op-3001"
+  },
+  "unknownFields": {}
+}

@@ -1,0 +1,14 @@
+Schema verdict: VALID against loop-package-manifest.schema.json.
+This schema only checks each packageInventory[].path for non-blank + <=255-byte shape; it does
+not (and per its own description deliberately does not) re-derive the full path-adversarial-class
+regex, because that is normative at the container level, not the manifest-shape level.
+
+Real rejection code: LOOP-PKG-003
+  "Path or canonicalization error at '../../etc/passwd': path traversal ('../' segment present)."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-PKG-003), which in turn
+  cites floop-container-format.v1.json pathRules.adversarialClasses_MUST_reject — "path traversal
+  ('../' anywhere in the raw or normalized name)" and "dotSegments: PROHIBITED — a normalized path
+  MUST NOT contain a '.' or '..' segment".
+
+Remediation: reject the package at import/build; a path traversal entry MUST NOT be silently
+stripped, renamed, or sandboxed — the whole archive is rejected.

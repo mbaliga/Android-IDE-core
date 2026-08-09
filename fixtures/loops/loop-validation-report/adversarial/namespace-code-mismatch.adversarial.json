@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportId": "validation-report-ns-mismatch",
+  "rulesetVersion": "fb-loop-validation-rules-1",
+  "semanticDigest": "sha256:be53e9697bd9fced158e244c414139fb588cb91af9c3a54930148129e54a362b",
+  "surfaceImplementation": {
+    "surface": "PHONE",
+    "name": "dev.aarso.full",
+    "version": "0.13.0"
+  },
+  "findings": [
+    {
+      "namespace": "LOOP-PKG",
+      "code": "LOOP-CAP-001",
+      "severity": "ERROR",
+      "objectType": "node",
+      "nodeId": "cloud-call",
+      "message": "Node 'cloud-call' requests capability 'fb.model.cloud_inference', which is unavailable on this target/flavor."
+    }
+  ],
+  "highestSeverity": "ERROR",
+  "createdAtUtc": "2026-08-01T10:00:03Z"
+}

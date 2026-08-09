@@ -1,0 +1,9 @@
+{
+  "comparisonId": "authdiff-adv-0002",
+  "generatedAtUtc": "2026-08-07T10:25:00Z",
+  "comparisonContext": "LINEAGE_COMPARISON",
+  "perCapability": [
+    { "capabilityId": "fb.device.flash", "before": "OBSERVE", "after": "EXECUTE_DESTRUCTIVE", "direction": "NARROWED" }
+  ],
+  "requiresFreshApproval": false
+}

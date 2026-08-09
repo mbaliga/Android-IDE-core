@@ -1,0 +1,17 @@
+Schema verdict: VALID against loop-installation.schema.json.
+This schema validates a single document in isolation — it has no prior version of the same
+installationId to diff `releaseIdentity.packageContentDigest` against, so it cannot itself detect
+an in-place rewrite. The `unknownFields` note and `priorPackageContentDigestHex` here are exactly
+the kind of out-of-band evidence a real store-layer diff would use to catch this.
+
+Real rejection code: LOOP-ID-002
+  "Attempted mutation of installed package bytes for release loop-fb-triage-inbox@1.0.0
+  (digest {packageDigest})."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-ID-002), which
+  docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §8 (FB-RAT-IMP-006) and this schema's own
+  top-level description both cite: "installed bytes are immutable once state reaches INSTALLED."
+  Reusing installationId `install-8f2c1a90` with a changed packageContentDigest after that
+  installation already reached INSTALLED is exactly the invariant LOOP-ID-002 exists to catch.
+
+Remediation: installed releases are immutable; the correct path is a forked local draft
+(a NEW installationId / lineage record), never an in-place rewrite of this document.

@@ -1,0 +1,13 @@
+{
+  "decisionId": "decision-0001-allow-repo-read",
+  "requestObjectId": "execreq-0001-repo-scan",
+  "requestingPrincipalId": "principal-loop-run-0482",
+  "requestedCapabilityId": "fb.repo.read",
+  "requestedResourceScope": { "kind": "REPOSITORY", "locator": "github.com/example-owner/android-ide-core" },
+  "matchedGrantId": "grant-repo-read-core-0001",
+  "outcome": "ALLOW",
+  "reasonCode": "AUTHORITY_GRANT_MATCH",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-01T02:00:05Z",
+  "evidenceLinks": ["grant-repo-read-core-0001"]
+}

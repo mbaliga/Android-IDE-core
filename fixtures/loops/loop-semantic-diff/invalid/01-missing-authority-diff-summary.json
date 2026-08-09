@@ -1,0 +1,11 @@
+{
+  "diffId": "diff-invalid-0001",
+  "sourceKind": "AI_PROPOSAL",
+  "generatedAtUtc": "2026-08-07T15:00:00Z",
+  "baseRevision": { "draftId": "draft-x", "draftRevisionNumber": 0 },
+  "semanticOperations": [],
+  "categorizedFindings": { "documentation": [], "schema": [], "node": [], "edge": [], "capability": [], "authority": [], "budget": [], "test": [], "compatibility": [] },
+  "licenseChange": { "changed": false },
+  "behaviorExplanation": "Missing authorityDiffSummary entirely — MUST fail required-field validation.",
+  "validationResult": { "status": "NOT_VALIDATED", "findings": [] }
+}

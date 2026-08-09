@@ -1,0 +1,29 @@
+{
+  "reviewId": "review-0001",
+  "releaseIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0",
+    "packageDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "byteLength": 190
+    }
+  },
+  "ratings": {
+    "usefulness": 5,
+    "reliability": 4,
+    "understandability": 5,
+    "efficiency": 4,
+    "safety": 5
+  },
+  "workedForMe": true,
+  "freeText": "Did exactly what it says on the tin; triaged 40 issues in under a minute on-device.",
+  "reviewerRef": {
+    "pseudonymousId": "gh:octo-reviewer-42",
+    "submissionRef": "https://github.com/fonebrew-registry/registry/pull/128"
+  },
+  "moderationState": "PUBLISHED",
+  "verifiedInstallRef": "receipt:activation-9f3c2a",
+  "verifiedRunRef": "receipt:shared-result-9f3c2a",
+  "createdAtUtc": "2026-07-20T10:00:00Z"
+}

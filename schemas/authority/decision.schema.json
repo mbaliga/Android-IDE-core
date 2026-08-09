@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/authority/decision.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. AuthorityDecisionRecord per FB-RAT-AUTH-001..007 (GRANT MODEL 'Decisions:' list — allow / deny / require confirmation / require stronger authority / allow with redaction or sandbox) and the constellation-wide invariant that policy decisions are deterministic, locally logged, and unit-tested against privilege-escalation fixtures. Typically carried as the `payload` of a ContractEnvelope<AuthorityDecisionRecord> (see schemas/common/envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc — `decisionId` below is this object's own FB-RAT-COM-002 stable ID. Decision records are append-only (FB-RAT-COM-006, same rule as any other event/receipt in this constellation): a later re-evaluation of the same request is a NEW record with a new `decisionId`, never an edit of this one.",
+  "title": "AuthorityDecisionRecord",
+  "description": "The evaluated outcome of one authority check: a principal requested one capability against one resource, and a policy engine decided ALLOW, DENY, REQUIRE_CONFIRMATION, REQUIRE_STRONGER_AUTHORITY, or ALLOW_WITH_REDACTION_OR_SANDBOX (the five variants also encoded as contracts/kotlin/AuthorityContracts.kt's `AuthorityDecision` sealed interface). This is the audit/log shape, not the policy engine itself — the engine's matching logic (walking Principal lineage, matching Grant.resourceScope/capabilityIds/expiresAtUtc, applying default-deny) is described in docs/ratified/CAPABILITY_AUTHORITY_MODEL.md and is not fully expressible as a JSON Schema structural constraint; this schema constrains the SHAPE of the resulting record and the small set of per-outcome field requirements that ARE structurally checkable.",
+  "type": "object",
+  "required": ["decisionId", "requestObjectId", "requestingPrincipalId", "requestedCapabilityId", "requestedResourceScope", "matchedGrantId", "outcome", "reasonCode", "policyVersion", "decidedAtUtc"],
+  "properties": {
+    "decisionId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this decision record (FB-RAT-COM-002). Append-only per FB-RAT-COM-006 — never mutated or reused after issue."
+    },
+    "requestObjectId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Back-reference to the objectId (FB-RAT-COM-002) of whatever operation/request this decision concerns — e.g. an ExecutionRequest.id (schemas/execution/request.schema.json), a git-history-rewrite operation id, a release-publish operation id. Deliberately generic across domains: any operation anywhere in the constellation that needs an authority check produces exactly one AuthorityDecisionRecord per check, referencing itself here."
+    },
+    "requestingPrincipalId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References a Principal.principalId (schemas/authority/principal.schema.json) — who/what asked."
+    },
+    "requestedCapabilityId": {
+      "type": "string",
+      "pattern": "^fb\\.[a-z0-9_]+(\\.[a-z0-9_]+)+$",
+      "description": "The single capability-ids.v1.json capability being requested for this check. An operation needing multiple capabilities produces multiple AuthorityDecisionRecords, one per capability — this keeps each record's outcome unambiguous (never 'partially allowed')."
+    },
+    "requestedResourceScope": {
+      "$ref": "#/$defs/ResourceScope",
+      "description": "The specific resource instance the request targets — typically narrower than (or equal to, never wider than) whatever Grant.resourceScope ultimately matched it, e.g. a single file path matching a Grant's wider FILE_GLOB pattern."
+    },
+    "matchedGrantId": {
+      "type": ["string", "null"],
+      "description": "The Grant.grantId (schemas/authority/grant.schema.json) this decision was evaluated against, or `null` when no grant matched at all (the FB-RAT-AUTH-003 default-deny path — see the if/then below requiring `reasonCode: AUTHORITY_DEFAULT_DENY` to be the only reasonCode paired with a null matchedGrantId.) Required non-null for ALLOW, REQUIRE_CONFIRMATION, and ALLOW_WITH_REDACTION_OR_SANDBOX (see the if/then below) — every outcome that grants some authority, even conditionally, MUST cite the grant it derived that authority from (FB-RAT-COM-012 'no contract bypass' applied to this domain)."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["ALLOW", "DENY", "REQUIRE_CONFIRMATION", "REQUIRE_STRONGER_AUTHORITY", "ALLOW_WITH_REDACTION_OR_SANDBOX"],
+      "description": "The GRANT MODEL's five decision variants, verbatim. Mirrors contracts/kotlin/AuthorityContracts.kt's `AuthorityDecision` sealed interface 1:1 — an exhaustive `when` over that sealed interface is the compile-time guarantee every variant here has runtime handling."
+    },
+    "reasonCode": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$",
+      "description": "Stable machine-readable reason code (same SCREAMING_SNAKE convention as ErrorEnvelope.code, schemas/common/error.schema.json) — stable across releases, never reused for a different meaning once retired. This contract version's initial vocabulary (open, not a closed enum, same rationale as ErrorEnvelope.code): AUTHORITY_DEFAULT_DENY (FB-RAT-AUTH-003, no grant matched), AUTHORITY_GRANT_MATCH (an ALLOW backed by an exact grant match), AUTHORITY_CHILD_EXCEEDS_PARENT (FB-RAT-AUTH-004, requesting principal's lineage never held sufficient rung), AUTHORITY_TRANSITIVE_DELEGATION_REJECTED (FB-RAT-AUTH-007), AUTHORITY_PURPOSE_MISMATCH (FB-RAT-AUTH-005, purpose-bound grant used outside its declared purpose), AUTHORITY_TARGET_MISMATCH (FB-RAT-AUTH-005, resourceScope does not cover the requested resource), AUTHORITY_GRANT_EXPIRED (FB-RAT-AUTH-005, `expiresAtUtc` has passed), AUTHORITY_GRANT_REVOKED, AUTHORITY_PRINCIPAL_NOT_ACTIVE (Principal.status is not ACTIVE), AUTHORITY_RUNG_INSUFFICIENT (paired with REQUIRE_STRONGER_AUTHORITY), AUTHORITY_CONFIRMATION_REQUIRED (paired with REQUIRE_CONFIRMATION), AUTHORITY_REDACTION_OR_SANDBOX_APPLIED (paired with ALLOW_WITH_REDACTION_OR_SANDBOX)."
+    },
+    "requiredRung": {
+      "oneOf": [ { "$ref": "#/$defs/AuthorityRung" }, { "type": "null" } ],
+      "default": null,
+      "description": "Required non-null only when `outcome` is REQUIRE_STRONGER_AUTHORITY (see the if/then below) — the rung the requester would need to hold for this decision to become ALLOW."
+    },
+    "confirmationPromptRef": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Required non-null (and non-blank) only when `outcome` is REQUIRE_CONFIRMATION (see the if/then below) — a pointer to what MUST be shown to the user before this action proceeds (e.g. a UI copy key, or a short description string). FB-RAT-COM-009 accessibility: whatever this resolves to at render time MUST carry text semantics, not rely on color/icon/haptic/position alone, same rule as ErrorEnvelope.userMessage."
+    },
+    "redactionOrSandbox": {
+      "oneOf": [ { "$ref": "#/$defs/RedactionOrSandboxDetail" }, { "type": "null" } ],
+      "default": null,
+      "description": "Required non-null only when `outcome` is ALLOW_WITH_REDACTION_OR_SANDBOX (see the if/then below) — which of the two mitigations was applied and a human-readable detail of what, specifically."
+    },
+    "policyVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of the authority policy/ruleset this decision was evaluated under (same spirit as schemas/loops/registries/loop-validation-rules.v1.json's `rulesetVersion` — 'a validation report MUST include this rulesetVersion... so decisions remain reproducible/auditable'). Required so 'policy decisions are deterministic' is checkable after the fact: re-running the same request against the same `policyVersion` MUST yield the same outcome."
+    },
+    "decidedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this decision was made (FB-RAT-COM-004)."
+    },
+    "evidenceLinks": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": [],
+      "description": "FB-RAT-COM-008 provenance evidence links — e.g. the Principal lineage chain (list of principalId) actually walked, or a reference to the specific Grant fields compared. Optional because a simple ALLOW/DENY on an exact single-grant match may need no more evidence than `matchedGrantId` itself already carries."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "outcome": { "const": "REQUIRE_STRONGER_AUTHORITY" } }, "required": ["outcome"] },
+      "then": { "required": ["requiredRung"], "properties": { "requiredRung": { "$ref": "#/$defs/AuthorityRung" } } } },
+    { "if": { "properties": { "outcome": { "const": "REQUIRE_CONFIRMATION" } }, "required": ["outcome"] },
+      "then": { "required": ["confirmationPromptRef"], "properties": { "confirmationPromptRef": { "type": "string", "minLength": 1 } } } },
+    { "if": { "properties": { "outcome": { "const": "ALLOW_WITH_REDACTION_OR_SANDBOX" } }, "required": ["outcome"] },
+      "then": { "required": ["redactionOrSandbox"], "properties": { "redactionOrSandbox": { "$ref": "#/$defs/RedactionOrSandboxDetail" } } } },
+    { "if": { "properties": { "outcome": { "enum": ["ALLOW", "REQUIRE_CONFIRMATION", "ALLOW_WITH_REDACTION_OR_SANDBOX"] } }, "required": ["outcome"] },
+      "then": { "required": ["matchedGrantId"], "properties": { "matchedGrantId": { "type": "string", "minLength": 1 } } } },
+    { "if": {
+        "properties": { "outcome": { "const": "DENY" }, "reasonCode": { "const": "AUTHORITY_DEFAULT_DENY" } },
+        "required": ["outcome", "reasonCode"]
+      },
+      "then": { "properties": { "matchedGrantId": { "const": null } } } }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "AuthorityRung": {
+      "type": "string",
+      "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE"],
+      "description": "Duplicated from schemas/authority/grant.schema.json's $defs/AuthorityRung per this repo's established convention of duplicating small shared sub-shapes across schema files in the same domain (see docs/ratified/COMMON_CONVENTIONS.md §5) — both copies MUST be kept in sync if this ladder changes."
+    },
+    "ResourceScope": {
+      "type": "object",
+      "required": ["kind", "locator"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["WORKSPACE_ROOT", "FILE_GLOB", "REPOSITORY", "EXECUTION_TARGET", "NETWORK_DOMAIN", "SECRET", "DEVICE", "RELEASE", "STORE_CHANNEL"],
+          "description": "Duplicated from schemas/authority/grant.schema.json's $defs/ResourceScope (see docs/ratified/COMMON_CONVENTIONS.md §5); both copies MUST be kept in sync."
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kind-specific identifier — see schemas/authority/grant.schema.json's $defs/ResourceScope.locator for the full per-kind description. Here it identifies the SPECIFIC resource instance the request targeted, not a pattern (a decision is always about one concrete instance, even when the matched Grant's own resourceScope.locator was a pattern like a FILE_GLOB)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "RedactionOrSandboxDetail": {
+      "type": "object",
+      "required": ["mode", "detail"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["REDACTION", "SANDBOX"],
+          "description": "REDACTION: the action proceeds but sensitive content is stripped/masked first (e.g. a log excerpt with a secret pattern redacted before it leaves the device — see fixtures/execution/adversarial/receipt-secret-leak-in-log-excerpt for the sibling pattern this mitigates). SANDBOX: the action proceeds inside an isolated/bounded execution context that limits its effective authority regardless of what it attempts (e.g. an imported companion artifact's first activation run)."
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable specifics of what was redacted or how the sandbox was bounded — never itself contains the redacted secret/content (same MUST-NOT-contain-secrets rule as ErrorEnvelope.detail, schemas/common/error.schema.json)."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

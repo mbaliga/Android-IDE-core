@@ -1,0 +1,39 @@
+Structural validation result: PASSES schemas/integrations/import-preview.v1.schema.json.
+`sourceDigest.digestHex` is only constrained to be 64 lowercase-hex characters when
+algorithm=="SHA-256" (structurally satisfied here) — JSON Schema has no way to know whether
+that hex string is the ACTUAL digest of the bytes at `sourceLocation`. This fixture is
+adversarial at the semantic layer only.
+
+MUST BE REJECTED BY A REAL IMPLEMENTATION — this fixture is a negative example, not a template.
+
+Ground truth (computed directly, via Bash + Python hashlib, against the referenced fixture
+file as it exists in this repo at the time this fixture was authored):
+  sha256(fixtures/integrations/valid/issues-manifest-baseline-valid.json) =
+    4b347ff1c46febb6bac513fcb5b9976f94013bd0ca8ff0416d6809018c248086
+  byteLength = 1084
+
+This fixture's claimed `sourceDigest.digestHex` (repeating zeroes ending in "...ff") does NOT
+match the real digest above, despite declaring the SAME byteLength (1084) and pointing at the
+SAME sourceLocation — a byte-length match with a digest mismatch is exactly the case a naive
+"just compare sizes" shortcut would miss.
+
+Required behavior from a real implementation (not just structural validation):
+  1. Before trusting ANY content read from `sourceLocation` (issue list, project match, or
+     anything else derived from the bytes), a reader MUST independently recompute the digest
+     of the exact bytes it read and compare it byte-for-byte against `sourceDigest.digestHex`.
+  2. A mismatch is IMPORT_DIGEST_MISMATCH (docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md's error
+     taxonomy): Block file; mark source integrity failure. The preview/receipt pipeline MUST
+     NOT proceed to compute newRecords/changedRecords/etc. from content whose digest does not
+     match what was claimed — the entire Validate step (grammar step 3) fails closed.
+  3. Recommended ErrorEnvelope (schemas/common/error.schema.json):
+       code: "IMPORT_DIGEST_MISMATCH"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Re-export or re-fetch the source and retry; do not proceed with the
+         previously computed digest."
+       userMessage: "This source file's contents don't match what was expected. It was not
+         imported."
+  4. This check MUST happen before Preview is computed at all (Validate precedes Preview in
+     the six-step grammar, INT-011) — a preview built from unverified bytes is itself
+     untrustworthy, not just its eventual receipt.

@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/execution/request.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionRequest per FB-RAT-EXE-001. Typically carried as the `payload` of a ContractEnvelope<ExecutionRequest> (see schemas/common/envelope.schema.json). `id` is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId.",
+  "title": "ExecutionRequest",
+  "description": "A request to run a typed operation against a specific ExecutionTarget (by id — not embedded, see schemas/execution/target.schema.json). Structurally operationalizes: FB-RAT-EXE-007 (secret handles, never raw values), FB-RAT-EXE-008 (external idempotency key + duplicate behavior declared before execution), FB-RAT-COM-012 (no contract bypass — `authorityGrant` is required, never optional, so a request cannot skip the authority seam), and the platform-grounding MUST-rule that an open-ended operation class MUST NOT declare fgsType DATA_SYNC or MEDIA_PROCESSING (Service.onTimeout() would kill it mid-work with no extension).",
+  "type": "object",
+  "required": [
+    "id", "targetId", "operation", "workingRevision", "environment", "secretHandles",
+    "budget", "authorityGrant", "expectedOutputs", "idempotencyKey", "sideEffectExternal",
+    "fgsType", "openEnded"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this request (FB-RAT-COM-002)."
+    },
+    "targetId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References an ExecutionTarget.id (schemas/execution/target.schema.json). Not embedded — a request outlives the exact target snapshot it was issued against; ExecutionReceipt.targetSnapshot is where a point-in-time copy lives."
+    },
+    "operation": {
+      "type": "object",
+      "required": ["operationClass", "command"],
+      "properties": {
+        "operationClass": {
+          "type": "string",
+          "enum": ["ONE_SHOT_COMMAND", "BUILD", "AGENT_LOOP", "TERMINAL_SESSION", "DEVICE_FLASH", "FILE_TRANSFER", "CI_DISPATCH", "CUSTOM"],
+          "description": "Coarse operation shape. This field is descriptive/routing only — it is NOT what the MUST-level fgsType rule below keys off of (that is `openEnded`, declared explicitly by the caller) — because whether a given BUILD or CUSTOM operation is open-ended is provider- and workload-specific, not implied by class alone."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The command/entrypoint to run, in whatever form the target's provider expects (a shell command line for SSH_HOST/RASPBERRY_PI/LOCAL_ANDROID; a workflow file ref for GITHUB_ACTIONS/GITEA_ACTIONS)."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Positional/flag arguments, kept separate from `command` so a provider can shell-escape them correctly rather than string-concatenating."
+        },
+        "workingDirectory": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Working directory on the target, or null to use the provider's default (e.g. the checked-out repo root)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "workingRevision": {
+      "type": ["string", "null"],
+      "description": "Git commit SHA, branch, or tag the operation runs against (FB-RAT-STR-004 revision visibility). Null only for operations with no git-scoped working tree (e.g. a bare device-flash or a connectivity probe)."
+    },
+    "environment": {
+      "type": "object",
+      "required": ["envVars"],
+      "properties": {
+        "envVars": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "default": {},
+          "description": "Non-secret environment variables only. FB-RAT-EXE-007 and the binding API-key rule (CLAUDE.md rule 5, 'never logged, never sent anywhere except the provider they belong to') require any secret-bearing value to be referenced through `secretHandles` instead — this map has no field capable of carrying a raw secret value by design, only named non-secret key/value pairs. A producer populating this map with a credential-shaped value is a binding-rule violation the schema cannot catch structurally (JSON Schema has no way to know a string is a live API key) — see fixtures/execution/adversarial/request-secret-value-in-envvars.adversarial.json."
+        }
+      },
+      "additionalProperties": true
+    },
+    "secretHandles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["handleId", "purpose"],
+        "properties": {
+          "handleId": { "type": "string", "minLength": 1, "description": "Opaque reference into the Android-Keystore-backed secret store (security/KeystoreSecret.kt) — never the secret value itself (FB-RAT-EXE-007)." },
+          "purpose": { "type": "string", "minLength": 1, "description": "What this secret is for, e.g. 'github.pat', 'anthropic.api_key' — purpose-bound, so a provider cannot silently repurpose a handle issued for one destination to authenticate to a different one." }
+        },
+        "additionalProperties": true
+      },
+      "default": [],
+      "description": "FB-RAT-EXE-007: purpose-bound secret handles this request needs resolved at execution time. This array structurally cannot carry a secret VALUE — there is no `value`/`secret`/`token` field in the handle shape, only `handleId` + `purpose` — by construction, not by convention alone."
+    },
+    "budget": {
+      "type": "object",
+      "required": ["sessionReauthorization", "thermalStateObservabilityRequired"],
+      "properties": {
+        "wallClockSeconds": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "default": null,
+          "description": "Wall-clock budget for the whole operation, or null for provider-default. A provider MUST refuse to start an `openEnded: true` request that also has `wallClockSeconds: null` AND `fgsType` in {DATA_SYNC, MEDIA_PROCESSING} — structurally impossible here since that fgsType/openEnded combination is already rejected by the top-level if/then below regardless of wallClockSeconds; this field exists for the remaining cases (SPECIAL_USE, CONNECTED_DEVICE, NONE) where a bound is still good practice but not structurally forced."
+        },
+        "maxOutputBytes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null,
+          "description": "Cap on captured stdout/stderr/log bytes, or null for provider-default."
+        },
+        "sessionReauthorization": {
+          "type": "object",
+          "required": ["maxSessionSeconds", "requiresUserReauth"],
+          "properties": {
+            "maxSessionSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Bounded session length after which the provider MUST require a fresh explicit user re-authorization before continuing (platform-grounding requirement — open-ended agent loops/terminals do not get an indefinite grant just because the operation itself has no natural end)."
+            },
+            "requiresUserReauth": {
+              "type": "boolean",
+              "description": "Whether reaching maxSessionSeconds requires an explicit user action to continue (true) or the provider is allowed to auto-renew within the same authorityGrant scope (false — only valid when the authorityGrant itself was issued with an explicit multi-session allowance)."
+            }
+          },
+          "additionalProperties": true
+        },
+        "thermalStateObservabilityRequired": {
+          "type": "boolean",
+          "default": true,
+          "description": "FB-RAT-EXE-006, P0-normative half: the provider MUST be able to report thermal state for the duration of this request. This is the normative half of EXE-006. Defaults to true; a provider incapable of thermal observability MUST NOT accept a request with this field true (schema cannot enforce that acceptance-time refusal itself — see docs/ratified/EXECUTION_CONTRACT.md §5)."
+        },
+        "thermalPausePolicyRef": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "EXPERIMENTAL, not ratified — FB-RAT-EXE-006's pause/offload POLICY half. Optional pointer into docs/non_ratified/EXPERIMENTAL_DECISIONS.md's thermal-policy entry (owned by a separate agent/session). Null means no thermal pause/offload policy is in effect for this request; that is the only ratified default. A non-null value here MUST NOT be treated as binding — only as an experimental hint."
+        }
+      },
+      "additionalProperties": true
+    },
+    "authorityGrant": {
+      "type": "object",
+      "required": ["grantId", "scopes"],
+      "properties": {
+        "grantId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to a grant issued by the Execution Contract + Authority engine (WP-0 survey (c) — a separate, create-new domain not detailed by this file's object model). This is the minimal reference shape the execution domain needs to refuse to model requests outside the authority seam (FB-RAT-COM-012 'no contract bypass' — anything that skips authority is a prototype, not architecture); the full grant/capability-ladder shape belongs to that other domain and is not invented here."
+        },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "description": "Operation scopes this grant authorizes, matching vocabulary from the target's CapabilityManifest.supportedOperations where applicable."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Required and non-null on every ExecutionRequest (FB-RAT-COM-012) — there is no shape of this contract that omits an authority grant reference."
+    },
+    "expectedOutputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "mediaType"],
+        "properties": {
+          "role": { "type": "string", "minLength": 1, "description": "What this expected output is for, e.g. 'build-artifact', 'log-bundle', 'flash-verify-report'." },
+          "mediaType": { "type": "string", "pattern": "^[\\w.+-]+/[\\w.+-]+$" }
+        },
+        "additionalProperties": true
+      },
+      "default": [],
+      "description": "Lightweight descriptors of outputs this request expects to produce — not full ArtifactRef entries (schemas/common/artifact-ref.schema.json), because the actual artifacts do not exist yet at request time. ExecutionReceipt.outputs is where realized ArtifactRefs (reused from common, not redefined) appear."
+    },
+    "idempotencyKey": {
+      "type": ["string", "null"],
+      "description": "FB-RAT-COM-006 / FB-RAT-EXE-008: caller-supplied de-duplication key. Required non-null (see the if/then below) whenever `sideEffectExternal` is true — an external side effect (CI dispatch, device flash, git push) MUST declare its idempotency key and duplicate behavior BEFORE execution, not after the fact."
+    },
+    "sideEffectExternal": {
+      "type": "boolean",
+      "description": "True when this operation causes a side effect outside the immediate execution process/session — e.g. dispatching a CI workflow, flashing a device, pushing to a git host. Drives the FB-RAT-EXE-008 if/then below."
+    },
+    "externalDuplicateBehavior": {
+      "type": ["string", "null"],
+      "enum": ["IGNORE_DUPLICATE", "RETURN_PRIOR_RESULT", "REJECT_DUPLICATE", null],
+      "default": null,
+      "description": "FB-RAT-EXE-008: what a provider MUST do when it observes a retried request carrying an idempotencyKey it has already seen. Required non-null whenever `sideEffectExternal` is true."
+    },
+    "fgsType": {
+      "$ref": "#/$defs/FgsType"
+    },
+    "openEnded": {
+      "type": "boolean",
+      "description": "True for work with no natural bounded end declared up front — agent loops, interactive terminal sessions, long-running builds without a caller-supplied wallClockSeconds. Drives the platform-grounding MUST-rule below: an `openEnded: true` request MUST NOT declare `fgsType` DATA_SYNC or MEDIA_PROCESSING, because both carry a hard 6h/rolling-24h ceiling with no extension (Service.onTimeout()) that open-ended work cannot honor safely."
+    },
+    "specialUseJustification": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Required non-null (and non-empty) when `fgsType` is SPECIAL_USE — the manifest justification string Play review requires for a specialUse foreground service. Null for every other fgsType."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "openEnded": { "const": true } },
+        "required": ["openEnded"]
+      },
+      "then": {
+        "properties": {
+          "fgsType": { "not": { "enum": ["DATA_SYNC", "MEDIA_PROCESSING"] } }
+        }
+      },
+      "$comment": "Structural enforcement of the platform-grounding MUST-rule: an operation class targeting open-ended work MUST NOT declare fgsType DATA_SYNC or MEDIA_PROCESSING. See fixtures/execution/invalid/request-open-ended-datasync-rejected.invalid.json."
+    },
+    {
+      "if": {
+        "properties": { "sideEffectExternal": { "const": true } },
+        "required": ["sideEffectExternal"]
+      },
+      "then": {
+        "required": ["idempotencyKey", "externalDuplicateBehavior"],
+        "properties": {
+          "idempotencyKey": { "type": "string", "minLength": 1 },
+          "externalDuplicateBehavior": { "type": "string", "enum": ["IGNORE_DUPLICATE", "RETURN_PRIOR_RESULT", "REJECT_DUPLICATE"] }
+        }
+      },
+      "$comment": "FB-RAT-EXE-008: external ops MUST declare idempotency key + duplicate behavior before execution."
+    },
+    {
+      "if": {
+        "properties": { "fgsType": { "const": "SPECIAL_USE" } },
+        "required": ["fgsType"]
+      },
+      "then": {
+        "required": ["specialUseJustification"],
+        "properties": {
+          "specialUseJustification": { "type": "string", "minLength": 1 }
+        }
+      },
+      "$comment": "SPECIAL_USE FGS requires a manifest justification string (platform grounding)."
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "FgsType": {
+      "type": "string",
+      "enum": ["DATA_SYNC", "MEDIA_PROCESSING", "SPECIAL_USE", "CONNECTED_DEVICE", "NONE"],
+      "description": "Duplicated from schemas/execution/target.schema.json's $defs/FgsType per this repo's established convention of duplicating small shared sub-shapes across schema files rather than reaching into another document's $defs (see docs/ratified/COMMON_CONVENTIONS.md §5) — both copies MUST be kept in sync if this vocabulary changes."
+    }
+  }
+}

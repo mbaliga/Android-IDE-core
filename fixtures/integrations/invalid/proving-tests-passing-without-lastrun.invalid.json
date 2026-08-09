@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "runId": "01J9E0000000000000000RN1",
+  "generatedAt": "2026-08-06T02:14:00Z",
+  "tests": [
+    {
+      "testId": "01J9F0000000000000000PT9",
+      "targetFindingRef": "findings.sarif#/runs/0/results/9",
+      "testKind": "UNIT",
+      "sourcePath": "tests/proving/test_bad.py",
+      "status": "PASSING",
+      "lastRunAtUtc": null
+    }
+  ],
+  "unknownFields": {}
+}

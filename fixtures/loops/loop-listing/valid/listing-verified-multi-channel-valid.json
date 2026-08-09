@@ -1,0 +1,44 @@
+{
+  "listingId": "listing-fb-release-notes-drafter",
+  "referencedReleases": [
+    {
+      "loopId": "loop-fb-release-notes-drafter",
+      "semanticVersion": "2.3.1",
+      "packageDigest": {
+        "algorithm": "SHA-256",
+        "digestHex": "1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d",
+        "byteLength": 310
+      },
+      "channel": "stable",
+      "recommended": true
+    },
+    {
+      "loopId": "loop-fb-release-notes-drafter",
+      "semanticVersion": "2.4.0-rc.1",
+      "packageDigest": {
+        "algorithm": "SHA-256",
+        "digestHex": "2b3c4d5e2b3c4d5e2b3c4d5e2b3c4d5e2b3c4d5e2b3c4d5e2b3c4d5e2b3c4d5e",
+        "byteLength": 320
+      },
+      "channel": "prerelease",
+      "recommended": true
+    }
+  ],
+  "displayName": "Release Notes Drafter",
+  "description": "Drafts release notes from commit history since the last tag.",
+  "category": "productivity",
+  "compatibilityDeclaration": {
+    "verified": true,
+    "declaredAxes": {
+      "platformDistribution": "full",
+      "device": "arm64-v8a phone"
+    },
+    "engineVersionRange": ">=1.0.0 <2.0.0",
+    "evidenceRefs": [
+      "fixture:loop-fb-release-notes-drafter@2.3.1#golden-run-001",
+      "receipt:shared-result-9f3c2a"
+    ]
+  },
+  "lastUpdatedUtc": "2026-07-25T14:00:00Z",
+  "publisherKeyFingerprint": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e"
+}

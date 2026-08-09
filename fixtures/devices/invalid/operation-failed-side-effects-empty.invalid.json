@@ -1,0 +1,52 @@
+{
+  "operationId": "op-3013",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0045",
+  "operationKind": "FLASH",
+  "artifactId": "fw-arduino-uno-blink-v3",
+  "preconditions": {
+    "identityConfidenceAtLeast": "PROBABLE",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9013",
+    "destructiveActionExplicitlyAuthorized": true,
+    "authorizedPrincipal": "user:owner",
+    "authorizedAtUtc": "2026-08-07T10:24:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 55,
+    "sideEffectsPossible": true
+  },
+  "state": "FAILED_SIDE_EFFECTS_POSSIBLE",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": {
+    "finishedAtUtc": "2026-08-07T10:24:30Z",
+    "exitState": "FAILED_SIDE_EFFECTS_POSSIBLE",
+    "sideEffects": [],
+    "errorEnvelope": {
+      "code": "DEVICE_FLASH_DISCONNECTED_MID_WRITE",
+      "severity": "CRITICAL",
+      "retryable": false,
+      "sideEffectState": "PARTIAL",
+      "detail": "USB device dropped at 55% of transfer during erase/write phase; no read-back was possible before disconnect.",
+      "recoveryAction": "Reconnect the device and read back its current flash contents before attempting another flash.",
+      "userMessage": "The device disconnected while flashing. It may be left in a partially-written state — reconnect it before trying again.",
+      "objectId": null,
+      "unknownFields": {}
+    },
+    "snapshotAfterId": null
+  },
+  "unknownFields": {}
+}

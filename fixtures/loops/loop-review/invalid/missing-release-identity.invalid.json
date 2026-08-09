@@ -1,0 +1,17 @@
+{
+  "reviewId": "review-0003",
+  "ratings": {
+    "usefulness": 4,
+    "reliability": 4,
+    "understandability": 4,
+    "efficiency": 4,
+    "safety": 4
+  },
+  "workedForMe": true,
+  "freeText": "Good loop.",
+  "reviewerRef": {
+    "pseudonymousId": "gh:reviewer-x"
+  },
+  "moderationState": "PUBLISHED",
+  "createdAtUtc": "2026-07-22T09:00:00Z"
+}

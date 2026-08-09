@@ -1,0 +1,25 @@
+{
+  "manifestId": "cap-play-dist-0001",
+  "subjectKind": "EXTENSION",
+  "subjectId": "dev.aarso (play flavor)",
+  "supportedOperations": [
+    "distribution.downloadAndExecuteNativeCode",
+    "execution.oneShotCommand"
+  ],
+  "limits": {},
+  "versions": {
+    "subjectVersion": "0.13.0",
+    "protocolVersion": null
+  },
+  "targetRequirements": {
+    "distributionFlavor": "play",
+    "abi": "arm64-v8a"
+  },
+  "producer": {
+    "name": "core-engine.distribution.play",
+    "version": "0.13.0",
+    "instanceId": null
+  },
+  "issuedAtUtc": "2026-08-07T09:00:00Z",
+  "unknownFields": {}
+}

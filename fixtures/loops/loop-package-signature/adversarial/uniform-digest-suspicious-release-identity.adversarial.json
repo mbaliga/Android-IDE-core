@@ -1,0 +1,19 @@
+{
+  "signatureAlgorithm": "Ed25519",
+  "publisherKeyFingerprint": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+  "signedDigest": "MEUCIQDx7Y8k3f9v0y2ZxG6h8QeR1sT4uW7vB2cD5eF9gH1jKgIgY3nM6oP0qR8sT1uV3wX5yZ7aB9cD1eF3gH5jK7mN9pR1s==",
+  "releaseIdentity": {
+    "loopId": "loop-fb-release-notes-drafter",
+    "semanticVersion": "2.3.1",
+    "packageContentDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "byteLength": 310
+    }
+  },
+  "canonicalizationVersion": "fb-loop-canon-1",
+  "releaseChannel": "MARKETPLACE",
+  "signedAtUtc": "2026-07-30T11:00:00Z",
+  "keyProvenance": "PHONE_KEYSTORE",
+  "softKeyScope": null
+}

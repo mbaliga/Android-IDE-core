@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-run-summary.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopRunSummary is the CLEAR MIDDLE STAGE between the full local loop-run.schema.json record and the final loop-result-share.schema.json shared artifact — not a third, independent shape. It is what LOOP_RESULT_SHARING_CONTRACT.md §3's share-flow state machine produces at ALLOWLISTED_SUMMARY_BUILT / UNAPPROVED_FIELDS_REMOVED / SECRET_SCANNED / EVIDENCE_NORMALIZED_HASHED: already a STRICT SUBSET of loop-run.schema.json's fields (every default-excluded category — prompts, responses, repo/file identities, file contents, credentials, hostnames, device IDs, terminal logs, artifacts, user identity — is already gone, same as the final artifact), but STILL UNBUCKETED (duration/retry/token/cost fields remain raw numbers here; bucketing per the coarse-bucketing requirement happens only at the loop-result-share step, §4). It has not yet been previewed, consented to, or signed — verificationClaim is nullable here for exactly that reason (signing happens at RECEIPT_SIGNED, after this object already exists). A LoopRunSummary MUST NOT itself be uploaded — only a LoopResultShare built from one, after PREVIEWED and CONSENT_OBTAINED, may leave the phone (§1, §2, §3).",
+  "title": "LoopRunSummary",
+  "description": "The redacted-but-still-local, still-unbucketed intermediate stage between a complete LoopRun (loop-run.schema.json) and a finalized, bucketed LoopResultShare (loop-result-share.schema.json). Built only from a completed or terminal LoopRun (FB-RAT-RES-001) — `terminalState` below is therefore the closed 8-value terminal vocabulary, never one of RunState's 9 non-terminal values; there is no representable non-terminal LoopRunSummary. Same default-excluded denylist as loop-result-share.schema.json (FB-RAT-RES-003) — prompts, responses, repository/file/branch/symbol identities, source code and diffs, file contents or paths, raw logs and terminal output, credentials/aliases/tokens/keys/hostnames, IP/MAC/device-serial/USB identity, generated artifacts, user identity unless explicitly attached, and private comments/human decisions MUST NOT appear anywhere in this schema at all — their absence IS the contract (`additionalProperties: false` below, a deliberate deviation from this corpus's usual `additionalProperties: true` + `unknownFields`-bag convention, chosen specifically because an allowlist-first, denylist-enforced object's whole point is that nothing outside the allowlist can validate).",
+  "type": "object",
+  "required": [
+    "schemaVersion", "summaryId", "sourceRunRef", "releaseIdentity", "engineVersion",
+    "terminalState", "terminalReason", "nodeStateSummary", "durationSeconds", "retryCount",
+    "aggregateCostUsd", "aggregateTokens", "localCloudRatio", "capabilityCategories",
+    "producedAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "summaryId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable ID for this summary instance (FB-RAT-COM-002)."
+    },
+    "sourceRunRef": {
+      "$ref": "#/$defs/DurableObjectRef",
+      "description": "Local-only pointer back to the full loop-run.schema.json record's runId this summary was built from. This reference itself MUST NOT be carried forward into loop-result-share.schema.json — a shared result never discloses which local run produced it beyond the release/engine/terminal facts the allowlist already permits (§5)."
+    },
+    "releaseIdentity": {
+      "$ref": "#/$defs/ReleaseIdentity",
+      "description": "loopId, semanticVersion, packageContentDigest (LOOP_PACKAGE_SPEC.md §2, §4) — exact identity is safe and required (§4: 'loop ID, release version, and package digest')."
+    },
+    "engineVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "capability-ids.v1.json's engineVersion — the loop contract/engine surface version (§4)."
+    },
+    "terminalState": {
+      "$ref": "#/$defs/TerminalRunState",
+      "description": "Exactly one of loop-run.schema.json RunState's 8 terminal values — never a non-terminal state, and never a free-text reason (§4). A LoopRunSummary for a non-terminal run is not representable by this schema."
+    },
+    "terminalReason": {
+      "$ref": "#/$defs/TerminalReason",
+      "description": "Same shape as loop-run.schema.json's TerminalReason — category + detail. Carried forward here unbucketed (the category enum is already coarse by construction; `detail` remains local-diagnostic free text and — unlike category — MUST NOT survive into loop-result-share.schema.json, which carries only a fixed-vocabulary terminalReasonCategory, no free-text detail)."
+    },
+    "nodeStateSummary": {
+      "$ref": "#/$defs/NodeStateSummary",
+      "description": "§4: node-state counts and stable public node IDs 'where permitted' — read as: node IDs disclosed only when the loop being reported on has itself been publicly published (`publishedLoop`). Per-node counts remain RAW integers at this stage (bucketing is a loop-result-share-step concern, §4's coarse-bucketing requirement)."
+    },
+    "durationSeconds": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Raw run duration. MUST be bucketed before this document's data may be carried into loop-result-share.schema.json's durationBucket (§4 coarse-bucketing requirement) — kept raw HERE because this document is explicitly the pre-bucketing stage."
+    },
+    "retryCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Raw total retry count across all node attempts. Bucketed only at the loop-result-share step."
+    },
+    "aggregateCostUsd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Raw aggregate monetary cost. Bucketed only at the loop-result-share step."
+    },
+    "aggregateTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Raw aggregate model token count. Bucketed only at the loop-result-share step."
+    },
+    "localCloudRatio": {
+      "$ref": "#/$defs/LocalCloudRatio",
+      "description": "§8: computed from coarse execution-target-type categories, never host identity. Not a 'bucketed' field in §4's sense (§4 names only duration/retry/per-node-count/token-cost fields as requiring bucketing) — same shape here and in loop-result-share.schema.json."
+    },
+    "capabilityCategories": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/CapabilityCategory" },
+      "description": "The coarse 8-value capability-ids.v1.json `category` enum only — never a specific reverse-DNS capability ID (§4)."
+    },
+    "scanState": {
+      "type": "string",
+      "enum": ["NOT_YET_SCANNED", "SCANNED_CLEAN", "SCANNED_FINDINGS_REDACTED"],
+      "default": "NOT_YET_SCANNED",
+      "description": "Where this instance sits relative to §3's SECRET_SCANNED transition — informative only, documenting this object's own middle-stage status rather than being itself part of the allowlist."
+    },
+    "verificationClaim": {
+      "oneOf": [{ "$ref": "#/$defs/VerificationClaim" }, { "type": "null" }],
+      "default": null,
+      "description": "Null at this stage in the common case — signing happens at §3's CONSENT_OBTAINED -> RECEIPT_SIGNED transition, AFTER a LoopRunSummary like this one already exists. Non-null only if a caller chooses to pre-compute the claim before preview (permitted, not required, by this schema)."
+    },
+    "producedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this summary was built (FB-RAT-COM-004)."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "DurableObjectRef": {
+      "type": "object",
+      "required": ["objectId"],
+      "properties": {
+        "objectId": { "type": "string", "minLength": 1 },
+        "digest": { "oneOf": [{ "$ref": "#/$defs/IntegrityRef" }, { "type": "null" }], "default": null }
+      },
+      "additionalProperties": false
+    },
+    "ReleaseIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageContentDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+        "packageContentDigest": { "$ref": "#/$defs/IntegrityRef" }
+      },
+      "additionalProperties": false
+    },
+    "TerminalRunState": {
+      "type": "string",
+      "enum": ["SUCCEEDED_VERIFIED", "SUCCEEDED_UNVERIFIED", "STOPPED_BUDGET", "STOPPED_POLICY", "FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED"],
+      "description": "The 8 terminal values of loop-run.schema.json's RunState, duplicated locally, name-identical."
+    },
+    "TerminalReasonCategory": {
+      "type": "string",
+      "enum": [
+        "VALIDATION_FAILURE", "CANCELLATION_REQUESTED", "CANCELLATION_TARGET_UNCONFIRMED",
+        "BUDGET_STEPS_EXHAUSTED", "BUDGET_WALL_CLOCK_EXHAUSTED", "BUDGET_TOKENS_EXHAUSTED",
+        "BUDGET_COST_EXHAUSTED", "BUDGET_TOOL_CALLS_EXHAUSTED", "POLICY_BOUNDARY",
+        "ALL_REQUIRED_VERIFIERS_PASSED", "REQUIRED_VERIFIER_INCOMPLETE",
+        "NODE_FAILURE_NO_SIDE_EFFECTS", "NODE_FAILURE_SIDE_EFFECTS_POSSIBLE",
+        "SIDE_EFFECT_OUTCOME_UNCONFIRMED"
+      ],
+      "description": "Duplicated locally from loop-run.schema.json's TerminalReasonCategory $def, name-identical."
+    },
+    "TerminalReason": {
+      "type": "object",
+      "required": ["category", "detail"],
+      "properties": {
+        "category": { "$ref": "#/$defs/TerminalReasonCategory" },
+        "detail": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "NodeOutcome": {
+      "type": "string",
+      "enum": ["SUCCEEDED", "FAILED", "RETRIED", "SKIPPED", "TIMED_OUT"],
+      "description": "loop-run.schema.json's NodeAttempt.outcome vocabulary, duplicated locally."
+    },
+    "NodeOutcomeCount": {
+      "type": "object",
+      "required": ["outcome", "count"],
+      "properties": {
+        "outcome": { "$ref": "#/$defs/NodeOutcome" },
+        "count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "NodeStateSummary": {
+      "type": "object",
+      "required": ["publishedLoop", "totalNodeCount", "nodeIds"],
+      "properties": {
+        "publishedLoop": {
+          "type": "boolean",
+          "description": "§4: 'where permitted' MUST be read as: only when the loop being reported on has itself been publicly published. Node-identity disclosure below is gated on this flag, not on node-ID stability alone."
+        },
+        "totalNodeCount": { "type": "integer", "minimum": 0 },
+        "nodeOutcomeCounts": { "type": "array", "default": [], "items": { "$ref": "#/$defs/NodeOutcomeCount" } },
+        "nodeIds": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "MUST be empty unless publishedLoop=true — see this $def's allOf."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "publishedLoop": { "const": false } }, "required": ["publishedLoop"] }, "then": { "properties": { "nodeIds": { "maxItems": 0 } } } }
+      ]
+    },
+    "LocalCloudRatio": {
+      "type": "object",
+      "required": ["computed", "ratioVersion"],
+      "properties": {
+        "computed": {
+          "type": "boolean",
+          "description": "§8: a run with zero eligible work reports 'no ratio computed' (computed=false), never a default-to-zero percentage."
+        },
+        "ratioVersion": { "type": "string", "minLength": 1, "description": "Versioned computation method/denominator, same pattern as bucketingVersion (§8, §4)." },
+        "localFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "default": null },
+        "remoteFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "default": null },
+        "ciFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "default": null }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "computed": { "const": true } }, "required": ["computed"] }, "then": { "required": ["localFraction", "remoteFraction", "ciFraction"], "properties": { "localFraction": { "type": "number" }, "remoteFraction": { "type": "number" }, "ciFraction": { "type": "number" } } } },
+        { "if": { "properties": { "computed": { "const": false } }, "required": ["computed"] }, "then": { "properties": { "localFraction": { "const": null }, "remoteFraction": { "const": null }, "ciFraction": { "const": null } } } }
+      ]
+    },
+    "CapabilityCategory": {
+      "type": "string",
+      "enum": ["workspace", "execution", "device", "network", "secret", "model", "marketplace", "release"],
+      "description": "capability-ids.v1.json's exact 8-value `category` enum, duplicated locally."
+    },
+    "VerificationClaimLabel": {
+      "type": "string",
+      "enum": ["SELF_SIGNED_RECEIPT", "UNSIGNED"],
+      "description": "RES-004 correction: renamed from the source's unsupportable RUNTIME_ATTESTED. SELF_SIGNED_RECEIPT proves only pseudonymous key continuity; UNSIGNED is the explicit no-key marker (§3: 'never silently omitted')."
+    },
+    "VerificationClaim": {
+      "type": "object",
+      "required": ["label", "claimText"],
+      "properties": {
+        "label": { "$ref": "#/$defs/VerificationClaimLabel" },
+        "claimText": { "type": "string", "minLength": 1 },
+        "signingKeyFingerprint": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "label": { "const": "SELF_SIGNED_RECEIPT" } }, "required": ["label"] }, "then": { "required": ["signingKeyFingerprint"], "properties": { "signingKeyFingerprint": { "type": "string", "minLength": 1 } } } },
+        { "if": { "properties": { "label": { "const": "UNSIGNED" } }, "required": ["label"] }, "then": { "properties": { "signingKeyFingerprint": { "const": null } } } }
+      ]
+    }
+  }
+}

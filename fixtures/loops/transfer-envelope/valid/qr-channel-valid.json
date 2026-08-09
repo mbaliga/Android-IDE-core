@@ -1,0 +1,11 @@
+{
+  "transferChannel": "QR",
+  "expectedMediaType": "application/zip",
+  "expectedDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f",
+    "byteLength": 92160
+  },
+  "initiatedByUser": true,
+  "sourceDescription": "User scanned a QR code printed on a conference handout, resolving to https://releases.example-publisher.dev/loop-fb-triage-inbox-1.0.0.floop plus the expected digest encoded in the QR payload."
+}

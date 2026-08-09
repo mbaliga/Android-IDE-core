@@ -1,0 +1,21 @@
+{
+  "id": "01J8ZA0000000000000000T3",
+  "type": "GITHUB_ACTIONS",
+  "displayName": "android-ide-core CI",
+  "trust": "TRUSTED",
+  "hostFingerprint": null,
+  "arch": "x86_64",
+  "capabilities": null,
+  "connectivity": { "kind": "REQUIRES_EXPLICIT_CONNECT", "lastSeenReachableUtc": "2026-08-06T10:02:11Z" },
+  "cost": { "tier": "BILLED", "notes": "GitHub Actions minutes against the org's private-repo allowance — see CLAUDE.md 'CI caveat' for a documented instance of this allowance being exhausted." },
+  "provenanceStyle": "CI_PIPELINE",
+  "visibilityContract": {
+    "executionLocationVisible": true,
+    "revisionVisible": true,
+    "dataBoundaryVisible": true,
+    "stateVisible": true,
+    "resultVisible": true
+  },
+  "fgsType": "NONE",
+  "unknownFields": {}
+}

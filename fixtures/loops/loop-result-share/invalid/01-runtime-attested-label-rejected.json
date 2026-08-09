@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "shareId": "share-bad-0001",
+  "releaseIdentity": {
+    "loopId": "loop.demo.hello-file",
+    "semanticVersion": "1.0.0",
+    "packageContentDigest": { "algorithm": "SHA-256", "digestHex": "bd0744455f140b0c49f72b83b21489ea512354a54ae7d43bef4e0489fd31181e", "byteLength": 4096 }
+  },
+  "engineVersion": "1.0.0",
+  "terminalState": "SUCCEEDED_VERIFIED",
+  "terminalReasonCategory": "ALL_REQUIRED_VERIFIERS_PASSED",
+  "nodeStateSummary": { "publishedLoop": false, "totalNodeCountBucket": "ONE_TO_FIVE", "nodeIds": [] },
+  "bucketingVersion": "fb-share-bucket-1",
+  "durationBucket": "UNDER_10_SECONDS",
+  "retryCountBucket": "ZERO",
+  "aggregateCostBucket": "ZERO",
+  "aggregateTokensBucket": "ZERO",
+  "localCloudRatio": { "computed": false, "ratioVersion": "fb-ratio-1" },
+  "capabilityCategories": [],
+  "verificationClaim": {
+    "label": "RUNTIME_ATTESTED",
+    "claimText": "A compatible Fonebrew runtime signed this receipt.",
+    "signingKeyFingerprint": "a3f5c9d1e7b2846f0193a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7"
+  },
+  "createdAtUtc": "2026-08-07T09:35:00Z"
+}

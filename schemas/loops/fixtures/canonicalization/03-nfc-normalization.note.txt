@@ -1,0 +1,1 @@
+Input string uses combining acute accent (NFD: e + U+0301); canonical form MUST be NFC-composed (é).

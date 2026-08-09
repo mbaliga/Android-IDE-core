@@ -1,0 +1,48 @@
+{
+  "operationId": "op-4002",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0047",
+  "operationKind": "FLASH",
+  "artifactId": "fw-arduino-uno-blink-v3",
+  "preconditions": {
+    "identityConfidenceAtLeast": "CONFIRMED",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9031",
+    "destructiveActionExplicitlyAuthorized": true,
+    "authorizedPrincipal": "user:owner",
+    "authorizedAtUtc": "2026-08-07T11:30:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 62,
+    "sideEffectsPossible": true
+  },
+  "state": "SUCCEEDED",
+  "verification": {
+    "state": "VERIFIED",
+    "method": "READ_BACK_HASH",
+    "verifiedAtUtc": "2026-08-07T10:31:00Z"
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": {
+    "finishedAtUtc": "2026-08-07T10:31:00Z",
+    "exitState": "SUCCEEDED",
+    "sideEffects": [
+      {
+        "description": "Flash memory partially overwritten before disconnect",
+        "reversible": false,
+        "occurredAtUtc": "2026-08-07T10:30:45Z"
+      }
+    ],
+    "errorEnvelope": null,
+    "snapshotAfterId": null
+  },
+  "unknownFields": {}
+}

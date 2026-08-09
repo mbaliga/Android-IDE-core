@@ -1,0 +1,28 @@
+{
+  "bufferId": "01J8ZS1A3C5E7G9J1L3N5P7R9T",
+  "resourceUri": {
+    "provider": "SSH",
+    "raw": "ssh://host-9f21e3/home/dev/projects/android-ide-core/docs/STATE.md",
+    "displayPath": "docs/STATE.md",
+    "unknownFields": {}
+  },
+  "state": "SAVE_FAILED",
+  "dirty": true,
+  "baseRevision": "rev-0000000388",
+  "contentRevision": "buf-rev-0000000390",
+  "encoding": "UTF-8",
+  "lineEndings": "LF",
+  "journalSequence": 390,
+  "conflictState": null,
+  "lastSaveError": {
+    "code": "GIT_HOST_UNREACHABLE",
+    "severity": "ERROR",
+    "retryable": true,
+    "sideEffectState": "NONE",
+    "detail": "POST /repos/o/r/contents/docs/STATE.md timed out after 30s against api.github.com.",
+    "recoveryAction": "Check network connectivity and retry the save.",
+    "userMessage": "Could not reach GitHub to save this file. Check your connection and try again.",
+    "objectId": null
+  },
+  "unknownFields": {}
+}

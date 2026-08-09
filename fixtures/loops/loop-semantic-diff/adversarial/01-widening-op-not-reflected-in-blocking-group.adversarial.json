@@ -1,0 +1,35 @@
+{
+  "diffId": "diff-adversarial-0001",
+  "sourceKind": "LINEAGE_COMPARISON",
+  "generatedAtUtc": "2026-08-07T17:00:00Z",
+  "baseRevision": {
+    "releaseRef": { "loopId": "loop.demo.hello-file", "semanticVersion": "1.0.0", "packageDigest": "sha256:379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c" }
+  },
+  "semanticOperations": [
+    { "opId": "op-1", "opType": "MODIFY_PROPERTY", "targetType": "AUTHORITY", "targetId": "n1", "description": "Node n1's requested capability changed from fb.repo.read (READ) to fb.device.flash (EXECUTE_DESTRUCTIVE) — a clear rung widening.", "beforeValue": "fb.repo.read", "afterValue": "fb.device.flash" }
+  ],
+  "categorizedFindings": {
+    "documentation": [],
+    "schema": [],
+    "node": [],
+    "edge": [],
+    "capability": ["op-1"],
+    "authority": ["op-1"],
+    "budget": [],
+    "test": [],
+    "compatibility": []
+  },
+  "licenseChange": { "changed": false },
+  "behaviorExplanation": "Node n1 now requests fb.device.flash instead of fb.repo.read.",
+  "validationResult": { "status": "VALID", "findings": [] },
+  "authorityDiffSummary": {
+    "perCapability": [],
+    "blockingReviewGroup": {
+      "authorityWidening": false,
+      "verificationWeakening": false,
+      "destructivePathIntroduced": false,
+      "schemaBreakage": false,
+      "acknowledgedByUser": false
+    }
+  }
+}

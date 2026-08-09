@@ -1,0 +1,6 @@
+{
+  "comparisonId": "authdiff-bad-0002",
+  "perCapability": [
+    { "capabilityId": "not-a-valid-capability-id", "direction": "ADDED" }
+  ]
+}

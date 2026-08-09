@@ -1,0 +1,16 @@
+{
+  "grantId": "grant-bad-transitive-0001",
+  "principalId": "principal-loop-run-0482",
+  "capabilityIds": ["fb.repo.read"],
+  "authorityRung": "READ",
+  "resourceScope": { "kind": "REPOSITORY", "locator": "github.com/example-owner/android-ide-core" },
+  "constraints": { "purpose": null, "additionalConstraints": {} },
+  "expiresAtUtc": "2026-09-01T00:00:00Z",
+  "confirmationPolicy": { "mode": "NEVER_REQUIRED", "aboveRung": null },
+  "delegationRule": {
+    "delegable": false,
+    "maxDelegatedRung": null,
+    "transitiveDelegationAllowed": true,
+    "requiresFreshUserApprovalForWidening": true
+  }
+}

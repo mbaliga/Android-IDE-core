@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "01J9B0000000000000000RC2",
+  "sourceType": "CSAPP_ISSUES_MANIFEST",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "1ec02cdcc218b1fc73ccfcb61d70faf443998c5342631c4bbae16c50df498d2b",
+    "byteLength": 812
+  },
+  "sourceLocation": "csapp-export://csapp-proj-aarso-mobile/2026-08-01T09:00:00Z-resubmit",
+  "previewId": "01J9C0000000000000000PV2",
+  "initiatedBy": "studio-user:jordan",
+  "decision": "FULL",
+  "createdAtUtc": "2026-08-02T10:00:00Z",
+  "created": [],
+  "updated": [],
+  "duplicates": [
+    { "sourceId": "csapp-iss-1001", "priorReceiptId": "01J9B0000000000000000RC1" },
+    { "sourceId": "csapp-iss-1002", "priorReceiptId": "01J9B0000000000000000RC1" }
+  ],
+  "rejected": [],
+  "unknownFields": {
+    "note": "sourceDigest is byte-identical to import-receipt-baseline-valid.json's — this receipt is what a re-import of the exact same CSApp snapshot produces: nothing new is created, the prior receipt is shown view-only (IMPORT_DUPLICATE_SNAPSHOT, INT-006)."
+  }
+}

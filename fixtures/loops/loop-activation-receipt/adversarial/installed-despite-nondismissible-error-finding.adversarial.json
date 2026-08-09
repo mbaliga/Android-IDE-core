@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "activation-receipt-nondismissible",
+  "receiptType": "LOOP_ACTIVATION",
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.0.2",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "77c4866114fb669a3587797c9d18fb5f3e39a4415209cb6d8d335dfea4b88037",
+    "byteLength": 192
+  },
+  "signatureState": "IMPORTED_SIGNED_VERIFIED",
+  "compatibilityOutcome": "COMPATIBLE",
+  "validationRulesetVersion": "fb-loop-validation-rules-1",
+  "validationFindings": [
+    {
+      "code": "LOOP-PKG-006",
+      "severity": "ERROR",
+      "objectType": "string",
+      "message": "Model-visible string at 'docs/README.md:12' contains disallowed invisible Unicode (bidi override) not individually declared and justified in the manifest.",
+      "nonDismissible": true
+    }
+  ],
+  "boundSlots": [],
+  "grantedAuthoritySummary": [],
+  "authorityGrantIds": [],
+  "installedAtUtc": "2026-08-03T11:00:00Z",
+  "engineVersion": "1.0.0",
+  "warnings": []
+}

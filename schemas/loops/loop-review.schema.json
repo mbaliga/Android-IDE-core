@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-review.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. loop-review.v1's wire shape is CLIENT-SIDE / STATIC-REGISTRY-COMPATIBLE (no field here presumes a hosted accounts/reviews database), but read LOOP_MARKETPLACE_CONTRACT.md §8 carefully before assuming this build-out stores any instance of it: 'Not built in this pass. Per the hard scope boundary above and 08_OPEN_QUESTIONS.md §E.1, structured reviews require a reviews database, which this build-out does not construct. This section is the interaction contract a future optional backend MUST follow if the owner turns reviews on; the static/Git registry (§11) carries no review mechanism of any kind.' This schema exists to give FB-RAT-MKT-006 a concrete wire shape per this work package's file-specific instruction and the traceability matrix's schema-target list — it is the contract a review record MUST have IF and WHEN reviews are ever turned on (the optional bounded backend §2 permits), not a claim that this repo persists, serves, or moderates any instance of this shape today. Flagged explicitly, not silently reframed as registry content, per this corpus's honesty convention.",
+  "title": "LoopReview",
+  "description": "loop-review.v1 — FB-RAT-MKT-006: 'Reviews separate usefulness, reliability, understandability, efficiency, and safety, plus a worked-for-me signal and free text.' Per LOOP_MARKETPLACE_CONTRACT.md §8, a review is release-specific (never a listing or a loopId alone) and carries a moderation state (§10). reviewerRef is pseudonymous by construction: this corpus has no accounts system anywhere (FB-RAT-INT-003, narrowly superseded only for deliberately published artifacts by FB-RAT-MKT-001) — a review's author identity is whatever pseudonymous identity the submission-by-pull-request process establishes (e.g. a GitHub handle on the PR that added this review to the optional backend's data, or to whatever mechanism eventually realizes §8), never a verified real-world identity, and this schema does not model one.",
+  "type": "object",
+  "required": ["reviewId", "releaseIdentity", "ratings", "workedForMe", "freeText", "reviewerRef", "moderationState", "createdAtUtc"],
+  "properties": {
+    "reviewId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable review identity."
+    },
+    "releaseIdentity": {
+      "$ref": "#/$defs/ReleaseIdentity",
+      "description": "The release this review is about. MUST be a specific release, never a listing or a bare loopId (LOOP_MARKETPLACE_CONTRACT.md §8: 'declares: release identity (never a listing or a loopId alone — reviews are release-specific, §4)... Reviews MUST NOT silently migrate to a later release version merely because the loopId matches — a review of 1.2.0 says nothing about 1.3.0 unless the service explicitly carries it forward with that fact visible.')."
+    },
+    "ratings": { "$ref": "#/$defs/ReviewRatings" },
+    "workedForMe": {
+      "type": "boolean",
+      "description": "The 'worked-for-me' boolean signal (FB-RAT-MKT-006)."
+    },
+    "freeText": {
+      "type": "string",
+      "description": "Free-text review body. MAY be an empty string (a rating-only review with no prose) — the field itself is required so a decoder never has to distinguish 'no free text field' from 'empty free text', but empty content is permitted. Same publication-time LOOP-PKG-006 (invisible-Unicode) / LOOP-PKG-008 (prompt-risk) scanning that applies to a listing's description (loop-listing.schema.json) applies here — a review body is exactly as model/human-readable as a listing, and is an equally plausible prompt-injection target (see this schema's adversarial/ fixtures)."
+    },
+    "reviewerRef": { "$ref": "#/$defs/ReviewerRef" },
+    "moderationState": {
+      "type": "string",
+      "enum": ["PENDING", "PUBLISHED", "LIMITED", "DELISTED", "TAKEDOWN"],
+      "default": "PENDING",
+      "description": "Subset of LOOP_MARKETPLACE_CONTRACT.md §10's six-state moderation table (PENDING/PUBLISHED/LIMITED/DELISTED/TAKEDOWN) — KEY_REVOKED is deliberately excluded here because §10 states it 'applies to a publisher's key, not to one release's editorial state' (and a review is neither a release nor a key); a revoked publisher key does not, on its own, change any single review's moderationState. Transitions follow the same from-state/event/to-state table §10 defines for marketplace content generally; not re-derived here."
+    },
+    "verifiedInstallRef": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional reference to a verified-install record (LOOP_MARKETPLACE_CONTRACT.md §8: 'optional verified-install/verified-run references'). Untyped reference string (not an inline object) because the full shape of an install/run verification receipt is owned by LOOP_RESULT_SHARING_CONTRACT.md and LOOP_IMPORT_ACTIVATION_CONTRACT.md respectively — not redefined here."
+    },
+    "verifiedRunRef": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional reference to a verified-run record, same rationale as verifiedInstallRef — LOOP_RESULT_SHARING_CONTRACT.md owns the shared-result-receipt shape this would point at."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this review was authored."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ReleaseIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+        },
+        "packageDigest": { "$ref": "#/$defs/IntegrityRef" }
+      },
+      "additionalProperties": true
+    },
+    "ReviewRatings": {
+      "type": "object",
+      "required": ["usefulness", "reliability", "understandability", "efficiency", "safety"],
+      "properties": {
+        "usefulness": { "$ref": "#/$defs/RatingScale" },
+        "reliability": { "$ref": "#/$defs/RatingScale" },
+        "understandability": { "$ref": "#/$defs/RatingScale" },
+        "efficiency": { "$ref": "#/$defs/RatingScale" },
+        "safety": { "$ref": "#/$defs/RatingScale" }
+      },
+      "additionalProperties": true,
+      "description": "The five separate rating dimensions FB-RAT-MKT-006 names explicitly, each independently scored — never collapsed into one aggregate star rating (that collapse is exactly what 'separate' rules out). NOTE: neither FB-RAT-MKT-006's decision text nor any other ratified document in this corpus fixes a numeric scale for these ratings — a 1-5 integer scale is this schema's own authoring choice (documented at RatingScale below), not a ratified decision. Flagged for the Amendments-phase agent if the owner wants a different scale (e.g. 1-10, or a non-numeric enum) fixed instead."
+    },
+    "RatingScale": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "1 (lowest) to 5 (highest) integer scale. Schema-authoring choice, not a ratified numeric range — see ReviewRatings' description."
+    },
+    "ReviewerRef": {
+      "type": "object",
+      "required": ["pseudonymousId"],
+      "properties": {
+        "pseudonymousId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Whatever pseudonymous identity the submission-by-pull-request process establishes for this review (e.g. the GitHub handle that opened the PR carrying it) — NOT a real-world verified identity. This corpus has no accounts system for the marketplace's static/Git registry (§11); reviews specifically are not even built by this pass (§8, 'Not built in this pass') — this field documents the constraint a future optional backend MUST honor if it ever assigns review authorship, rather than assuming a real user-account system exists."
+        },
+        "submissionRef": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Optional pointer establishing pseudonymousId's provenance (e.g. a PR URL or number) — mirrors §11's 'the PR and its review are the audit trail' pattern for whichever mechanism eventually carries reviews."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

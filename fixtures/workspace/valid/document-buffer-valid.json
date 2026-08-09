@@ -1,0 +1,18 @@
+{
+  "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+  "resourceUri": {
+    "provider": "LOCAL",
+    "raw": "local:///storage/emulated/0/Android-IDE-core/core-engine/src/main/java/dev/aarso/domain/loop/GraphRunner.kt",
+    "displayPath": "core-engine/.../GraphRunner.kt",
+    "unknownFields": {}
+  },
+  "state": "OPEN_DIRTY",
+  "dirty": true,
+  "baseRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6789",
+  "contentRevision": "buf-rev-0000000412",
+  "encoding": "UTF-8",
+  "lineEndings": "LF",
+  "journalSequence": 412,
+  "conflictState": null,
+  "unknownFields": {}
+}

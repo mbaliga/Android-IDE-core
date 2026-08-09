@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/recovery-snapshot.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. RecoverySnapshot per FB-RAT-WS-001/003: the checkpoint WorkspaceJournal.checkpoint()/restore() produce/consume, existing specifically to satisfy FB-RAT-WS-003 (dirty buffers survive Activity recreation/process death/reboot until explicit save or discard). Typically carried as the `payload` of a ContractEnvelope<RecoverySnapshot>; `snapshotId` below is this object's own FB-RAT-COM-002 stable ID. `resourceUri`/`digest` sub-shapes mirror resource-uri.schema.json / schemas/common/envelope.schema.json's IntegrityRef $defs — duplicated locally rather than cross-file $ref'd, same standalone-file tradeoff COMMON_CONVENTIONS.md documents.",
+  "title": "RecoverySnapshot",
+  "type": "object",
+  "required": ["snapshotId", "workspaceId", "takenAtUtc", "reason", "lastJournalSequence", "bufferSnapshots"],
+  "properties": {
+    "snapshotId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this snapshot (FB-RAT-COM-002)."
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The `Workspace.workspaceId` this snapshot checkpoints."
+    },
+    "takenAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this snapshot was captured (FB-RAT-COM-004)."
+    },
+    "reason": {
+      "type": "string",
+      "enum": ["PERIODIC_CHECKPOINT", "PRE_OPERATION", "PROCESS_DEATH_CAPTURE", "MANUAL"],
+      "description": "What triggered this checkpoint. PRE_OPERATION is what a RepositoryState.operationLock's `recoverySnapshotId` points at before a history-rewriting git op begins (FB-RAT-WS-007); PROCESS_DEATH_CAPTURE is the last-resort capture a process-death/OOM-kill hook takes on the way down, best-effort by nature."
+    },
+    "lastJournalSequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The global journal watermark this snapshot represents (FB-RAT-COM-004 — monotonic sequence preferred over wall-clock). WorkspaceJournal.restore() resumes journal replay strictly after this sequence, never before, to avoid double-applying entries this snapshot already reflects."
+    },
+    "bufferSnapshots": {
+      "type": "array",
+      "default": [],
+      "description": "Per-buffer captured state sufficient to reconstitute every OPEN_DIRTY/SAVING/SAVE_FAILED/CONFLICTED/MERGING buffer this workspace held at capture time (FB-RAT-WS-003). A buffer that was OPEN_CLEAN/CLOSED at capture time MAY be omitted — its content is already durable at `resourceUri`, nothing to recover.",
+      "items": {
+        "type": "object",
+        "required": ["bufferId", "resourceUri", "journalSequence", "dirty", "encoding", "lineEndings", "contentDigest"],
+        "properties": {
+          "bufferId": { "type": "string", "minLength": 1 },
+          "resourceUri": { "$ref": "#/$defs/ResourceUri" },
+          "journalSequence": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "This buffer's own `journalSequence` at capture time — MUST be <= the snapshot's top-level `lastJournalSequence`."
+          },
+          "dirty": { "type": "boolean" },
+          "encoding": { "type": "string", "minLength": 1 },
+          "lineEndings": { "type": "string", "enum": ["LF", "CRLF", "CR", "MIXED"] },
+          "contentDigest": {
+            "$ref": "#/$defs/IntegrityRef",
+            "description": "Digest+length over the captured buffer content bytes (FB-RAT-COM-005) — the bytes themselves are persisted by whatever store WorkspaceJournal.checkpoint() writes to (implementation-specific, e.g. an app-private snapshot cache); this digest is how restore() verifies it read back exactly what was captured."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ResourceUri": {
+      "type": "object",
+      "required": ["provider", "raw"],
+      "properties": {
+        "provider": { "type": "string", "enum": ["LOCAL", "SAF", "SSH", "SNAPSHOT", "VIRTUAL"] },
+        "raw": { "type": "string", "minLength": 1, "pattern": "^(local|saf|ssh|snapshot|virtual)://\\S+$" },
+        "displayPath": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "LOCAL" } } }, "then": { "properties": { "raw": { "pattern": "^local://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SAF" } } }, "then": { "properties": { "raw": { "pattern": "^saf://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SSH" } } }, "then": { "properties": { "raw": { "pattern": "^ssh://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SNAPSHOT" } } }, "then": { "properties": { "raw": { "pattern": "^snapshot://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "VIRTUAL" } } }, "then": { "properties": { "raw": { "pattern": "^virtual://\\S+$" } } } }
+      ]
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

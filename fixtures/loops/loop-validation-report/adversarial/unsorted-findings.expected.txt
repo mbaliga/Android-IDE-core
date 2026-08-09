@@ -1,0 +1,21 @@
+Schema verdict: VALID against loop-validation-report.schema.json.
+This schema has no native 'array items sorted by these fields' keyword, so it cannot structurally
+reject a `findings` array out of order. Sorted by (namespace, code, nodeId/edgeId) the correct
+order would be LOOP-BUDGET-002, LOOP-CAP-001, LOOP-PKG-001 — this fixture is deliberately in the
+wrong order (LOOP-PKG-001, LOOP-CAP-001, LOOP-BUDGET-002).
+
+Real rejection basis: schemas/loops/registries/loop-validation-rules.v1.json's own top-level
+description (no dedicated LOOP-* rule code exists for this — it is a report-shape hygiene
+requirement about THIS document's own internal ordering, not a rule about loop content, so this
+fixture deliberately does not cite a LOOP-* code, per the "do not invent new ones for concepts the
+registry already covers" instruction — this concept is a MUST stated in that registry's prose,
+not encoded as one of its rule entries):
+  "A validation report MUST include this rulesetVersion, the semantic digest of the definition
+  being validated, the surface implementation identity, and findings sorted deterministically (by
+  namespace, then code, then nodeId/edgeId)."
+A consumer relying on stable sort order (e.g. a diff view comparing two reports, or a UI grouping
+findings by namespace without re-sorting) will silently mis-render this report.
+
+Remediation: sort `findings` by (namespace, code, nodeId-or-edgeId-or-empty) before emitting the
+report; this is a producer-side obligation, not something a reader can safely correct after the
+fact if two producers disagree on tie-breaking for a null nodeId/edgeId.

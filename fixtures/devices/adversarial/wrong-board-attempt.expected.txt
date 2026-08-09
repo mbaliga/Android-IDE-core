@@ -1,0 +1,46 @@
+Fixture: fixtures/devices/adversarial/wrong-board-attempt.adversarial.json
+Schema: schemas/devices/operation.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+DeviceOperation op-4001 targets deviceIdentityId "dev-arduino-uno-0007" — an Arduino Uno
+(ATmega328P, AVR, family STK500 per fixtures/devices/valid/device-identity-arduino-uno-valid.json)
+— but its artifactId is "fw-esp32-devkitc-blink-v9", an ESP32-DevKitC firmware image (Xtensa/
+RISC-V). The board and the firmware artifact are not the same device family at all. Despite this,
+the fixture claims preconditions.boardFirmwareCompatibilityChecked: true and
+authority.destructiveActionExplicitlyAuthorized: true, and has already reached
+state: IN_PROGRESS with protocol.sideEffectsPossible: true — meaning, per this operation's own
+claim, an erase/write transfer against the wrong board has already begun.
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/devices/operation.schema.json validates DeviceOperation in isolation. It has no way to
+reach into a separate DeviceIdentity object and a separate FirmwareArtifact object and compare
+DeviceIdentity.board against FirmwareArtifact.boardCompatibility (schemas/devices/
+device-identity.schema.json's $defs/BoardRef vs schemas/devices/firmware-artifact.schema.json's
+boardCompatibility array) — that is an application-level, cross-object check, not a
+single-document structural constraint. `boardFirmwareCompatibilityChecked` is a boolean the
+producer can set to `true` regardless of whether the check it claims to describe was actually
+performed correctly, or performed at all.
+
+REQUIRED REAL BEHAVIOR (FB-RAT-DEV-007 — wrong-board block: incompatible board/artifact
+combinations fail BEFORE erase)
+
+A real Device Broker implementation MUST, before granting `authority.destructiveActionExplicitlyAuthorized:
+true` for any FLASH/ERASE operation, resolve the target DeviceIdentity.board against the
+FirmwareArtifact.boardCompatibility list (matching on (catalogRef, catalogId) when both sides have
+a non-null catalogId, falling back to displayName only when either side is UNCATALOGED — see
+schemas/devices/firmware-artifact.schema.json's BoardRef description) and MUST refuse to proceed
+past PENDING_PRECONDITIONS on a mismatch. The refusal MUST resolve the operation to
+state: FAILED_SAFE with an empty receipt.sideEffects list (this schema's own if/then already
+enforces the FAILED_SAFE-implies-empty-sideEffects half once that state is reached — see
+docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4) — never reach IN_PROGRESS, never set
+protocol.sideEffectsPossible: true, and never begin the destructive transfer this fixture shows
+already underway.
+
+Rejection code: DEVICE_WRONG_BOARD_BLOCKED
+Severity: CRITICAL
+Retryable: false (not with this firmware artifact against this board)
+Recovery action: select a firmware artifact whose boardCompatibility includes
+arduino:avr:uno / ATmega328P, or select the correct target board for
+fw-esp32-devkitc-blink-v9.

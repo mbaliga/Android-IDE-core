@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/transfer-envelope.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. TransferEnvelope per LOOP_ENGINEERING_SPEC_V2.1.md §21 (Transfer and activation boundary): 'Transfer moves inert bytes. It does not grant authority, resolve secrets, or start execution... Every transfer is represented by a user-initiated envelope containing expected media type and digest.' This schema states the boundary object only — the full ten-step import grammar and eleven-state machine are LOOP_IMPORT_ACTIVATION_CONTRACT.md's (FB-RAT-IMP-001), not restated here.",
+  "title": "TransferEnvelope",
+  "description": "The user-initiated envelope that precedes any package transfer, carrying the transfer channel, the caller's EXPECTED media type and digest (checked against what actually arrives), and a human-readable source description. Typically carried as the `payload` of a ContractEnvelope<TransferEnvelope> (schemas/common/envelope.schema.json), inheriting objectId/createdAtUtc/producer from that outer envelope.",
+  "type": "object",
+  "required": ["transferChannel", "expectedMediaType", "expectedDigest", "initiatedByUser", "sourceDescription"],
+  "properties": {
+    "transferChannel": {
+      "type": "string",
+      "enum": ["FILE", "SHARE_SHEET", "HTTPS_URL", "QR", "GIT"],
+      "description": "Matches the transfer channel enumeration LOOP_DUAL_SURFACE_ARCHITECTURE.md §7 lists as the canonical LoopPackage boundary crossings: a .floop file, the Android share sheet, a marketplace/unlisted release HTTPS URL, a QR code carrying a URL plus expected digest, or a user-owned Git repository."
+    },
+    "expectedMediaType": {
+      "type": "string",
+      "pattern": "^[\\w.+-]+/[\\w.+-]+$",
+      "description": "IANA media type the caller expects the transferred bytes to be (e.g. 'application/zip' for a .floop archive). Checked against the actual container's declared/sniffed media type before any further processing — a mismatch is a rejection at the transfer boundary, before parsing begins (LOOP-PKG-004: import never executes package content, which presupposes the bytes are validated as the expected shape before anything touches them)."
+    },
+    "expectedDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "The digest the caller expects the transferred bytes to hash to, known BEFORE the transfer completes (e.g. from a QR payload, a marketplace listing, or a prior handoff). Compared against the actually-received bytes' digest once the transfer completes; a mismatch is 'declared-digest / actual-digest mismatch', one of floop-container-format.v1.json's adversarialClasses_MUST_reject."
+    },
+    "initiatedByUser": {
+      "const": true,
+      "description": "MUST-level invariant (LOOP_ENGINEERING_SPEC_V2.1 §21, FB-RAT-IMP-002): a TransferEnvelope only exists because a human took a transfer-initiating action. There is no representable 'false' value — a producer that cannot truthfully assert user initiation MUST NOT construct a TransferEnvelope at all; encoding this as `const: true` rather than a plain boolean makes 'this transfer was not user-initiated' unrepresentable in this object, not merely disallowed by convention."
+    },
+    "sourceDescription": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable description of where these bytes came from (e.g. 'QR code scanned from publisher listing', 'shared via WhatsApp', 'cloned from git@github.com:...'), surfaced to the user before any authority or binding controls are presented (LOOP_ENGINEERING_SPEC_V2.1 §21: 'Fonebrew snapshots the bytes, validates the container, and performs local compatibility evaluation before presenting authority or binding controls')."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

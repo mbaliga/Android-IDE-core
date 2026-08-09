@@ -1,0 +1,12 @@
+{
+  "decisionId": "decision-bad-0001",
+  "requestObjectId": "devreq-0099-flash-attempt",
+  "requestingPrincipalId": "principal-local-agent-persona-primary",
+  "requestedCapabilityId": "fb.device.flash",
+  "requestedResourceScope": { "kind": "DEVICE", "locator": "usb-device-0001" },
+  "matchedGrantId": null,
+  "outcome": "REQUIRE_STRONGER_AUTHORITY",
+  "reasonCode": "AUTHORITY_RUNG_INSUFFICIENT",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-07T11:00:00Z"
+}

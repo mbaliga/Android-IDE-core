@@ -1,0 +1,19 @@
+{
+  "loopId": "loop-fb-release-notes-drafter",
+  "semanticVersion": "2.3.1",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d1a2b3c4d",
+    "byteLength": 310
+  },
+  "publisherKeyFingerprint": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e",
+  "releaseAssetUrl": "https://github.com/another-publisher/loop-fb-release-notes-drafter/releases/download/v2.3.1/loop-fb-release-notes-drafter-2.3.1.floop",
+  "publishedAtUtc": "2026-05-01T12:30:00Z",
+  "signatureRef": {
+    "signatureAssetUrl": "https://github.com/another-publisher/loop-fb-release-notes-drafter/releases/download/v2.3.1/loop-fb-release-notes-drafter-2.3.1.floop.sig.json",
+    "sha256": "9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f9c1a5e3f"
+  },
+  "releaseChannel": "stable",
+  "revoked": true,
+  "revokedAtUtc": "2026-07-20T08:00:00Z"
+}

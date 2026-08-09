@@ -1,0 +1,54 @@
+{
+  "receiptId": "01J8ZR0000000000000000E2",
+  "requestId": "01J8ZB0000000000000000R2",
+  "handleId": "01J8ZH0000000000000000H1",
+  "targetSnapshot": {
+    "id": "01J8ZA0000000000000000T1",
+    "type": "LOCAL_ANDROID",
+    "displayName": "This phone",
+    "trust": "TRUSTED",
+    "hostFingerprint": null,
+    "arch": "arm64-v8a"
+  },
+  "revision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "capsuleDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "9799906dd5bfc7be0352521c1ebfb597936152d55beecc4fefcdc0d22dbe8ea4",
+    "byteLength": 604
+  },
+  "timings": {
+    "queuedAtUtc": "2026-08-07T10:59:50Z",
+    "startedAtUtc": "2026-08-07T11:00:02Z",
+    "finishedAtUtc": "2026-08-07T11:44:16Z",
+    "durationMs": 2654000
+  },
+  "exitState": "SUCCEEDED_UNVERIFIED",
+  "terminationCause": null,
+  "logs": {
+    "ref": null,
+    "excerpt": "Loop run stopped: hit step cap (24). No verification step was configured for this Loop definition.",
+    "redactionApplied": true
+  },
+  "resourceSummary": {
+    "cpuSecondsUsed": null,
+    "wallClockSecondsUsed": 2654.0,
+    "networkBytesUp": 512000,
+    "networkBytesDown": 8912000,
+    "peakMemoryBytes": null,
+    "thermalStateObserved": "MODERATE"
+  },
+  "outputs": [],
+  "sideEffects": [],
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "provenance": {
+    "sourceLocation": "/data/user/0/dev.aarso.full/workspace/android-ide-core",
+    "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+    "initiatingPrincipal": "owner",
+    "evidenceLinks": []
+  },
+  "unknownFields": {}
+}

@@ -1,0 +1,26 @@
+{
+  "reviewId": "review-0004",
+  "releaseIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0",
+    "packageDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "byteLength": 190
+    }
+  },
+  "ratings": {
+    "usefulness": 11,
+    "reliability": 4,
+    "understandability": 4,
+    "efficiency": 4,
+    "safety": 4
+  },
+  "workedForMe": true,
+  "freeText": "Great!",
+  "reviewerRef": {
+    "pseudonymousId": "gh:reviewer-y"
+  },
+  "moderationState": "KEY_REVOKED",
+  "createdAtUtc": "2026-07-22T09:05:00Z"
+}

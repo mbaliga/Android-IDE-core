@@ -1,0 +1,18 @@
+Schema verdict: VALID against loop-activation-receipt.schema.json.
+`warnings` is an unconstrained array of strings — this schema has no cross-field rule tying its
+contents to `signatureState`, so an empty array alongside a revoked-key signature state passes.
+
+Real rejection basis: docs/ratified/loops/LOOP_PACKAGE_SPEC.md §11 (no dedicated loop-validation-
+rules.v1.json code exists for this — it is a surface/UI requirement, not a package-content
+validation rule, so this fixture deliberately does not cite a LOOP-* code per the task's "do not
+invent new ones for concepts the registry already covers" instruction; this concept is NOT
+covered by that registry):
+  "...every installation surface MUST show revocation status and require an explicit user choice
+  before any new activation under a revoked key."
+A receipt recording `IMPORTED_REVOKED_KEY_FLAGGED` with an empty `warnings` array is evidence the
+surface skipped that required disclosure — the activation should not have been allowed to reach
+INSTALLED (and this receipt should not exist) without the user's explicit acknowledgement being
+recorded in `warnings`.
+
+Remediation: block the READY_TO_SIMULATE→INSTALLABLE transition until the revocation-status
+warning has been shown and explicitly acknowledged; record that acknowledgement's text here.

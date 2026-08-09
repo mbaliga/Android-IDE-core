@@ -1,0 +1,50 @@
+Fixture: fixtures/devices/adversarial/play-manifest-declares-download-and-exec.adversarial.json
+Schema: schemas/common/capability-manifest.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+A CapabilityManifest tagged for the Play distribution flavor (targetRequirements.distributionFlavor:
+"play", producer.name: "core-engine.distribution.play") declares
+"distribution.downloadAndExecuteNativeCode" in supportedOperations — exactly the mechanism
+FB-RAT-DIST-002 rejects: downloading and executing DEX/JAR/native code inside the Play
+distribution.
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/common/capability-manifest.schema.json deliberately keeps `supportedOperations` an open
+array of non-empty strings (see that schema's own description: "operation vocabulary is
+subject-kind-specific"), because different subjectKinds (LSP/DAP/EXECUTION/DEVICE/MODEL_PROVIDER/
+EXTENSION) legitimately need different, unenumerable operation-name vocabularies. There is no
+closed enum this schema could add that would both (a) allow every legitimate operation name across
+every subject kind and (b) reject this one specific prohibited string — that requires a
+distribution-flavor-aware denylist check, which is policy logic, not shape validation.
+
+REQUIRED REAL BEHAVIOR (FB-RAT-DIST-002 — REJECTED: reject downloading executable DEX/JAR/native
+code in the Play distribution)
+
+Prohibition (normative): a CapabilityManifest whose targetRequirements.distributionFlavor is
+"play" (or whose producer identifies a play-flavor producer) MUST NOT declare any
+supportedOperations entry that names a download-and-execute-native-code capability, under any
+naming variant.
+
+CI policy check this fixture is a violation of (described here since no real CI runs in this
+sandbox): a static scanner runs over every CapabilityManifest JSON emitted for the play build
+variant (or, more practically, over every Kotlin source declaring a play-flavor
+CapabilityManifest's `supportedOperations` list literal) and matches each entry against a small,
+explicit denylist of prohibited operation-name substrings:
+  - "downloadAndExecute"
+  - "dynamicCodeLoad" (unless the declaring context is the Play Dynamic-Feature-delivered native
+    code lane per docs/ratified/DISTRIBUTION_CAPABILITY_SPLIT.md §3(b) — a distinct, Play-legal
+    mechanism this denylist must not also catch)
+  - "system_linker_exec" / "linkerExec"
+  - "execFromAppWritableStorage"
+A match on a play-flavor manifest fails the check with a non-zero exit code and blocks the PR/
+release.
+
+Rejection code: DIST_PLAY_DOWNLOAD_EXEC_PROHIBITED
+
+Additional platform-level note: this is also flatly IMPOSSIBLE on targetSdk 29+ regardless of
+policy (Android's W^X / SELinux exec restriction blocks execve()/exec-mmap of files in
+app-writable storage on every flavor — see docs/ratified/DISTRIBUTION_CAPABILITY_SPLIT.md §3(e)),
+so the CI check above is defense-in-depth documentation and early rejection, not the only thing
+that would actually prevent this mechanism from working.

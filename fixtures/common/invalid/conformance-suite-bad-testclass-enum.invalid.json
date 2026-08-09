@@ -1,0 +1,15 @@
+{
+  "suiteId": "01J8ZAT4V6X8Z1B3D5F7H9K1LN",
+  "name": "CommonContracts envelope+error conformance",
+  "contractRef": "schemas/common/envelope.schema.json",
+  "testClasses": [
+    {
+      "testClass": "PERF",
+      "jvmTestable": "NO",
+      "notes": null
+    }
+  ],
+  "fixtureDirectoryRef": "fixtures/common",
+  "definitionOfReady": true,
+  "unknownFields": {}
+}

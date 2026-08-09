@@ -1,0 +1,23 @@
+{
+  "handleId": "01J8ZH0000000000000000H1",
+  "requestId": "01J8ZB0000000000000000R1",
+  "targetId": "01J8ZA0000000000000000T1",
+  "state": "RUNNING",
+  "stateReason": null,
+  "enteredStateAtUtc": "2026-08-07T09:01:04Z",
+  "heartbeat": {
+    "lastHeartbeatUtc": "2026-08-07T09:05:40Z",
+    "heartbeatIntervalSeconds": 15,
+    "missedConsecutive": 0
+  },
+  "cancellationMode": "COOPERATIVE",
+  "knownStoppedDescription": null,
+  "reconnectToken": {
+    "token": "rct_8f3c1e2a9b4d7e5f6a0c1d2e3f4a5b6c",
+    "issuedAtUtc": "2026-08-07T09:01:04Z",
+    "expiresAtUtc": "2026-08-07T21:01:04Z"
+  },
+  "reconnectAttempt": null,
+  "resumedFromHandleId": null,
+  "unknownFields": {}
+}

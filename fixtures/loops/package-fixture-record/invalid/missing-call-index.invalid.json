@@ -1,0 +1,9 @@
+{
+  "nodeId": "node-summarize-thread",
+  "iterationIndex": 0,
+  "recordedPromptDigest": null,
+  "recordedOutput": {
+    "summary": "x"
+  },
+  "recordedDecision": null
+}

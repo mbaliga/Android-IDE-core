@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/authority/grant.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Grant per FB-RAT-AUTH-001/002/004/005/006/007 (GRANT MODEL: principal + actions + resource scope + constraints + expiry + confirmation policy + delegation rule). Typically carried as the `payload` of a ContractEnvelope<Grant> (see schemas/common/envelope.schema.json) — `grantId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId. `grantId` is also the exact string schemas/execution/request.schema.json's `authorityGrant.grantId` field references (FB-RAT-COM-012 'no contract bypass') — see docs/ratified/CAPABILITY_AUTHORITY_MODEL.md §11 for that cross-domain correlation.",
+  "title": "Grant",
+  "description": "A scoped authorization: WHO (principalId) may do WHAT (capabilityIds, all resolving to the same authorityRung) to WHICH resource (resourceScope), under WHAT constraints, until WHEN (expiresAtUtc), with WHAT confirmation policy, and WHETHER a child principal may inherit it (delegationRule). capabilityIds MUST be drawn from schemas/loops/registries/capability-ids.v1.json's reverse-DNS fb.* namespace — that registry is the concrete capability-ID vocabulary this general authority model is written against; it is not redefined here.",
+  "type": "object",
+  "required": ["grantId", "principalId", "capabilityIds", "authorityRung", "resourceScope", "constraints", "expiresAtUtc", "confirmationPolicy", "delegationRule"],
+  "properties": {
+    "grantId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this grant (FB-RAT-COM-002)."
+    },
+    "principalId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References a Principal.principalId (schemas/authority/principal.schema.json) — the principal this grant authorizes. This schema does not itself join against a Principal store to verify the reference resolves; that is a decision-engine-time obligation, same pattern as ArtifactRef.producerReceipt in schemas/common/artifact-ref.schema.json."
+    },
+    "capabilityIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^fb\\.[a-z0-9_]+(\\.[a-z0-9_]+)+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "One or more reverse-DNS capability IDs from schemas/loops/registries/capability-ids.v1.json (e.g. 'fb.repo.commit', 'fb.model.cloud_inference'). This schema cannot itself join against that external registry to confirm every ID is a real, registered capability, or that every one resolves to the SAME `authorityRung` declared below — that cross-registry check is a decision-engine-time obligation (see fixtures/authority/adversarial/grant-authorityrung-capability-mismatch.adversarial.json). A policy that needs to grant capabilities spanning more than one rung MUST issue one Grant per rung, never a single Grant mixing rungs — this keeps 'is this grant at or below the rung this delegation would need' a single field comparison (see `delegationRule` below) instead of a per-capability lookup."
+    },
+    "authorityRung": {
+      "$ref": "#/$defs/AuthorityRung",
+      "description": "FB-RAT-AUTH-002: the single authority-ladder rung every entry in `capabilityIds` resolves to per capability-ids.v1.json. Also the ceiling `delegationRule.maxDelegatedRung` is checked against, structurally, below."
+    },
+    "resourceScope": {
+      "$ref": "#/$defs/ResourceScope",
+      "description": "FB-RAT-AUTH-005 target-binding: exactly which resource instance(s) this grant applies to. A grant with a broad `locator` (e.g. a wide file glob, or a wildcard network domain) is a legitimate but wider grant — narrowing is always a decision the ISSUER made explicit here, never an ambient default."
+    },
+    "constraints": {
+      "type": "object",
+      "required": ["purpose"],
+      "properties": {
+        "purpose": {
+          "type": ["string", "null"],
+          "description": "FB-RAT-AUTH-005 purpose-binding tag, e.g. 'model-provider-authentication', 'git-push-to-user-selected-remote'. MUST be non-null for any capability whose capability-ids.v1.json entry has `requiresPurposeBinding: true` (this schema cannot enforce that cross-registry rule structurally — see fixtures/authority/adversarial/decision-purpose-crossing-secret-use.adversarial.json, which models a policy engine catching exactly this at decision time). A secret-use grant purpose-bound to 'model-provider-authentication' MUST NOT be usable to authorize an unrelated shell/network operation, even against the same underlying resourceScope — purpose is a second, independent binding axis on top of resourceScope, not a synonym for it."
+        },
+        "additionalConstraints": {
+          "type": "object",
+          "default": {},
+          "description": "Open bag for constraint dimensions this general model does not enumerate by name (e.g. a max-invocation-count, a rate limit, a byte-size ceiling on a secret's use). Kept open rather than closed because concrete constraint vocabularies are expected to be domain-specific (execution/device/loop budget dimensions already have their own richer shapes — this is not meant to duplicate schemas/execution/request.schema.json's `budget`)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "expiresAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "FB-RAT-AUTH-005: every grant is time-bound — there is no shape of this contract representing a non-expiring grant. A grant intended to last 'until revoked' still MUST carry a concrete, reissuable expiry (renewal is a fresh Grant with a fresh `grantId` and fresh `expiresAtUtc`, an explicit act, never a silent extension of this one — see fixtures/authority/adversarial/decision-request-against-expired-grant.adversarial.json, FB-RAT-AUTH-003/005: a request against an expired grant MUST decide DENY, not silently renew)."
+    },
+    "confirmationPolicy": {
+      "$ref": "#/$defs/ConfirmationPolicy"
+    },
+    "delegationRule": {
+      "$ref": "#/$defs/DelegationRule"
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "authorityRung": { "const": "OBSERVE" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "READ" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "PROPOSE" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", "PROPOSE", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "MODIFY_DRAFT" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "EXECUTE_REVERSIBLE" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "EXECUTE_EXTERNAL" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "EXECUTE_DESTRUCTIVE" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", null] } } } } } },
+    { "if": { "properties": { "authorityRung": { "const": "PUBLISH_OR_RELEASE" } }, "required": ["authorityRung"] },
+      "then": { "properties": { "delegationRule": { "properties": { "maxDelegatedRung": { "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE", null] } } } } } }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "AuthorityRung": {
+      "type": "string",
+      "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE"],
+      "description": "FB-RAT-AUTH-002's eight-rung authority ladder, in ascending order. Identical to capability-ids.v1.json's top-level `authorityLadder` array — duplicated here per this repo's established convention of duplicating small closed-vocabulary $defs across schema files rather than reaching into another document's $defs for an in-repo (non-`schemas/common/`) reference (see docs/ratified/COMMON_CONVENTIONS.md §5, and schemas/execution/request.schema.json's duplicated `FgsType` for a precedent). Both copies MUST be kept in sync if this ladder changes — a ladder change is a FB-RAT-AUTH-002 decision amendment, not a routine edit."
+    },
+    "ResourceScope": {
+      "type": "object",
+      "required": ["kind", "locator"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["WORKSPACE_ROOT", "FILE_GLOB", "REPOSITORY", "EXECUTION_TARGET", "NETWORK_DOMAIN", "SECRET", "DEVICE", "RELEASE", "STORE_CHANNEL"],
+          "description": "Closed vocabulary from the GRANT MODEL resources list. WORKSPACE_ROOT: a whole Workspace (schemas/workspace/workspace.schema.json). FILE_GLOB: a path pattern within a workspace/repository. REPOSITORY: a specific git-hosted repo. EXECUTION_TARGET: a specific schemas/execution/target.schema.json id. NETWORK_DOMAIN: a specific host (e.g. an API provider, or the ASOM local daemon at 127.0.0.1:11435 — see docs/ratified/CAPABILITY_AUTHORITY_MODEL.md §11.2). SECRET: a specific Keystore-held secret handle (never the raw value — see security/KeystoreSecret.kt). DEVICE: a specific connected USB/serial device. RELEASE: a specific app/store release artifact. STORE_CHANNEL: a specific distribution channel (e.g. Play internal-testing track)."
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kind-specific identifier or pattern: a Workspace.id (WORKSPACE_ROOT), a glob string (FILE_GLOB), a repository id/URL (REPOSITORY), an ExecutionTarget.id (EXECUTION_TARGET), a hostname (NETWORK_DOMAIN), a secret handle id — never a raw secret value (SECRET; see fixtures/authority/adversarial for the sibling secret-leak pattern already established at fixtures/common/adversarial/error-secret-leak-in-detail and fixtures/execution/adversarial/receipt-secret-leak-in-log-excerpt), a device id (DEVICE), a release id (RELEASE), a channel id (STORE_CHANNEL)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ConfirmationPolicy": {
+      "type": "object",
+      "required": ["mode", "aboveRung"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["NEVER_REQUIRED", "ALWAYS_REQUIRED", "REQUIRED_ABOVE_RUNG"],
+          "description": "Whether exercising this grant ever produces a REQUIRE_CONFIRMATION decision outcome (schemas/authority/decision.schema.json): NEVER_REQUIRED (e.g. a narrow, low-risk OBSERVE/READ grant), ALWAYS_REQUIRED (every use pauses for a fresh user confirmation — appropriate for FB-RAT-AUTH-006 visible-high-risk-authority operations), REQUIRED_ABOVE_RUNG (confirmation is required only when a specific use of this grant would need `aboveRung` or higher — relevant when a grant's `capabilityIds` legitimately span behaviors a decision engine treats at finer granularity than the single `authorityRung` ceiling declared above)."
+        },
+        "aboveRung": {
+          "oneOf": [ { "$ref": "#/$defs/AuthorityRung" }, { "type": "null" } ],
+          "description": "Required non-null only when `mode` is REQUIRED_ABOVE_RUNG (see the if/then below); null for NEVER_REQUIRED/ALWAYS_REQUIRED, where it is meaningless."
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "mode": { "const": "REQUIRED_ABOVE_RUNG" } }, "required": ["mode"] },
+          "then": { "required": ["aboveRung"], "properties": { "aboveRung": { "$ref": "#/$defs/AuthorityRung" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "DelegationRule": {
+      "type": "object",
+      "required": ["delegable", "maxDelegatedRung", "transitiveDelegationAllowed", "requiresFreshUserApprovalForWidening"],
+      "properties": {
+        "delegable": {
+          "type": "boolean",
+          "description": "Whether a child principal of this grant's `principalId` (per Principal.parentPrincipalId, schemas/authority/principal.schema.json) may be issued its OWN grant deriving from this one. This field does not itself perform delegation — it only records whether the issuing policy permits it; the actual child grant is still a separate, freshly-issued Grant object (see `transitiveDelegationAllowed` below for why)."
+        },
+        "maxDelegatedRung": {
+          "oneOf": [ { "$ref": "#/$defs/AuthorityRung" }, { "type": "null" } ],
+          "description": "Required non-null when `delegable` is true, required null when `delegable` is false (see the if/then below). When non-null, this schema's top-level `allOf` structurally forbids it from exceeding this Grant's own `authorityRung` — FB-RAT-AUTH-004 ('no implicit privilege expansion') encoded as a field-level ceiling a schema-valid document cannot violate, not left as prose alone."
+        },
+        "transitiveDelegationAllowed": {
+          "const": false,
+          "description": "FB-RAT-AUTH-007 — REJECTED: automatic/transitive delegation (a grant flowing from principal A to child B to B's own child C without a fresh, independently-issued grant at each hop) is structurally disallowed. This field is pinned to `false` on every Grant in this contract version; there is no schema-valid way to declare a Grant that re-delegates itself down a chain. A grandchild principal that needs authority gets its OWN Grant, issued fresh (typically requiring a fresh user escalation per `requiresFreshUserApprovalForWidening`), never an inherited copy of an ancestor's Grant. See fixtures/authority/invalid/grant-transitive-delegation-flag-rejected.invalid.json (this field set `true` is a structural — not merely semantic — validation failure) and fixtures/authority/adversarial/decision-transitive-delegation-attempt.adversarial.json (the decision-time consequence when a request tries to exploit this anyway)."
+        },
+        "requiresFreshUserApprovalForWidening": {
+          "const": true,
+          "description": "FB-RAT-AUTH-004/007: any attempt to grant a child principal MORE authority than this Grant itself carries (a 'widening' delegation) requires an explicit, fresh user approval action — never an automatic consequence of this Grant existing. Pinned to `true` on every Grant in this contract version for the same reason `transitiveDelegationAllowed` is pinned to `false`: this invariant is meant to be unconditional, so it is encoded as a constant rather than a togglable policy field."
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "delegable": { "const": true } }, "required": ["delegable"] },
+          "then": { "required": ["maxDelegatedRung"], "properties": { "maxDelegatedRung": { "$ref": "#/$defs/AuthorityRung" } } } },
+        { "if": { "properties": { "delegable": { "const": false } }, "required": ["delegable"] },
+          "then": { "properties": { "maxDelegatedRung": { "const": null } } } }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

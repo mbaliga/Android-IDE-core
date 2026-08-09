@@ -1,0 +1,36 @@
+Structural validation result: PASSES schemas/integrations/import-receipt.v1.schema.json.
+`rejected[].sourceLocation` is only constrained to be a non-empty string — JSON Schema has no
+filesystem-path semantics, so this fixture is adversarial at the semantic layer only (same
+pattern class as fixtures/common/adversarial/artifact-ref-path-traversal.adversarial.json).
+`rejected[].errorCode` here ("IMPORT_INVALID_SOURCELOCATION") also PASSES structurally: it
+matches the IMPORT_INVALID_<FIELD> family pattern `^IMPORT_INVALID_[A-Z0-9_]+$` defined in
+schemas/integrations/import-receipt.v1.schema.json's $defs/ImportErrorCode.
+
+MUST BE REJECTED BY A REAL IMPLEMENTATION — this fixture is a negative example, not a template.
+
+Required behavior from a real implementation (not just structural validation):
+  1. Any code path that resolves a `sourceLocation` value into an actual filesystem/repo path
+     (e.g. to open runs/<runId>/ content it names, or to display a clickable backlink) MUST
+     reject any locator containing a '..' path segment, and MUST additionally verify — after
+     normalizing the path — that the resolved absolute path stays within the expected root
+     (the run's own runs/<runId>/ directory, or the repo checkout root). Both checks are
+     required; normalization-then-containment-check catches traversal encodings a naive
+     '../' substring search on the raw string can miss.
+  2. This fixture's sourceLocation both contains literal '..' segments AND (independently)
+     would resolve outside any sane per-run/per-repo root — either check alone would catch
+     it, and a real implementation SHOULD run both for defense in depth.
+  3. Recommended ErrorEnvelope for the rejection (schemas/common/error.schema.json):
+       code: "IMPORT_SOURCE_LOCATION_PATH_TRAVERSAL"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Reject this rejected-record entry's sourceLocation; do not attempt to
+         open or display it as a path. Treat the source snapshot as untrusted."
+       userMessage: "A record reference was refused because it pointed outside the run's
+         allowed location."
+  4. This check MUST happen before any attempt to open/display the location — refuse first,
+     never open-then-check. It is independent of, and in addition to, the ordinary
+     IMPORT_INVALID_<FIELD> classification already recorded on this entry — that code says
+     "this record's field failed validation"; the path-traversal refusal is a separate,
+     higher-severity gate on the sourceLocation string itself, regardless of which
+     ImportErrorCode a producer attached to the entry.

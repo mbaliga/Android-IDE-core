@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "activation-receipt-revoked-noack",
+  "receiptType": "LOOP_ACTIVATION",
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.0.1",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "83ec8bbf31babe60ca013f351f064304cf44b76f653d10573c0f591c1ad72d26",
+    "byteLength": 191
+  },
+  "signatureState": "IMPORTED_REVOKED_KEY_FLAGGED",
+  "compatibilityOutcome": "COMPATIBLE",
+  "boundSlots": [],
+  "grantedAuthoritySummary": [],
+  "authorityGrantIds": [],
+  "installedAtUtc": "2026-08-02T09:00:00Z",
+  "engineVersion": "1.0.0",
+  "warnings": []
+}

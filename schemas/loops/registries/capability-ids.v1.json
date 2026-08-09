@@ -1,0 +1,40 @@
+{
+  "licenseStatus": "LICENSE-PENDING",
+  "registryId": "capability-ids.v1",
+  "registryVersion": "1.0.0",
+  "status": "FROZEN",
+  "frozenBy": "WP-1L-G0",
+  "decisionRefs": ["FB-RAT-AUTH-001", "FB-RAT-CMP-001"],
+  "title": "Capability ID namespace — v1 (frozen)",
+  "description": "Reverse-DNS capability IDs, cross-referenced to the authority rung each implies (CAPABILITY_AUTHORITY_MODEL.md ladder). CMP-001..006 (multi-axis compatibility) and IMP-005 (authority may narrow, never widen) are unimplementable without this registry. A node's capability request MUST use an ID from this list, or the build fails LOOP-CAP-001. This is a v1 seed set — new capability IDs are additive (minor registry bump) and MUST NOT repurpose an existing ID's authorityRung.",
+  "authorityLadder": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE"],
+  "capabilities": [
+    {"id": "fb.workspace.observe", "authorityRung": "OBSERVE", "category": "workspace", "requiresPurposeBinding": false, "description": "Observe workspace/project metadata (existence, names, non-content stats) without reading file content."},
+    {"id": "fb.repo.read", "authorityRung": "READ", "category": "workspace", "requiresPurposeBinding": false, "description": "Read repository file content and history at a given revision."},
+    {"id": "fb.repo.propose_change", "authorityRung": "PROPOSE", "category": "workspace", "requiresPurposeBinding": false, "description": "Propose a ChangeSet for human review; produces no write until approved."},
+    {"id": "fb.repo.write_draft", "authorityRung": "MODIFY_DRAFT", "category": "workspace", "requiresPurposeBinding": false, "description": "Write to an uncommitted draft/buffer (DocumentBuffer OPEN_DIRTY) — reversible, not yet committed."},
+    {"id": "fb.repo.commit", "authorityRung": "EXECUTE_REVERSIBLE", "category": "workspace", "requiresPurposeBinding": false, "description": "Create a local commit. Reversible (git reset/revert) but a persisted side effect."},
+    {"id": "fb.repo.push_remote", "authorityRung": "EXECUTE_EXTERNAL", "category": "workspace", "requiresPurposeBinding": true, "description": "Push to a user-selected remote. External side effect visible to a third party (the remote host)."},
+    {"id": "fb.repo.history_rewrite", "authorityRung": "EXECUTE_DESTRUCTIVE", "category": "workspace", "requiresPurposeBinding": true, "description": "Rewrite committed history (rebase across pushed commits, force-push, filter-repo). Requires visible destructive-authority evidence."},
+    {"id": "fb.exec.local_process", "authorityRung": "EXECUTE_REVERSIBLE", "category": "execution", "requiresPurposeBinding": false, "description": "Run a local process/build/test on the Android device itself."},
+    {"id": "fb.exec.ssh_remote", "authorityRung": "EXECUTE_EXTERNAL", "category": "execution", "requiresPurposeBinding": true, "description": "Run a command on a user-configured SSH execution target (e.g. a Raspberry Pi)."},
+    {"id": "fb.ci.dispatch", "authorityRung": "EXECUTE_EXTERNAL", "category": "execution", "requiresPurposeBinding": true, "description": "Dispatch a workflow run on a user-configured CI provider (GitHub Actions, Gitea Actions)."},
+    {"id": "fb.device.serial_read", "authorityRung": "EXECUTE_REVERSIBLE", "category": "device", "requiresPurposeBinding": true, "description": "Read from a connected serial/USB device (non-destructive)."},
+    {"id": "fb.device.flash", "authorityRung": "EXECUTE_DESTRUCTIVE", "category": "device", "requiresPurposeBinding": true, "description": "Flash/erase firmware on a connected device. Requires exclusive device-operation lock + explicit destructive authority (DEVICE_STATE_AND_SAFETY_SPEC flash contract)."},
+    {"id": "fb.network.egress", "authorityRung": "EXECUTE_EXTERNAL", "category": "network", "requiresPurposeBinding": true, "description": "Make an outbound network call to a declared host. MUST be scoped to a manifest egress allowlist (LOOP-PKG-007) — a grant of this capability is never a general network grant."},
+    {"id": "fb.secret.use", "authorityRung": "EXECUTE_EXTERNAL", "category": "secret", "requiresPurposeBinding": true, "description": "Use a Keystore-held secret by purpose-bound handle for a single declared destination. Never returns the raw value to model context or logs."},
+    {"id": "fb.model.local_inference", "authorityRung": "EXECUTE_REVERSIBLE", "category": "model", "requiresPurposeBinding": false, "description": "Run inference on an on-device or ASOM-resident (127.0.0.1:11435) model. On-device default; no network egress implied."},
+    {"id": "fb.model.cloud_inference", "authorityRung": "EXECUTE_EXTERNAL", "category": "model", "requiresPurposeBinding": true, "description": "Run inference against a cloud provider (Anthropic / OpenAI-compatible / Gemini). Always a 'watched object'; implies fb.network.egress + fb.secret.use to the provider host."},
+    {"id": "fb.device.usb_permission", "authorityRung": "PROPOSE", "category": "device", "requiresPurposeBinding": true, "description": "Request the Android system USB-permission prompt for a connected device. The prompt itself is the user's authority decision; this capability only initiates the request."},
+    {"id": "fb.marketplace.import", "authorityRung": "READ", "category": "marketplace", "requiresPurposeBinding": false, "description": "Read a package listing or index from a configured registry (static/Git-backed per MKT-009). Never implies activation."},
+    {"id": "fb.marketplace.publish", "authorityRung": "PUBLISH_OR_RELEASE", "category": "marketplace", "requiresPurposeBinding": true, "description": "Publish a deliberately-shared package/listing/result to the bounded marketplace. User-only rung; a loop node MUST NOT hold this capability (marketplace publish is never automatable, LOOP_ENGINEERING_SPEC_V2.1 §23)."},
+    {"id": "fb.release.publish", "authorityRung": "PUBLISH_OR_RELEASE", "category": "release", "requiresPurposeBinding": true, "description": "Publish an app/store release artifact. User-only rung."}
+  ],
+  "engineVersion": {
+    "definition": "engineVersion identifies the LOOP CONTRACT/ENGINE surface — parser, canonicalizer, static validator, run state machine — as a SemVer string, decoupled from the Fonebrew app's own version number (which tracks UI/feature releases, not contract surface). Two devices on different app versions but the same engineVersion are loop-engine-compatible.",
+    "v1Value": "1.0.0",
+    "v1Meaning": "First frozen contract release, corresponding to LOOP_ENGINEERING_SPEC_V2.1 plus this handoff pack's WP-1L-G0 registries (floop-container-format.v1, semantic-digest.v1, canonicalization.v1 fb-loop-canon-1, loop-validation-rules.v1, capability-ids.v1, model-capability-vocabulary.v1).",
+    "bumpRule": "MAJOR: a change that makes a previously-valid definition.json invalid, or changes packageContentDigest/semanticDigest for byte-identical input (i.e. any change to floop-container-format, semantic-digest, or canonicalization registries). MINOR: additive, backward-compatible changes (new capability IDs, new validation rule codes, new run states that old engines can treat conservatively). PATCH: editorial/documentation-only.",
+    "declaredAsRange": "A LoopDefinition declares minEngineVersion/maxEngineVersion (or an engineVersionRange) using standard SemVer range syntax (e.g. '>=1.0.0 <2.0.0'). Compatibility evaluation (CMP-001..006) resolves the installing phone's engineVersion against this range; out-of-range is a compatibility finding, not a silent block or silent accept."
+  }
+}

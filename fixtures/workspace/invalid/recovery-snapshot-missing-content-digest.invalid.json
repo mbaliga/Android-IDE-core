@@ -1,0 +1,22 @@
+{
+  "snapshotId": "01J8ZM7Q9S1U3W5Y7A9C1E3G5J",
+  "workspaceId": "01J8ZK1M3P5R7T9V1X3Z5B7D9F",
+  "takenAtUtc": "2026-08-07T10:15:00Z",
+  "reason": "PERIODIC_CHECKPOINT",
+  "lastJournalSequence": 412,
+  "bufferSnapshots": [
+    {
+      "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+      "resourceUri": {
+        "provider": "LOCAL",
+        "raw": "local:///storage/emulated/0/Android-IDE-core/README.md",
+        "unknownFields": {}
+      },
+      "journalSequence": 412,
+      "dirty": true,
+      "encoding": "UTF-8",
+      "lineEndings": "LF"
+    }
+  ],
+  "unknownFields": {}
+}

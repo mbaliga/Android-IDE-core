@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportId": "validation-report-sorted-01",
+  "rulesetVersion": "fb-loop-validation-rules-1",
+  "semanticDigest": "sha256:82add0d1c7a35aec233b9a77b465b3b17b7f322b58c6d5293ff419b47cbe8ee9",
+  "semanticDigestVersion": "fb-semantic-digest-1",
+  "surfaceImplementation": {
+    "surface": "BROWSER",
+    "name": "fonebrew-web-studio",
+    "version": "0.4.0"
+  },
+  "findings": [
+    {
+      "namespace": "LOOP-BUDGET",
+      "code": "LOOP-BUDGET-001",
+      "severity": "ERROR",
+      "objectType": "node",
+      "nodeId": "external-webhook-call",
+      "edgeId": null,
+      "message": "External-effect node 'external-webhook-call' declares no budget dimension.",
+      "remediation": "Declare at least the minimum budget dimensions.",
+      "nonDismissible": null
+    },
+    {
+      "namespace": "LOOP-GRAPH",
+      "code": "LOOP-GRAPH-002",
+      "severity": "WARNING",
+      "objectType": "node",
+      "nodeId": "legacy-summarizer",
+      "edgeId": null,
+      "message": "Node 'legacy-summarizer' is unreachable from the start node.",
+      "remediation": "Connect the node into the graph or remove it."
+    },
+    {
+      "namespace": "LOOP-PKG",
+      "code": "LOOP-PKG-008",
+      "severity": "WARNING",
+      "objectType": "string",
+      "nodeId": null,
+      "edgeId": null,
+      "message": "Heuristic prompt-risk scan flagged 'docs/README.md': model-directed imperative.",
+      "remediation": "Human review required before publish."
+    }
+  ],
+  "highestSeverity": "ERROR",
+  "createdAtUtc": "2026-08-01T09:55:00Z"
+}

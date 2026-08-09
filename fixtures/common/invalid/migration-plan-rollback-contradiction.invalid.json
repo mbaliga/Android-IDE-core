@@ -1,0 +1,22 @@
+{
+  "migrationId": "01J8Z9R2U4W6Y8A1C3E5G7J9KM",
+  "contractRef": "schemas/common/envelope.schema.json",
+  "fromSchemaVersion": "1.0.0",
+  "toSchemaVersion": "1.1.0",
+  "compatibility": "MINOR",
+  "dataMigration": {
+    "steps": [
+      "Add default null for the new optional 'sequence' field on any stored envelope missing it.",
+      "No existing field is renamed, removed, or retyped; old readers continue to work unmigrated."
+    ],
+    "reversible": true
+  },
+  "rollback": {
+    "possible": false,
+    "steps": [
+      "Drop the 'sequence' field."
+    ]
+  },
+  "issuedAtUtc": "2026-08-07T09:16:44Z",
+  "unknownFields": {}
+}

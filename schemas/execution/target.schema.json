@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/execution/target.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionTarget per FB-RAT-EXE-001 (execution object model). Typically carried as the `payload` of a ContractEnvelope<ExecutionTarget> (see schemas/common/envelope.schema.json), inheriting schemaVersion/objectId/producer/createdAtUtc from that outer envelope — `id` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId (a target can be re-wrapped in a fresh envelope, e.g. on a re-scan, without changing its own identity).",
+  "title": "ExecutionTarget",
+  "description": "A place execution can run: this phone, an SSH host, a Raspberry Pi, a GitHub Actions runner, a Gitea Actions runner (FB-RAT-EXE-010 — initial providers; no other target type is in scope for this contract version). Every field on this shape exists so an ExecutionRequest against this target, and an ExecutionReceipt produced from it, can be evaluated against FB-RAT-STR-004 (compute provenance — execution location, revision, data boundary, state, and result MUST be visible for any non-local target) and the Android platform-grounding facts (W^X exec restriction, FGS type ceilings) baked into this contract as normative text in docs/ratified/EXECUTION_CONTRACT.md §3.",
+  "type": "object",
+  "required": ["id", "type", "displayName", "trust", "arch", "connectivity", "cost", "provenanceStyle", "fgsType"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this target (FB-RAT-COM-002), independent of displayName or host address — a renamed or re-addressed target keeps the same id."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["LOCAL_ANDROID", "SSH_HOST", "RASPBERRY_PI", "GITHUB_ACTIONS", "GITEA_ACTIONS"],
+      "description": "FB-RAT-EXE-010: the closed vocabulary of initial execution providers. RASPBERRY_PI is modeled distinctly from SSH_HOST even though it is commonly reached over SSH (per CLAUDE.md's Devices surface: Pi shell / Arduino-via-Pi) because it carries device-class expectations (attached peripherals, device-flash workflows) an arbitrary SSH_HOST does not. A new target type is a MINOR schema addition to this enum, never a repurposed existing value."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable label, e.g. 'This phone', 'build-box.lan', 'octoprint-pi'. Display-only — MUST NOT be used as identity (FB-RAT-COM-002); see `id`."
+    },
+    "trust": {
+      "type": "string",
+      "enum": ["UNKNOWN", "TRUST_ON_FIRST_USE", "TRUSTED", "CHANGED", "UNTRUSTED"],
+      "description": "Host-trust state, mirroring the TOFU pattern already real in core-engine's RemoteSessionDriver/KnownHosts (WP-0 survey §1(h)): UNKNOWN before any connection attempt; TRUST_ON_FIRST_USE immediately after a first successful handshake pending explicit user confirmation; TRUSTED once the user has confirmed the fingerprint; CHANGED when a previously-trusted hostFingerprint no longer matches (a provider MUST suspend for a fresh user trust decision, never silently proceed); UNTRUSTED when the user explicitly declined. LOCAL_ANDROID and CI-hosted targets (GITHUB_ACTIONS/GITEA_ACTIONS) that have no SSH host key of their own SHOULD report TRUSTED once the underlying platform/API auth succeeds — trust here models 'do we know we are talking to the right machine', not merely 'is there a host key'."
+    },
+    "hostFingerprint": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "SHA-256 fingerprint of the target's host key (SSH_HOST, RASPBERRY_PI). Null for LOCAL_ANDROID and for CI providers (GITHUB_ACTIONS/GITEA_ACTIONS) that authenticate via API token rather than a host key. A non-null value here paired with `trust: CHANGED` is the structural signal a provider MUST treat as a possible MITM and MUST NOT auto-proceed past."
+    },
+    "arch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target CPU architecture string, e.g. 'arm64-v8a' (this constellation's own single-ABI Android target per CLAUDE.md), 'x86_64', 'armv7l'. Free string rather than a closed enum because CI runner architectures vary by provider and this contract does not want to gate on an incomplete list; a provider descriptor's CapabilityManifest.targetRequirements is the place a specific operation states an architecture *requirement* to be matched against this field."
+    },
+    "capabilities": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/capability-manifest.schema.json" },
+            {
+              "type": "object",
+              "properties": {
+                "subjectKind": { "const": "EXECUTION" }
+              }
+            }
+          ]
+        },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Optional CapabilityManifest (reused from schemas/common/capability-manifest.schema.json, not redefined here) narrowed to subjectKind='EXECUTION' — what operations/limits this target currently claims support for. Null before a capability handshake has completed (e.g. target discovered but not yet probed)."
+    },
+    "connectivity": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ALWAYS_ON_LOCAL", "INTERMITTENT_NETWORK", "REQUIRES_EXPLICIT_CONNECT"],
+          "description": "ALWAYS_ON_LOCAL: LOCAL_ANDROID only. INTERMITTENT_NETWORK: reachable but may drop (home Pi, laptop on Wi-Fi) — a provider MUST be prepared to reconnect (FB-RAT-EXE-004). REQUIRES_EXPLICIT_CONNECT: CI providers, or an SSH host behind a VPN the user must dial in to first."
+        },
+        "lastSeenReachableUtc": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "default": null,
+          "description": "UTC instant this target was last confirmed reachable (FB-RAT-COM-004). Null if never successfully reached."
+        }
+      },
+      "additionalProperties": true
+    },
+    "cost": {
+      "type": "object",
+      "required": ["tier"],
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": ["FREE", "METERED", "BILLED"],
+          "description": "FREE: LOCAL_ANDROID, an owned SSH host/Pi with no metered connection. METERED: a connection with a data cap (e.g. cellular fallback to a home Pi). BILLED: GITHUB_ACTIONS/GITEA_ACTIONS minutes against a possibly-exhausted account allowance — see CLAUDE.md 'CI caveat' for a real, documented instance of a BILLED target silently exhausting its allowance and producing misleading 'red build' signal; a provider surfacing a BILLED target SHOULD make remaining-allowance visibility part of its CapabilityManifest.limits when the provider API exposes it."
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Free-text cost detail for display (e.g. 'GitHub Actions — org billing'). Never a substitute for `tier`."
+        }
+      },
+      "additionalProperties": true
+    },
+    "provenanceStyle": {
+      "type": "string",
+      "enum": ["LOCAL_DEVICE_DIRECT", "USER_INITIATED_REMOTE", "CI_PIPELINE"],
+      "description": "FB-RAT-STR-004: compute provenance permits user-initiated SSH and CI compute only when execution location, revision, data boundary, state, and result are visible. LOCAL_DEVICE_DIRECT (LOCAL_ANDROID) has no separate visibility contract to satisfy — the executing device and the requesting device are the same. USER_INITIATED_REMOTE (SSH_HOST, RASPBERRY_PI) and CI_PIPELINE (GITHUB_ACTIONS, GITEA_ACTIONS) MUST carry a non-null `visibilityContract` with every field true before a provider is permitted to start an ExecutionRequest against this target — this schema records the claim structurally; enforcing 'MUST NOT start otherwise' is an Execution Contract provider-gate obligation (see docs/ratified/EXECUTION_CONTRACT.md §4), not something JSON Schema validation alone can block, since a target legitimately needs to be representable mid-handshake before all five are true."
+    },
+    "visibilityContract": {
+      "oneOf": [
+        { "$ref": "#/$defs/VisibilityContract" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Required non-null when provenanceStyle is USER_INITIATED_REMOTE or CI_PIPELINE (see the allOf/if/then below); MAY be null for LOCAL_DEVICE_DIRECT."
+    },
+    "fgsType": {
+      "$ref": "#/$defs/FgsType"
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "provenanceStyle": { "enum": ["USER_INITIATED_REMOTE", "CI_PIPELINE"] } },
+        "required": ["provenanceStyle"]
+      },
+      "then": {
+        "required": ["visibilityContract"],
+        "properties": {
+          "visibilityContract": { "$ref": "#/$defs/VisibilityContract" }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "VisibilityContract": {
+      "type": "object",
+      "required": ["executionLocationVisible", "revisionVisible", "dataBoundaryVisible", "stateVisible", "resultVisible"],
+      "properties": {
+        "executionLocationVisible": { "type": "boolean", "description": "The user can see WHERE this runs (FB-RAT-STR-004)." },
+        "revisionVisible": { "type": "boolean", "description": "The user can see WHAT revision (code/config) is running (FB-RAT-STR-004)." },
+        "dataBoundaryVisible": { "type": "boolean", "description": "The user can see WHAT data crosses the boundary onto this target (FB-RAT-STR-004)." },
+        "stateVisible": { "type": "boolean", "description": "The user can see the CURRENT STATE of the running operation (FB-RAT-STR-004)." },
+        "resultVisible": { "type": "boolean", "description": "The user can see the RESULT once it completes (FB-RAT-STR-004)." }
+      },
+      "additionalProperties": true,
+      "description": "All five MUST be true for a provider to be permitted to start work on this target per FB-RAT-STR-004; a false value here is a legitimate, representable state (e.g. mid-handshake, or a provider that has not yet wired result-visibility), but it is a gate-refusal condition, not something this schema silently allows through to execution — see docs/ratified/EXECUTION_CONTRACT.md §4 and fixtures/execution/adversarial/target-visibility-contract-incomplete.adversarial.json."
+    },
+    "FgsType": {
+      "type": "string",
+      "enum": ["DATA_SYNC", "MEDIA_PROCESSING", "SPECIAL_USE", "CONNECTED_DEVICE", "NONE"],
+      "description": "Android foreground-service type this target's execution work runs under, when it must run as a bounded-duration FGS at all (LOCAL_ANDROID only — remote/CI targets execute on the far side and use NONE here, the FGS ceiling applies to the on-device orchestration process only, if any). DATA_SYNC/MEDIA_PROCESSING carry a hard 6h/rolling-24h ceiling with no extension (Service.onTimeout()) and MUST NOT be declared for open-ended work (builds, agent loops, terminal sessions) — see schemas/execution/request.schema.json's structural if/then, which is where this rule is actually enforced (this target-level field records the target's typical/default fgsType; the per-request field is the one a provider gate MUST check against openEnded before starting). SPECIAL_USE requires a manifest justification string plus Play review. CONNECTED_DEVICE (no fixed timeout) is for USB/serial device work. NONE is for LOCAL_ANDROID work that does not need a foreground service at all (short, bounded, no user-visible notification required) or for any non-LOCAL_ANDROID target."
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/resource-uri.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ResourceUri per FB-RAT-WS-002: provider-qualified; local/SAF/SSH/snapshot/virtual MUST NOT share ambiguous raw paths. The `raw` field is the single authoritative identity string for a resource — it embeds its own scheme prefix so two resources from different providers can never collide even if their provider-local path text happens to look alike. `displayPath`, when present, is explicitly NON-authoritative (UI-only) — a consumer MUST NOT use it for equality/dedup/identity, only `(provider, raw)` together may be used for that (see fixtures/workspace/adversarial/resource-uri-cross-provider-ambiguity.adversarial.json for the fixture this guards against).",
+  "title": "ResourceUri",
+  "description": "A single resource location, provider-qualified per FB-RAT-WS-002. Embedded (duplicated as local $defs, not cross-file $ref'd — same standalone-file tradeoff COMMON_CONVENTIONS.md §3 documents for IntegrityRef) inside project.schema.json, document-buffer.schema.json, recovery-snapshot.schema.json, and buffer-journal-entry.schema.json wherever a resource location is needed.",
+  "type": "object",
+  "required": ["provider", "raw"],
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": ["LOCAL", "SAF", "SSH", "SNAPSHOT", "VIRTUAL"],
+      "description": "Which provider family this resource belongs to (FB-RAT-WS-002). Workspace Kernel providers per FB-RAT-WS-001: on-device filesystem (LOCAL), Android Storage Access Framework (SAF), a remote SSH host (SSH), a point-in-time RecoverySnapshot-backed read-only view (SNAPSHOT), or a synthetic/in-memory resource with no backing store of its own (VIRTUAL, e.g. an unsaved scratch buffer or a generated diff view)."
+    },
+    "raw": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(local|saf|ssh|snapshot|virtual)://\\S+$",
+      "description": "The full, self-describing, provider-qualified identity string, e.g. 'local:///storage/emulated/0/Project/README.md', 'saf://tree/primary%3AProject/doc/README.md', 'ssh://host-9f21/home/dev/project/README.md', 'snapshot://01J8Z.../README.md', 'virtual://scratch/diff-review-4821'. Two ResourceUri values are the SAME resource if and only if `raw` is byte-identical; readers MUST NOT compare only the path tail across providers (FB-RAT-WS-002)."
+    },
+    "displayPath": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional human-legible path for UI display only (e.g. 'Project/README.md'). NON-authoritative — MUST NOT be used for identity, equality, deduplication, or access-control decisions. Two different real resources (e.g. one LOCAL, one SSH) MAY legitimately share the same displayPath; only `(provider, raw)` disambiguates them."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "required": ["provider"], "properties": { "provider": { "const": "LOCAL" } } },
+      "then": { "properties": { "raw": { "pattern": "^local://\\S+$" } } }
+    },
+    {
+      "if": { "required": ["provider"], "properties": { "provider": { "const": "SAF" } } },
+      "then": { "properties": { "raw": { "pattern": "^saf://\\S+$" } } }
+    },
+    {
+      "if": { "required": ["provider"], "properties": { "provider": { "const": "SSH" } } },
+      "then": { "properties": { "raw": { "pattern": "^ssh://\\S+$" } } }
+    },
+    {
+      "if": { "required": ["provider"], "properties": { "provider": { "const": "SNAPSHOT" } } },
+      "then": { "properties": { "raw": { "pattern": "^snapshot://\\S+$" } } }
+    },
+    {
+      "if": { "required": ["provider"], "properties": { "provider": { "const": "VIRTUAL" } } },
+      "then": { "properties": { "raw": { "pattern": "^virtual://\\S+$" } } }
+    }
+  ]
+}

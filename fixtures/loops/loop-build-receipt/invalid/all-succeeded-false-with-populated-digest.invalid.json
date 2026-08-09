@@ -1,0 +1,93 @@
+{
+  "buildReceiptId": "receipt-bad-0002",
+  "sourceDraftRevision": "draft-rev-00045",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "stepName": "FREEZE_DRAFT_REVISION",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 2,
+      "stepName": "VALIDATE_SEMANTIC_GRAPH",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 3,
+      "stepName": "CANONICALIZE",
+      "outcome": "SUCCEEDED",
+      "detail": null
+    },
+    {
+      "stepNumber": 4,
+      "stepName": "SCAN_FORBIDDEN_CONTENT",
+      "outcome": "FAILED",
+      "detail": "LOOP-PKG-002: fixtures/onboard.md matches a forbidden executable-payload pattern."
+    },
+    {
+      "stepNumber": 5,
+      "stepName": "RUN_REQUIRED_FIXTURES",
+      "outcome": "SKIPPED",
+      "detail": "Build blocked at step 4; not attempted."
+    },
+    {
+      "stepNumber": 6,
+      "stepName": "GENERATE_COMPAT_PROVENANCE_DOCS",
+      "outcome": "SKIPPED",
+      "detail": "Build blocked at step 4; not attempted."
+    },
+    {
+      "stepNumber": 7,
+      "stepName": "INVENTORY_FILES",
+      "outcome": "SKIPPED",
+      "detail": "Build blocked at step 4; not attempted."
+    },
+    {
+      "stepNumber": 8,
+      "stepName": "COMPUTE_CONTENT_DIGEST",
+      "outcome": "SKIPPED",
+      "detail": "Build blocked at step 4; not attempted."
+    },
+    {
+      "stepNumber": 9,
+      "stepName": "SIGN_RELEASE_IDENTITY",
+      "outcome": "SKIPPED",
+      "detail": "Build blocked at step 4; not attempted."
+    },
+    {
+      "stepNumber": 10,
+      "stepName": "EMIT_BUILD_RECEIPT",
+      "outcome": "SUCCEEDED",
+      "detail": "Receipt emitted recording the BUILD_BLOCKED outcome."
+    }
+  ],
+  "allStepsSucceeded": false,
+  "semanticDigest": "sha256:5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+  "semanticDigestVersion": "fb-semantic-digest-1",
+  "validationRulesetVersion": "fb-loop-validation-rules-1",
+  "validationFindings": [
+    {
+      "code": "LOOP-PKG-002",
+      "severity": "ERROR",
+      "objectType": "file",
+      "message": "File 'fixtures/onboard.md' is a forbidden executable payload."
+    }
+  ],
+  "testSuiteResults": null,
+  "canonicalizationVersion": "fb-loop-canon-1",
+  "fileInventoryDigest": null,
+  "packageContentDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e",
+    "byteLength": 310
+  },
+  "signatureAction": null,
+  "builderProducer": {
+    "name": "aarso-loop-builder",
+    "version": "1.0.0"
+  },
+  "warnings": [],
+  "createdAtUtc": "2026-07-30T10:20:00Z"
+}

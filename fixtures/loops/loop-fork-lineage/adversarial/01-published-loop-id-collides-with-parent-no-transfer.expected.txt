@@ -1,0 +1,18 @@
+Schema validation: PASSES (this document is schema-valid against loop-fork-lineage.schema.json).
+
+Real rejection: LOOP_FORK_LINEAGE_CONTRACT.md §11/§3 (FB-RAT-LIN-006) — "A published derivative
+MUST receive a new, stable loop family ID, distinct from its parent's, unless ownership of the
+parent family is formally transferred to the derivative's publisher." Here,
+`publication.publishedLoopId` ("loop.demo.hello-file") is byte-identical to `parentReleaseRef
+.loopId`, while `publication.ownershipTransferred` is explicitly `false`. This publisher is
+publishing a derivative under the ORIGINAL publisher's own loop family identity without any
+transfer having occurred — exactly the identity-collision condition §11 exists to prevent (a
+marketplace client resolving "loop.demo.hello-file" could no longer reliably distinguish the
+original publisher's releases from this fork's).
+
+Why the schema cannot catch this: verifying `publication.publishedLoopId != parentReleaseRef
+.loopId` (the safe case) requires comparing two sibling string VALUES for inequality — JSON Schema
+draft 2020-12 has no keyword expressing "these two properties, wherever they appear in the
+document, must not be equal" for arbitrary string values (only `const`/`enum` against a FIXED,
+schema-authored value, never against another instance property). This gap is explicitly
+acknowledged in loop-fork-lineage.schema.json's own allOf `$comment` rather than left unstated.

@@ -1,0 +1,34 @@
+[
+  {
+    "sequence": 40,
+    "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+    "resourceUri": {
+      "provider": "LOCAL",
+      "raw": "local:///storage/emulated/0/Android-IDE-core/README.md",
+      "unknownFields": {}
+    },
+    "opType": "INSERT",
+    "byteRange": { "startByte": 900, "endByteExclusive": 900 },
+    "content": "## Section committed before the kill\n",
+    "recordedAtUtc": "2026-08-07T10:20:00.100Z",
+    "originKind": "HUMAN",
+    "originPrincipal": "user:owner",
+    "unknownFields": {}
+  },
+  {
+    "sequence": 42,
+    "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+    "resourceUri": {
+      "provider": "LOCAL",
+      "raw": "local:///storage/emulated/0/Android-IDE-core/README.md",
+      "unknownFields": {}
+    },
+    "opType": "INSERT",
+    "byteRange": { "startByte": 960, "endByteExclusive": 960 },
+    "content": "## Section observed after restart, sequence 41 never arrived\n",
+    "recordedAtUtc": "2026-08-07T10:20:00.900Z",
+    "originKind": "HUMAN",
+    "originPrincipal": "user:owner",
+    "unknownFields": {}
+  }
+]

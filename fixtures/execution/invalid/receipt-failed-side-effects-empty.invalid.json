@@ -1,0 +1,26 @@
+{
+  "receiptId": "01J8ZR0000000000000000EY",
+  "requestId": "01J8ZB0000000000000000R3",
+  "handleId": "01J8ZH0000000000000000H3",
+  "targetSnapshot": {
+    "id": "01J8ZA0000000000000000T3",
+    "type": "GITHUB_ACTIONS",
+    "displayName": "android-ide-core CI",
+    "trust": "TRUSTED",
+    "hostFingerprint": null,
+    "arch": "x86_64"
+  },
+  "revision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
+  "capsuleDigest": { "algorithm": "SHA-256", "digestHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "byteLength": 219 },
+  "timings": { "queuedAtUtc": "2026-08-07T12:10:01Z", "startedAtUtc": "2026-08-07T12:10:19Z", "finishedAtUtc": "2026-08-07T12:10:41Z", "durationMs": 22000 },
+  "exitState": "FAILED_SIDE_EFFECTS_POSSIBLE",
+  "terminationCause": null,
+  "logs": { "ref": null, "excerpt": null, "redactionApplied": true },
+  "resourceSummary": {},
+  "outputs": [],
+  "sideEffects": [],
+  "verification": { "state": "FAILED", "method": null, "verifiedAtUtc": null },
+  "provenance": { "sourceLocation": ".github/workflows/ci.yml", "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071", "initiatingPrincipal": "owner", "evidenceLinks": [] },
+  "unknownFields": {},
+  "$note": "INVALID: exitState=FAILED_SIDE_EFFECTS_POSSIBLE with sideEffects=[] — the state's entire purpose is to name what may have happened; leaving it empty defeats the receipt's job."
+}

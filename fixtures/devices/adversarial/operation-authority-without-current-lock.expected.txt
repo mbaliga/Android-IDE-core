@@ -1,0 +1,37 @@
+Fixture: fixtures/devices/adversarial/operation-authority-without-current-lock.adversarial.json
+Schema: schemas/devices/operation.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+DeviceOperation op-4020 (an ERASE — destructive) carries
+authority.exclusiveLockId: "lock-7777-EXPIRED-FROM-OP-1999" (self-evidently, by its own naming, a
+lock minted for a prior, unrelated operation, not a lock freshly granted for op-4020) alongside
+authority.destructiveActionExplicitlyAuthorized: true, and has already reached
+state: IN_PROGRESS with protocol.sideEffectsPossible: true against connectionId "conn-0049".
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/devices/operation.schema.json's `authority.exclusiveLockId` is `{"type": "string",
+"minLength": 1}` — any non-empty string satisfies it, structurally indistinguishable from a lock
+id that is actually current, live, and held for THIS operation. Verifying that a given
+exclusiveLockId equals the referenced DeviceConnection's CURRENT `exclusiveLock.lockId`
+(schemas/devices/connection.schema.json) at the moment of authorization is a cross-object,
+point-in-time check no single-document JSON Schema can express.
+
+REQUIRED REAL BEHAVIOR (FB-RAT-DEV-001 — privilege escalation risk under the single-arbiter rule:
+one Device Broker arbitrates serial, flash, debug, USB permission, device locks)
+
+A real Device Broker implementation MUST, immediately before permitting a DeviceOperation to
+advance from AUTHORIZED into IN_PROGRESS, re-validate that `authority.exclusiveLockId` equals the
+target DeviceConnection's CURRENT `exclusiveLock.lockId`, that the lock has not expired, and that
+it was granted to the same principal now claiming authority. If the referenced lock is stale (as
+here — a lock id from a different, already-completed operation), expired, held by a different
+principal, or simply does not match the connection's live lock record at all, the broker MUST
+refuse and resolve the operation to FAILED_SAFE (the precondition/authority failure happens before
+any destructive action, per FB-RAT-DEV-007's same before-erase framing) rather than allow it to
+proceed. Without this re-check, a replayed, forged, or leaked lock-id string could authorize a
+destructive erase/flash without the calling principal ever having actually gone through the
+broker's exclusive-arbitration handshake — exactly the privilege-escalation shape FB-RAT-DEV-001's
+single-arbiter rule exists to close off.
+
+Rejection code: DEVICE_AUTHORITY_STALE_LOCK

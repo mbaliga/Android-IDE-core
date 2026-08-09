@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/execution/receipt.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionReceipt per FB-RAT-EXE-001. Typically carried as the `payload` of a ContractEnvelope<ExecutionReceipt> (see schemas/common/envelope.schema.json). `receiptId` is this object's own FB-RAT-COM-002 stable ID. Receipts are append-only (FB-RAT-COM-006) — a corrected receipt is a NEW receipt referencing the old one via `unknownFields`/provenance, never an in-place edit.",
+  "title": "ExecutionReceipt",
+  "description": "The durable, terminal record of one ExecutionRequest run: a target snapshot, the revision actually executed, a capsule digest, timings, exit state, logs, resource usage, output ArtifactRefs (reused from schemas/common/artifact-ref.schema.json, not redefined), recorded side effects, and result verification — kept structurally separate from success (FB-RAT-EXE-009). Emitted once, at (or after) a terminal ExecutionHandle.state.",
+  "type": "object",
+  "required": [
+    "receiptId", "requestId", "handleId", "targetSnapshot", "revision", "capsuleDigest",
+    "timings", "exitState", "logs", "resourceSummary", "outputs", "sideEffects",
+    "verification", "provenance"
+  ],
+  "properties": {
+    "receiptId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this receipt (FB-RAT-COM-002)."
+    },
+    "requestId": { "type": "string", "minLength": 1, "description": "References the ExecutionRequest.id this receipt reports on." },
+    "handleId": { "type": "string", "minLength": 1, "description": "References the ExecutionHandle.handleId whose terminal state this receipt is derived from." },
+    "targetSnapshot": {
+      "type": "object",
+      "required": ["id", "type", "displayName", "trust", "arch"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "The ExecutionTarget.id this ran on — a stable reference, but the rest of this object is a POINT-IN-TIME COPY of that target's fields at execution time, not a live reference, because a target's own trust/fingerprint/arch can legitimately change later without rewriting history." },
+        "type": { "type": "string", "enum": ["LOCAL_ANDROID", "SSH_HOST", "RASPBERRY_PI", "GITHUB_ACTIONS", "GITEA_ACTIONS"] },
+        "displayName": { "type": "string", "minLength": 1 },
+        "trust": { "type": "string", "enum": ["UNKNOWN", "TRUST_ON_FIRST_USE", "TRUSTED", "CHANGED", "UNTRUSTED"] },
+        "hostFingerprint": { "type": ["string", "null"], "default": null },
+        "arch": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true,
+      "description": "Duplicated subset of schemas/execution/target.schema.json's ExecutionTarget fields per this repo's convention of duplicating small shared sub-shapes across schema files (docs/ratified/COMMON_CONVENTIONS.md §5) rather than reaching into another document's $defs."
+    },
+    "revision": {
+      "type": ["string", "null"],
+      "description": "The exact revision that actually executed (resolved, e.g. a full git commit SHA rather than a branch name — FB-RAT-STR-004 revision visibility). Null only when the corresponding ExecutionRequest.workingRevision was also null (no git-scoped working tree)."
+    },
+    "capsuleDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "Digest+length over the serialized 'execution capsule' — the exact command, args, resolved env, and secret-handle references (never secret values) that were sent to the provider (FB-RAT-COM-005). Lets a caller later prove exactly what was requested to run, independent of the human-readable `operation.command` string on the originating ExecutionRequest."
+    },
+    "timings": {
+      "type": "object",
+      "required": ["queuedAtUtc", "finishedAtUtc"],
+      "properties": {
+        "queuedAtUtc": { "type": "string", "format": "date-time" },
+        "startedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null, "description": "Null only if the operation never left QUEUED (e.g. cancelled before PREPARING)." },
+        "finishedAtUtc": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": ["integer", "null"], "minimum": 0, "default": null, "description": "finishedAtUtc - startedAtUtc in milliseconds, when startedAtUtc is non-null. Null when startedAtUtc is null." }
+      },
+      "additionalProperties": true
+    },
+    "exitState": { "$ref": "#/$defs/ExecutionExitState" },
+    "terminationCause": {
+      "oneOf": [
+        { "$ref": "#/$defs/TerminationCause" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Android 12+ phantom-process-killer awareness (platform grounding): required non-null when `exitState` is TARGET_STATE_UNKNOWN (see the if/then below) — a receipt MUST record that the process may simply have been SIGKILLed with no chance to report, not silently omit the cause."
+    },
+    "logs": {
+      "type": "object",
+      "required": ["redactionApplied"],
+      "properties": {
+        "ref": {
+          "oneOf": [
+            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json" },
+            { "type": "null" }
+          ],
+          "default": null,
+          "description": "Full log bundle as an ArtifactRef (reused from schemas/common/artifact-ref.schema.json, not redefined), or null if no durable log bundle was produced."
+        },
+        "excerpt": {
+          "type": ["string", "null"],
+          "maxLength": 4096,
+          "default": null,
+          "description": "Short inline excerpt (e.g. the log tail) for quick display without fetching `ref`. MUST be redaction-scanned before population, identically to schemas/common/error.schema.json's ErrorEnvelope.detail (binding rule: API keys are never logged) — see fixtures/execution/adversarial/receipt-secret-leak-in-log-excerpt.adversarial.json for the fixture this guards against, and fixtures/execution/valid/receipt-log-excerpt-redacted-clean.json for the compliant counterpart."
+        },
+        "redactionApplied": {
+          "type": "boolean",
+          "description": "Producer's own claim that credential-shaped substrings were scanned and redacted from `excerpt` (and from whatever `ref` points at) before this receipt was written. A schema cannot verify the claim is true — see the adversarial fixture referenced above, where this field is (incorrectly) true while `excerpt` still contains a live-looking secret, which is exactly the case a real implementation's redaction step MUST prevent from ever being constructible."
+        }
+      },
+      "additionalProperties": true
+    },
+    "resourceSummary": {
+      "type": "object",
+      "properties": {
+        "cpuSecondsUsed": { "type": ["number", "null"], "minimum": 0, "default": null },
+        "wallClockSecondsUsed": { "type": ["number", "null"], "minimum": 0, "default": null },
+        "networkBytesUp": { "type": ["integer", "null"], "minimum": 0, "default": null },
+        "networkBytesDown": { "type": ["integer", "null"], "minimum": 0, "default": null },
+        "peakMemoryBytes": { "type": ["integer", "null"], "minimum": 0, "default": null },
+        "thermalStateObserved": {
+          "type": ["string", "null"],
+          "enum": ["NOMINAL", "LIGHT", "MODERATE", "SEVERE", "CRITICAL", "EMERGENCY", "SHUTDOWN", "UNKNOWN", null],
+          "default": null,
+          "description": "FB-RAT-EXE-006 P0-normative half: thermal STATE OBSERVABILITY. Null only when the target/provider does not support thermal observability at all (see ExecutionRequest.budget.thermalStateObservabilityRequired); UNKNOWN means observability was attempted but inconclusive, distinct from never having attempted it (null)."
+        }
+      },
+      "additionalProperties": true,
+      "description": "All fields nullable/optional — not every provider (e.g. a CI_PIPELINE target) can report every resource dimension a LOCAL_ANDROID target can."
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json" },
+      "default": [],
+      "description": "Realized output artifacts, reused as-is from schemas/common/artifact-ref.schema.json (not redefined here) — each entry's own `producerReceipt.receiptObjectId` SHOULD point back at this receipt's ContractEnvelope.objectId."
+    },
+    "sideEffects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "external"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "external": { "type": "boolean", "description": "True if this side effect is visible/persists outside the immediate execution session (a git push, a device flash, a dispatched CI run) — FALSE for effects fully contained and already reversed within this same execution (e.g. a temp file cleaned up before exit)." },
+          "reversible": { "type": ["boolean", "null"], "default": null },
+          "occurredAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+        },
+        "additionalProperties": true
+      },
+      "default": [],
+      "description": "Real-world side effects this execution is known (or believed) to have caused. Required non-empty when `exitState` is FAILED_SIDE_EFFECTS_POSSIBLE (see the if/then below) — a receipt MUST NOT use that exit state and then leave this array empty, since the whole point of the state is to name what may have happened."
+    },
+    "verification": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["NOT_PERFORMED", "VERIFIED", "FAILED", "SKIPPED"],
+          "description": "FB-RAT-EXE-009: operation success and result verification are separate states. See the if/then rules below tying this to `exitState`."
+        },
+        "method": { "type": ["string", "null"], "default": null, "description": "How verification was performed, e.g. 'checksum compare against expected artifact', 'STK500 flash-verify readback', 'exit code + test-report parse'." },
+        "verifiedAtUtc": { "type": ["string", "null"], "format": "date-time", "default": null }
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["sourceLocation", "projectRevision", "initiatingPrincipal"],
+      "properties": {
+        "sourceLocation": { "type": "string", "minLength": 1, "description": "FB-RAT-COM-008 — where the executed operation came from (repo path, device path, workflow file ref)." },
+        "projectRevision": { "type": "string", "minLength": 1, "description": "FB-RAT-COM-008 — project/repo revision in effect (often equal to `revision` above, but named separately because the two can differ, e.g. a device-flash operation whose 'project' is the firmware repo while `revision` is the flashed image's own version string)." },
+        "initiatingPrincipal": { "type": "string", "minLength": 1, "description": "FB-RAT-COM-008 — who or what initiated this execution (user id, agent name, scheduled-loop id)." },
+        "evidenceLinks": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [], "description": "FB-RAT-COM-008 — optional supporting evidence links (logs, related receipts, screenshots)." }
+      },
+      "additionalProperties": true,
+      "description": "FB-RAT-COM-008 provenance minimum, duplicated inline per this repo's convention (mirrors ArtifactRef.ProducerReceiptRef in schemas/common/artifact-ref.schema.json's $defs) rather than cross-file $ref'd into another document's $defs."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "exitState": { "const": "SUCCEEDED" } }, "required": ["exitState"] },
+      "then": { "properties": { "verification": { "type": "object", "required": ["state"], "properties": { "state": { "const": "VERIFIED" } } } } },
+      "$comment": "FB-RAT-EXE-009: exitState SUCCEEDED requires verification.state VERIFIED — a plain success without verification MUST use SUCCEEDED_UNVERIFIED instead."
+    },
+    {
+      "if": { "properties": { "exitState": { "const": "SUCCEEDED_UNVERIFIED" } }, "required": ["exitState"] },
+      "then": { "properties": { "verification": { "type": "object", "required": ["state"], "properties": { "state": { "enum": ["NOT_PERFORMED", "SKIPPED"] } } } } },
+      "$comment": "FB-RAT-EXE-009: SUCCEEDED_UNVERIFIED MUST NOT claim verification.state VERIFIED or FAILED — either it wasn't attempted, or it was explicitly skipped."
+    },
+    {
+      "if": { "properties": { "exitState": { "enum": ["FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE"] } }, "required": ["exitState"] },
+      "then": { "properties": { "verification": { "type": "object", "required": ["state"], "properties": { "state": { "not": { "const": "VERIFIED" } } } } } },
+      "$comment": "FB-RAT-EXE-009: a failed exitState MUST NOT simultaneously claim verification.state VERIFIED."
+    },
+    {
+      "if": { "properties": { "exitState": { "const": "TARGET_STATE_UNKNOWN" } }, "required": ["exitState"] },
+      "then": { "required": ["terminationCause"] },
+      "$comment": "Platform grounding: a TARGET_STATE_UNKNOWN receipt MUST record a terminationCause (SIGKILL suspected, reconnect uncertainty, etc.) rather than leaving the reason implicit."
+    },
+    {
+      "if": { "properties": { "exitState": { "const": "FAILED_SIDE_EFFECTS_POSSIBLE" } }, "required": ["exitState"] },
+      "then": { "properties": { "sideEffects": { "type": "array", "minItems": 1 } } },
+      "$comment": "A receipt MUST NOT declare FAILED_SIDE_EFFECTS_POSSIBLE and then leave sideEffects empty — name what may have happened."
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "ExecutionExitState": {
+      "type": "string",
+      "enum": ["SUCCEEDED", "SUCCEEDED_UNVERIFIED", "FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED"],
+      "description": "The terminal subset of schemas/execution/handle.schema.json's ExecutionState enum — a receipt is only ever emitted once a handle has reached one of these six terminal states."
+    },
+    "TerminationCause": {
+      "type": "string",
+      "enum": ["NORMAL", "USER_CANCELLED", "SIGKILL_SUSPECTED", "PROCESS_DEATH_UNSPECIFIED", "RECONNECT_UNKNOWN"],
+      "description": "NORMAL: the operation ran to its own natural conclusion. USER_CANCELLED: an explicit cancel() completed. SIGKILL_SUSPECTED: heartbeat/process evidence points at an Android 12+ phantom-process-kill or similar OS-level kill. PROCESS_DEATH_UNSPECIFIED: the owning process is confirmed gone but the specific cause is not known. RECONNECT_UNKNOWN: a reconnect() attempt could not establish state (FB-RAT-EXE-004) — see schemas/execution/handle.schema.json's ReconnectAttempt.outcome for the finer-grained reason."
+    },
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"], "description": "Digest algorithm; SHA-256 or stronger only (FB-RAT-COM-005)." },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "required": ["algorithm"], "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true,
+      "description": "Duplicated from schemas/common/envelope.schema.json's $defs/IntegrityRef per this repo's convention (docs/ratified/COMMON_CONVENTIONS.md §5) of duplicating small shared sub-shapes rather than cross-file $ref into another document's $defs."
+    }
+  }
+}

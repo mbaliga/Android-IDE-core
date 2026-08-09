@@ -1,0 +1,503 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "01J9B0000000000000000RC5",
+  "sourceType": "ASSAY_REPO_INDEX",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "6d842f947c115bbb9429b51860e53d2345dfc0d7329f4ec7b863d83552337e49",
+    "byteLength": 245760
+  },
+  "sourceLocation": "github.com/owner/target-repo@assay-output:.assay/assay-index.v1.json",
+  "previewId": "01J9C0000000000000000PV5",
+  "initiatedBy": "studio-user:jordan",
+  "decision": "FULL",
+  "createdAtUtc": "2026-08-05T09:30:00Z",
+  "created": [
+    {
+      "sourceId": "assay-finding-00000",
+      "incidentId": "01J9D0000000000000000000"
+    },
+    {
+      "sourceId": "assay-finding-00001",
+      "incidentId": "01J9D0000000000000000001"
+    },
+    {
+      "sourceId": "assay-finding-00002",
+      "incidentId": "01J9D0000000000000000002"
+    },
+    {
+      "sourceId": "assay-finding-00003",
+      "incidentId": "01J9D0000000000000000003"
+    },
+    {
+      "sourceId": "assay-finding-00004",
+      "incidentId": "01J9D0000000000000000004"
+    },
+    {
+      "sourceId": "assay-finding-00005",
+      "incidentId": "01J9D0000000000000000005"
+    },
+    {
+      "sourceId": "assay-finding-00006",
+      "incidentId": "01J9D0000000000000000006"
+    },
+    {
+      "sourceId": "assay-finding-00007",
+      "incidentId": "01J9D0000000000000000007"
+    },
+    {
+      "sourceId": "assay-finding-00008",
+      "incidentId": "01J9D0000000000000000008"
+    },
+    {
+      "sourceId": "assay-finding-00009",
+      "incidentId": "01J9D0000000000000000009"
+    },
+    {
+      "sourceId": "assay-finding-00010",
+      "incidentId": "01J9D0000000000000000010"
+    },
+    {
+      "sourceId": "assay-finding-00011",
+      "incidentId": "01J9D0000000000000000011"
+    },
+    {
+      "sourceId": "assay-finding-00012",
+      "incidentId": "01J9D0000000000000000012"
+    },
+    {
+      "sourceId": "assay-finding-00013",
+      "incidentId": "01J9D0000000000000000013"
+    },
+    {
+      "sourceId": "assay-finding-00014",
+      "incidentId": "01J9D0000000000000000014"
+    },
+    {
+      "sourceId": "assay-finding-00015",
+      "incidentId": "01J9D0000000000000000015"
+    },
+    {
+      "sourceId": "assay-finding-00016",
+      "incidentId": "01J9D0000000000000000016"
+    },
+    {
+      "sourceId": "assay-finding-00017",
+      "incidentId": "01J9D0000000000000000017"
+    },
+    {
+      "sourceId": "assay-finding-00018",
+      "incidentId": "01J9D0000000000000000018"
+    },
+    {
+      "sourceId": "assay-finding-00019",
+      "incidentId": "01J9D0000000000000000019"
+    },
+    {
+      "sourceId": "assay-finding-00020",
+      "incidentId": "01J9D0000000000000000020"
+    },
+    {
+      "sourceId": "assay-finding-00021",
+      "incidentId": "01J9D0000000000000000021"
+    },
+    {
+      "sourceId": "assay-finding-00022",
+      "incidentId": "01J9D0000000000000000022"
+    },
+    {
+      "sourceId": "assay-finding-00023",
+      "incidentId": "01J9D0000000000000000023"
+    },
+    {
+      "sourceId": "assay-finding-00024",
+      "incidentId": "01J9D0000000000000000024"
+    },
+    {
+      "sourceId": "assay-finding-00025",
+      "incidentId": "01J9D0000000000000000025"
+    },
+    {
+      "sourceId": "assay-finding-00026",
+      "incidentId": "01J9D0000000000000000026"
+    },
+    {
+      "sourceId": "assay-finding-00027",
+      "incidentId": "01J9D0000000000000000027"
+    },
+    {
+      "sourceId": "assay-finding-00028",
+      "incidentId": "01J9D0000000000000000028"
+    },
+    {
+      "sourceId": "assay-finding-00029",
+      "incidentId": "01J9D0000000000000000029"
+    },
+    {
+      "sourceId": "assay-finding-00030",
+      "incidentId": "01J9D0000000000000000030"
+    },
+    {
+      "sourceId": "assay-finding-00031",
+      "incidentId": "01J9D0000000000000000031"
+    },
+    {
+      "sourceId": "assay-finding-00032",
+      "incidentId": "01J9D0000000000000000032"
+    },
+    {
+      "sourceId": "assay-finding-00033",
+      "incidentId": "01J9D0000000000000000033"
+    },
+    {
+      "sourceId": "assay-finding-00034",
+      "incidentId": "01J9D0000000000000000034"
+    },
+    {
+      "sourceId": "assay-finding-00035",
+      "incidentId": "01J9D0000000000000000035"
+    },
+    {
+      "sourceId": "assay-finding-00036",
+      "incidentId": "01J9D0000000000000000036"
+    },
+    {
+      "sourceId": "assay-finding-00037",
+      "incidentId": "01J9D0000000000000000037"
+    },
+    {
+      "sourceId": "assay-finding-00038",
+      "incidentId": "01J9D0000000000000000038"
+    },
+    {
+      "sourceId": "assay-finding-00039",
+      "incidentId": "01J9D0000000000000000039"
+    },
+    {
+      "sourceId": "assay-finding-00040",
+      "incidentId": "01J9D0000000000000000040"
+    },
+    {
+      "sourceId": "assay-finding-00041",
+      "incidentId": "01J9D0000000000000000041"
+    },
+    {
+      "sourceId": "assay-finding-00042",
+      "incidentId": "01J9D0000000000000000042"
+    },
+    {
+      "sourceId": "assay-finding-00043",
+      "incidentId": "01J9D0000000000000000043"
+    },
+    {
+      "sourceId": "assay-finding-00044",
+      "incidentId": "01J9D0000000000000000044"
+    },
+    {
+      "sourceId": "assay-finding-00045",
+      "incidentId": "01J9D0000000000000000045"
+    },
+    {
+      "sourceId": "assay-finding-00046",
+      "incidentId": "01J9D0000000000000000046"
+    },
+    {
+      "sourceId": "assay-finding-00047",
+      "incidentId": "01J9D0000000000000000047"
+    },
+    {
+      "sourceId": "assay-finding-00048",
+      "incidentId": "01J9D0000000000000000048"
+    },
+    {
+      "sourceId": "assay-finding-00049",
+      "incidentId": "01J9D0000000000000000049"
+    },
+    {
+      "sourceId": "assay-finding-00050",
+      "incidentId": "01J9D0000000000000000050"
+    },
+    {
+      "sourceId": "assay-finding-00051",
+      "incidentId": "01J9D0000000000000000051"
+    },
+    {
+      "sourceId": "assay-finding-00052",
+      "incidentId": "01J9D0000000000000000052"
+    },
+    {
+      "sourceId": "assay-finding-00053",
+      "incidentId": "01J9D0000000000000000053"
+    },
+    {
+      "sourceId": "assay-finding-00054",
+      "incidentId": "01J9D0000000000000000054"
+    },
+    {
+      "sourceId": "assay-finding-00055",
+      "incidentId": "01J9D0000000000000000055"
+    },
+    {
+      "sourceId": "assay-finding-00056",
+      "incidentId": "01J9D0000000000000000056"
+    },
+    {
+      "sourceId": "assay-finding-00057",
+      "incidentId": "01J9D0000000000000000057"
+    },
+    {
+      "sourceId": "assay-finding-00058",
+      "incidentId": "01J9D0000000000000000058"
+    },
+    {
+      "sourceId": "assay-finding-00059",
+      "incidentId": "01J9D0000000000000000059"
+    },
+    {
+      "sourceId": "assay-finding-00060",
+      "incidentId": "01J9D0000000000000000060"
+    },
+    {
+      "sourceId": "assay-finding-00061",
+      "incidentId": "01J9D0000000000000000061"
+    },
+    {
+      "sourceId": "assay-finding-00062",
+      "incidentId": "01J9D0000000000000000062"
+    },
+    {
+      "sourceId": "assay-finding-00063",
+      "incidentId": "01J9D0000000000000000063"
+    },
+    {
+      "sourceId": "assay-finding-00064",
+      "incidentId": "01J9D0000000000000000064"
+    },
+    {
+      "sourceId": "assay-finding-00065",
+      "incidentId": "01J9D0000000000000000065"
+    },
+    {
+      "sourceId": "assay-finding-00066",
+      "incidentId": "01J9D0000000000000000066"
+    },
+    {
+      "sourceId": "assay-finding-00067",
+      "incidentId": "01J9D0000000000000000067"
+    },
+    {
+      "sourceId": "assay-finding-00068",
+      "incidentId": "01J9D0000000000000000068"
+    },
+    {
+      "sourceId": "assay-finding-00069",
+      "incidentId": "01J9D0000000000000000069"
+    },
+    {
+      "sourceId": "assay-finding-00070",
+      "incidentId": "01J9D0000000000000000070"
+    },
+    {
+      "sourceId": "assay-finding-00071",
+      "incidentId": "01J9D0000000000000000071"
+    },
+    {
+      "sourceId": "assay-finding-00072",
+      "incidentId": "01J9D0000000000000000072"
+    },
+    {
+      "sourceId": "assay-finding-00073",
+      "incidentId": "01J9D0000000000000000073"
+    },
+    {
+      "sourceId": "assay-finding-00074",
+      "incidentId": "01J9D0000000000000000074"
+    },
+    {
+      "sourceId": "assay-finding-00075",
+      "incidentId": "01J9D0000000000000000075"
+    },
+    {
+      "sourceId": "assay-finding-00076",
+      "incidentId": "01J9D0000000000000000076"
+    },
+    {
+      "sourceId": "assay-finding-00077",
+      "incidentId": "01J9D0000000000000000077"
+    },
+    {
+      "sourceId": "assay-finding-00078",
+      "incidentId": "01J9D0000000000000000078"
+    },
+    {
+      "sourceId": "assay-finding-00079",
+      "incidentId": "01J9D0000000000000000079"
+    },
+    {
+      "sourceId": "assay-finding-00080",
+      "incidentId": "01J9D0000000000000000080"
+    },
+    {
+      "sourceId": "assay-finding-00081",
+      "incidentId": "01J9D0000000000000000081"
+    },
+    {
+      "sourceId": "assay-finding-00082",
+      "incidentId": "01J9D0000000000000000082"
+    },
+    {
+      "sourceId": "assay-finding-00083",
+      "incidentId": "01J9D0000000000000000083"
+    },
+    {
+      "sourceId": "assay-finding-00084",
+      "incidentId": "01J9D0000000000000000084"
+    },
+    {
+      "sourceId": "assay-finding-00085",
+      "incidentId": "01J9D0000000000000000085"
+    },
+    {
+      "sourceId": "assay-finding-00086",
+      "incidentId": "01J9D0000000000000000086"
+    },
+    {
+      "sourceId": "assay-finding-00087",
+      "incidentId": "01J9D0000000000000000087"
+    },
+    {
+      "sourceId": "assay-finding-00088",
+      "incidentId": "01J9D0000000000000000088"
+    },
+    {
+      "sourceId": "assay-finding-00089",
+      "incidentId": "01J9D0000000000000000089"
+    },
+    {
+      "sourceId": "assay-finding-00090",
+      "incidentId": "01J9D0000000000000000090"
+    },
+    {
+      "sourceId": "assay-finding-00091",
+      "incidentId": "01J9D0000000000000000091"
+    },
+    {
+      "sourceId": "assay-finding-00092",
+      "incidentId": "01J9D0000000000000000092"
+    },
+    {
+      "sourceId": "assay-finding-00093",
+      "incidentId": "01J9D0000000000000000093"
+    },
+    {
+      "sourceId": "assay-finding-00094",
+      "incidentId": "01J9D0000000000000000094"
+    },
+    {
+      "sourceId": "assay-finding-00095",
+      "incidentId": "01J9D0000000000000000095"
+    },
+    {
+      "sourceId": "assay-finding-00096",
+      "incidentId": "01J9D0000000000000000096"
+    },
+    {
+      "sourceId": "assay-finding-00097",
+      "incidentId": "01J9D0000000000000000097"
+    },
+    {
+      "sourceId": "assay-finding-00098",
+      "incidentId": "01J9D0000000000000000098"
+    },
+    {
+      "sourceId": "assay-finding-00099",
+      "incidentId": "01J9D0000000000000000099"
+    },
+    {
+      "sourceId": "assay-finding-00100",
+      "incidentId": "01J9D0000000000000000100"
+    },
+    {
+      "sourceId": "assay-finding-00101",
+      "incidentId": "01J9D0000000000000000101"
+    },
+    {
+      "sourceId": "assay-finding-00102",
+      "incidentId": "01J9D0000000000000000102"
+    },
+    {
+      "sourceId": "assay-finding-00103",
+      "incidentId": "01J9D0000000000000000103"
+    },
+    {
+      "sourceId": "assay-finding-00104",
+      "incidentId": "01J9D0000000000000000104"
+    },
+    {
+      "sourceId": "assay-finding-00105",
+      "incidentId": "01J9D0000000000000000105"
+    },
+    {
+      "sourceId": "assay-finding-00106",
+      "incidentId": "01J9D0000000000000000106"
+    },
+    {
+      "sourceId": "assay-finding-00107",
+      "incidentId": "01J9D0000000000000000107"
+    },
+    {
+      "sourceId": "assay-finding-00108",
+      "incidentId": "01J9D0000000000000000108"
+    },
+    {
+      "sourceId": "assay-finding-00109",
+      "incidentId": "01J9D0000000000000000109"
+    },
+    {
+      "sourceId": "assay-finding-00110",
+      "incidentId": "01J9D0000000000000000110"
+    },
+    {
+      "sourceId": "assay-finding-00111",
+      "incidentId": "01J9D0000000000000000111"
+    },
+    {
+      "sourceId": "assay-finding-00112",
+      "incidentId": "01J9D0000000000000000112"
+    },
+    {
+      "sourceId": "assay-finding-00113",
+      "incidentId": "01J9D0000000000000000113"
+    },
+    {
+      "sourceId": "assay-finding-00114",
+      "incidentId": "01J9D0000000000000000114"
+    },
+    {
+      "sourceId": "assay-finding-00115",
+      "incidentId": "01J9D0000000000000000115"
+    },
+    {
+      "sourceId": "assay-finding-00116",
+      "incidentId": "01J9D0000000000000000116"
+    },
+    {
+      "sourceId": "assay-finding-00117",
+      "incidentId": "01J9D0000000000000000117"
+    },
+    {
+      "sourceId": "assay-finding-00118",
+      "incidentId": "01J9D0000000000000000118"
+    },
+    {
+      "sourceId": "assay-finding-00119",
+      "incidentId": "01J9D0000000000000000119"
+    }
+  ],
+  "updated": [],
+  "duplicates": [],
+  "rejected": [],
+  "unknownFields": {
+    "note": "Models a large-batch Assay promotion (120 findings promoted to Incidents in one Confirm) to exercise the no-schema-level-cap path on created[]/updated[]/duplicates[]/rejected[]; a real implementation applies its own batch-size UX limits, not enforced here."
+  }
+}

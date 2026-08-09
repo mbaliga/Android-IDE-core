@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/common/conformance-suite.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ConformanceSuite descriptor per FB-RAT-COM-011 and FB-RAT-DIST-004 (Definition of Ready/Done: contract-first DoR/DoD + the 8 conformance test classes as release governance). Typically carried as the `payload` of a ContractEnvelope<ConformanceSuite> (see envelope.schema.json); `suiteId` below is this object's own FB-RAT-COM-002 stable ID.",
+  "title": "ConformanceSuite",
+  "type": "object",
+  "required": ["suiteId", "name", "contractRef", "testClasses", "fixtureDirectoryRef"],
+  "properties": {
+    "suiteId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this suite (FB-RAT-COM-002)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable suite name, e.g. 'CommonContracts envelope+error conformance'."
+    },
+    "contractRef": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier of the contract this suite conformance-tests, e.g. a schema '$id' (or repo-relative path) or a Kotlin type FQN."
+    },
+    "testClasses": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The FB-RAT-DIST-004 eight conformance test classes this suite covers, and whether each is JVM-testable in the build container (no device/emulator — see CLAUDE.md 'Environment honesty').",
+      "items": {
+        "type": "object",
+        "required": ["testClass", "jvmTestable"],
+        "properties": {
+          "testClass": {
+            "type": "string",
+            "enum": [
+              "GOLDEN_SERIALIZATION",
+              "STATE_TRANSITION",
+              "ADVERSARIAL",
+              "PROVIDER_CONFORMANCE",
+              "RECOVERY",
+              "PERFORMANCE",
+              "ACCESSIBILITY",
+              "COMPATIBILITY"
+            ]
+          },
+          "jvmTestable": {
+            "type": "string",
+            "enum": ["YES", "PARTIAL", "NO"],
+            "description": "YES = fully exercisable on the JVM gate with no device; PARTIAL = the structural/logic half is JVM-testable but a device-owner-verified half remains; NO = requires a real device/emulator/board and is out of CI's reach entirely."
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "default": null
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "fixtureDirectoryRef": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Repo-relative path to the fixtures/ directory this suite reads, containing valid/ invalid/ adversarial/ subfolders per the FIXTURES convention."
+    },
+    "definitionOfReady": {
+      "type": "boolean",
+      "default": false,
+      "description": "FB-RAT-DIST-004: true only once golden-serialization + state-machine + adversarial + recovery + compatibility + provider-conformance fixtures exist for the referenced contract BEFORE feature implementation begins."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true
+}

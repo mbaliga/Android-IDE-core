@@ -1,0 +1,20 @@
+Schema validation: PASSES (this document is schema-valid against loop-draft.schema.json).
+
+Real rejection code: LOOP-ID-002 (namespace LOOP-ID, severity ERROR, loop-validation-rules.v1.json)
+  messageTemplate: "Attempted mutation of installed package bytes for release
+    {loopId}@{semanticVersion} (digest {packageDigest})."
+  remediation: "Installed releases are immutable; create a forked draft to edit (IMP-006, LIN-001)."
+  sourceObligation: LOOP_ENGINEERING_SPEC_V2.1 §21/§22; WP-8a hard invariant IMP-006
+
+Why the schema cannot catch this: `graph.mode` and `localHistory` are independent top-level
+properties of LoopDraft — this schema's DraftGraph if/then only checks that `mode=REFERENCED`
+carries a non-null `referencedDefinitionRef` (satisfied here) and that `mode=EMBEDDED` carries a
+non-null `definition`. Nothing in the schema requires `mode` to transition to `EMBEDDED` the
+moment `localHistory` starts recording USER-authored MODIFY_PROPERTY operations against the
+referenced release's own node IDs (`n2`). LOOP_ENGINEERING_SPEC_V2.1 §11 ('imported packages
+remain editable on the phone through a forked draft') and FB-RAT-IMP-006 ('editing an installed
+release creates a forked local draft rather than mutating it') together require that the very
+first structural edit against a REFERENCED draft produce an EMBEDDED graph.mode with its own
+`definition` — a semantic/workflow invariant a JSON Schema document validating one snapshot in
+isolation cannot enforce, since detecting the violation requires noticing that mutating
+operations accumulated in `localHistory` while `graph.mode` never left REFERENCED.

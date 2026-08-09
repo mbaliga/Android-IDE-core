@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-listing.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. loop-listing.v1 is a CLIENT-SIDE / STATIC-REGISTRY artifact only. Per the master build brief's hard scope boundary, this build-out does NOT build a hosted marketplace service, accounts, reviews, or moderation storage — this schema describes the mutable per-loopId presentation record maintained alongside the signed Git index (LOOP_MARKETPLACE_CONTRACT.md §11: 'A static browse site. Generated from the index at build time... no server-side query engine, no per-request computation over private state') and updated the same way an index entry is: submission by pull request, merge is publication. FB-RAT-MKT-003: 'Marketplace listings are mutable presentation records; referenced releases are immutable content-addressed artifacts.' §4: 'A LoopListing is mutable descriptive metadata (title, description, category, screenshots, the currently-recommended release pointer)... A listing MAY reference a stable channel and a pre-release channel simultaneously. Removing a listing MUST NOT mutate, invalidate, or retroactively alter a release a user has already downloaded; the release's identity is its digest, not its presence in any listing.'",
+  "title": "LoopListing",
+  "description": "loop-listing.v1 — the mutable presentation record for a loop family, referencing one or more immutable loop-release.v1 entries (loop-release.schema.json) by their identity tuples (LOOP_MARKETPLACE_CONTRACT.md §4). compatibilityDeclaration on this record is creator-declared discovery metadata (LOOP_MARKETPLACE_CONTRACT.md §7's discovery filters), explicitly distinct from the fuller, per-release compatibility.json LOOP_COMPATIBILITY_CONTRACT.md governs in detail (LOOP_PACKAGE_SPEC.md §10) — this schema does not redefine that document's ten-axis vocabulary, only cross-references it, and is UNVERIFIED METADATA by default per FB-RAT-CMP-007.",
+  "type": "object",
+  "required": ["listingId", "referencedReleases", "displayName", "description", "category", "compatibilityDeclaration", "lastUpdatedUtc"],
+  "properties": {
+    "listingId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable listing identity, independent of any single referenced release (FB-RAT-MKT-003 — a listing outlives and outlasts individual releases)."
+    },
+    "referencedReleases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ReferencedRelease" },
+      "description": "One or more loop-release.v1 identity tuples this listing presents (LOOP_MARKETPLACE_CONTRACT.md §4: 'A listing MAY reference a stable channel and a pre-release channel simultaneously.'). Exactly one entry SHOULD have recommended=true per distinct channel — this schema does not enforce that cardinality structurally (it is a discovery-UX convention, not a content-integrity property); see this schema's adversarial/ fixtures for a schema-valid case with zero or multiple recommended entries per channel."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Human-readable title (LOOP_MARKETPLACE_CONTRACT.md §4 'title'). Model-directed-string scanning (LOOP-PKG-008, loop-validation-rules.v1.json) and invisible-Unicode rejection (LOOP-PKG-006) apply to this field at publication time (§10) — this schema validates shape only, not content safety; see this schema's adversarial/ fixtures."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 20000,
+      "description": "Free-text listing description. Same LOOP-PKG-006/LOOP-PKG-008 publication-time scanning applies as for displayName — this is exactly the kind of human/model-readable marketplace surface §10's prompt-risk review (LOOP-PKG-008) exists to catch, since a listing description is read by both humans browsing the static site and by any AI assistant a user might ask to summarize or compare listings."
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Discovery category (LOOP_MARKETPLACE_CONTRACT.md §7). Modeled as an open string, not a closed enum — no ratified document in this corpus freezes a category vocabulary; §7 states discovery filters SHOULD be 'derived from declared package manifest data wherever possible' but does not enumerate a fixed category list. A future registry-hygiene pass MAY freeze one; not done here to avoid inventing a taxonomy nobody has ratified."
+    },
+    "compatibilityDeclaration": { "$ref": "#/$defs/ListingCompatibilityDeclaration" },
+    "lastUpdatedUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this presentation record was last changed via a merged PR against the registry repository (LOOP_MARKETPLACE_CONTRACT.md §11)."
+    },
+    "publisherKeyFingerprint": {
+      "type": ["string", "null"],
+      "default": null,
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Optional convenience mirror of the publisher identity common to referencedReleases, for discovery-site rendering without dereferencing every release. Not authoritative — a client's actual trust decision is always made per-release against that release's own signatureRef (loop-release.schema.json), never against this field."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ReferencedRelease": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+        },
+        "packageDigest": {
+          "$ref": "#/$defs/IntegrityRef",
+          "description": "Duplicated locally rather than $ref'd against loop-release.schema.json, per this corpus's standalone-schema-file convention (each schema validates without reaching into a sibling file)."
+        },
+        "channel": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Matches the referenced loop-release.v1's own releaseChannel (loop-release.schema.json), duplicated here so a discovery UI can group/filter without dereferencing every release."
+        },
+        "recommended": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this is 'the currently-recommended release pointer' for its channel (LOOP_MARKETPLACE_CONTRACT.md §4)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ListingCompatibilityDeclaration": {
+      "type": "object",
+      "required": ["verified"],
+      "properties": {
+        "verified": {
+          "type": "boolean",
+          "default": false,
+          "description": "MUST default false and MUST NOT be set true without evidenceRefs (see allOf below) — FB-RAT-CMP-007 (EXPERIMENTAL, cited here as already-scoped context per LOOP_COMPATIBILITY_CONTRACT.md §8, not re-ratified): 'Treat creator-declared device/language compatibility as unverified metadata until backed by fixtures or explicit shared receipts... A creator claim without such evidence MUST be labeled declared, never verified.' A listing whose creator has supplied no fixtures or shared receipts MUST leave this false; the UI-facing label for false is 'declared', never 'verified', per that same decision text."
+        },
+        "declaredAxes": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true,
+          "description": "Open map of compatibility-axis name to creator-declared value, for discovery-filter rendering (LOOP_MARKETPLACE_CONTRACT.md §7: 'estimated cost/duration, read/write/destructive authority, engine version, test coverage, verification level, license, publisher, and compatibility'). The ten-axis vocabulary itself (schema, engine, node type, capability, model class, execution target, platform/distribution, device, resource, policy) is owned by LOOP_COMPATIBILITY_CONTRACT.md §2 (FB-RAT-CMP-001) and capability-ids.v1.json / model-capability-vocabulary.v1.json for the capability/model-class axes specifically — not redefined or re-enumerated here as a closed key set, so an additive axis never requires a schema change."
+        },
+        "engineVersionRange": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "SemVer range summary mirrored from the recommended release's manifest.compatibilityDeclaration.engineVersionRange (loop-package-manifest.schema.json), for the §7 'engine version' discovery filter without dereferencing the release. Cross-references capability-ids.v1.json's engineVersion object; not re-derived here."
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fixture references or shared-receipt identifiers/URLs supporting a verified=true claim (LOOP_RESULT_SHARING_CONTRACT.md owns the full shared-receipt shape; this schema does not redefine it, only points at it by reference string). REQUIRED non-empty when verified is true — see allOf below."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "verified": { "const": true } }, "required": ["verified"] },
+          "then": { "properties": { "evidenceRefs": { "type": "array", "minItems": 1 } }, "required": ["evidenceRefs"] }
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

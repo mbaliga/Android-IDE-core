@@ -1,0 +1,16 @@
+{
+  "grantId": "grant-ssh-remote-exec-homepi-0009",
+  "principalId": "principal-local-agent-persona-primary",
+  "capabilityIds": ["fb.exec.ssh_remote"],
+  "authorityRung": "EXECUTE_EXTERNAL",
+  "resourceScope": { "kind": "EXECUTION_TARGET", "locator": "target-ssh-home-pi-01" },
+  "constraints": { "purpose": "ssh-remote-build-dispatch", "additionalConstraints": {} },
+  "expiresAtUtc": "2026-07-01T00:00:00Z",
+  "confirmationPolicy": { "mode": "NEVER_REQUIRED", "aboveRung": null },
+  "delegationRule": {
+    "delegable": false,
+    "maxDelegatedRung": null,
+    "transitiveDelegationAllowed": false,
+    "requiresFreshUserApprovalForWidening": true
+  }
+}

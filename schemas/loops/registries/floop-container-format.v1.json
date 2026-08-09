@@ -1,0 +1,69 @@
+{
+  "licenseStatus": "LICENSE-PENDING",
+  "registryId": "fb-floop-container-1",
+  "registryVersion": "1.0.0",
+  "title": ".floop container format — v1 (frozen)",
+  "status": "FROZEN",
+  "frozenBy": "WP-1L-G0",
+  "decisionRefs": ["FB-RAT-LBX-010", "FB-RAT-PKG-004"],
+  "description": "Byte-level definition of the .floop LoopPackage archive. Frozen so the digest gate (LOOP_ENGINEERING_SPEC_V2.1 §20/§28, FB-RAT-PKG-004) is testable. Extension '.floop' itself remains FB-RAT-LBX-010 (EXPERIMENTAL) pending owner naming/branding review (08_OPEN_QUESTIONS §E.3) — this registry freezes the BYTES, not the final public-facing extension string.",
+  "archiveFormat": {
+    "container": "ZIP",
+    "allowedCompressionMethods": ["STORED", "DEFLATE"],
+    "prohibitedCompressionMethods": ["BZIP2", "LZMA", "ZSTD", "AES_ENCRYPTED", "any method not STORED or DEFLATE"],
+    "directoryEntries": "PROHIBITED — every archive member is a file entry; empty directories are not representable and MUST NOT be encoded as zero-length directory entries",
+    "extraFields": "PROHIBITED — local file header and central directory extra-field areas MUST be empty; a reader MUST reject an archive carrying non-empty extra fields",
+    "entryNameEncoding": "UTF-8, NFC-normalized",
+    "entrySortOrder": "Archive members MUST be written in ascending order of their normalized path, compared as UTF-16 code units — this is a WRITE requirement for reproducibility, not a read-time trust requirement (a reader still normalizes and sorts its own view)",
+    "symlinks": "PROHIBITED — an entry whose external file attributes encode a symlink (or any non-regular-file Unix mode) MUST be rejected",
+    "localAndCentralDirectoryAgreement": "A reader MUST reject an archive where any entry's local file header (size, CRC-32, compression method) disagrees with its central directory record — a classic ZIP-parser-confusion / zip-bomb vector",
+    "maxCompressionRatioPerEntry": 100,
+    "maxUncompressedTotalBytes": 536870912,
+    "maxEntryCount": 20000,
+    "notes": "The ratio/total/count ceilings are calibratable (EXPERIMENTAL numeric parameters per the 08_OPEN_QUESTIONS §C pattern for numeric thresholds); the STRUCTURAL rules above them (no symlinks, no directory entries, no extra fields, local/central agreement) are normative and not calibratable."
+  },
+  "pathRules": {
+    "separator": "forward slash '/'  only",
+    "leadingSlash": "PROHIBITED (no absolute paths)",
+    "driveOrUncPrefixes": "PROHIBITED (e.g. 'C:\\', '\\\\host\\share')",
+    "dotSegments": "PROHIBITED — a normalized path MUST NOT contain a '.' or '..' segment",
+    "caseSensitivity": "paths are compared byte-for-byte after NFC normalization; case-insensitive collisions across entries (e.g. 'A.json' vs 'a.json') MUST be rejected as duplicate-normalized-path",
+    "maxPathBytes": 255,
+    "duplicateNormalizedPaths": "PROHIBITED — two entries that normalize to the same path is a rejection, not a silent last-write-wins",
+    "adversarialClasses_MUST_reject": [
+      "absolute path entry",
+      "path traversal ('../' anywhere in the raw or normalized name)",
+      "duplicate normalized paths",
+      "symlink escape",
+      "decompression-ratio bomb (see maxCompressionRatioPerEntry)",
+      "declared-length / actual-length mismatch",
+      "declared-digest / actual-digest mismatch",
+      "unknown major schema version in manifest.json"
+    ]
+  },
+  "requiredTopLevelLayout": {
+    "manifest.json": "REQUIRED — LoopPackage manifest: package identity (loopId, semanticVersion), capability requests, compatibility declaration, inventory (see packageInventory below), signature reference. schemaVersion-gated.",
+    "definition.json": "REQUIRED — canonical LoopDefinition JSON (LOOP_ENGINEERING_SPEC_V2.1 §2.2/§3). SOLE source of semantic identity — see semantic-digest.v1.json. This is the file the digest gate is computed over (after exclusions + canonicalization).",
+    "definition.bpmn": "OPTIONAL, DERIVED — a regenerable BPMN 2.0 export of definition.json for portability with generic BPMN tooling (LOOP_ENGINEERING_SPEC_V2.1 §13). EXCLUDED from both the package content digest and the signed file set (see packageInventory.semanticFiles vs .derivedFiles below) — a build MAY omit it and regenerate on demand; its presence or absence MUST NOT change the package digest.",
+    "schemas/": "OPTIONAL — input/output/form JSON Schemas (draft 2020-12+) referenced by definition.json by relative path.",
+    "fixtures/": "OPTIONAL — simulation/replay/fault-injection fixtures, keyed per fixture-keying.v1 (nodeId, iterationIndex, callIndex) — NOT 'tests/fixtures/'. This resolves the two conflicting layouts found in the source pack (10_DUAL_VALIDATION_ADDENDUM §B2).",
+    "docs/": "OPTIONAL — human-readable documentation (README, objective, usage notes). Treated as untrusted content by the runtime (LOOP_ENGINEERING_SPEC_V2.1 §25) and subject to prompt-static-scanning + invisible-Unicode rejection like every other model-visible or human-visible string in the package.",
+    "assets/": "OPTIONAL — non-executable static assets (icons, media) referenced by definition.json or docs/. MUST NOT contain any file matching the forbidden-executable-payload class (see loop-validation-rules.v1.json LOOP-PKG-002).",
+    "LICENSE": "OPTIONAL — license text if the package declares one (feeds LOOP-LINEAGE-* checks).",
+    "signatures/": "OPTIONAL — detached signature file(s), loop-package-signature.v1 (Ed25519 over contentDigest + release identity, per 10_DUAL_VALIDATION_ADDENDUM §D)."
+  },
+  "packageInventory": {
+    "description": "manifest.json MUST carry a per-file inventory. Every entry declares path, byteLength, sha256, and exactly one classification.",
+    "classifications": {
+      "semanticFile": "Included in the package content digest (definition.json, schemas/*, fixtures/*, docs/*, assets/*, LICENSE — everything except derivedFiles and signatures/).",
+      "derivedFile": "Regenerable from semanticFiles; EXCLUDED from the package content digest. definition.bpmn is the canonical example. A derived file's own digest is still recorded in the inventory for integrity-on-extract, but it does not participate in identity.",
+      "signatureFile": "Signature material under signatures/; excluded from the digest it signs, by construction."
+    }
+  },
+  "packageContentDigest": {
+    "algorithm": "SHA-256",
+    "computedOver": "the CANONICAL FILE LIST, not raw archive bytes: a deterministically sorted sequence of (normalizedPath, byteLength, sha256OfFileBytes) tuples for every semanticFile, JCS-canonicalized as a JSON array and then SHA-256'd once more to produce the single packageContentDigest.",
+    "rationale": "Computing over the file list rather than archive bytes makes identity invariant to recompression, ZIP tool, member order in the physical archive, and timestamp/OS metadata fields — none of which are semantic. This was ambiguous in the source pack ('RFC 8785-style... or a versioned equivalent') and is now pinned: no escape hatch. See semantic-digest.v1.json for the SEPARATE, narrower semanticDigest computed only over definition.json.",
+    "timestampFreedom": "ZIP local-file-header mtime/date fields MUST NOT be read by any digest or compatibility computation — archive identity is timestamp-free by construction (LOOP_ENGINEERING_SPEC_V2.1 §28)."
+  }
+}

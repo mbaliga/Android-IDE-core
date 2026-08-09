@@ -1,0 +1,11 @@
+{
+  "transferChannel": "FILE",
+  "expectedMediaType": "application/zip",
+  "expectedDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+    "byteLength": 184320
+  },
+  "initiatedByUser": true,
+  "sourceDescription": "User tapped 'Open with Aarso' on release-notes-drafter-2.3.1.floop from the device Downloads folder."
+}

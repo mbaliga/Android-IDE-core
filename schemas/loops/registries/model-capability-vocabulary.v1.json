@@ -1,0 +1,31 @@
+{
+  "licenseStatus": "LICENSE-PENDING",
+  "registryId": "model-capability-vocabulary.v1",
+  "registryVersion": "1.0.0",
+  "status": "FROZEN",
+  "frozenBy": "WP-1L-G0",
+  "decisionRefs": ["FB-RAT-CMP-001", "FB-RAT-LOOP-001"],
+  "title": "Model capability vocabulary — v1 (frozen)",
+  "description": "Vocabulary a model-inference node (LOOP_ENGINEERING_SPEC_V2.1 node category 'model inference') uses to declare what it needs from whichever model eventually binds to it, and what a ModelDescriptor (05_INTEGRATION_CONTRACTS §9, the ASOM contract addendum) advertises it can provide. Distinct from capability-ids.v1 (authority/side-effect capabilities) — this registry is purely about MODEL FEATURE compatibility, feeding CMP-001..007 target-constraint evaluation and LOOP-COMPAT-001.",
+  "tags": [
+    {"id": "text-generation", "description": "Free-form text completion/chat.", "residencyRelevant": false},
+    {"id": "vision-input", "description": "Accepts image input alongside text.", "residencyRelevant": true},
+    {"id": "audio-input", "description": "Accepts audio input.", "residencyRelevant": true},
+    {"id": "tool-calling", "description": "Structured function/tool-call output the runtime can parse deterministically.", "residencyRelevant": false},
+    {"id": "json-mode", "description": "Can be constrained to emit schema-valid JSON output.", "residencyRelevant": false},
+    {"id": "long-context", "description": "Supports a context window at or above a node-declared contextTokens threshold.", "residencyRelevant": false, "parameterized": "contextTokens (integer, minimum required context length)"},
+    {"id": "logprobs", "description": "Exposes per-token logprob/entropy from the first token (InferenceEngine plumbing requirement carried over from the base app spine — CLAUDE.md 'why llama.cpp over Ollama').", "residencyRelevant": false},
+    {"id": "streaming", "description": "Supports token-by-token or SSE streaming output.", "residencyRelevant": false},
+    {"id": "embedding-output", "description": "Produces a fixed-size embedding vector rather than generated text (feeds semantic search M4, currently blocked on a real on-device embedder replacing PlaceholderEmbedder).", "residencyRelevant": true},
+    {"id": "image-generation", "description": "Produces image output (cloud or on-device Stable Diffusion).", "residencyRelevant": true},
+    {"id": "reasoning-effort-control", "description": "Accepts a caller-supplied reasoning-effort/thinking-budget parameter.", "residencyRelevant": false},
+    {"id": "on-device-residency", "description": "Model MAY be resolved to run fully on-device (no network egress). Loop nodes SHOULD prefer this tag per the sovereignty default (binding rule 2) unless the node explicitly requests cloud-only quality.", "residencyRelevant": true},
+    {"id": "cloud-residency", "description": "Model resolves to a cloud provider call. Always implies fb.model.cloud_inference (capability-ids.v1) and a visible 'watched object' badge.", "residencyRelevant": true},
+    {"id": "asom-shared-residency", "description": "Model MAY be resolved via ASOM (127.0.0.1:11435) with shared-residency memory-budget negotiation against other apps holding the same weights (05_INTEGRATION_CONTRACTS §9).", "residencyRelevant": true}
+  ],
+  "modelDescriptorShape": {
+    "note": "Mirrors 05_INTEGRATION_CONTRACTS §9 ModelDescriptor — restated here as the producer side of this vocabulary, not redefined.",
+    "fields": ["id", "family", "quantization", "contextLength", "residency (in-ASOM | in-Fonebrew | cloud)", "memoryFootprintBytes", "capabilityTags (array of tag ids from this registry)"]
+  },
+  "compatibilityRule": "A model-inference node's required capability tags MUST be a subset of the resolved ModelDescriptor's capabilityTags at bind time, or the resolution fails with LOOP-COMPAT-001 (impossible target constraint) rather than silently degrading (e.g. silently dropping a tool-calling requirement and hoping the model complies in free text)."
+}

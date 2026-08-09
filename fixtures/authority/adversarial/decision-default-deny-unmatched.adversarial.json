@@ -1,0 +1,13 @@
+{
+  "decisionId": "decision-adv-0004-default-deny",
+  "requestObjectId": "storereq-0001-totally-novel",
+  "requestingPrincipalId": "principal-local-agent-persona-primary",
+  "requestedCapabilityId": "fb.release.publish",
+  "requestedResourceScope": { "kind": "STORE_CHANNEL", "locator": "play-internal-testing" },
+  "matchedGrantId": null,
+  "outcome": "DENY",
+  "reasonCode": "AUTHORITY_DEFAULT_DENY",
+  "policyVersion": "authority-policy-1.0.0",
+  "decidedAtUtc": "2026-08-07T12:20:00Z",
+  "evidenceLinks": []
+}

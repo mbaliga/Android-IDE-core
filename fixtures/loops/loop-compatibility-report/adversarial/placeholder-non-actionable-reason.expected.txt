@@ -1,0 +1,17 @@
+Schema verdict: VALID against loop-compatibility-report.schema.json.
+`reason` is only checked for minLength:1 — a one-character placeholder like "x" satisfies that
+structurally, even though it carries no actionable information.
+
+Real rejection basis: docs/ratified/loops/LOOP_COMPATIBILITY_CONTRACT.md §1 (no dedicated
+loop-validation-rules.v1.json code exists for "reason text is not actually actionable" — this is
+a content-quality requirement on free text, not a rule this registry encodes as a machine-checkable
+code, so this fixture deliberately does not cite a LOOP-* code):
+  "...for whether the installing phone can understand, install, bind, and run it without HIDING
+  DEGRADATION or silently substituting an unsafe resource."
+A CAPABILITY axis outcome of BLOCKED with reason "x" hides exactly what's missing from the user —
+this is functionally equivalent to hiding the degradation the axis is supposed to disclose, even
+though every field is individually well-typed.
+
+Remediation: a human/publisher review step (or a human-authored finding-quality lint, not a
+mechanical JSON Schema rule) should reject a `reason` string that fails a basic
+information-content check before this report is shown to a user as their remediation guidance.

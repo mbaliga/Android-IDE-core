@@ -1,0 +1,14 @@
+Schema verdict: VALID against loop-build-receipt.schema.json.
+signatureAction.producedSignatureRef is declared nullable independent of signatureAction.outcome
+in this schema — the schema does not require a non-null ref specifically when outcome=SUCCEEDED.
+
+Real rejection: a signing step cannot coherently "succeed" (steps[8].outcome=SUCCEEDED,
+signatureAction.outcome=SUCCEEDED) while producing no reference to the resulting
+loop-package-signature.v1 record — LOOP_PACKAGE_SPEC.md §11 defines a signature as a concrete
+detached file under signatures/ (floop-container-format.v1.json); "succeeded but produced
+nothing" is not a real signing outcome. No frozen loop-validation-rules.v1 code covers this
+specific receipt-internal consistency check (it is a property of the RECEIPT's own honesty about
+what step 9 did, not of the package's content) — flagged here as a receipt-emission
+implementation bug that MUST be treated as a build failure retroactively, not published as a
+"succeeded" receipt. This is an application-level invariant this work package is naming for the
+Amendments-phase agent's awareness, not a citation to an existing registry entry.

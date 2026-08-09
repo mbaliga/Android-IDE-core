@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "01J9B0000000000000000RC9",
+  "sourceType": "CSAPP_ISSUES_MANIFEST",
+  "sourceDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "0c6808c77619a1591c7be14dc91331bbf269a2d78032e2997b40fe55e0d153b2",
+    "byteLength": 812
+  },
+  "initiatedBy": "studio-user:jordan",
+  "decision": "MOSTLY",
+  "createdAtUtc": "2026-08-06T09:00:00Z",
+  "created": [],
+  "updated": [],
+  "duplicates": [],
+  "rejected": [
+    { "sourceLocation": "csapp-iss-9999", "errorCode": "IMPORT_TOTALLY_MADE_UP_CODE" }
+  ],
+  "unknownFields": {}
+}

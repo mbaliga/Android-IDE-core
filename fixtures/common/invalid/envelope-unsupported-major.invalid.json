@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "2.0.0",
+  "objectId": "01J8Z8Q7T1V3X5Z7B9D1F3H5JL",
+  "createdAtUtc": "2026-08-07T09:14:31Z",
+  "sourceTimezone": "Asia/Kolkata",
+  "sequence": 4821,
+  "producer": {
+    "name": "core-engine.git.contents-api",
+    "version": "0.13.0",
+    "instanceId": null
+  },
+  "idempotencyKey": "sync-req-8f3c1e2a-retry-1",
+  "integrity": {
+    "algorithm": "SHA-256",
+    "digestHex": "9b37278e52d5a6424654e45b23a633ff2f73c01bd8743dfca6b557a89cbeff0e",
+    "byteLength": 467
+  },
+  "payload": {
+    "code": "GIT_AUTH_EXPIRED",
+    "severity": "ERROR",
+    "retryable": true,
+    "sideEffectState": "NONE",
+    "detail": "GitHub REST contents API returned 401 for GET /repos/o/r/contents/README.md; token last refreshed 2026-08-06T10:02:11Z.",
+    "recoveryAction": "Re-authenticate the GitHub connection in Settings > Global > Source Control, then retry the sync.",
+    "userMessage": "Your GitHub connection expired. Reconnect it to keep syncing this project.",
+    "objectId": "01J8Z1FVZ0T7Q8W3B7K2R6M4XN"
+  },
+  "unknownFields": {}
+}

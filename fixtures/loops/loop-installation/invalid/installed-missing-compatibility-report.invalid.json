@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0.0",
+  "installationId": "install-missing-compat",
+  "releaseIdentity": {
+    "loopId": "loop-fb-triage-inbox",
+    "semanticVersion": "1.0.0",
+    "packageContentDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+      "byteLength": 190
+    }
+  },
+  "source": {
+    "transferChannel": "HTTPS_URL",
+    "expectedMediaType": "application/zip",
+    "expectedDigest": {
+      "algorithm": "SHA-256",
+      "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+      "byteLength": 190
+    },
+    "sourceDescription": "https://example-releases.invalid/loop-fb-triage-inbox/1.0.0.floop",
+    "initiatedByUser": true
+  },
+  "signatureState": "IMPORTED_SIGNED_VERIFIED",
+  "compatibilityReportRef": null,
+  "bindingProfileRef": {
+    "objectId": "binding-profile-77aa"
+  },
+  "authorityGrants": [],
+  "installationState": "INSTALLED",
+  "receipts": [
+    {
+      "objectId": "activation-receipt-x"
+    }
+  ],
+  "createdAtUtc": "2026-08-01T10:00:00Z"
+}

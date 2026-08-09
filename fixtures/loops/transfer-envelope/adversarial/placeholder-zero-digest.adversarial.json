@@ -1,0 +1,11 @@
+{
+  "transferChannel": "HTTPS_URL",
+  "expectedMediaType": "application/zip",
+  "expectedDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "byteLength": 0
+  },
+  "initiatedByUser": true,
+  "sourceDescription": "User tapped a marketplace 'Install' button; the digest was not available at request time so a placeholder was recorded."
+}

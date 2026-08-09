@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-build-receipt.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopBuildReceipt per LOOP_ENGINEERING_SPEC_V2.1.md §20 (Package build pipeline, the 10 numbered steps) and LOOP_PACKAGE_SPEC.md §5 (build receipt field list, merged from the source draft's duplicate §11/§16). §20: 'The build fails closed. It never publishes a partially built package.' This schema's allStepsSucceeded/steps/packageContentDigest interaction is this work package's structural encoding of that sentence — see the long-form note on `allStepsSucceeded` below.",
+  "title": "LoopBuildReceipt",
+  "description": "The record LOOP_ENGINEERING_SPEC_V2.1.md §20 step 10 emits: which of the ten fixed pipeline steps ran and their outcome, the resulting digests, validation findings, test-suite results, signature action (if any), builder identity, and a fail-closed flag. A receipt is emitted whether the build succeeded or was blocked (LOOP_PACKAGE_SPEC.md §5's state table: 'a non-deterministic build is not silently discarded, it is recorded as such') — steps after a blocking failure are recorded as SKIPPED, never simply absent, so the tuple stays the fixed ten-step shape in every receipt.",
+  "type": "object",
+  "required": [
+    "buildReceiptId", "sourceDraftRevision", "steps", "allStepsSucceeded",
+    "validationRulesetVersion", "validationFindings", "canonicalizationVersion",
+    "packageContentDigest", "builderProducer", "warnings", "createdAtUtc"
+  ],
+  "properties": {
+    "buildReceiptId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this receipt (FB-RAT-COM-002)."
+    },
+    "sourceDraftRevision": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The draft revision frozen at step 1 (LOOP_ENGINEERING_SPEC_V2.1.md §15's revision/concurrency contract governs what this string identifies; not restated here)."
+    },
+    "steps": {
+      "description": "The fixed ten-step pipeline (LOOP_ENGINEERING_SPEC_V2.1.md §20), always recorded in this exact order regardless of outcome. A step after the first FAILED required step is recorded SKIPPED, not omitted.",
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "prefixItems": [
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 1 }, "stepName": { "const": "FREEZE_DRAFT_REVISION" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 2 }, "stepName": { "const": "VALIDATE_SEMANTIC_GRAPH" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 3 }, "stepName": { "const": "CANONICALIZE" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 4 }, "stepName": { "const": "SCAN_FORBIDDEN_CONTENT" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 5 }, "stepName": { "const": "RUN_REQUIRED_FIXTURES" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 6 }, "stepName": { "const": "GENERATE_COMPAT_PROVENANCE_DOCS" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 7 }, "stepName": { "const": "INVENTORY_FILES" } } },
+        { "$ref": "#/$defs/StepRecord", "properties": { "stepNumber": { "const": 8 }, "stepName": { "const": "COMPUTE_CONTENT_DIGEST" } } },
+        {
+          "$ref": "#/$defs/StepRecord",
+          "properties": { "stepNumber": { "const": 9 }, "stepName": { "const": "SIGN_RELEASE_IDENTITY" } },
+          "description": "The only step whose SKIPPED outcome is always legitimate even in an otherwise fully-succeeded build — signing is optional (LOOP_ENGINEERING_SPEC_V2.1.md §20 step 9: 'optionally sign a release identity')."
+        },
+        {
+          "$ref": "#/$defs/StepRecord",
+          "properties": { "stepNumber": { "const": 10 }, "stepName": { "const": "EMIT_BUILD_RECEIPT" }, "outcome": { "const": "SUCCEEDED" } },
+          "description": "Always SUCCEEDED in any receipt document that exists to be validated against this schema — the document's own existence is the evidence step 10 completed; a build that fails to emit a receipt produces no receipt object at all, not a receipt recording its own emission failure."
+        }
+      ],
+      "items": false
+    },
+    "allStepsSucceeded": {
+      "type": "boolean",
+      "description": "The fail-closed flag (LOOP_ENGINEERING_SPEC_V2.1.md §20: 'The build fails closed. It never publishes a partially built package.'). This is a plain boolean, not a bare `const: true`, because a receipt for a BLOCKED build is itself a required, valid artifact (LOOP_PACKAGE_SPEC.md §5: a failed/non-deterministic build 'is not silently discarded, it is recorded as such') — const:true would make failed-build receipts unrepresentable, which is the opposite of what fail-closed requires. Instead the allOf rules below make it structurally IMPOSSIBLE for a receipt to carry a populated, usable packageContentDigest while allStepsSucceeded is false, and impossible to claim allStepsSucceeded true while any required step's outcome is not SUCCEEDED (steps 1-8 and 10) or step 9 is FAILED (SKIPPED remains fine for step 9 only). This is the schema's actual enforcement of 'do not allow a build receipt to exist in a partial-success state that could be mistaken for a completed build' — a consumer reading packageContentDigest without checking this flag first can never mistake a blocked build's receipt for a completed one, because that field is guaranteed null whenever this flag is false."
+    },
+    "semanticDigest": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "default": null,
+      "description": "definition.json's semantic digest, formatted exactly as semantic-digest.v1.json specifies ('sha256:<lowercase-hex>'). Populated once step 3 (CANONICALIZE) has run to SUCCEEDED; null before that point in a blocked build."
+    },
+    "semanticDigestVersion": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The semanticDigestVersion this receipt's semanticDigest was produced under (semantic-digest.v1.json's own registryId, 'fb-semantic-digest-1'). Null exactly when semanticDigest is null."
+    },
+    "validationRulesetVersion": {
+      "const": "fb-loop-validation-rules-1",
+      "description": "Matches loop-validation-rules.v1.json's rulesetVersion — always recorded, even for a build blocked before reaching every rule, so a reader always knows which frozen ruleset produced the findings below."
+    },
+    "validationFindings": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/ValidationFinding" },
+      "description": "Findings from step 2 (and any later re-validation) reported by stable rule code, per LOOP_ENGINEERING_SPEC_V2.1.md §19: 'A validation report includes ruleset version, semantic digest, surface implementation, and findings sorted deterministically.' MAY be empty for a clean build."
+    },
+    "testSuiteResults": {
+      "oneOf": [
+        { "$ref": "#/$defs/TestSuiteResults" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Summary of step 5 (RUN_REQUIRED_FIXTURES). Null if the build was blocked before reaching step 5."
+    },
+    "canonicalizationVersion": {
+      "const": "fb-loop-canon-1",
+      "description": "Matches canonicalization.v1.json's canonicalizationVersion — always recorded, the same way validationRulesetVersion is, independent of how far the pipeline got."
+    },
+    "fileInventoryDigest": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntegrityRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "SHA-256 over the COMPLETE packageInventory list from step 7 (INVENTORY_FILES) — every semanticFile, derivedFile, and signatureFile entry, unlike packageContentDigest which covers only semanticFile entries per floop-container-format.v1.json. This is a receipt-only, whole-archive tamper-evidence digest; it does not replace or redefine packageContentDigest. Null before step 7 succeeds."
+    },
+    "packageContentDigest": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntegrityRef" },
+        { "type": "null" }
+      ],
+      "description": "The floop-container-format.v1.json packageContentDigest computed at step 8. MUST be null whenever allStepsSucceeded is false (see the allOf rules below) — this is the concrete mechanism that makes a blocked build's receipt structurally unable to look like a completed one, even if step 8 itself happened to succeed before a LATER step (9 or 10) failed."
+    },
+    "signatureAction": {
+      "oneOf": [
+        { "$ref": "#/$defs/SignatureAction" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "What step 9 (SIGN_RELEASE_IDENTITY) actually did, if attempted. Null when step 9 was SKIPPED (an intentionally-unsigned local build) — see steps[8] for the per-step outcome this MUST agree with."
+    },
+    "builderProducer": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true,
+      "description": "The builder's implementation identity and version (LOOP_PACKAGE_SPEC.md §5's build-receipt field list). Mirrors CommonContracts.kt's ProducerRef shape, duplicated locally per this corpus's standalone-schema convention."
+    },
+    "warnings": {
+      "type": "array",
+      "default": [],
+      "items": { "type": "string" },
+      "description": "Free-text warnings that are not themselves stable-coded validationFindings (e.g. a calibratable-limit advisory under FB-RAT-PKG-010's EXPERIMENTAL status)."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this receipt was emitted (FB-RAT-COM-004)."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "allStepsSucceeded": { "const": false } }, "required": ["allStepsSucceeded"] },
+      "then": { "properties": { "packageContentDigest": { "const": null } }, "required": ["packageContentDigest"] }
+    },
+    {
+      "if": { "properties": { "allStepsSucceeded": { "const": true } }, "required": ["allStepsSucceeded"] },
+      "then": {
+        "required": ["packageContentDigest"],
+        "properties": {
+          "packageContentDigest": { "$ref": "#/$defs/IntegrityRef" },
+          "steps": {
+            "prefixItems": [
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } },
+              { "properties": { "outcome": { "enum": ["SUCCEEDED", "SKIPPED"] } } },
+              { "properties": { "outcome": { "const": "SUCCEEDED" } } }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "semanticDigest": { "const": null } }, "required": ["semanticDigest"] },
+      "then": { "properties": { "semanticDigestVersion": { "const": null } } }
+    },
+    {
+      "if": { "not": { "properties": { "semanticDigest": { "const": null } }, "required": ["semanticDigest"] } },
+      "then": { "required": ["semanticDigestVersion"], "properties": { "semanticDigestVersion": { "const": "fb-semantic-digest-1" } } }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "StepRecord": {
+      "type": "object",
+      "required": ["stepNumber", "stepName", "outcome"],
+      "properties": {
+        "stepNumber": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "stepName": {
+          "type": "string",
+          "enum": [
+            "FREEZE_DRAFT_REVISION", "VALIDATE_SEMANTIC_GRAPH", "CANONICALIZE", "SCAN_FORBIDDEN_CONTENT",
+            "RUN_REQUIRED_FIXTURES", "GENERATE_COMPAT_PROVENANCE_DOCS", "INVENTORY_FILES",
+            "COMPUTE_CONTENT_DIGEST", "SIGN_RELEASE_IDENTITY", "EMIT_BUILD_RECEIPT"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["SUCCEEDED", "FAILED", "SKIPPED"]
+        },
+        "detail": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "ValidationFinding": {
+      "type": "object",
+      "required": ["code", "severity", "objectType", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^LOOP-[A-Z]+-[0-9]{3}$", "description": "Stable rule code from loop-validation-rules.v1.json, e.g. 'LOOP-PKG-002'. Membership in the frozen registry is validated by the rule engine, not this schema." },
+        "severity": { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        "objectType": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "TestSuiteResults": {
+      "type": "object",
+      "required": ["fixturesRun", "fixturesPassed", "fixturesFailed", "fixturesStale"],
+      "properties": {
+        "fixturesRun": { "type": "integer", "minimum": 0 },
+        "fixturesPassed": { "type": "integer", "minimum": 0 },
+        "fixturesFailed": { "type": "integer", "minimum": 0 },
+        "fixturesStale": { "type": "integer", "minimum": 0, "description": "Count of fixtures flagged LOOP-TEST-002 (recorded prompt digest no longer matches the current node prompt) — reported, never silently dropped from the count." }
+      },
+      "additionalProperties": true
+    },
+    "SignatureAction": {
+      "type": "object",
+      "required": ["outcome"],
+      "properties": {
+        "outcome": { "type": "string", "enum": ["SUCCEEDED", "FAILED", "SKIPPED"], "description": "MUST agree with steps[8] (the SIGN_RELEASE_IDENTITY step record) — this field is not independently authoritative, it exists so a consumer inspecting signing specifically does not have to index into the steps array." },
+        "producedSignatureRef": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string", "pattern": "^signatures/" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              },
+              "additionalProperties": true
+            },
+            { "type": "null" }
+          ],
+          "default": null,
+          "description": "Pointer to the resulting loop-package-signature.v1 record. Null when outcome is not SUCCEEDED."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

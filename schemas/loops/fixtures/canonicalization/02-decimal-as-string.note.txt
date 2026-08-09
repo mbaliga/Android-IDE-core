@@ -1,0 +1,1 @@
+Decimal quantities are JSON strings matching ^-?[0-9]+\.[0-9]+$, never bare JSON floats. stepCount stays a plain integer.

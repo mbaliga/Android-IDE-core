@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/workspace.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Workspace per FB-RAT-WS-001: the top-level durable object the Workspace Kernel is authoritative for (projects, files, buffers, indexes, tasks, language sessions, launch state, recovery). Typically carried as the `payload` of a ContractEnvelope<Workspace> (see schemas/common/envelope.schema.json), inheriting schemaVersion/objectId/createdAtUtc/producer from that outer envelope where one wraps it; `workspaceId` below is this object's own FB-RAT-COM-002 stable ID, independent of `displayName`.",
+  "title": "Workspace",
+  "type": "object",
+  "required": ["workspaceId", "displayName", "createdAtUtc"],
+  "properties": {
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this workspace (FB-RAT-COM-002), independent of `displayName` — renaming a workspace MUST NOT change this."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-legible workspace name. Display-only; never an identity key."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this workspace was created (FB-RAT-COM-004)."
+    },
+    "projectIds": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Stable `Project.projectId` values this workspace contains (FB-RAT-WS-001 — the kernel is authoritative for projects). Membership order carries no meaning."
+    },
+    "activeProjectId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The currently-focused project, when one is focused. SHOULD be a member of `projectIds` — not structurally enforced here (JSON Schema 2020-12 has no cross-array-membership keyword without a `$data` extension, which this constellation does not depend on); a reader MUST treat an `activeProjectId` absent from `projectIds` as a data-integrity fault, not silently ignore it."
+    },
+    "providerConnections": {
+      "type": "array",
+      "default": [],
+      "description": "Live connection state for each configured WorkspaceProvider this workspace uses (WorkspaceProviderState machine — see WORKSPACE_KERNEL_SPEC.md §6). One entry per distinct `providerId`; `providerId` values SHOULD be unique within this array.",
+      "items": {
+        "type": "object",
+        "required": ["providerId", "providerKind", "state", "lastTransitionAtUtc"],
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable ID of the configured provider connection (e.g. a specific SSH host config's ID, or a fixed literal like 'local-primary' for the on-device filesystem provider)."
+          },
+          "providerKind": {
+            "type": "string",
+            "enum": ["LOCAL", "SAF", "SSH", "SNAPSHOT", "VIRTUAL"],
+            "description": "Same closed vocabulary as ResourceUri.provider (FB-RAT-WS-002) — the provider family this connection belongs to."
+          },
+          "state": {
+            "type": "string",
+            "enum": ["UNCONFIGURED", "CONNECTING", "READY", "DEGRADED", "DISCONNECTED", "AUTH_REQUIRED", "FAILED"],
+            "description": "Current WorkspaceProviderState (WORKSPACE_KERNEL_SPEC.md §6 transition table): UNCONFIGURED -> CONNECTING -> READY <-> DEGRADED -> DISCONNECTED | AUTH_REQUIRED | FAILED."
+          },
+          "lastTransitionAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC instant of the most recent state transition (FB-RAT-COM-004)."
+          },
+          "detail": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Optional plain-language detail for the current state (FB-RAT-COM-009 — textual semantics for a non-READY connection state, so degraded/disconnected/auth-required/failed is legible without relying on a color-only status dot)."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "recoverySnapshotId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The most recent `RecoverySnapshot.snapshotId` checkpointed for this workspace (FB-RAT-WS-003), or null if none has been taken yet."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true
+}

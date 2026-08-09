@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-release.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. loop-release.v1 is a CLIENT-SIDE / STATIC-REGISTRY artifact only. Per the master build brief's hard scope boundary and LOOP_MARKETPLACE_CONTRACT.md's header ('this build-out does NOT build a hosted marketplace service, accounts, reviews, or moderation storage'), this schema does NOT describe a database row or a service this repo runs — it describes one entry of the signed JSON index in the public Git registry repository that §11 defines as 'THE DEFINITION of the marketplace for this build-out': 'The index lists releases by loopId, semanticVersion, package-content digest, publisher key fingerprint, and a download URL. The index itself is signed; a client verifies the index signature before trusting any entry in it.' The release's .floop bytes themselves live on the publisher's own GitHub Release (§11), never Fonebrew-hosted. FB-RAT-PKG-006 (immutable once published) + FB-RAT-MKT-003 ('referenced releases are immutable content-addressed artifacts, distinct from the mutable listing that references them' — see loop-listing.schema.json). The {loopId, semanticVersion, packageDigest, publisherKeyFingerprint} tuple below is LOOP_ENGINEERING_SPEC_V2.1.md §14's release identity, quoted verbatim: 'A release is identified by {loopId, semanticVersion, packageDigest, publisherKeyFingerprint}. The digest is the final source of byte-level identity.' NOTE (flagged, not silently reconciled): §14 names this field 'packageDigest'; the sibling files in this corpus (loop-package-manifest.schema.json, loop-package-signature.schema.json, floop-container-format.v1.json) name the identical SHA-256-over-canonicalized-semantic-files concept 'packageContentDigest'. This schema uses 'packageDigest' because that is the literal field name the task brief for this document specifies and the literal word §14 uses — the same digest, two literal spellings across sibling ratified documents. Worth reconciling editorially in a future pass; not a semantic conflict, and not resolved here (no new decision ID needed — this is a naming-drift observation, not a content dispute).",
+  "title": "LoopRelease",
+  "description": "loop-release.v1 — one entry of the signed static/Git-backed registry index (LOOP_MARKETPLACE_CONTRACT.md §11). Immutable and content-addressed: the release identity tuple (loopId, semanticVersion, packageDigest, publisherKeyFingerprint) MUST NOT change once published (FB-RAT-PKG-006, FB-RAT-MKT-003). This schema cannot itself enforce non-mutation over time — that is a registry-repository (Git history / PR review) obligation, not a single-document structural property; §11's realization is that any change to these four fields is, by definition, a DIFFERENT release, published as a new index entry, never an edit of this one. The only fields on an already-published entry that MAY be updated in place via a follow-up PR are the revocation fields below, which mark trust status, not content (§10's KEY_REVOKED mapping: 'A revoked: true / revokedAt field set directly on the affected index entries via PR; a client checks this field locally at browse/download/update time — no push notification, no revocation service.').",
+  "type": "object",
+  "required": ["loopId", "semanticVersion", "packageDigest", "publisherKeyFingerprint", "releaseAssetUrl", "publishedAtUtc", "signatureRef"],
+  "properties": {
+    "loopId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable human/version identity of the loop family (LOOP_PACKAGE_SPEC.md §2), independent of packageDigest's exact-content identity. Part of the release identity tuple (LOOP_ENGINEERING_SPEC_V2.1.md §14)."
+    },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "description": "SemVer 2.0.0 string. Part of the release identity tuple (LOOP_ENGINEERING_SPEC_V2.1.md §14, LOOP_PACKAGE_SPEC.md §12)."
+    },
+    "packageDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "The package-content digest LOOP_ENGINEERING_SPEC_V2.1.md §14 calls 'the final source of byte-level identity' — the same SHA-256 value floop-container-format.v1.json's packageContentDigest computes (over the JCS-canonicalized (normalizedPath, byteLength, sha256) tuple list for every semanticFile packageInventory entry, NOT raw archive bytes). See this schema's top-level $comment for the packageDigest/packageContentDigest naming-drift note."
+    },
+    "publisherKeyFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 fingerprint of the publisher's Ed25519 public key, lowercase hex — the fourth element of the release identity tuple (LOOP_ENGINEERING_SPEC_V2.1.md §14) and the key-revocation lookup key (LOOP_PACKAGE_SPEC.md §11, LOOP_MARKETPLACE_CONTRACT.md §6)."
+    },
+    "releaseAssetUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Download URL for the release's .floop bytes, hosted on the publisher's OWN GitHub Release — never Fonebrew-hosted user content (LOOP_MARKETPLACE_CONTRACT.md §11: '.floop package assets hosted on publishers' own GitHub Releases — never Fonebrew-hosted user content. Fonebrew's registry repository holds only the index and metadata; the bytes of every package live on infrastructure the publisher, not Fonebrew, controls and is responsible for.'). This schema checks URL shape only; that the host is actually the declared publisher's own GitHub Releases infrastructure (not a Fonebrew-controlled or unrelated third-party host) is a build/import-time integrity check, not a structural property a JSON Schema can express — see this schema's adversarial/ fixtures."
+    },
+    "publishedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this index entry was published (i.e. the submission PR merged — 'Merge is publication; the PR and its review are the audit trail — nothing extra is stored,' LOOP_MARKETPLACE_CONTRACT.md §11)."
+    },
+    "signatureRef": {
+      "$ref": "#/$defs/SignatureAssetRef",
+      "description": "Pointer to the detached loop-package-signature.v1 record (loop-package-signature.schema.json) proving this release's identity tuple was signed by the key at publisherKeyFingerprint, per LOOP_PACKAGE_SPEC.md §11 (FB-RAT-PKG-005). Co-hosted with releaseAssetUrl on the publisher's own GitHub Release (§11) — not a separate Fonebrew-hosted signature store. This schema does not re-embed the full signature record inline (loop-package-signature.schema.json already owns that shape); a client MUST fetch and verify it before trusting this release, including checking whether keyProvenance is PHONE_KEYSTORE (the only tier eligible for marketplace publication, LOOP_WEB_STUDIO_SPEC.md §13) — see this schema's adversarial/ fixtures for the schema-valid-but-ineligible case this pointer indirection cannot catch by itself."
+    },
+    "releaseChannel": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The distribution channel this release was published under (e.g. 'stable', 'prerelease') — the same non-empty-string, non-enum vocabulary loop-package-signature.schema.json's releaseChannel uses, since it is the value bound into that same signature (LOOP_PACKAGE_SPEC.md §11). Null when the publisher declares no channel; a referencing loop-listing.v1 (loop-listing.schema.json) MAY reference a stable and a pre-release channel simultaneously (LOOP_MARKETPLACE_CONTRACT.md §4)."
+    },
+    "revoked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Trust-status flag, not content — set true via a follow-up PR against the registry repository when the signing key at publisherKeyFingerprint is revoked (LOOP_MARKETPLACE_CONTRACT.md §10's KEY_REVOKED, realized at §11 as exactly this field). MUST NOT be read as retroactively deleting or invalidating bytes already installed locally (§6: 'Key revocation marks affected releases; it MUST NOT retroactively delete local copies already installed.') — only as 'do not newly trust/activate under this key going forward.'"
+    },
+    "revokedAtUtc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "default": null,
+      "description": "UTC instant revocation was recorded. Required non-null exactly when revoked is true — see this schema's allOf."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "revoked": { "const": true } }, "required": ["revoked"] },
+      "then": { "properties": { "revokedAtUtc": { "type": "string", "format": "date-time" } }, "required": ["revokedAtUtc"] }
+    },
+    {
+      "if": { "properties": { "revoked": { "const": false } } },
+      "then": { "properties": { "revokedAtUtc": { "const": null } } }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "SignatureAssetRef": {
+      "type": "object",
+      "required": ["signatureAssetUrl", "sha256"],
+      "properties": {
+        "signatureAssetUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the detached signature record's bytes, co-hosted with releaseAssetUrl on the publisher's own GitHub Release (§11) — not modeled as an archive-relative 'signatures/' path (unlike loop-package-manifest.schema.json's SignatureRef) because this object lives outside any .floop archive, in the registry index."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Digest of the signature file's own bytes, for integrity-on-fetch — distinct from the signedDigest carried inside the signature record itself (loop-package-signature.schema.json)."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

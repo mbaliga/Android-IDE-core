@@ -1,0 +1,11 @@
+{
+  "transferChannel": "GIT",
+  "expectedMediaType": "application/zip",
+  "expectedDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e7b2c4d6e",
+    "byteLength": 40960
+  },
+  "initiatedByUser": true,
+  "sourceDescription": "Nightly CI job auto-synced this package from the build pipeline's Git remote; no user tap or approval was involved in this fetch."
+}

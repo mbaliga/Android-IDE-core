@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/document-buffer.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DocumentBuffer per FB-RAT-WS-001/003/004/005. FB-RAT-WS-003 (crash-safe buffers: dirty buffers survive Activity recreation/process death/reboot until explicit save or discard) is why `dirty`+`journalSequence` are both present — journalSequence is what a RecoverySnapshot/WorkspaceJournal.restore() uses to reconstitute exactly this buffer's un-persisted edits. `state` follows the DocumentBufferState machine in WORKSPACE_KERNEL_SPEC.md §4 (CLOSED -> OPEN_CLEAN -> OPEN_DIRTY -> SAVING -> OPEN_CLEAN | SAVE_FAILED; OPEN_DIRTY -> CONFLICTED -> MERGING -> OPEN_DIRTY). The `dirty` and `conflictState` fields are each pinned to `state` via `allOf`/`if`/`then` below so a wire payload cannot claim an internally-contradictory buffer (e.g. state=OPEN_CLEAN with dirty=true, or state=CONFLICTED with conflictState=null) — see fixtures/workspace/invalid/document-buffer-dirty-state-contradiction.invalid.json and fixtures/workspace/invalid/document-buffer-conflict-state-mismatch.invalid.json.",
+  "title": "DocumentBuffer",
+  "type": "object",
+  "required": ["bufferId", "resourceUri", "state", "dirty", "contentRevision", "encoding", "lineEndings", "journalSequence"],
+  "properties": {
+    "bufferId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this buffer (FB-RAT-COM-002), independent of `resourceUri` — a buffer keeps its identity across a save-as/rename in the same editing session if the implementation chooses to model it that way."
+    },
+    "resourceUri": { "$ref": "#/$defs/ResourceUri" },
+    "state": {
+      "type": "string",
+      "enum": ["CLOSED", "OPEN_CLEAN", "OPEN_DIRTY", "SAVING", "SAVE_FAILED", "CONFLICTED", "MERGING"],
+      "description": "DocumentBufferState (WORKSPACE_KERNEL_SPEC.md §4)."
+    },
+    "dirty": {
+      "type": "boolean",
+      "description": "Whether this buffer's in-memory content differs from its last known persisted content (FB-RAT-WS-003). Structurally pinned to `state` below: false only for CLOSED/OPEN_CLEAN, true for every other state."
+    },
+    "baseRevision": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The provider revision this buffer's content was opened/last-synced from, used as `expectedRevision` for an optimistic-concurrency write (FB-RAT-WS-004). Null for a buffer with no remote counterpart yet (e.g. a new unsaved file)."
+    },
+    "contentRevision": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque revision/hash of this buffer's CURRENT in-memory content, advanced on every edit. Distinct from `baseRevision` (which never changes until a successful save rebases it)."
+    },
+    "encoding": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Text encoding of this buffer's content, e.g. 'UTF-8', 'UTF-16LE'."
+    },
+    "lineEndings": {
+      "type": "string",
+      "enum": ["LF", "CRLF", "CR", "MIXED"],
+      "description": "Line-ending convention detected/in-use for this buffer. MIXED means the buffer contains more than one convention (FB-RAT-COM-009 relevance: a save that silently normalizes MIXED endings without telling the user is a legibility violation, not just a formatting nicety)."
+    },
+    "journalSequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The highest `BufferJournalEntry.sequence` applied to this buffer so far (FB-RAT-COM-004 — monotonic sequence). Used by WorkspaceJournal.restore() to know exactly which journal entries still need replaying for this buffer after a crash."
+    },
+    "conflictState": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["remoteRevision", "detectedAtUtc"],
+          "properties": {
+            "remoteRevision": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The provider revision that was found to differ from `baseRevision` at write/refresh time, triggering the conflict (FB-RAT-WS-004)."
+            },
+            "detectedAtUtc": { "type": "string", "format": "date-time" },
+            "remoteSummary": {
+              "type": ["string", "null"],
+              "default": null,
+              "description": "Optional plain-language summary of what changed remotely, for accessibility (FB-RAT-COM-009) — MUST NOT rely on a diff-only visual to convey that a conflict exists."
+            }
+          },
+          "additionalProperties": true
+        },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Non-null only while `state` is CONFLICTED or MERGING; null otherwise (structurally enforced below)."
+    },
+    "lastSaveError": {
+      "oneOf": [
+        { "$ref": "#/$defs/ErrorEnvelope" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Non-null only while `state` is SAVE_FAILED; null otherwise (structurally enforced below). Carries why the last save attempt failed (FB-RAT-COM-007), so a SAVE_FAILED buffer is not just a bare status flag with no explanation — `userMessage` gives this state its accessibility-required textual semantics (FB-RAT-COM-009)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "required": ["state"], "properties": { "state": { "enum": ["CLOSED", "OPEN_CLEAN"] } } },
+      "then": { "properties": { "dirty": { "const": false } } }
+    },
+    {
+      "if": { "required": ["state"], "properties": { "state": { "enum": ["OPEN_DIRTY", "SAVING", "SAVE_FAILED", "CONFLICTED", "MERGING"] } } },
+      "then": { "properties": { "dirty": { "const": true } } }
+    },
+    {
+      "if": { "required": ["state"], "properties": { "state": { "enum": ["CONFLICTED", "MERGING"] } } },
+      "then": { "required": ["conflictState"], "properties": { "conflictState": { "type": "object" } } }
+    },
+    {
+      "if": { "required": ["state"], "properties": { "state": { "enum": ["CLOSED", "OPEN_CLEAN", "OPEN_DIRTY", "SAVING", "SAVE_FAILED"] } } },
+      "then": { "properties": { "conflictState": { "type": "null" } } }
+    },
+    {
+      "if": { "required": ["state"], "properties": { "state": { "const": "SAVE_FAILED" } } },
+      "then": { "required": ["lastSaveError"], "properties": { "lastSaveError": { "type": "object" } } }
+    },
+    {
+      "if": { "required": ["state"], "properties": { "state": { "enum": ["CLOSED", "OPEN_CLEAN", "OPEN_DIRTY", "SAVING", "CONFLICTED", "MERGING"] } } },
+      "then": { "properties": { "lastSaveError": { "type": "null" } } }
+    }
+  ],
+  "$defs": {
+    "ErrorEnvelope": {
+      "type": "object",
+      "required": ["code", "severity", "retryable", "sideEffectState", "detail", "recoveryAction", "userMessage"],
+      "description": "Mirrors schemas/common/error.schema.json's ErrorEnvelope — duplicated locally rather than cross-file $ref'd, same standalone-file tradeoff COMMON_CONVENTIONS.md documents for IntegrityRef.",
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$" },
+        "severity": { "type": "string", "enum": ["INFO", "WARNING", "ERROR", "CRITICAL"] },
+        "retryable": { "type": "boolean" },
+        "sideEffectState": { "type": "string", "enum": ["NONE", "PARTIAL", "COMPLETED", "UNKNOWN"] },
+        "detail": { "type": "string", "minLength": 1 },
+        "recoveryAction": { "type": "string", "minLength": 1 },
+        "userMessage": { "type": "string", "minLength": 1 },
+        "objectId": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "ResourceUri": {
+      "type": "object",
+      "required": ["provider", "raw"],
+      "properties": {
+        "provider": { "type": "string", "enum": ["LOCAL", "SAF", "SSH", "SNAPSHOT", "VIRTUAL"] },
+        "raw": { "type": "string", "minLength": 1, "pattern": "^(local|saf|ssh|snapshot|virtual)://\\S+$" },
+        "displayPath": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "LOCAL" } } }, "then": { "properties": { "raw": { "pattern": "^local://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SAF" } } }, "then": { "properties": { "raw": { "pattern": "^saf://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SSH" } } }, "then": { "properties": { "raw": { "pattern": "^ssh://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "SNAPSHOT" } } }, "then": { "properties": { "raw": { "pattern": "^snapshot://\\S+$" } } } },
+        { "if": { "required": ["provider"], "properties": { "provider": { "const": "VIRTUAL" } } }, "then": { "properties": { "raw": { "pattern": "^virtual://\\S+$" } } } }
+      ]
+    }
+  }
+}

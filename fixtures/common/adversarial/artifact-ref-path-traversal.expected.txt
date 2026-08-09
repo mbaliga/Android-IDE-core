@@ -1,0 +1,22 @@
+Structural validation result: PASSES schemas/common/artifact-ref.schema.json.
+`storageLocation.locator` is only constrained to be a non-empty string — JSON Schema has
+no filesystem-path semantics, so this fixture is adversarial at the semantic layer only.
+
+Required behavior from a real implementation (not just structural validation):
+  1. A reader resolving a LOCAL_FS `storageLocation` MUST reject any locator containing a
+     '..' path segment, and MUST additionally verify — after normalizing the path — that
+     the resolved absolute path stays within the artifact store's configured root
+     directory. Both checks are required; normalization-then-containment-check catches
+     traversal encodings that a naive '../' substring search on the raw string can miss.
+  2. This fixture's locator both contains literal '..' segments AND (independently)
+     would resolve outside any sane per-app artifact root — either check alone would
+     catch it, and a real implementation SHOULD run both for defense in depth.
+  3. Recommended ErrorEnvelope for the rejection:
+       code: "ARTIFACT_PATH_TRAVERSAL"
+       severity: "CRITICAL"
+       retryable: false
+       sideEffectState: "NONE"
+       recoveryAction: "Reject this ArtifactRef; do not attempt to open storageLocation.locator. Treat the producer as untrusted for this artifact."
+       userMessage: "A file reference was refused because it pointed outside its allowed storage area."
+  4. This check MUST happen before `digest`/`sizeBytes` verification (which would require
+     opening the file) — refuse the path first, never open-then-check.

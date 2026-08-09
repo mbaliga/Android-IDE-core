@@ -1,0 +1,1 @@
+Canonical form has zero insignificant whitespace: no spaces after ':' or ','.

@@ -1,0 +1,27 @@
+Schema verdict: VALID against loop-release.schema.json.
+Every required field is present and individually well-formed; nothing in this schema compares
+this entry against any other entry in the registry index, so it cannot by itself detect a
+cross-entry identity collision.
+
+Why this is semantically dangerous: this document declares the release identity tuple
+{loopId: "loop-fb-triage-inbox", semanticVersion: "1.0.0"} with packageDigest.digestHex
+"deadbeef..." (repeating). fixtures/loops/loop-release/valid/release-stable-valid.json already
+declares the SAME {loopId, semanticVersion} tuple with a DIFFERENT packageDigest.digestHex
+("5a5a5a..."). FB-RAT-PKG-006 (immutable once published) and FB-RAT-MKT-003 ("referenced releases
+are immutable content-addressed artifacts") both require that once {loopId, semanticVersion} is
+published, its packageDigest MUST NOT change under a later PR — LOOP_ENGINEERING_SPEC_V2.1.md §14:
+"A release is identified by {loopId, semanticVersion, packageDigest, publisherKeyFingerprint}. The
+digest is the final source of byte-level identity." A submission that reuses an already-published
+{loopId, semanticVersion} pair with a different digest is an attempted mutation of an already
+-published release, not a new release.
+
+Real rejection code: LOOP-ID-002
+  "Attempted mutation of installed package bytes for release {loopId}@{semanticVersion} (digest
+  {packageDigest})."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-ID-002), citing
+  LOOP_ENGINEERING_SPEC_V2.1 §21/§22 and WP-8a hard invariant IMP-006.
+
+Remediation: reject the pull request; a genuinely new build of the same source at the same
+semanticVersion MUST bump semanticVersion (per LOOP_PACKAGE_SPEC.md §12) before it can be
+published as a distinct release — the digest is never silently overwritten under an existing
+identity tuple.

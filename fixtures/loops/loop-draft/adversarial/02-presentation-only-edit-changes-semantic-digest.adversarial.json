@@ -1,0 +1,26 @@
+{
+  "draftId": "draft-adversarial-layout-digest-drift",
+  "revision": 1,
+  "graph": {
+    "mode": "EMBEDDED",
+    "definition": { "loopId": "loop.demo.hello-file", "nodes": [{ "nodeId": "n1", "presentation": { "x": 120, "y": 340 } }] }
+  },
+  "presentation": {},
+  "validationState": { "status": "VALID", "findings": [] },
+  "testWorkspaceRef": null,
+  "sourceSurface": "WEB",
+  "localHistory": [
+    {
+      "revisionNumber": 1,
+      "actorClass": "USER",
+      "timestampUtc": "2026-08-07T14:00:00Z",
+      "baseSemanticDigest": "sha256:bf3f7e389c41195471c70d731d2053c317d8c78ad4721aaa603d956264644263",
+      "resultingSemanticDigest": "sha256:76be93e92bc8cf4e0c551c3aff07864245d8a364431d1d893ad7bf8ef17ce0aa",
+      "operationList": [
+        { "opId": "op-1", "opType": "MODIFY_PROPERTY", "targetType": "PRESENTATION", "targetId": "n1", "description": "Dragged node n1's card to a new position on the canvas (presentation.x/presentation.y only)." }
+      ],
+      "validationState": { "status": "VALID", "findings": [] },
+      "authorityVerificationDelta": { "authorityWidened": false, "verificationWeakened": false, "details": null }
+    }
+  ]
+}

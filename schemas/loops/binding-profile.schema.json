@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/binding-profile.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. BindingProfile per LOOP_ENGINEERING_SPEC_V2.1.md §2.6: 'device- and user-specific resolution of abstract package slots to actual models, repositories, execution targets, devices, secrets, policies, and budgets. Binding profiles are not publishable package content (FB-RAT-WEB-005 — packages declare typed binding slots; Fonebrew resolves them locally).' A BindingProfile document MUST NEVER be embedded in, or shipped as part of, a .floop LoopPackage archive (floop-container-format.v1.json's requiredTopLevelLayout has no slot for one) — it lives only in this phone's own local store, referenced by LoopInstallation.bindingProfileRef (loop-installation.schema.json). `substitutionPolicy` per binding is the FB-RAT-CMP-003 four-value enum — copied verbatim from docs/ratified/loops/LOOP_COMPATIBILITY_CONTRACT.md §5, not the task-brief's abbreviated three-value paraphrase.",
+  "title": "BindingProfile",
+  "description": "The local, device-and-user-specific resolution of one release's abstract binding slots (LOOP_PACKAGE_SPEC.md §9) to actual local resources — models, repositories, execution targets, devices, secrets (by reference only), policies, and budgets. Produced by LOOP_IMPORT_ACTIVATION_CONTRACT.md §5's binding-resolution-order procedure and consumed at activation. NOT publishable package content (see $comment) — a package build pipeline (LOOP_PACKAGE_SPEC.md §5) MUST NOT include a BindingProfile document in its output.",
+  "type": "object",
+  "required": ["schemaVersion", "profileId", "packageDigest", "slotBindings", "resolvedAtUtc"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this profile's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "profileId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this profile (FB-RAT-COM-002)."
+    },
+    "loopId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The release family this profile binds against. LOOP_IMPORT_ACTIVATION_CONTRACT.md §5: 'a binding never survives a change of loopId... without fresh review' — carried here so a resolver can cheaply reject a stale profile before even comparing packageDigest."
+    },
+    "semanticVersion": {
+      "type": ["string", "null"],
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "default": null,
+      "description": "The release version this profile was resolved against, or the compatible version range it was approved to survive into (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 — 'or a user-approved compatible version range'). Null only when scoping is by packageDigest alone (no range approval given)."
+    },
+    "packageDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "The exact packageContentDigest (floop-container-format.v1.json) this profile was resolved against. A profile is scoped to this digest unless `semanticVersion` above additionally records a user-approved range (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5)."
+    },
+    "slotBindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/BindingRecord" },
+      "description": "One entry per resolved binding slot (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5's required binding-record field list). MUST have unique slotId values — see the $comment on the `uniqueSlotIds` marker below; JSON Schema draft 2020-12 has no native 'unique by key' keyword, so uniqueness of slotId specifically (as opposed to whole-item uniqueness, which `uniqueItems` would check) is a documented, not structurally enforced, invariant. See fixtures/loops/binding-profile/adversarial for the schema-valid-but-duplicate-slotId case."
+    },
+    "resolvedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this resolution completed (FB-RAT-COM-004)."
+    },
+    "producer": {
+      "oneOf": [
+        { "$ref": "#/$defs/ProducerRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "The app instance that produced this profile."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ProducerRef": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "BindingRecord": {
+      "type": "object",
+      "required": ["slotId", "selectedProviderId", "substitutionPolicy", "provenance"],
+      "properties": {
+        "slotId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The package's abstract placeholder slot ID being resolved (LOOP_PACKAGE_SPEC.md §9, e.g. 'model.writer', 'repository.primary', 'ci.default', 'device.target', 'secret.release_signing')."
+        },
+        "requirement": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Human-readable copy of the slot's declared requirement, for display without re-fetching the package manifest."
+        },
+        "selectedProviderId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The actual local resource this slot resolved to (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 'selected provider/resource ID')."
+        },
+        "providerVersion": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Version of the selected provider/resource, when the resource kind carries one (e.g. a model build, a tool version)."
+        },
+        "targetType": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "The resource kind this slot resolved to (e.g. 'model', 'repository', 'executionTarget', 'device', 'secret') — LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 'provider version and target type'."
+        },
+        "substitutionPolicy": {
+          "type": "string",
+          "enum": ["EXACT_ONLY", "DECLARED_EQUIVALENTS", "USER_APPROVED", "ANY_COMPATIBLE"],
+          "description": "LOOP_COMPATIBILITY_CONTRACT.md §5's four-value policy (FB-RAT-CMP-003): EXACT_ONLY (fixed, no substitution possible), DECLARED_EQUIVALENTS (phone auto-resolves among a package-declared list), USER_APPROVED (user confirms any phone-proposed value), ANY_COMPATIBLE (phone auto-resolves any locally available value meeting the slot's declared capability requirements)."
+        },
+        "substitutionReason": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Required in practice whenever substitutionPolicy is not EXACT_ONLY (FB-RAT-CMP-003) — see the `if`/`then` below for the one direction this schema DOES enforce structurally (EXACT_ONLY forbids a reason, since there is nothing to explain)."
+        },
+        "provenance": {
+          "type": "string",
+          "enum": ["LOCAL", "CLOUD", "REMOTE"],
+          "description": "LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 'local/cloud/remote provenance' of the resolved resource."
+        },
+        "constraints": {
+          "type": "object",
+          "default": {},
+          "description": "Open bag for slot-specific constraints (e.g. a context-length floor, a latency ceiling) — LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 'constraints'."
+        },
+        "budgets": {
+          "type": "object",
+          "default": {},
+          "description": "Open bag for slot-specific budget dimensions (e.g. a per-call cost ceiling) — LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 'budgets'."
+        },
+        "secretReferenceId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "A Keystore-held secret HANDLE ID only (security/KeystoreSecret.kt) — LOOP_PACKAGE_SPEC.md §9's fb.secret.use purpose-bound-handle mechanism. This field MUST NEVER carry a raw secret value; see fixtures/loops/binding-profile/adversarial for the fixture modeling exactly that violation (schema-valid string, semantically forbidden content)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "substitutionPolicy": { "const": "EXACT_ONLY" } }, "required": ["substitutionPolicy"] },
+          "then": { "properties": { "substitutionReason": { "const": null } } },
+          "$comment": "EXACT_ONLY is the fixed, no-substitution case (LOOP_COMPATIBILITY_CONTRACT.md §5) — there is no substitution to explain, so a non-null reason here would be self-contradictory."
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

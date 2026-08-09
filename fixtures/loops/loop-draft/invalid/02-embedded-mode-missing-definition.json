@@ -1,0 +1,10 @@
+{
+  "draftId": "draft-invalid-embedded-no-definition",
+  "revision": 0,
+  "graph": { "mode": "EMBEDDED" },
+  "presentation": {},
+  "validationState": { "status": "NOT_VALIDATED", "findings": [] },
+  "testWorkspaceRef": null,
+  "sourceSurface": "WEB",
+  "localHistory": []
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportId": "validation-report-bad-ruleset",
+  "rulesetVersion": "fb-loop-validation-rules-2",
+  "semanticDigest": "sha256:c63b890c5219db8a2871ad87bf40710bfa817b1e3e344abd9e55e5a49736c636",
+  "surfaceImplementation": {
+    "surface": "PHONE",
+    "name": "dev.aarso.full",
+    "version": "0.13.0"
+  },
+  "findings": [],
+  "createdAtUtc": "2026-08-01T10:00:03Z"
+}

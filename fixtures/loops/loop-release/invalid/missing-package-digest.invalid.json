@@ -1,0 +1,11 @@
+{
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.0.0",
+  "publisherKeyFingerprint": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+  "releaseAssetUrl": "https://github.com/example-publisher/loop-fb-triage-inbox/releases/download/v1.0.0/loop-fb-triage-inbox-1.0.0.floop",
+  "publishedAtUtc": "2026-07-15T09:00:00Z",
+  "signatureRef": {
+    "signatureAssetUrl": "https://github.com/example-publisher/loop-fb-triage-inbox/releases/download/v1.0.0/loop-fb-triage-inbox-1.0.0.floop.sig.json",
+    "sha256": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+  }
+}

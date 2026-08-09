@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportId": "validation-report-unsorted",
+  "rulesetVersion": "fb-loop-validation-rules-1",
+  "semanticDigest": "sha256:ffd75dd8ee851dfeece3785aab00f2841ebf822ddfe55e75a4c88bdde6458fa0",
+  "surfaceImplementation": {
+    "surface": "PHONE",
+    "name": "dev.aarso.full",
+    "version": "0.13.0"
+  },
+  "findings": [
+    {
+      "namespace": "LOOP-PKG",
+      "code": "LOOP-PKG-001",
+      "severity": "ERROR",
+      "objectType": "file",
+      "message": "File 'assets/notes.txt' matches a secret-like pattern."
+    },
+    {
+      "namespace": "LOOP-CAP",
+      "code": "LOOP-CAP-001",
+      "severity": "ERROR",
+      "objectType": "node",
+      "nodeId": "cloud-call",
+      "message": "Node 'cloud-call' requests capability 'fb.model.cloud_inference', which is unavailable on this target/flavor."
+    },
+    {
+      "namespace": "LOOP-BUDGET",
+      "code": "LOOP-BUDGET-002",
+      "severity": "ERROR",
+      "objectType": "node",
+      "nodeId": "recursive-refine",
+      "message": "Recursive subloop at 'recursive-refine' has no statically visible depth limit."
+    }
+  ],
+  "highestSeverity": "ERROR",
+  "createdAtUtc": "2026-08-01T10:00:03Z"
+}

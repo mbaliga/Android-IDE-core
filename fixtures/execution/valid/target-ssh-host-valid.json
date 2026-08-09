@@ -1,0 +1,21 @@
+{
+  "id": "01J8ZA0000000000000000T2",
+  "type": "SSH_HOST",
+  "displayName": "build-box.lan",
+  "trust": "TRUSTED",
+  "hostFingerprint": "SHA256:9c1c1f0d7e6b4a3f2e5d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f",
+  "arch": "x86_64",
+  "capabilities": null,
+  "connectivity": { "kind": "INTERMITTENT_NETWORK", "lastSeenReachableUtc": "2026-08-07T08:45:12Z" },
+  "cost": { "tier": "FREE", "notes": "Owner's own workstation, no metered link." },
+  "provenanceStyle": "USER_INITIATED_REMOTE",
+  "visibilityContract": {
+    "executionLocationVisible": true,
+    "revisionVisible": true,
+    "dataBoundaryVisible": true,
+    "stateVisible": true,
+    "resultVisible": true
+  },
+  "fgsType": "NONE",
+  "unknownFields": {}
+}

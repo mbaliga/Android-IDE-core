@@ -1,0 +1,11 @@
+{
+  "transferChannel": "BLUETOOTH",
+  "expectedMediaType": "application/zip",
+  "expectedDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c3f5e1a9c",
+    "byteLength": 20480
+  },
+  "initiatedByUser": true,
+  "sourceDescription": "User accepted a Bluetooth file transfer from a nearby device."
+}

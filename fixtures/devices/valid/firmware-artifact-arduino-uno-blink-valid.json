@@ -1,0 +1,50 @@
+{
+  "firmwareArtifactId": "fw-arduino-uno-blink-v3",
+  "artifact": {
+    "id": "fw-arduino-uno-blink-v3",
+    "mediaType": "application/octet-stream",
+    "digest": {
+      "algorithm": "SHA-256",
+      "digestHex": "f9b27032939d4d72b5cb88fa5c51d3c3eee0515a056cd728804b68ee7c66ab38",
+      "byteLength": 1084
+    },
+    "sizeBytes": 1084,
+    "storageLocation": {
+      "kind": "LOCAL_FS",
+      "locator": "/storage/emulated/0/Android-IDE-core/firmware/blink_uno_v3.hex"
+    },
+    "verificationState": "VERIFIED",
+    "producerReceipt": {
+      "receiptObjectId": "01J8ZFW0000000000000000R1",
+      "producer": {
+        "name": "core-engine.device.arduino-cli-build",
+        "version": "0.13.0",
+        "instanceId": null
+      },
+      "sourceLocation": "sketches/blink/blink.ino",
+      "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6789",
+      "initiatingPrincipal": "user:owner",
+      "evidenceLinks": []
+    },
+    "unknownFields": {}
+  },
+  "boardCompatibility": [
+    {
+      "catalogRef": "ARDUINO_CLI",
+      "catalogId": "arduino:avr:uno",
+      "displayName": "Arduino Uno"
+    }
+  ],
+  "memoryLayout": {
+    "flashBytes": 1084,
+    "ramBytes": 9,
+    "eepromBytes": 0,
+    "flashStartAddress": "0x0000"
+  },
+  "signing": {
+    "signed": false,
+    "signatureScheme": null,
+    "verified": null
+  },
+  "unknownFields": {}
+}

@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/devices/device-identity.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceIdentity per FB-RAT-DEV-002 (device object model). Typically carried as the `payload` of a ContractEnvelope<DeviceIdentity> (see schemas/common/envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc from that outer envelope; `deviceIdentityId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId — a device keeps the same deviceIdentityId across reconnects, USB-port moves, and re-enumeration.",
+  "title": "DeviceIdentity",
+  "description": "What a discovered device claims to be: USB family classification, board reference (via Arduino CLI/PlatformIO metadata per FB-RAT-DEV-009, never a separate owned board catalog), MCU, USB descriptor, serial number, bootloader entry method, capabilities, and — load-bearing per FB-RAT-DEV-004 — an explicit identification-confidence claim a flash preflight gates on. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §2.",
+  "type": "object",
+  "required": ["deviceIdentityId", "family", "board", "confidence"],
+  "properties": {
+    "deviceIdentityId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this device (FB-RAT-COM-002), independent of USB port, transportPath, or displayName — the same physical board keeps this id across unplug/replug and even across a firmware re-flash that changes its USB descriptor strings."
+    },
+    "family": {
+      "$ref": "#/$defs/UsbFamily"
+    },
+    "board": {
+      "$ref": "#/$defs/BoardRef"
+    },
+    "mcu": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Free-string MCU identifier when known, e.g. 'ATmega328P', 'ESP32-S3', 'RP2040'. Null when discovery has not yet determined it (e.g. mid-handshake, or a family/board pairing where the MCU is ambiguous without a further probe)."
+    },
+    "usbDescriptor": {
+      "oneOf": [
+        { "$ref": "#/$defs/UsbDescriptor" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Raw USB vendor/product identification, when the device was discovered over USB (all nine FB-RAT-DEV-010 families are). Null only transiently, before Android's UsbManager enumeration has completed for this device."
+    },
+    "serial": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The device's OWN USB serial-number string (iSerialNumber), when it reports one — distinct from `deviceIdentityId`, which this constellation generates and owns. Many CH34x/inexpensive CP210x clones report no serial at all (null is common and expected, not an error) — this is exactly why `deviceIdentityId` cannot simply BE the USB serial and must be independently assigned."
+    },
+    "bootloaderInfo": {
+      "oneOf": [
+        { "$ref": "#/$defs/BootloaderInfo" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "How this identity's board enters/speaks a bootloader protocol, when applicable. Null for a device with no known bootloader path (e.g. a CDC-only serial peripheral this constellation only ever talks to, never flashes)."
+    },
+    "capabilities": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/capability-manifest.schema.json" },
+            {
+              "type": "object",
+              "properties": {
+                "subjectKind": { "const": "DEVICE" }
+              }
+            }
+          ]
+        },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Optional CapabilityManifest (reused from schemas/common/capability-manifest.schema.json, not redefined here) narrowed to subjectKind='DEVICE' — which device.* operations (serial, flash, debug, self-test) this identity currently claims support for. Null before a capability handshake has completed."
+    },
+    "confidence": {
+      "$ref": "#/$defs/IdentityConfidence"
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "UsbFamily": {
+      "type": "string",
+      "enum": ["CDC", "FTDI", "CP210X", "CH34X", "STK500", "UF2", "DFU", "ESP_BOOTLOADER", "CMSIS_DAP"],
+      "description": "FB-RAT-DEV-010 (EXPERIMENTAL — cross-reference docs/non_ratified/EXPERIMENTAL_DECISIONS.md): the nine-family initial USB target matrix. This field records which family the device was DISCOVERED/CLASSIFIED under, not an exhaustive claim about every protocol the physical board might also speak — a board can legitimately present as CDC while running an STK500-speaking bootloader underneath (see BootloaderInfo.family). CMSIS_DAP carries the FB-RAT-DEV-011 research-spike caveat (docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §7) — its presence in this enum is a target-matrix placeholder, not a claim that CMSIS-DAP/OpenOCD support exists or is precedented on Android."
+    },
+    "CatalogRef": {
+      "type": "string",
+      "enum": ["ARDUINO_CLI", "PLATFORMIO", "UNCATALOGED"],
+      "description": "FB-RAT-DEV-009: interoperate with Arduino CLI / PlatformIO board metadata, never own a separate board/package universe. UNCATALOGED is the honest fallback when neither toolchain's metadata recognizes this board — it is NOT a third catalog this constellation invents and grows over time."
+    },
+    "BoardRef": {
+      "type": "object",
+      "required": ["catalogRef", "displayName"],
+      "properties": {
+        "catalogRef": { "$ref": "#/$defs/CatalogRef" },
+        "catalogId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "The catalog's own identifier for this board, e.g. an Arduino CLI FQBN ('arduino:avr:uno') or a PlatformIO board id ('esp32dev'). Null when catalogRef is UNCATALOGED, or when the catalog identifier has not yet been resolved."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable board name for display, e.g. 'Arduino Uno', 'ESP32-DevKitC-32', 'Raspberry Pi Pico'. Never used as identity — a renamed/relabeled board keeps the same deviceIdentityId."
+        }
+      },
+      "additionalProperties": true
+    },
+    "UsbDescriptor": {
+      "type": "object",
+      "required": ["vendorId", "productId"],
+      "properties": {
+        "vendorId": {
+          "type": "string",
+          "pattern": "^0x[0-9A-Fa-f]{4}$",
+          "description": "USB idVendor as a 4-hex-digit '0x'-prefixed string, e.g. '0x2341' (Arduino LLC)."
+        },
+        "productId": {
+          "type": "string",
+          "pattern": "^0x[0-9A-Fa-f]{4}$",
+          "description": "USB idProduct as a 4-hex-digit '0x'-prefixed string."
+        },
+        "manufacturer": { "type": ["string", "null"], "default": null, "description": "iManufacturer string, when reported." },
+        "productName": { "type": ["string", "null"], "default": null, "description": "iProduct string, when reported." }
+      },
+      "additionalProperties": true
+    },
+    "BootloaderInfo": {
+      "type": "object",
+      "required": ["supported"],
+      "properties": {
+        "supported": {
+          "type": "boolean",
+          "description": "Whether this identity is known to have a bootloader entry path at all."
+        },
+        "family": {
+          "oneOf": [
+            { "$ref": "#/$defs/UsbFamily" },
+            { "type": "null" }
+          ],
+          "default": null,
+          "description": "Which of the nine FB-RAT-DEV-010 families the bootloader itself speaks, when known — MAY differ from the outer DeviceIdentity.family (e.g. outer family CDC, bootloader family STK500, for a classic Arduino AVR board reached over a CDC-presenting USB-serial adapter)."
+        },
+        "entryMethod": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Free-text description of how the bootloader is entered, e.g. '1200-baud touch auto-reset', 'BOOTSEL button held at power-on', 'double-tap reset'. Free text because entry methods are genuinely board-specific and not worth a closed vocabulary."
+        }
+      },
+      "additionalProperties": true
+    },
+    "IdentityConfidence": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["CONFIRMED", "PROBABLE", "UNCERTAIN", "UNKNOWN"],
+          "description": "FB-RAT-DEV-004: flash preflight validates board identity confidence before erase. CONFIRMED: an exact USB VID/PID + protocol handshake match against known board metadata, or explicit user confirmation. PROBABLE: a VID/PID match against a device family that maps to more than one possible board (e.g. a generic CH340 clone matching many AVR boards). UNCERTAIN: heuristic-only (e.g. port-name guess, no successful protocol probe yet). UNKNOWN: no classification attempt has succeeded yet. A DeviceOperation's `preconditions.identityConfidenceAtLeast` gate (schemas/devices/operation.schema.json) is evaluated against this ordered scale — see docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4 step 3."
+        },
+        "basis": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": [],
+          "description": "Free-text reasons supporting `level`, e.g. 'USB VID/PID exact match against arduino:avr:uno', 'STK500 protocol handshake succeeded', 'user manually selected board from list'. MAY be empty for level=UNKNOWN."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

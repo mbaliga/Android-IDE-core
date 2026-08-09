@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0.0",
+  "profileId": "binding-profile-77aa",
+  "loopId": "loop-fb-triage-inbox",
+  "semanticVersion": "1.0.0",
+  "packageDigest": {
+    "algorithm": "SHA-256",
+    "digestHex": "2ea394169df5872bf61db43b5b101b3688d1aa392d786016989f406c46354184",
+    "byteLength": 190
+  },
+  "slotBindings": [
+    {
+      "slotId": "repository.primary",
+      "requirement": "A user-owned Git repository readable at fb.repo.read.",
+      "selectedProviderId": "github:acme/support-inbox",
+      "providerVersion": null,
+      "targetType": "repository",
+      "substitutionPolicy": "EXACT_ONLY",
+      "substitutionReason": null,
+      "provenance": "REMOTE",
+      "constraints": {},
+      "budgets": {},
+      "secretReferenceId": null
+    },
+    {
+      "slotId": "model.writer",
+      "requirement": "text-generation + tool-calling, contextTokens >= 8000",
+      "selectedProviderId": "local-model-llama-3-8b-instruct",
+      "providerVersion": "Q4_K_M",
+      "targetType": "model",
+      "substitutionPolicy": "DECLARED_EQUIVALENTS",
+      "substitutionReason": "Declared exact model unavailable on-device; bound to a declared equivalent carrying the same required capability tags.",
+      "provenance": "LOCAL",
+      "constraints": {
+        "minContextTokens": 8000
+      },
+      "budgets": {
+        "maxTokensPerCall": 4096
+      },
+      "secretReferenceId": null
+    }
+  ],
+  "resolvedAtUtc": "2026-08-01T10:00:05Z",
+  "producer": {
+    "name": "dev.aarso.full",
+    "version": "0.13.0"
+  }
+}

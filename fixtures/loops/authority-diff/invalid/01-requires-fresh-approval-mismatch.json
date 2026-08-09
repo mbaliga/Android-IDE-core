@@ -1,0 +1,8 @@
+{
+  "comparisonId": "authdiff-bad-0001",
+  "generatedAtUtc": "2026-08-07T10:10:00Z",
+  "perCapability": [
+    { "capabilityId": "fb.device.flash", "before": null, "after": "EXECUTE_DESTRUCTIVE", "direction": "ADDED" }
+  ],
+  "requiresFreshApproval": false
+}

@@ -1,0 +1,21 @@
+Schema validation: PASSES (this document is schema-valid against authority-diff.schema.json).
+
+Real rejection: violates FB-RAT-IMP-008 ("any authority widening... requires fresh approval even
+for a patch release") and FB-RAT-LIN-005 ("any upstream or fork change that widens capabilities or
+side effects is highlighted independently of ordinary graph changes") by OMISSION rather than by a
+false boolean. The update this comparison was actually computed over also newly requests
+fb.device.flash (EXECUTE_DESTRUCTIVE) -- ground truth this fixture's own producer had access to and
+silently dropped from `perCapability`. Because the array contains no ADDED/WIDENED entry at all,
+this schema's own allOf correctly infers requiresFreshApproval=false FROM THE ARRAY AS GIVEN -- the
+boolean is internally consistent with the (incomplete) array, which is exactly why the schema cannot
+catch this class of defect.
+
+Why the schema cannot catch this: authority-diff.schema.json has no ground-truth source (a before/
+after capability-request set) to compare `perCapability` against -- it can only check that the
+`requiresFreshApproval` flag agrees with the entries actually present, never that the entries
+present are the complete set of entries that SHOULD be present. Detecting this requires the actual
+producer (the update-gate or lineage-comparison engine) to compare full capability-request sets on
+both sides of the comparison, not a downstream JSON Schema validator. The closest machine-checkable
+sibling is LOOP-COMPAT-002 (loop-validation-rules.v1.json), which enforces the same "authority
+widening requires fresh approval" invariant at install/update time against the actual package
+manifests being compared, not against this already-reduced summary object.

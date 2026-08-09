@@ -1,0 +1,42 @@
+{
+  "operationId": "op-3011",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "connectionId": "conn-0045",
+  "operationKind": "SELF_TEST",
+  "artifactId": null,
+  "preconditions": {
+    "identityConfidenceAtLeast": "CONFIRMED",
+    "usbPermissionGranted": true,
+    "boardFirmwareCompatibilityChecked": true,
+    "powerWiringAssumptionsAcknowledged": true
+  },
+  "authority": {
+    "exclusiveLockId": "lock-9011",
+    "destructiveActionExplicitlyAuthorized": false,
+    "authorizedPrincipal": "agent-run:wp1-device-selftest-3011",
+    "authorizedAtUtc": "2026-08-07T10:22:00Z"
+  },
+  "protocol": {
+    "family": "STK500",
+    "progressPercent": 100,
+    "sideEffectsPossible": false
+  },
+  "state": "SUCCEEDED",
+  "verification": {
+    "state": "NOT_PERFORMED",
+    "method": null,
+    "verifiedAtUtc": null
+  },
+  "rollback": {
+    "possible": false,
+    "steps": []
+  },
+  "receipt": {
+    "finishedAtUtc": "2026-08-07T10:22:05Z",
+    "exitState": "SUCCEEDED",
+    "sideEffects": [],
+    "errorEnvelope": null,
+    "snapshotAfterId": null
+  },
+  "unknownFields": {}
+}

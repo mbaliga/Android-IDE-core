@@ -1,0 +1,11 @@
+{
+  "connectionId": "conn-0044",
+  "deviceIdentityId": "dev-arduino-uno-0007",
+  "state": "READY",
+  "stateReason": null,
+  "enteredStateAtUtc": "2026-08-07T10:00:00Z",
+  "transportPath": "/dev/bus/usb/001/014",
+  "usbPermissionGranted": true,
+  "exclusiveLock": null,
+  "unknownFields": {}
+}

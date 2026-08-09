@@ -1,0 +1,16 @@
+Schema verdict: VALID against loop-installation.schema.json.
+`unknownFields` is an intentionally open bag (FB-RAT-COM-003 round-trip preservation) — this
+schema cannot see into it structurally, so a PARTIAL decision smuggled in there passes.
+
+Real rejection code: LOOP-PKG-005
+  "Package import for 'loop-fb-triage-inbox' was PARTIAL; partial import is unsupported for
+  PACKAGE_IMPORT profile."
+  Source: schemas/loops/registries/loop-validation-rules.v1.json (LOOP-PKG-005), which in turn
+  cites docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §2: "PARTIAL_IMPORT is unsupported
+  for PACKAGE_IMPORT — a LoopPackage import is all-or-nothing." A LoopInstallation reaching
+  INSTALLED after excluding files the way this fixture's unknownFields describes MUST NOT exist —
+  the Confirm/Install step MUST reject any code path offering per-record exclusion for a
+  PACKAGE_IMPORT profile, unlike the DATA_IMPORT profile's INT-007 partial-import support.
+
+Remediation: reject the import attempt outright at PREVIEWED/WAITING_BINDINGS; the user must
+re-acquire a complete package rather than install a subset.

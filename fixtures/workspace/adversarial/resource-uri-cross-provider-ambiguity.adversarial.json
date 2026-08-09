@@ -1,0 +1,14 @@
+[
+  {
+    "provider": "LOCAL",
+    "raw": "local:///storage/emulated/0/Android-IDE-core/README.md",
+    "displayPath": "Android-IDE-core/README.md",
+    "unknownFields": {}
+  },
+  {
+    "provider": "SSH",
+    "raw": "ssh://host-9f21e3/home/dev/mirrors/Android-IDE-core/README.md",
+    "displayPath": "Android-IDE-core/README.md",
+    "unknownFields": {}
+  }
+]

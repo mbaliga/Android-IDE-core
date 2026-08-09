@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/devices/connection.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceConnection per FB-RAT-DEV-002 (device object model) and FB-RAT-DEV-003 (device uncertainty represented explicitly). Typically carried as the `payload` of a ContractEnvelope<DeviceConnection> (see schemas/common/envelope.schema.json). `connectionId` is this object's own FB-RAT-COM-002 stable ID — distinct from `deviceIdentityId`, since one DeviceIdentity has exactly one live DeviceConnection at a time but goes through many DeviceConnection instances (one per connect/disconnect cycle) over its lifetime.",
+  "title": "DeviceConnection",
+  "description": "Live connection state for a DeviceIdentity: the FB-RAT-DEV-003 nine-state lifecycle (DISCOVERED -> PERMISSION_REQUIRED -> CONNECTING -> READY | BOOTLOADER | BUSY | DISCONNECTED | STATE_UNKNOWN | UNSUPPORTED), the Android USB-permission flag the flash contract's step 2 checks, and the FB-RAT-DEV-001 exclusive device-operation lock the single Device Broker arbitrates. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §3.",
+  "type": "object",
+  "required": ["connectionId", "deviceIdentityId", "state", "enteredStateAtUtc", "usbPermissionGranted"],
+  "properties": {
+    "connectionId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this connection instance (FB-RAT-COM-002). A single physical device unplugged and replugged produces a NEW connectionId each time — deviceIdentityId is what stays constant."
+    },
+    "deviceIdentityId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "References the DeviceIdentity.deviceIdentityId this connection is for (schemas/devices/device-identity.schema.json)."
+    },
+    "state": {
+      "$ref": "#/$defs/DeviceConnectionState"
+    },
+    "stateReason": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Free-text reason for the current state (e.g. 'USB permission dialog dismissed by user', 'device did not respond to STK500 sync after 3 attempts', 'unplugged mid-operation'). Required non-blank whenever `state` is one of PERMISSION_REQUIRED/BOOTLOADER/BUSY/DISCONNECTED/STATE_UNKNOWN/UNSUPPORTED (see the if/then below) — FB-RAT-COM-009 accessibility: textual semantics independent of a status-dot color."
+    },
+    "enteredStateAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this connection entered its current `state` (FB-RAT-COM-004)."
+    },
+    "transportPath": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Android USB device node / transport identifier this connection is reached through (e.g. a UsbDevice.deviceName-shaped path), when known. Null only in DISCOVERED, before a transport path has been resolved."
+    },
+    "usbPermissionGranted": {
+      "type": "boolean",
+      "description": "Whether Android's UsbManager permission has been explicitly granted by the user for this device (flash contract step 2 — docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4). This is a VISIBLE, user-facing permission grant, not an implicit one — a connection MUST NOT report a settled state past PERMISSION_REQUIRED with this false."
+    },
+    "exclusiveLock": {
+      "oneOf": [
+        { "$ref": "#/$defs/DeviceLock" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "FB-RAT-DEV-001: one Device Broker arbitrates serial, flash, debug, USB permission, and device locks — this is the wire-visible record of that arbitration. Non-null only while `state` is BUSY (see the if/then below); every DeviceOperation that reaches AUTHORIZED (schemas/devices/operation.schema.json) MUST hold this lock for the duration, and the broker MUST refuse to start a second concurrent operation against the same connection while it is held."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "state": { "enum": ["PERMISSION_REQUIRED", "BOOTLOADER", "BUSY", "DISCONNECTED", "STATE_UNKNOWN", "UNSUPPORTED"] } },
+        "required": ["state"]
+      },
+      "then": {
+        "required": ["stateReason"],
+        "properties": { "stateReason": { "type": "string", "minLength": 1 } }
+      },
+      "$comment": "FB-RAT-COM-009 accessibility: a non-plain-connected state MUST carry a textual-semantics reason, not rely on the enum value alone."
+    },
+    {
+      "if": {
+        "properties": { "state": { "const": "BUSY" } },
+        "required": ["state"]
+      },
+      "then": { "required": ["exclusiveLock"], "properties": { "exclusiveLock": { "$ref": "#/$defs/DeviceLock" } } },
+      "$comment": "FB-RAT-DEV-001: a BUSY connection MUST carry the exclusive lock the Device Broker granted for the in-flight operation — BUSY without a recorded lock is a bypass of the single-arbiter rule."
+    },
+    {
+      "if": {
+        "required": ["exclusiveLock"],
+        "properties": { "exclusiveLock": { "type": "object" } }
+      },
+      "then": { "properties": { "state": { "const": "BUSY" } } },
+      "$comment": "The converse: a non-null exclusiveLock MUST NOT appear on a connection reporting any state other than BUSY — a stale lock left behind after a state transition is exactly the kind of silent-inconsistency this schema is meant to make structurally unrepresentable."
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "DeviceConnectionState": {
+      "type": "string",
+      "enum": ["DISCOVERED", "PERMISSION_REQUIRED", "CONNECTING", "READY", "BOOTLOADER", "BUSY", "DISCONNECTED", "STATE_UNKNOWN", "UNSUPPORTED"],
+      "description": "FB-RAT-DEV-003: device uncertainty represented explicitly. DISCOVERED/PERMISSION_REQUIRED/CONNECTING are the transient entry path; READY/BOOTLOADER/BUSY/DISCONNECTED/STATE_UNKNOWN/UNSUPPORTED are settled states a connection can dwell in and, other than UNSUPPORTED, transition back out of (e.g. DISCONNECTED -> CONNECTING on reconnect). See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §3 for the full transition table. STATE_UNKNOWN is distinct from DISCONNECTED: DISCONNECTED means the device is confirmed gone (clean unplug detected); STATE_UNKNOWN means connectivity was lost in a way that leaves the device's actual condition genuinely indeterminate (e.g. dropped mid-BUSY) — never collapse the two."
+    },
+    "DeviceLock": {
+      "type": "object",
+      "required": ["lockId", "holderPrincipal", "acquiredAtUtc"],
+      "properties": {
+        "lockId": { "type": "string", "minLength": 1, "description": "FB-RAT-COM-002 stable ID for this lock grant." },
+        "holderPrincipal": { "type": "string", "minLength": 1, "description": "FB-RAT-COM-008 — who/what holds the lock (user id, agent name)." },
+        "acquiredAtUtc": { "type": "string", "format": "date-time" },
+        "operationId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "References the DeviceOperation.operationId (schemas/devices/operation.schema.json) this lock was granted for, when the BUSY state was entered on that operation's behalf."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

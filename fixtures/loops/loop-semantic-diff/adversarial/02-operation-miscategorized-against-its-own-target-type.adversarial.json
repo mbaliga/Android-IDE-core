@@ -1,0 +1,27 @@
+{
+  "diffId": "diff-adversarial-0002",
+  "sourceKind": "AI_PROPOSAL",
+  "generatedAtUtc": "2026-08-07T17:30:00Z",
+  "baseRevision": { "draftId": "draft-x", "draftRevisionNumber": 5 },
+  "semanticOperations": [
+    { "opId": "op-1", "opType": "MODIFY_PROPERTY", "targetType": "SCHEMA", "targetId": null, "description": "Widened the outputSchema's 'summary' field from a plain string to allow null, changing what a downstream consumer must accept.", "beforeValue": { "type": "string" }, "afterValue": { "type": ["string", "null"] } }
+  ],
+  "categorizedFindings": {
+    "documentation": ["op-1"],
+    "schema": [],
+    "node": [],
+    "edge": [],
+    "capability": [],
+    "authority": [],
+    "budget": [],
+    "test": [],
+    "compatibility": []
+  },
+  "licenseChange": { "changed": false },
+  "behaviorExplanation": "A single schema-widening change, filed under the wrong category.",
+  "validationResult": { "status": "VALID", "findings": [] },
+  "authorityDiffSummary": {
+    "perCapability": [],
+    "blockingReviewGroup": { "authorityWidening": false, "verificationWeakening": false, "destructivePathIntroduced": false, "schemaBreakage": false, "acknowledgedByUser": false }
+  }
+}

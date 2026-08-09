@@ -1,0 +1,16 @@
+{
+  "sequence": 413,
+  "bufferId": "01J8ZR8Y1A3C5E7G9J1L3N5P7R",
+  "resourceUri": {
+    "provider": "LOCAL",
+    "raw": "local:///storage/emulated/0/Android-IDE-core/README.md",
+    "unknownFields": {}
+  },
+  "opType": "DELETE",
+  "byteRange": { "startByte": 100, "endByteExclusive": 140 },
+  "content": "this text should not be here for a DELETE op",
+  "recordedAtUtc": "2026-08-07T10:15:02Z",
+  "originKind": "HUMAN",
+  "originPrincipal": "user:owner",
+  "unknownFields": {}
+}

@@ -53,6 +53,64 @@ class AppContainer(context: Context) {
     val ledgerStore: dev.aarso.data.LedgerStore =
         dev.aarso.data.LedgerStore(database.ledgerDao())
 
+    /** Fonebrew handoff-pack WP-2: append-only receipt store (FB-RAT-COM-006). Same on-device,
+     *  no-telemetry shape as [ledgerStore] — see docs/ratified/COMMON_CONVENTIONS.md and
+     *  HANDOFF_STATE.md. No consumer wired in yet; later work packages (execution receipts,
+     *  import receipts, loop activation receipts) call [dev.aarso.data.ReceiptStore.append]. */
+    val receiptStore: dev.aarso.data.ReceiptStore =
+        dev.aarso.data.ReceiptStore(database.receiptDao())
+
+    /** Fonebrew handoff-pack WP-3: Workspace Kernel journal (FB-RAT-WS-003/005) + the LOCAL
+     *  provider (FB-RAT-WS-002/004). No consumer wired in yet -- WP-3 is the domain/data layer;
+     *  wiring into the live IDE surfaces (Develop tab, RepoWorkLoop) is a later work package's
+     *  job per docs/ratified/WORKSPACE_KERNEL_SPEC.md's own scope note. */
+    val workspaceJournal: dev.aarso.data.RoomWorkspaceJournal =
+        dev.aarso.data.RoomWorkspaceJournal(
+            journalDao = database.bufferJournalDao(),
+            snapshotDao = database.recoverySnapshotDao(),
+            registryDao = database.bufferRegistryDao(),
+        )
+
+    val localWorkspaceProvider: dev.aarso.domain.workspace.LocalWorkspaceProvider =
+        dev.aarso.domain.workspace.LocalWorkspaceProvider(context.applicationContext.filesDir)
+
+    /** Fonebrew handoff-pack WP-6: workspace-buffer lexical search, wiring the existing real
+     *  LexicalSearch engine (already used for conversation search, data/search/) into the
+     *  Workspace Kernel via WorkspaceSearchProjector. Deliberately in-memory, not a new
+     *  SQLDelight table -- see WorkspaceSearchIndex's own doc comment. No consumer wired in yet;
+     *  a future Develop-tab search surface calls .index()/.search() as buffers open/save. The
+     *  semantic stage stays the real, honest default (disabled) until an embedder ships. */
+    val workspaceSearchIndex: dev.aarso.domain.search.WorkspaceSearchIndex =
+        dev.aarso.domain.search.WorkspaceSearchIndex()
+    val semanticSearchProvider: dev.aarso.domain.search.SemanticSearchProvider =
+        dev.aarso.domain.search.DisabledSemanticSearchProvider
+
+    /** Fonebrew handoff-pack WP-4: the real authority policy engine (default-deny, no transitive
+     *  delegation, purpose/target/time binding -- docs/ratified/CAPABILITY_AUTHORITY_MODEL.md).
+     *  Grant/principal storage is in-memory only this pass (no consumer or persistence need yet,
+     *  same "no consumer wired in yet" note WP-2/WP-3 each left for similar pieces); decisions
+     *  are audited through [receiptStore] via [dev.aarso.domain.authority.AuditedAuthorityEngine]. */
+    val grantStore: dev.aarso.domain.authority.InMemoryGrantStore = dev.aarso.domain.authority.InMemoryGrantStore()
+    val principalStore: dev.aarso.domain.authority.InMemoryPrincipalStore = dev.aarso.domain.authority.InMemoryPrincipalStore()
+    val authorityEngine: dev.aarso.domain.authority.AuditedAuthorityEngine =
+        dev.aarso.domain.authority.AuditedAuthorityEngine(
+            engine = dev.aarso.domain.authority.AuthorityEngine(
+                grants = grantStore, principals = principalStore, policyVersion = "1.0.0"
+            ),
+            receiptStore = receiptStore,
+            producer = dev.aarso.contracts.common.ProducerRef(name = "core-engine", version = "1.0.0"),
+        )
+
+    /** WP-4: reference (non-Keystore) secret-handle broker -- see that class's own doc comment
+     *  for why a real Keystore-backed implementation is owner-verified, not built here. */
+    val secretHandleBroker: dev.aarso.domain.authority.InMemorySecretHandleBroker =
+        dev.aarso.domain.authority.InMemorySecretHandleBroker(emptyMap())
+
+    /** WP-4: the LOCAL_ANDROID ExecutionProvider. No consumer wired in yet -- see that class's
+     *  own doc comment on W^X and the "process supervisor semantics JVM-mocked" scope note. */
+    val localExecutionProvider: dev.aarso.domain.execution.LocalProcessExecutionProvider =
+        dev.aarso.domain.execution.LocalProcessExecutionProvider()
+
     // Placeholder until the Phase 2 local embedder lands (§5b). Cold-start
     // logging is live regardless (§5c).
     val embedder: Embedder = PlaceholderEmbedder()

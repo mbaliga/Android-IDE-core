@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-result-share.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopResultShare realizes LOOP_ENGINEERING_SPEC_V2.1 §2.8's SharedResult concept and is the terminal artifact of LOOP_RESULT_SHARING_CONTRACT.md §3's share-flow state machine (entered at RECEIPT_STORED). Read that document FIRST, specifically for: (1) the FB-RAT-RES-004 correction — the verification label is SELF_SIGNED_RECEIPT, NOT the source draft's unsupportable RUNTIME_ATTESTED (§6: 'the only claim a verifier MAY draw... is: the same key signed these N receipts... never that a genuine Fonebrew binary, a specific device, or an unmodified runtime produced any of them'); and (2) the coarse-bucketing requirement (§4: duration, retry totals, per-node counts, and token/cost aggregates MUST be reported as one of a small number of coarse, versioned ranges, never raw values — a high-dimensional quasi-identifier otherwise, per the cited USENIX Security 2024 token-length side-channel work). This schema encodes that requirement STRUCTURALLY: durationBucket/aggregateCostBucket/aggregateTokensBucket (plus retryCountBucket, added per the same requirement) are each a closed enum-of-named-ranges, not a `type: number` field with a documentation-only promise to bucket it before populating — a producer CANNOT construct a schema-valid document carrying a raw numeric duration/cost/token value here even if it tried. FIELD-LIST NOTE: this work package's task brief's literal field enumeration for this document (packageDigest, engineVersion, terminalState, nodeStateSummary, durationBucket, aggregateCostBucket, aggregateTokensBucket, localCloudRatio, capabilityCategories, verificationClaim) is EXPANDED here in two grounded, non-silent ways: (a) 'packageDigest' becomes the full `releaseIdentity` {loopId, semanticVersion, packageContentDigest} tuple, because LOOP_RESULT_SHARING_CONTRACT.md §4's own allowlist row groups these three as one unit ('loop ID, release version, and package digest') — a digest alone, without the family/version it belongs to, does not satisfy that row; (b) `terminalReasonCategory`, `retryCountBucket`, and `bucketingVersion` are added because §4's own text requires them ('terminal state AND terminal reason category'; 'duration AND retry totals... MUST be bucketed'; a versioned bucketing scheme 'following the same pattern as semanticDigestVersion and rulesetVersion'). Two things §4's fuller allowlist names are DELIBERATELY OMITTED, not silently dropped: execution-target categories (localCloudRatio here already carries the coarse local/remote/CI split §8 defines) and verifier outcomes / user ratings (FB-RAT-RES-005's four-label correctnessEvidence scheme and the worked-for-me rating are a materially larger, separately-shaped addition this document's assigned field list does not ask for — forward-pointed to a future schema revision, not modeled here).",
+  "title": "LoopResultShare",
+  "description": "The final, redacted, bucketed, previewed, consented, optionally-signed artifact a user's explicit Share Result action produces and that MAY leave the phone (LOOP_RESULT_SHARING_CONTRACT.md §1-§7). Built only from a LoopRunSummary (loop-run-summary.schema.json), itself built only from a completed or terminal LoopRun (loop-run.schema.json) — never constructed directly from live run state. DEFAULT-EXCLUDED FIELDS (FB-RAT-RES-003) MUST NOT appear anywhere in this schema, not even as an optional property: prompt and model response content; repository, branch, file, symbol, project, and organization names; source code and diffs; file contents or paths; raw logs and terminal output; credentials, aliases, tokens, keys, and hostnames; IP/MAC/device-serial/USB identity; generated artifacts; user identity unless explicitly attached; private comments and human decisions. Their absence IS the contract — this schema sets `additionalProperties: false` throughout (a deliberate, explicit deviation from this corpus's usual `additionalProperties: true` + `unknownFields`-bag convention) specifically so no producer, however well-intentioned, can construct a schema-valid document carrying any of them.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "shareId", "releaseIdentity", "engineVersion", "terminalState",
+    "terminalReasonCategory", "nodeStateSummary", "bucketingVersion", "durationBucket",
+    "retryCountBucket", "aggregateCostBucket", "aggregateTokensBucket", "localCloudRatio",
+    "capabilityCategories", "verificationClaim", "createdAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this shared-artifact shape. Not the same axis as `ContractEnvelope.schemaVersion` when this document is carried as `ContractEnvelope<LoopResultShare>` payload — this is the payload's own version (§4: 'result schema version... is ContractEnvelope.schemaVersion... which only the outer envelope carries' notwithstanding, this field is retained here so the document validates standalone per this corpus's convention)."
+    },
+    "shareId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable ID for this share instance — the 'exact share digest' §7's consent receipt records a pointer to (FB-RAT-COM-002)."
+    },
+    "releaseIdentity": {
+      "$ref": "#/$defs/ReleaseIdentity",
+      "description": "loopId, semanticVersion, packageContentDigest (LOOP_PACKAGE_SPEC.md §2, §4) — this document's expansion of the task brief's literal 'packageDigest' field, per §4's own grouped allowlist row. Exact values, never bucketed — exact identity is the whole point (compatibility evaluation, dedup, aggregate cohort grouping, §4)."
+    },
+    "engineVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "capability-ids.v1.json's engineVersion (§4). The Fonebrew APP version is deliberately NOT a field here — it lives on `ContractEnvelope.producer.version` when this document is carried as that envelope's payload (§4), not duplicated inside the payload."
+    },
+    "terminalState": {
+      "$ref": "#/$defs/TerminalRunState",
+      "description": "One of loop-run.schema.json RunState's 8 terminal values (§4). Never a free-text reason and never one of RunState's 9 non-terminal values — sharing is only ever triggered from a completed or terminal run (FB-RAT-RES-001)."
+    },
+    "terminalReasonCategory": {
+      "$ref": "#/$defs/TerminalReasonCategory",
+      "description": "§4: 'terminal state and terminal reason category... MUST itself be one of a small closed set of coarse categories, never a free-text reason.' Same closed vocabulary as loop-run.schema.json/loop-run-summary.schema.json's TerminalReasonCategory — but note NO `detail` free-text field is carried here (contrast loop-run-summary.schema.json's TerminalReason object, which does carry `detail`): the category alone survives into the shared artifact."
+    },
+    "nodeStateSummary": {
+      "$ref": "#/$defs/SharedNodeStateSummary",
+      "description": "§4: node-state counts and stable public node IDs 'where permitted' (gated on publishedLoop, same rule as loop-run-summary.schema.json), with per-node counts now BUCKETED (this document's stage, per the coarse-bucketing requirement)."
+    },
+    "bucketingVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "§4: versions the bucket-boundary scheme durationBucket/retryCountBucket/aggregateCostBucket/aggregateTokensBucket/nodeStateSummary's per-outcome counts all use, 'following the same pattern as semanticDigestVersion and rulesetVersion elsewhere in this constellation.' This document fixes that a version MUST be carried; the exact boundaries a given bucketingVersion encodes are documented alongside the enum values below, not a separate registry (no bucket-boundary registry exists in schemas/loops/registries/ as of this freeze — this schema IS that fixing point)."
+    },
+    "durationBucket": { "$ref": "#/$defs/DurationBucket" },
+    "retryCountBucket": { "$ref": "#/$defs/RetryCountBucket" },
+    "aggregateCostBucket": { "$ref": "#/$defs/CostBucket" },
+    "aggregateTokensBucket": { "$ref": "#/$defs/TokenCountBucket" },
+    "localCloudRatio": {
+      "$ref": "#/$defs/LocalCloudRatio",
+      "description": "§8: coarse local/remote/CI fractions computed from ExecutionTargetType categories, never host identity. `computed=false` ('no ratio computed') for a zero-eligible-work run — never a default-to-zero percentage."
+    },
+    "capabilityCategories": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/CapabilityCategory" },
+      "description": "The coarse 8-value capability-ids.v1.json `category` enum only — never a specific reverse-DNS capability ID (§4)."
+    },
+    "verificationClaim": {
+      "$ref": "#/$defs/VerificationClaim",
+      "description": "§6, FB-RAT-RES-004 (corrected). Required and non-null here (contrast loop-run-summary.schema.json, where it is nullable pending signing) — §3's RECEIPT_SIGNED transition MUST produce either a signed SELF_SIGNED_RECEIPT claim or an explicit UNSIGNED marker, 'never silently omitted.'"
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this share artifact was finalized, i.e. §3's RECEIPT_STORED transition (FB-RAT-COM-004)."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ReleaseIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageContentDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+        "packageContentDigest": { "$ref": "#/$defs/IntegrityRef" }
+      },
+      "additionalProperties": false
+    },
+    "TerminalRunState": {
+      "type": "string",
+      "enum": ["SUCCEEDED_VERIFIED", "SUCCEEDED_UNVERIFIED", "STOPPED_BUDGET", "STOPPED_POLICY", "FAILED_SAFE", "FAILED_SIDE_EFFECTS_POSSIBLE", "TARGET_STATE_UNKNOWN", "CANCELLED"]
+    },
+    "TerminalReasonCategory": {
+      "type": "string",
+      "enum": [
+        "VALIDATION_FAILURE", "CANCELLATION_REQUESTED", "CANCELLATION_TARGET_UNCONFIRMED",
+        "BUDGET_STEPS_EXHAUSTED", "BUDGET_WALL_CLOCK_EXHAUSTED", "BUDGET_TOKENS_EXHAUSTED",
+        "BUDGET_COST_EXHAUSTED", "BUDGET_TOOL_CALLS_EXHAUSTED", "POLICY_BOUNDARY",
+        "ALL_REQUIRED_VERIFIERS_PASSED", "REQUIRED_VERIFIER_INCOMPLETE",
+        "NODE_FAILURE_NO_SIDE_EFFECTS", "NODE_FAILURE_SIDE_EFFECTS_POSSIBLE",
+        "SIDE_EFFECT_OUTCOME_UNCONFIRMED"
+      ]
+    },
+    "NodeOutcome": { "type": "string", "enum": ["SUCCEEDED", "FAILED", "RETRIED", "SKIPPED", "TIMED_OUT"] },
+    "NodeCountBucket": {
+      "type": "string",
+      "enum": ["ZERO", "ONE_TO_FIVE", "SIX_TO_TWENTY", "TWENTY_ONE_TO_FIFTY", "OVER_FIFTY"],
+      "description": "Coarse per-node/per-outcome count range (§4 coarse-bucketing requirement, 'per-node counts')."
+    },
+    "NodeOutcomeCountBucket": {
+      "type": "object",
+      "required": ["outcome", "countBucket"],
+      "properties": {
+        "outcome": { "$ref": "#/$defs/NodeOutcome" },
+        "countBucket": { "$ref": "#/$defs/NodeCountBucket" }
+      },
+      "additionalProperties": false
+    },
+    "SharedNodeStateSummary": {
+      "type": "object",
+      "required": ["publishedLoop", "totalNodeCountBucket", "nodeIds"],
+      "properties": {
+        "publishedLoop": { "type": "boolean" },
+        "totalNodeCountBucket": { "$ref": "#/$defs/NodeCountBucket" },
+        "nodeOutcomeCountBuckets": { "type": "array", "default": [], "items": { "$ref": "#/$defs/NodeOutcomeCountBucket" } },
+        "nodeIds": { "type": "array", "default": [], "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "publishedLoop": { "const": false } }, "required": ["publishedLoop"] }, "then": { "properties": { "nodeIds": { "maxItems": 0 } } } }
+      ]
+    },
+    "DurationBucket": {
+      "type": "string",
+      "enum": ["UNDER_10_SECONDS", "TEN_SECONDS_TO_ONE_MINUTE", "ONE_TO_FIVE_MINUTES", "FIVE_TO_THIRTY_MINUTES", "THIRTY_MINUTES_TO_TWO_HOURS", "OVER_TWO_HOURS"],
+      "description": "§4 coarse-bucketing requirement, 'duration.' Boundaries fixed by this schema's own bucketingVersion (see that field's description) — this is a schema-authoring choice, not a re-derivation of a pre-existing registry (none exists for bucket boundaries as of this freeze)."
+    },
+    "RetryCountBucket": {
+      "type": "string",
+      "enum": ["ZERO", "ONE_TO_TWO", "THREE_TO_FIVE", "SIX_TO_TEN", "OVER_TEN"],
+      "description": "§4 coarse-bucketing requirement, 'retry totals.'"
+    },
+    "CostBucket": {
+      "type": "string",
+      "enum": ["ZERO", "UNDER_ONE_CENT", "ONE_CENT_TO_TEN_CENTS", "TEN_CENTS_TO_ONE_DOLLAR", "ONE_TO_TEN_DOLLARS", "OVER_TEN_DOLLARS"],
+      "description": "§4 coarse-bucketing requirement, 'token/cost aggregates' (cost half)."
+    },
+    "TokenCountBucket": {
+      "type": "string",
+      "enum": ["ZERO", "UNDER_ONE_THOUSAND", "ONE_THOUSAND_TO_TEN_THOUSAND", "TEN_THOUSAND_TO_ONE_HUNDRED_THOUSAND", "ONE_HUNDRED_THOUSAND_TO_ONE_MILLION", "OVER_ONE_MILLION"],
+      "description": "§4 coarse-bucketing requirement, 'token/cost aggregates' (token half)."
+    },
+    "LocalCloudRatio": {
+      "type": "object",
+      "required": ["computed", "ratioVersion"],
+      "properties": {
+        "computed": { "type": "boolean" },
+        "ratioVersion": { "type": "string", "minLength": 1 },
+        "localFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "default": null },
+        "remoteFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "default": null },
+        "ciFraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "default": null }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "computed": { "const": true } }, "required": ["computed"] }, "then": { "required": ["localFraction", "remoteFraction", "ciFraction"], "properties": { "localFraction": { "type": "number" }, "remoteFraction": { "type": "number" }, "ciFraction": { "type": "number" } } } },
+        { "if": { "properties": { "computed": { "const": false } }, "required": ["computed"] }, "then": { "properties": { "localFraction": { "const": null }, "remoteFraction": { "const": null }, "ciFraction": { "const": null } } } }
+      ]
+    },
+    "CapabilityCategory": {
+      "type": "string",
+      "enum": ["workspace", "execution", "device", "network", "secret", "model", "marketplace", "release"]
+    },
+    "VerificationClaimLabel": {
+      "type": "string",
+      "enum": ["SELF_SIGNED_RECEIPT", "UNSIGNED"],
+      "description": "RES-004 correction (§6): renamed from the source draft's unsupportable RUNTIME_ATTESTED — no implementable signing-key option in this pack's own analysis supports a genuine runtime-attestation claim (see §6's three-option analysis). SELF_SIGNED_RECEIPT proves only pseudonymous key continuity across shares; UNSIGNED is the explicit no-key marker §3 requires rather than silent omission."
+    },
+    "VerificationClaim": {
+      "type": "object",
+      "required": ["label", "claimText"],
+      "properties": {
+        "label": { "$ref": "#/$defs/VerificationClaimLabel" },
+        "claimText": {
+          "type": "string",
+          "description": "Fixed to the exact honest wording per label — see this $def's allOf for the two const strings. A consumer MUST NOT present either as evidence of runtime authenticity, app integrity, or correctness of any kind (§6)."
+        },
+        "signingKeyFingerprint": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Android Keystore-held, non-exportable receipt-signing key's fingerprint (§6) — a key distinct from any provider API key and from the LOOP_PACKAGE_SPEC.md §11 publisher signing key. Required exactly when label=SELF_SIGNED_RECEIPT."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "label": { "const": "SELF_SIGNED_RECEIPT" } }, "required": ["label"] },
+          "then": {
+            "required": ["signingKeyFingerprint"],
+            "properties": {
+              "signingKeyFingerprint": { "type": "string", "minLength": 1 },
+              "claimText": { "const": "The same signing key produced this receipt and any other receipts under it (pseudonymous continuity only). This does NOT prove a genuine Fonebrew runtime, a specific device, or an unmodified app produced it, and does NOT prove the loop is safe, correct, representative, or suitable for another user." }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label": { "const": "UNSIGNED" } }, "required": ["label"] },
+          "then": {
+            "properties": {
+              "signingKeyFingerprint": { "const": null },
+              "claimText": { "const": "This receipt is unsigned: no local signing key was available. No continuity claim can be made at all." }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

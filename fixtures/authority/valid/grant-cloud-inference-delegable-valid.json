@@ -1,0 +1,19 @@
+{
+  "grantId": "grant-cloud-inference-council-0007",
+  "principalId": "principal-council-member-reviewer-01",
+  "capabilityIds": ["fb.model.cloud_inference"],
+  "authorityRung": "EXECUTE_EXTERNAL",
+  "resourceScope": { "kind": "NETWORK_DOMAIN", "locator": "api.anthropic.com" },
+  "constraints": {
+    "purpose": "council-member-cloud-completion",
+    "additionalConstraints": { "maxRequestsPerHour": 60 }
+  },
+  "expiresAtUtc": "2026-08-14T00:00:00Z",
+  "confirmationPolicy": { "mode": "ALWAYS_REQUIRED", "aboveRung": null },
+  "delegationRule": {
+    "delegable": true,
+    "maxDelegatedRung": "EXECUTE_EXTERNAL",
+    "transitiveDelegationAllowed": false,
+    "requiresFreshUserApprovalForWidening": true
+  }
+}

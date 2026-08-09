@@ -1,0 +1,19 @@
+Schema validation: PASSES (this document is schema-valid against loop-run-summary.schema.json).
+
+Real rejection: violates LOOP_RESULT_SHARING_CONTRACT.md §4's "where permitted" gate — "MUST be
+read as: only when the loop being reported on has itself been publicly published." `loopId:
+"loop.demo.private-triage"` is a loop that (per its own name and this fixture's construction) has
+NEVER actually been published to the marketplace; `publishedLoop: true` is a false claim the
+producer supplied to unlock `nodeIds` disclosure. All four node IDs — including
+"triage-sensitive-flag-check" and "triage-escalate-to-oncall", which describe this private loop's
+internal decision structure — are disclosed as a direct result. This is precisely the disclosure
+§4 exists to prevent: "node IDs are stable per FB-RAT-PKG-009... but stability is not the same
+question as disclosure safety."
+
+Why the schema cannot catch this: `publishedLoop` is a self-reported boolean with no connection,
+inside this document, to any actual marketplace listing record (loop-listing.schema.json) that
+could confirm or deny the claim. This schema's own allOf only enforces the SAFE direction
+(publishedLoop=false forces nodeIds empty) — it cannot enforce the reverse (publishedLoop=true
+requires an ACTUALLY-published loop) without cross-referencing a live registry/index this document
+has no field pointing at. A conforming producer implementation MUST resolve `publishedLoop` against
+the actual marketplace listing state before setting it true, not merely assert it.

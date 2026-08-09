@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-activation-receipt.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopActivationReceipt is one instance of the general Receipt-envelope-with-a-receiptType-enum concept named at docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §10 and 10_DUAL_VALIDATION_ADDENDUM.md §E — that full consolidation (one Receipt<T> wrapper for every receipt kind in the constellation) is WP-2 scope, NOT designed here; `receiptType` below is this document's forward-compatible seam for that future union, fixed to the single literal value this domain owns today. Required-field content is FB-RAT-IMP-009 verbatim ('every installation records source, package digest, signature state, validation report, bindings digest, authority grant IDs, and installation receipt'), specializing the FB-RAT-COM-008 provenance minimum the same way schemas/integrations/import-receipt.v1.schema.json specializes it for the DATA_IMPORT profile — cross-referenced, not re-derived.",
+  "title": "LoopActivationReceipt",
+  "description": "The durable, append-only record written on entry to InstallationState.INSTALLED (docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §3, §10). A correction is a NEW receipt with a fresh receiptId, never an in-place edit of an existing one (FB-RAT-COM-006).",
+  "type": "object",
+  "required": [
+    "schemaVersion", "receiptId", "receiptType", "loopId", "semanticVersion", "packageDigest",
+    "signatureState", "compatibilityOutcome", "boundSlots", "grantedAuthoritySummary",
+    "installedAtUtc", "engineVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this receipt shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "receiptId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable ID for this receipt (FB-RAT-COM-002); also the idempotency anchor for a retried install-confirmation tap (FB-RAT-COM-006)."
+    },
+    "receiptType": {
+      "const": "LOOP_ACTIVATION",
+      "description": "Fixed literal discriminant this domain's receipts carry. Forward-compatible with a future consolidated Receipt<T> envelope keyed on this same field (10_DUAL_VALIDATION_ADDENDUM.md §E, WP-2 scope) — not itself that envelope."
+    },
+    "installationId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Back-reference to the loop-installation.schema.json LoopInstallation.installationId this receipt closes out (FB-RAT-COM-002)."
+    },
+    "loopId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable human/version identity of the loop family (LOOP_PACKAGE_SPEC.md §2), independent of packageDigest."
+    },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "description": "SemVer 2.0.0 of the installed release."
+    },
+    "packageDigest": {
+      "$ref": "#/$defs/IntegrityRef",
+      "description": "packageContentDigest of the exact bytes installed (floop-container-format.v1.json) — FB-RAT-IMP-009 'package digest'."
+    },
+    "source": {
+      "oneOf": [
+        { "$ref": "#/$defs/TransferEnvelope" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "FB-RAT-IMP-009 'source' — the transfer envelope this installation began from. Null only for a receipt reconstructed from a pre-this-convention record; a live producer MUST populate it."
+    },
+    "signatureState": {
+      "$ref": "#/$defs/PackageSignatureState",
+      "description": "FB-RAT-IMP-009 'signature state' — LOOP_PACKAGE_SPEC.md §11's terminal signature posture at install time. A receipt (only ever written on reaching INSTALLED) MUST carry one of the four IMPORTED_* values — see the allOf below."
+    },
+    "compatibilityOutcome": {
+      "$ref": "#/$defs/CompatibilityOutcome",
+      "description": "The overall outcome LOOP_COMPATIBILITY_CONTRACT.md §3 (FB-RAT-CMP-004) resolved to for this activation. Only COMPATIBLE, COMPATIBLE_WITH_BINDINGS, or DEGRADED are reachable in a real receipt — BLOCKED/UNSUPPORTED route to the BLOCKED_INCOMPATIBLE terminal state (LOOP_IMPORT_ACTIVATION_CONTRACT.md §3) and never produce this receipt at all; the full five-value enum is reused here rather than narrowed, so this schema does not drift from LOOP_COMPATIBILITY_CONTRACT.md's own enum."
+    },
+    "validationRulesetVersion": {
+      "type": ["string", "null"],
+      "const": "fb-loop-validation-rules-1",
+      "default": "fb-loop-validation-rules-1",
+      "description": "The loop-validation-rules.v1.json rulesetVersion applied (FB-RAT-IMP-009 'validation report... rulesetVersion applied')."
+    },
+    "validationFindings": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/ValidationFindingSummary" },
+      "description": "FB-RAT-IMP-009 'validation report... findings' — the findings the PARSED_VALIDATED transition's full loop-validation-report.schema.json document carried, summarized inline here. This array is a copy for receipt self-containment, not a substitute for the full report (installationRef points at it)."
+    },
+    "boundSlots": {
+      "type": "array",
+      "minItems": 0,
+      "items": { "$ref": "#/$defs/BoundSlotSummary" },
+      "description": "One entry per binding slot resolved for this activation (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5) — the human-readable summary FB-RAT-CMP-003 requires be recorded ('substitutions are recorded in the activation receipt')."
+    },
+    "bindingProfileDigest": {
+      "oneOf": [
+        { "$ref": "#/$defs/IntegrityRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "FB-RAT-IMP-009 'bindings digest' — digest of the binding-profile.schema.json document `boundSlots` above summarizes. Null only when no slots required binding (an empty `boundSlots` array)."
+    },
+    "grantedAuthoritySummary": {
+      "type": "array",
+      "minItems": 0,
+      "items": { "$ref": "#/$defs/GrantedAuthorityBucket" },
+      "description": "Authority actually granted, grouped by rung (LOOP_IMPORT_ACTIVATION_CONTRACT.md §6's Observe/Read/Propose/Write/External/Destructive/Publish review buckets, mapped onto CAPABILITY_AUTHORITY_MODEL.md's eight-rung ladder) — human-readable summary form."
+    },
+    "authorityGrantIds": {
+      "type": "array",
+      "default": [],
+      "items": { "type": "string", "minLength": 1 },
+      "description": "FB-RAT-IMP-009 'authority grant IDs' — the exact Grant.grantId values (schemas/authority/grant.schema.json) issued during WAITING_AUTHORITY, machine-resolvable form of `grantedAuthoritySummary` above."
+    },
+    "simulationResult": {
+      "oneOf": [
+        { "$ref": "#/$defs/SimulationResult" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "FB-RAT-PHN-009 dangerous-first-run-simulation outcome (LOOP_IMPORT_ACTIVATION_CONTRACT.md §7). Null only when this activation's authority request never crossed the Write/External/Destructive/Publish threshold that makes simulation mandatory."
+    },
+    "installedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "FB-RAT-COM-004: UTC instant of the INSTALLABLE-to-INSTALLED transition this receipt records."
+    },
+    "engineVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "capability-ids.v1.json's engineVersion — the installing phone's loop contract/engine surface version at install time, decoupled from the app's own release version (`producer.version` below, when present)."
+    },
+    "producer": {
+      "oneOf": [
+        { "$ref": "#/$defs/ProducerRef" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "The app instance that produced this receipt — `producer.version` is the Fonebrew app's own release version, kept independent of `engineVersion` above per capability-ids.v1.json's engineVersion definition."
+    },
+    "warnings": {
+      "type": "array",
+      "default": [],
+      "items": { "type": "string", "minLength": 1 },
+      "description": "FB-RAT-IMP-009 'any warnings the user acknowledged' — e.g. an unsigned-package warning or a simulation-gap acknowledgement, in the user's own confirmed language, not raw error codes."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "properties": {
+        "signatureState": {
+          "enum": [
+            "IMPORTED_SIGNED_VERIFIED", "IMPORTED_SIGNED_REVOCATION_UNKNOWN",
+            "IMPORTED_REVOKED_KEY_FLAGGED", "IMPORTED_UNSIGNED_NARROWED_GRANTS"
+          ]
+        }
+      },
+      "$comment": "This receipt exists only because InstallationState reached INSTALLED, so signatureState MUST already have settled to one of the four IMPORTED_* terminal postures (LOOP_PACKAGE_SPEC.md §11), never a transient state like SIGNATURE_PRESENT."
+    }
+  ],
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } }, "required": ["algorithm"] }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ProducerRef": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "TransferEnvelope": {
+      "type": "object",
+      "required": ["transferChannel", "expectedMediaType", "expectedDigest", "sourceDescription", "initiatedByUser"],
+      "properties": {
+        "transferChannel": { "type": "string", "enum": ["FILE", "SHARE_SHEET", "HTTPS_URL", "QR", "GIT"] },
+        "expectedMediaType": { "type": "string", "pattern": "^[\\w.+-]+/[\\w.+-]+$" },
+        "expectedDigest": { "$ref": "#/$defs/IntegrityRef" },
+        "sourceDescription": { "type": "string", "minLength": 1 },
+        "initiatedByUser": { "const": true }
+      },
+      "additionalProperties": true
+    },
+    "PackageSignatureState": {
+      "type": "string",
+      "enum": [
+        "PACKAGE_ACQUIRED", "SIGNATURE_PRESENT", "UNSIGNED",
+        "SIGNATURE_VALID_REVOCATION_CHECKED", "SIGNATURE_INVALID",
+        "SIGNATURE_VALID_REVOCATION_UNKNOWN", "REJECTED",
+        "IMPORTED_UNSIGNED_NARROWED_GRANTS", "IMPORTED_REVOKED_KEY_FLAGGED",
+        "IMPORTED_SIGNED_VERIFIED", "IMPORTED_SIGNED_REVOCATION_UNKNOWN"
+      ],
+      "description": "Copied verbatim from LOOP_PACKAGE_SPEC.md §11's state table — duplicated here rather than $ref'd from loop-installation.schema.json, per this corpus's standalone-schema convention."
+    },
+    "CompatibilityOutcome": {
+      "type": "string",
+      "enum": ["COMPATIBLE", "COMPATIBLE_WITH_BINDINGS", "DEGRADED", "BLOCKED", "UNSUPPORTED"],
+      "description": "LOOP_COMPATIBILITY_CONTRACT.md §3's five-value outcome enum (FB-RAT-CMP-004), duplicated here rather than $ref'd from loop-compatibility-report.schema.json."
+    },
+    "ValidationFindingSummary": {
+      "type": "object",
+      "required": ["code", "severity"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^LOOP-[A-Z]+-[0-9]{3}$",
+          "description": "A rule code from loop-validation-rules.v1.json. Membership in that frozen registry is validated by the rule engine, not this schema — see the sibling adversarial fixture for an unregistered-but-shape-valid code."
+        },
+        "severity": { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        "objectType": { "type": ["string", "null"], "default": null },
+        "message": { "type": ["string", "null"], "default": null }
+      },
+      "additionalProperties": true
+    },
+    "BoundSlotSummary": {
+      "type": "object",
+      "required": ["slotId", "selectedProviderId", "substitutionPolicy"],
+      "properties": {
+        "slotId": { "type": "string", "minLength": 1 },
+        "selectedProviderId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The resolved provider/resource ID this slot was bound to (LOOP_IMPORT_ACTIVATION_CONTRACT.md §5 'selected provider/resource ID')."
+        },
+        "substitutionPolicy": {
+          "type": "string",
+          "enum": ["EXACT_ONLY", "DECLARED_EQUIVALENTS", "USER_APPROVED", "ANY_COMPATIBLE"],
+          "description": "LOOP_COMPATIBILITY_CONTRACT.md §5's four-value policy (FB-RAT-CMP-003)."
+        },
+        "substitutionReason": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Required in practice whenever substitutionPolicy is not EXACT_ONLY (FB-RAT-CMP-003 'substitutions are recorded... which declared or discovered alternative was actually chosen and why') — not enforced structurally here because a schema cannot see whether a value equals the slot's original EXACT declaration without the package's own manifest in scope."
+        }
+      },
+      "additionalProperties": true
+    },
+    "GrantedAuthorityBucket": {
+      "type": "object",
+      "required": ["authorityRung", "capabilityIds"],
+      "properties": {
+        "authorityRung": {
+          "type": "string",
+          "enum": ["OBSERVE", "READ", "PROPOSE", "MODIFY_DRAFT", "EXECUTE_REVERSIBLE", "EXECUTE_EXTERNAL", "EXECUTE_DESTRUCTIVE", "PUBLISH_OR_RELEASE"],
+          "description": "CAPABILITY_AUTHORITY_MODEL.md's eight-rung ladder (FB-RAT-AUTH-002), duplicated from schemas/authority/grant.schema.json's $defs/AuthorityRung."
+        },
+        "capabilityIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^fb\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "SimulationResult": {
+      "type": "object",
+      "required": ["outcome"],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["SUCCEEDED", "FAILED", "SKIPPED_NO_SIMULATOR_AVAILABLE"],
+          "description": "LOOP_IMPORT_ACTIVATION_CONTRACT.md §7: a passing simulation is evidence the declared behavior is well-formed against its own fixtures, never a claim the live target will succeed."
+        },
+        "gapAcknowledgedByUser": {
+          "type": ["boolean", "null"],
+          "default": null,
+          "description": "Required true when outcome is SKIPPED_NO_SIMULATOR_AVAILABLE (§7: 'the UI MUST state the gap explicitly and require a stronger, distinct acknowledgement') — not enforced structurally here; see the adversarial fixture for the schema-valid-but-rule-violating case."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

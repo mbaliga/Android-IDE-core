@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-package-signature.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopPackageSignature = the detached record under a .floop package's signatures/ directory (floop-container-format.v1.json requiredTopLevelLayout). Signature suite is Ed25519 over the release-identity tuple, per canonicalization.v1.json's fb-loop-canon-1 profile (the bytes signed are the JCS-canonicalized releaseIdentity object below, forbidding IEEE-754 doubles like every other canonical payload in this corpus) and LOOP_PACKAGE_SPEC.md §11 (FB-RAT-PKG-005): 'A release signature MUST bind exactly: loopId, semanticVersion, packageContentDigest, canonicalizationVersion, the publisher's key fingerprint, and the release channel.'",
+  "title": "LoopPackageSignature",
+  "description": "loop-package-signature.v1 — an Ed25519 detached signature over a LoopPackage release identity. keyProvenance distinguishes a phone Keystore/StrongBox-signed publisher key from the browser-side soft-key unlisted-draft tier (LOOP_WEB_STUDIO_SPEC.md §13's phone-signing correction — WebAuthn cannot produce a detached signature over an arbitrary caller-supplied digest, so publisher signing for marketplace publication happens on the phone; a soft key is a lower-trust, unlisted-drafts-only tier that MUST NOT be presented as equivalent).",
+  "type": "object",
+  "required": ["signatureAlgorithm", "publisherKeyFingerprint", "signedDigest", "releaseIdentity", "canonicalizationVersion", "releaseChannel", "signedAtUtc", "keyProvenance"],
+  "properties": {
+    "signatureAlgorithm": {
+      "const": "Ed25519",
+      "description": "The only signature suite this corpus defines (LOOP_PACKAGE_SPEC.md §11, 10_DUAL_VALIDATION_ADDENDUM.md §D). A future suite requires a new schema major, not a widened enum here — signature-suite ambiguity is exactly the kind of thing a verifier must never guess at."
+    },
+    "publisherKeyFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 fingerprint of the publisher's Ed25519 public key, lowercase hex. Bound into the signature per LOOP_PACKAGE_SPEC.md §11's 'MUST bind exactly' list; also the key-rotation/revocation lookup key (a revoked key MUST NOT retroactively alter bytes already installed locally, but every installation surface MUST show revocation status before any NEW activation under a revoked key)."
+    },
+    "signedDigest": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "minLength": 4,
+      "description": "The raw Ed25519 signature bytes (64 bytes), base64-encoded — NOT itself a digest despite the field name inherited from this work package's task brief; it is the signature computed over the fb-loop-canon-1-canonicalized bytes of the `releaseIdentity` object below plus the four other bound elements (canonicalizationVersion, publisherKeyFingerprint, releaseChannel)."
+    },
+    "releaseIdentity": {
+      "$ref": "#/$defs/ReleaseIdentity",
+      "description": "The {loopId, semanticVersion, packageContentDigest} tuple LOOP_ENGINEERING_SPEC_V2.1.md §14 defines a release's identity as ('A release is identified by {loopId, semanticVersion, packageDigest, publisherKeyFingerprint}' — publisherKeyFingerprint is carried as this object's own sibling field above rather than duplicated inside the tuple, since it is bound to the signature independently per LOOP_PACKAGE_SPEC.md §11)."
+    },
+    "canonicalizationVersion": {
+      "const": "fb-loop-canon-1",
+      "description": "Matches canonicalization.v1.json's own canonicalizationVersion value. Bound into the signature per LOOP_PACKAGE_SPEC.md §11 so a future canonicalization-profile bump can never be silently substituted under an old signature."
+    },
+    "releaseChannel": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The distribution channel this specific signature is bound to (LOOP_PACKAGE_SPEC.md §11: signature MUST bind 'the release channel'). Modeled as a non-empty string, not an enum — the closed channel vocabulary is owned by LOOP_MARKETPLACE_CONTRACT.md's listing/release model, not re-derived or invented in this schema-authoring pass."
+    },
+    "signedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant the signature was produced (FB-RAT-COM-004)."
+    },
+    "keyProvenance": {
+      "type": "string",
+      "enum": ["PHONE_KEYSTORE", "SOFT_KEY"],
+      "description": "PHONE_KEYSTORE: signed on-device with an Android Keystore/StrongBox-backed Ed25519 key via the phone's existing activation-import path (LOOP_WEB_STUDIO_SPEC.md §13's PUBLISHER_SIGNED state) — the only tier eligible for marketplace publication. SOFT_KEY: a non-extractable browser IndexedDB CryptoKey, explicitly a lower-trust tier scoped to unlisted, account-free drafts only (FB-RAT-WEB-009, EXPERIMENTAL) — MUST NOT be presented as equivalent to a phone-signed signature and MUST NOT be accepted for direct marketplace publication (LOOP_WEB_STUDIO_SPEC.md §13's REJECTED_INSUFFICIENT_SIGNATURE transition)."
+    },
+    "softKeyScope": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Structural guard for the SOFT_KEY tier: required to equal 'UNLISTED_DRAFT_ONLY' whenever keyProvenance is SOFT_KEY, so a soft-signed record is self-declaring its own restriction rather than relying on a downstream reader to remember the rule. MUST be null when keyProvenance is PHONE_KEYSTORE."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "keyProvenance": { "const": "SOFT_KEY" } }, "required": ["keyProvenance"] },
+      "then": { "properties": { "softKeyScope": { "const": "UNLISTED_DRAFT_ONLY" } }, "required": ["softKeyScope"] }
+    },
+    {
+      "if": { "properties": { "keyProvenance": { "const": "PHONE_KEYSTORE" } }, "required": ["keyProvenance"] },
+      "then": { "properties": { "softKeyScope": { "const": null } } }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "IntegrityRef": {
+      "type": "object",
+      "required": ["algorithm", "digestHex", "byteLength"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["SHA-256", "SHA-384", "SHA-512"] },
+        "digestHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+        "byteLength": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "algorithm": { "const": "SHA-256" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{64}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-384" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{96}$" } } } },
+        { "if": { "properties": { "algorithm": { "const": "SHA-512" } } }, "then": { "properties": { "digestHex": { "pattern": "^[0-9a-f]{128}$" } } } }
+      ],
+      "additionalProperties": true
+    },
+    "ReleaseIdentity": {
+      "type": "object",
+      "required": ["loopId", "semanticVersion", "packageContentDigest"],
+      "properties": {
+        "loopId": { "type": "string", "minLength": 1 },
+        "semanticVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+        },
+        "packageContentDigest": { "$ref": "#/$defs/IntegrityRef" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

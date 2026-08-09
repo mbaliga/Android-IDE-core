@@ -1,0 +1,30 @@
+Scenario (FB-RAT-AUTH-007 REJECTED "automatic authority inheritance"):
+
+principal-studio-workflow-release-checklist-01 is three hops deep: spawned by
+principal-loop-run-0482, which was spawned by principal-local-agent-persona-primary, which was
+spawned by the human principal-user-jordan-01. The workflow attempts fb.repo.push_remote
+(EXECUTE_EXTERNAL) by relying on some ancestor in that chain having once been granted push
+authority, without ever having been issued its OWN Grant for this capability+resource.
+
+schemas/authority/grant.schema.json structurally forbids any Grant from declaring
+delegationRule.transitiveDelegationAllowed=true (it is pinned `const: false`) — so no
+schema-valid Grant anywhere in the system can claim to support this kind of multi-hop inheritance
+by construction. That is exactly why the escalation attempt shown here has no matchedGrantId: the
+workflow principal holds no grant of its own, and is instead hoping a decision engine will
+(incorrectly) walk the ancestor chain and treat some ancestor's grant as if it applied
+transitively. This decision record is schema-valid either way (matchedGrantId=null is legal for
+DENY) — jsonschema structural validation cannot observe whether a *real* engine implementation
+was tempted to do the wrong thing here; only an actual policy-engine test can.
+
+Required real-implementation behavior:
+- MUST require a principal at ANY depth in the parent chain to hold its OWN, independently and
+  freshly issued Grant (with its own grantId, its own resourceScope, its own expiresAtUtc) before
+  authorizing a capability — never resolve authority by scanning ancestors' grants and applying
+  the nearest match.
+- MUST return outcome=DENY, reasonCode=AUTHORITY_TRANSITIVE_DELEGATION_REJECTED (or an
+  equivalent stable code reserved for this condition) whenever a request can only be explained by
+  such an inherited/transitive grant.
+- MUST treat "issue principal-studio-workflow-release-checklist-01 its own fresh Grant" as
+  requiring the same fresh user-approval step delegationRule.requiresFreshUserApprovalForWidening
+  already pins to true on every Grant — this is not a lesser bar just because an ancestor already
+  holds the capability.
