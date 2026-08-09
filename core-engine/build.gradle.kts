@@ -41,6 +41,17 @@ android {
         // arm64 is the only ABI the target device (and most modern phones) needs;
         // restricting it keeps the llama.cpp build and APK small.
         ndk { abiFilters += "arm64-v8a" }
+
+        // Pin the NATIVE platform to this module's own minSdk. Left implicit, AGP
+        // configured CMake at `android-22` (-DANDROID_PLATFORM=android-22,
+        // --target=aarch64-none-linux-android22) even though minSdk is 31 — and bionic
+        // guards the POSIX_MADV_* macros behind `__ANDROID_API__ >= 23`, so llama.cpp's
+        // llama-mmap.cpp failed to compile ("use of undeclared identifier
+        // 'POSIX_MADV_WILLNEED'"). Stating the level explicitly keeps the native headers
+        // on the same contract the Kotlin side already declares.
+        externalNativeBuild {
+            cmake { arguments += listOf("-DANDROID_PLATFORM=android-31") }
+        }
     }
 
     // Native llama.cpp engine (CPU-only first cut). The submodule lives at

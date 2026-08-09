@@ -9,16 +9,17 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,25 +42,44 @@ import dev.aarso.ui.theme.LocalHyleColors
  * The three *views* of the central room — not rooms, not depths. The centre is one
  * activity (agents doing work over the message tree); these are lenses onto it, like a
  * CLI session read three ways: [CONVERSATION] the human-readable exchange, [TERMINAL]
- * the raw ground-level transcript, [BACKGROUND] what's running underneath. Altitude
- * order left→right: the floor above, ground, basement.
+ * the raw ground-level transcript, [BACKGROUND] what's running underneath.
+ *
+ * Labels are the mockups' own words ("Chat", not "Conversation") — the enum keeps the
+ * structural name, the UI shows what the owner drew.
  */
 enum class CenterView(val label: String) {
-    CONVERSATION("Conversation"),
+    CONVERSATION("Chat"),
     TERMINAL("Terminal"),
-    BACKGROUND("Background tasks"),
+    BACKGROUND("Background Tasks"),
 }
 
+private val BAR_HEIGHT = 52.dp
+
 /**
- * The persistent bottom bar, now the centre room's **view switcher** and nothing else
- * (owner correction to the previous six-room bar: tabs are views of the same place;
- * *rooms* are navigated spatially — edge drags for Chats/Settings/Project/Develop,
- * pinch for Tree and Loops — because a tab metaphor is weaker than the room metaphor
- * the shell is built on; the tabs inside Settings/Chats are a different, in-room kind).
+ * Hyle's locked slant (rise 1, run 0.2 — the slope every slanted surface in the design
+ * system leans at). Held here as a local constant rather than imported: the pinned
+ * `dev.aarso:hyle` does not export the slope yet, and the app should not gain a hard
+ * dependency on an unmerged design-system branch just to draw a seam. If/when the module
+ * publishes it, delete this and import it — the value must not diverge.
+ */
+private const val HYLE_SLANT = 0.2f
+
+/**
+ * The persistent bottom bar: the centre room's **view switcher** and nothing else. Room
+ * navigation is spatial (edge drags, pinch) — tabs are views of one place, never a way to
+ * change place.
  *
- * Responsive ladder (owner-set): show icon+label on every tab when they fit; else keep
- * the label only on the selected tab; else icons alone. The decision is
- * [CenterTabLayout.stage] over real measured label widths — no truncation, no marquee.
+ * Form follows the owner's detailed mockups: the selected view sits on the app surface,
+ * cut out of a **dark strip** that carries the unselected views, and every seam between
+ * them leans at [HYLE_SLANT] — the design system's one slope, so the bar's slashes are the
+ * same gesture as the colour picker's tabs rather than a second eyeballed angle. The
+ * selected view's icon and label take the **accent** (owner-set: buttons, swipe
+ * affordances and selected text are all the user's chosen accent); unselected views sit
+ * light-on-dark inside the strip.
+ *
+ * Responsive ladder (owner-set): icons+labels on every tab when they fit, else the label
+ * on the selected tab only, else icons alone — decided by [CenterTabLayout.stage] over
+ * real measured label widths, no truncation or marquee. Render is owner-verified.
  */
 @Composable
 fun CenterViewTabBar(
@@ -67,58 +88,95 @@ fun CenterViewTabBar(
     modifier: Modifier = Modifier,
 ) {
     val ac = LocalHyleColors.current
+    // The strip is the bar's high-contrast block. On a light surface that is a near-black
+    // slab (as drawn); on an already-dark surface it lifts to `raised` instead, so the
+    // strip stays a distinct block rather than dissolving into the page.
+    val lightSurface = ac.ink.luminance() > 0.5f
+    val strip = if (lightSurface) Color(0xFF0E0F12) else ac.raised
+    val onStrip = if (lightSurface) Color(0xFFECEDEF) else ac.textHigh
+
     val views = CenterView.entries
     val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    val labelStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium)
 
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-            .background(ac.ink)
-            .height(56.dp),
+            .height(BAR_HEIGHT)
+            .background(strip),
     ) {
         val density = LocalDensity.current
         val stage = with(density) {
             CenterTabLayout.stage(
                 availablePx = maxWidth.toPx(),
-                labelWidthsPx = views.map {
-                    measurer.measure(it.label, labelStyle).size.width.toFloat()
-                },
+                labelWidthsPx = views.map { measurer.measure(it.label, labelStyle).size.width.toFloat() },
                 selected = views.indexOf(selected),
-                iconPx = 22.dp.toPx(),
-                gapPx = 6.dp.toPx(),
-                paddingPx = 14.dp.toPx(),
+                iconPx = 20.dp.toPx(),
+                gapPx = 8.dp.toPx(),
+                paddingPx = 16.dp.toPx(),
             )
         }
-        Row(
-            Modifier.fillMaxWidth().fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            views.forEach { view ->
+
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            views.forEachIndexed { i, view ->
                 val active = view == selected
-                val tint = if (active) ac.violet else ac.textMid
                 val labelled = when (stage) {
                     CenterTabStage.FULL -> true
                     CenterTabStage.SELECTED_LABEL -> active
                     CenterTabStage.ICONS_ONLY -> false
                 }
+                // A divider marks the seam between two neighbouring strip cells only —
+                // where the selected cell abuts the strip, its own colour edge IS the seam.
+                val leadingDivider = i > 0 && !active && views[i - 1] != selected
+
                 Row(
                     Modifier
-                        .weight(1f)
                         .fillMaxHeight()
+                        .drawBehind {
+                            val lean = size.height * HYLE_SLANT
+                            if (active) {
+                                // The surface cut-out: flush to the screen edge when this
+                                // is the first cell, leaning on both sides otherwise.
+                                val path = Path().apply {
+                                    moveTo(if (i == 0) 0f else lean, 0f)
+                                    lineTo(size.width, 0f)
+                                    lineTo(size.width - lean, size.height)
+                                    lineTo(0f, size.height)
+                                    close()
+                                }
+                                drawPath(path, ac.ink)
+                            } else if (leadingDivider) {
+                                drawLine(
+                                    onStrip.copy(alpha = 0.38f),
+                                    start = Offset(lean, 0f),
+                                    end = Offset(0f, size.height),
+                                    strokeWidth = 1.dp.toPx(),
+                                    cap = StrokeCap.Round,
+                                )
+                            }
+                        }
                         .clickable { onSelect(view) }
+                        .padding(horizontal = 16.dp)
                         .semantics { contentDescription = view.label },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    ViewGlyph(view, tint, size = 22.dp)
+                    val tint = if (active) ac.violet else onStrip
+                    ViewGlyph(view, tint, size = 20.dp)
                     if (labelled) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(view.label, color = tint, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            view.label,
+                            color = tint,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
+            // The strip runs on past the last view to the screen edge, as drawn.
+            Spacer(Modifier.weight(1f))
         }
     }
 }

@@ -12,6 +12,12 @@ android {
     defaultConfig {
         minSdk = 31
         ndk { abiFilters += "arm64-v8a" }
+
+        // Same explicit native platform pin as :core-engine — see the note there; AGP
+        // otherwise configures CMake at android-22, below several bionic API guards.
+        externalNativeBuild {
+            cmake { arguments += listOf("-DANDROID_PLATFORM=android-31") }
+        }
     }
 
     ndkVersion = "28.2.13676358"

@@ -1,6 +1,7 @@
 package dev.aarso.ui.hyle
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -474,6 +476,77 @@ fun HyleNavChip(
         contentAlignment = Alignment.Center,
     ) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = c.textMid, maxLines = 1)
+    }
+}
+
+/** Which glyph a [HyleHeaderButton] draws. */
+enum class HeaderGlyph { ROOM_LEFT, SETTINGS }
+
+/**
+ * The chat header's corner buttons, per the owner's detailed mockups: a slant-edged slab
+ * **filled with the accent** (owner-set — buttons, swipe affordances and selected text all
+ * take the user's chosen accent), carrying stroked line-art in [HyleColors.onViolet].
+ *
+ * The slant mirrors across the header: the left button slants on its right edge, the right
+ * button on its left, so the pair leans *into* the title between them rather than marching
+ * in one direction. Both reuse the module's existing shapes, so they lean at the same slope
+ * as every other slanted Hyle surface.
+ */
+@Composable
+fun HyleHeaderButton(
+    glyph: HeaderGlyph,
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    slantLeft: Boolean = false,
+) {
+    val c = LocalHyleColors.current
+    val shape = if (slantLeft) HyleFieldShape else HyleRightSlantShape
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        modifier = modifier
+            .size(width = 44.dp, height = 36.dp)
+            .clip(shape)
+            .background(if (pressed) c.violetPressed else c.violet, shape)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(18.dp)) {
+            val w = size.width
+            val h = size.height
+            val sw = w * 0.10f
+            val stroke = Stroke(width = sw, cap = StrokeCap.Round)
+            fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
+                drawLine(c.onViolet, Offset(x0, y0), Offset(x1, y1), strokeWidth = sw, cap = StrokeCap.Round)
+
+            when (glyph) {
+                // An arrow travelling left into a wall: "the room parked off the left edge".
+                HeaderGlyph.ROOM_LEFT -> {
+                    line(w * 0.16f, h * 0.14f, w * 0.16f, h * 0.86f)
+                    line(w * 0.38f, h * 0.50f, w * 0.88f, h * 0.50f)
+                    line(w * 0.38f, h * 0.50f, w * 0.56f, h * 0.30f)
+                    line(w * 0.38f, h * 0.50f, w * 0.56f, h * 0.70f)
+                }
+                // Gear: hub, rim, six spokes — same construction as the room glyphs.
+                HeaderGlyph.SETTINGS -> {
+                    val cx = w * 0.5f
+                    val cy = h * 0.5f
+                    val rOuter = w * 0.30f
+                    drawCircle(c.onViolet, radius = rOuter, center = Offset(cx, cy), style = stroke)
+                    drawCircle(c.onViolet, radius = w * 0.13f, center = Offset(cx, cy), style = stroke)
+                    val inner = rOuter + w * 0.04f
+                    val outer = rOuter + w * 0.16f
+                    for (i in 0 until 6) {
+                        val a = (i * 60.0) * (Math.PI / 180.0)
+                        val ca = kotlin.math.cos(a).toFloat()
+                        val sa = kotlin.math.sin(a).toFloat()
+                        line(cx + inner * ca, cy + inner * sa, cx + outer * ca, cy + outer * sa)
+                    }
+                }
+            }
+        }
     }
 }
 

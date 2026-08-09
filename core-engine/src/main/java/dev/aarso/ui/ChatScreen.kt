@@ -84,7 +84,8 @@ import dev.aarso.flavor.InvocationFeatures
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
-import dev.aarso.ui.hyle.HyleNavChip
+import dev.aarso.ui.hyle.HeaderGlyph
+import dev.aarso.ui.hyle.HyleHeaderButton
 import dev.aarso.ui.hyle.FileImage
 import dev.aarso.ui.search.InChatFindBar
 import dev.aarso.ui.search.InChatFindPresenter
@@ -646,35 +647,40 @@ private fun HomeHeader(
 ) {
     val c = LocalHyleColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Left: Chats/Back — slant on the right, rounds on the left.
-        HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
-        // Centre: current conversation title (truncated).
+        // Left: the room parked off the left edge (Conversations).
+        HyleHeaderButton(
+            glyph = HeaderGlyph.ROOM_LEFT,
+            onClick = onOpenChats,
+            contentDescription = "Open conversations",
+            slantLeft = false,
+        )
+        // Centre: the conversation's own title, given the weight the mockups give it —
+        // this is the one thing naming where you are, so it reads as a title rather than
+        // the muted caption it used to be.
         Text(
             state.steps.firstOrNull { it.node.role == Role.USER }
-                ?.node?.content?.lineSequence()?.firstOrNull()?.take(36) ?: "",
-            style = MaterialTheme.typography.bodySmall,
-            color = c.textMid,
+                ?.node?.content?.lineSequence()?.firstOrNull()?.take(36)
+                ?: "New chat",
+            style = MaterialTheme.typography.titleMedium,
+            color = c.textHigh,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
             modifier = Modifier.weight(1f),
         )
-        // Right: Settings, then the profile avatar → Me · Myself · I.
-        HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(c.violet, CircleShape)
-                .clickable(onClick = onOpenMe)
-                .semantics { contentDescription = "Open your profile — Me, Myself, I" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("☺", style = MaterialTheme.typography.titleSmall, color = c.onViolet)
-        }
+        // Right: Settings. (The mockups carry no header avatar, so the Me · Myself · I
+        // entry point is not duplicated here — it stays reachable from Settings, which
+        // already opens MeScreen.)
+        HyleHeaderButton(
+            glyph = HeaderGlyph.SETTINGS,
+            onClick = onOpenSettings,
+            contentDescription = "Open settings",
+            slantLeft = true,
+        )
     }
 }
 

@@ -86,7 +86,19 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
 ## Building
 - JDK 17 auto-provisioned (foojay resolver). `git submodule update --init --recursive`.
 - Android SDK/NDK: `scripts/setup-android-sdk.sh` (NDK `28.2.13676358`, CMake `3.31.6`; r28 emits
-  16 KB-page-aligned libs).
+  16 KB-page-aligned libs). Note the script's own `NDK=` pin is the *older* r27 — pass the r28
+  version above to `sdkmanager` directly, since both native modules declare `ndkVersion` r28.
+- **Native platform level is pinned explicitly (do not remove):** `:core-engine` and `:sdengine`
+  each pass `-DANDROID_PLATFORM=android-31` via `defaultConfig.externalNativeBuild.cmake.arguments`.
+  Left implicit, AGP configures CMake at **android-22** (`--target=aarch64-none-linux-android22`)
+  despite `minSdk = 31`, and bionic guards `POSIX_MADV_*` behind `__ANDROID_API__ >= 23` — so
+  `llama.cpp/src/llama-mmap.cpp` fails with *"use of undeclared identifier
+  'POSIX_MADV_WILLNEED'"*. This is a build-config bug, not an upstream llama.cpp one.
+- **Run gates unpiped.** `./gradlew … | tail` reports *tail's* exit code, so a failed build looks
+  green. Redirect to a file and check `$?` (`./gradlew … > log 2>&1; echo $?`).
+- **Set a UTF-8 locale before the JVM gate** (`export LANG=C.UTF-8 LC_ALL=C.UTF-8`). Under the
+  container's default POSIX locale, Kotlin can't write test classes whose names contain non-ASCII
+  (several tests use an em-dash), failing with `InvalidPathException: Malformed input`.
 - Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.aarso.full`, default) /
   **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.aarso`).
 - Gate: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest` (keep green). Hyle's own

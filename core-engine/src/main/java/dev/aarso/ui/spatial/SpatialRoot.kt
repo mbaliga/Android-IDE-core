@@ -553,17 +553,26 @@ fun SpatialRoot() {
     }
 }
 
+/**
+ * The room affordance: a solid bar sitting flush against the edge the room parks behind,
+ * in the user's chosen **accent** (owner-set — the swipe affordances and the buttons share
+ * the accent). Flush and opaque, not an inset ghost: it is the only standing evidence that
+ * there is somewhere to drag to, so it reads as part of the frame rather than decoration.
+ */
 @Composable
 private fun BoxScope.EdgePeek(alignment: Alignment, vertical: Boolean = false) {
+    val ac = LocalHyleColors.current
     Box(
         modifier = Modifier
             .align(alignment)
-            .padding(if (vertical) 8.dp else 8.dp)
-            .then(if (vertical) Modifier.size(width = 56.dp, height = 4.dp) else Modifier.size(width = 4.dp, height = 56.dp))
-            .background(
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                RoundedCornerShape(2.dp),
-            ),
+            .then(
+                if (vertical) {
+                    Modifier.size(width = 64.dp, height = 3.dp)
+                } else {
+                    Modifier.size(width = 3.dp, height = 64.dp)
+                },
+            )
+            .background(ac.violet, RoundedCornerShape(2.dp)),
     )
 }
 
