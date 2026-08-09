@@ -143,6 +143,9 @@ fun ChatsRoom(
             fun listProps(list: List<Conversations.Summary>, empty: String) = ConversationListProps(
                 conversations = list, emptyMessage = empty, activeIds = activeIds, firstNodeId = firstNodeId,
                 bookmarked = bookmarked, projects = projects, enabled = !state.isGenerating,
+                generating = state.isGenerating,
+                // "Watched" is the model's own flag (binding rule 2), not a guess from its id.
+                generatingWatched = state.models.firstOrNull { it.id == state.activeModelId }?.watched == true,
                 onOpen = { viewModel.openConversation(it.rootId); onClose() },
                 onToggleBookmark = { session.toggleBookmark(it.rootId) },
                 onSetProject = { projectDialogFor = it },
@@ -219,6 +222,11 @@ private class ConversationListProps(
     val bookmarked: Set<String>,
     val projects: Map<String, String>,
     val enabled: Boolean,
+    /** True while a turn is generating into the open conversation. */
+    val generating: Boolean,
+    /** True when the model producing that turn is a **watched** (cloud) one — the only
+     *  case Hyle's motion rule lets breathe. */
+    val generatingWatched: Boolean,
     val onOpen: (Conversations.Summary) -> Unit,
     val onToggleBookmark: (Conversations.Summary) -> Unit,
     val onSetProject: (Conversations.Summary) -> Unit,
@@ -319,6 +327,22 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
         border = BorderStroke(1.dp, c.hairline),
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Leading state marker — branch glyph / filled dot / hollow ring, breathing
+            // only while a watched cloud model is generating into THIS conversation.
+            ConversationMarker(
+                mark = when {
+                    conv.branchCount > 1 -> ConversationMark.BRANCHED
+                    conv.nodeCount <= 1 -> ConversationMark.EMPTY
+                    else -> ConversationMark.LINEAR
+                },
+                pulse = when {
+                    !active || !p.generating -> ConversationPulse.NONE
+                    p.generatingWatched -> ConversationPulse.WATCHED
+                    else -> ConversationPulse.LOCAL
+                },
+                active = active,
+            )
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     conv.title,
