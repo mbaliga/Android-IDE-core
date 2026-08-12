@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "eventId": "01J9E0000000000000000DL1",
+  "kind": "DELEGATION",
+  "occurredAtUtc": "2026-08-10T09:25:00Z",
+  "rootId": "01J8Z0000000000000000RT1",
+  "anchorMsgId": "01J8Z00000000000000MSG50",
+  "srcRootId": null,
+  "srcNodeId": null,
+  "newRootId": null,
+  "markerId": null,
+  "label": null,
+  "delegationId": "01J9D0000000000000000DG1",
+  "delegationKind": "MODEL_PICK_BRANCH",
+  "chosenRef": "01J8Z00000000000000MSG51",
+  "alternatives": ["01J8Z00000000000000MSG52", "01J8Z00000000000000MSG53"],
+  "outcome": "KEPT",
+  "outcomeAt": "2026-08-10T09:40:00Z",
+  "unknownFields": {}
+}

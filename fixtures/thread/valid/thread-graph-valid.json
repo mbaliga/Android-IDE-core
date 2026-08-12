@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAtUtc": "2026-08-12T00:00:00Z",
+  "nodes": [
+    { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": null, "at": "2026-08-09T10:00:00Z", "label": null },
+    { "id": "01J8Z00000000000000MSG42", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:05:00Z", "label": null },
+    { "id": "01J8Z0000000000000000RT2", "kind": "FORK_ROOT", "rootId": "01J8Z0000000000000000RT2", "parentId": "01J8Z00000000000000MSG42", "at": "2026-08-10T09:20:00Z", "label": null },
+    { "id": "01J9M0000000000000000CH1", "kind": "MARKER", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z00000000000000MSG42", "at": "2026-08-10T09:14:31Z", "label": "Auth flow rewrite" }
+  ],
+  "edges": [
+    { "from": "01J8Z0000000000000000RT1", "to": "01J8Z00000000000000MSG42", "kind": "REPLY" },
+    { "from": "01J8Z00000000000000MSG42", "to": "01J8Z0000000000000000RT2", "kind": "FORK" },
+    { "from": "01J9M0000000000000000CH1", "to": "01J8Z00000000000000MSG42", "kind": "MARKER_ANCHOR" }
+  ],
+  "unknownFields": {}
+}

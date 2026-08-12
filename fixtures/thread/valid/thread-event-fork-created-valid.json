@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "eventId": "01J9E0000000000000000FK1",
+  "kind": "FORK_CREATED",
+  "occurredAtUtc": "2026-08-10T09:20:00Z",
+  "rootId": "01J8Z0000000000000000RT2",
+  "anchorMsgId": "01J8Z00000000000000MSG42",
+  "srcRootId": "01J8Z0000000000000000RT1",
+  "srcNodeId": "01J8Z00000000000000MSG42",
+  "newRootId": "01J8Z0000000000000000RT2",
+  "markerId": null,
+  "label": null,
+  "delegationId": null,
+  "delegationKind": null,
+  "chosenRef": null,
+  "alternatives": [],
+  "outcome": null,
+  "outcomeAt": null,
+  "unknownFields": {}
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/thread/thread-graph.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadGraph is a forward pointer to THREAD_TOPOLOGY_PLAN.md WP9's 'pure ThreadGraph/ThreadGraphProjector (plain-snapshot inputs; extraction-ready)' — fixed here, WP0-first, per that plan's own 'contracts first' Definition of Ready, exactly as schemas/workspace/*.schema.json fixed shapes for WP-3's later implementation. No WP9 code exists yet (out of this session's scope, THREAD_TOPOLOGY_PLAN.md 'strict order' work-package list) — this schema has no consumer wired in yet, same 'no consumer wired in yet' pattern AppContainer.kt's own comments use throughout. Binding constraint 3 (Issue #2) applies in advance: a future ThreadGraphProjector reads Room stores, never dev.aarso.domain.mirror.AarsoEventLog — this schema's `nodes`/`edges` are a plain structural snapshot, carrying no drift/idiolect interpretation.",
+  "title": "ThreadGraph",
+  "description": "A snapshot of the conversation topology as a graph: messages, fork/spawn roots, markers, and delegations as nodes; replies/forks/spawns/lineage/anchors as edges. Carried as a ContractEnvelope<ThreadGraph> payload (FB-RAT-COM-011).",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAtUtc", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "generatedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this snapshot was projected (FB-RAT-COM-004). A ThreadGraph is a point-in-time projection, not a live subscription — a fresh one is produced on request (WP9's ThreadGraphProjector), never streamed."
+    },
+    "nodes": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/ThreadGraphNode" },
+      "description": "One entry per message, fork/spawn root, marker, or delegation this snapshot includes. Node ids MUST be unique within one ThreadGraph (not structurally enforced — JSON Schema 2020-12 has no cross-item uniqueness-by-subfield keyword without `$data`; a future ThreadGraphProjector test MUST assert it, matching this corpus's established pattern for the same class of gap, e.g. loop-fork-lineage.schema.json's identical caveat)."
+    },
+    "edges": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/ThreadGraphEdge" },
+      "description": "Directed relationships between two node ids in `nodes`. This schema does not structurally verify `from`/`to` resolve to an actual node in the same document — same class of gap as `nodes`' uniqueness caveat above."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ThreadGraphNode": {
+      "type": "object",
+      "required": ["id", "kind", "rootId", "at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "The underlying object's own id (a MessageNode.id, ThreadMarker.id, or DelegationEvent.id) — a ThreadGraph node never mints a new identity, it references one that already exists (FB-RAT-COM-002)." },
+        "kind": {
+          "type": "string",
+          "enum": ["MESSAGE", "FORK_ROOT", "SPAWN_ROOT", "MARKER", "DELEGATION"],
+          "description": "MESSAGE for an ordinary tree node; FORK_ROOT/SPAWN_ROOT for a conversation root that carries `lineage.kind` insert-time metadata (THREAD_TOPOLOGY_PLAN.md Data model); MARKER for a ThreadMarker; DELEGATION for a DelegationEvent."
+        },
+        "rootId": { "type": "string", "minLength": 1, "description": "The conversation root this node belongs to (for a FORK_ROOT/SPAWN_ROOT node, its own id)." },
+        "parentId": { "type": ["string", "null"], "default": null, "description": "The node this one is directly attached to in the graph (a message's parent node id, a marker's anchor node id, a fork/spawn root's source node id). Null for a conversation root with no parent." },
+        "at": { "type": "string", "format": "date-time", "description": "UTC instant of the underlying fact (message creation, marker placement, delegation creation) — FB-RAT-COM-004." },
+        "label": { "type": ["string", "null"], "default": null, "description": "Optional short display label (a chapter name, a delegation kind), for a renderer that wants one without a second lookup." }
+      },
+      "additionalProperties": true
+    },
+    "ThreadGraphEdge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["REPLY", "FORK", "SPAWN", "LINEAGE", "MARKER_ANCHOR", "DELEGATION_ANCHOR"],
+          "description": "REPLY: ordinary parent->child message edge. FORK/SPAWN: a conversation root's edge back to its source node (THREAD_TOPOLOGY_PLAN.md's ForkLineage-style provenance, TreeFork.copySubtree/SpawnBridge — WP2). LINEAGE: a broader lineage-source pointer (a LINEAGE_SRC marker's edge). MARKER_ANCHOR/DELEGATION_ANCHOR: a marker or delegation's edge to the message it anchors to."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

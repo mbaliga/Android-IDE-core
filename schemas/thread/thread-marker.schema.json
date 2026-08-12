@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.aarso/schemas/thread/thread-marker.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadMarker realizes THREAD_TOPOLOGY_PLAN.md's 'Data model' §`thread_markers` table (id, rootId, anchorMsgId?, kind CHAPTER|SESSION_START|COMPACTION_RUN|LINEAGE_SRC, label?, note?, at, source USER|SYSTEM, payloadJson?), carried as a ContractEnvelope<ThreadMarker> payload per FB-RAT-COM-011 the same way ErrorEnvelope is (schemas/common/envelope.schema.json). A ThreadMarker is a RETROACTIVE fact about the append-only message tree (THREAD_TOPOLOGY_PLAN.md binding constraint 5: 'metadata minted at insert, never edited; retroactive facts -> Room tables') — it never mutates MessageNode.metadata, it lives in its own store (dev.aarso.data.ThreadMarkerStore). Field names here match the plan's own column-list naming verbatim (`at`, not `atUtc`/`createdAtUtc`) since this schema documents that exact table's wire shape, not a fresh contract inventing its own vocabulary.",
+  "title": "ThreadMarker",
+  "description": "A user- or system-placed marker on the conversation tree: a chapter boundary, a fresh-session start, a compaction-run boundary, or a lineage source pointer (fork/spawn origin). Created after the fact — the anchored message already exists — never edited in place except by the owning UI's own rename/remove actions on the marker row itself (the anchored MessageNode is never touched).",
+  "type": "object",
+  "required": ["schemaVersion", "id", "rootId", "kind", "at", "source"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable id for this marker (FB-RAT-COM-002), independent of its label or anchor."
+    },
+    "rootId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The conversation root this marker belongs to (dev.aarso.domain.tree.Conversations.Summary.rootId) — every marker is scoped to exactly one conversation, never shared across roots."
+    },
+    "anchorMsgId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The message node this marker anchors to, when it anchors to one at all. Required non-null for CHAPTER (a chapter boundary IS a specific message). Null is valid for SESSION_START (a session boundary may mark 'start fresh from here forward' without naming a prior message) and for COMPACTION_RUN/LINEAGE_SRC when the marker instead points into `payloadJson` for its own reference shape (those two kinds are populated by later work packages — WP3's compaction runs, WP2's fork/spawn lineage — this schema only fixes the shared envelope, not their payload internals)."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["CHAPTER", "SESSION_START", "COMPACTION_RUN", "LINEAGE_SRC"],
+      "description": "THREAD_TOPOLOGY_PLAN.md's four marker kinds, verbatim. CHAPTER/SESSION_START are user-facing (TurnActionsSheet's 'Mark chapter here…'/'Start fresh session here'); COMPACTION_RUN/LINEAGE_SRC are system-facing, written by later work packages (WP3, WP2) reusing this same table rather than inventing a second one."
+    },
+    "label": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Required non-blank for CHAPTER (the user-entered chapter name, same naming-dialog pattern as dev.aarso.domain.curation.Version.name). Null for the other three kinds — SESSION_START/COMPACTION_RUN/LINEAGE_SRC are self-describing by `kind` alone and don't prompt for a name."
+    },
+    "note": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optional free-text annotation, any kind."
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this marker was created (FB-RAT-COM-004). This is when the MARKER was placed, which for a retroactive chapter mark is typically later than the anchored message's own timestamp — the two are independent clocks on purpose."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["USER", "SYSTEM"],
+      "description": "USER for anything placed through a TurnActionsSheet action; SYSTEM for anything written by an automated process (a future compaction run boundary, a fork/spawn operation recording its own lineage source marker)."
+    },
+    "payloadJson": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Opaque per-kind JSON, mirroring dev.aarso.domain.mirror.AarsoEvent.payloadJson's 'the writer knows the shape' split — this schema does not need to understand a payload's internal shape to carry it. Encoded as a JSON string (not a nested object) because the owning kind's schema (e.g. a future COMPACTION_RUN receipt shape) is versioned independently of ThreadMarker itself."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "CHAPTER" } } },
+      "then": {
+        "required": ["anchorMsgId", "label"],
+        "properties": {
+          "anchorMsgId": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  ],
+  "$defs": {}
+}
