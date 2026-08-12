@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import dev.aarso.data.dao.BufferJournalDao
 import dev.aarso.data.dao.BufferRegistryDao
 import dev.aarso.data.dao.CompactionDirectiveDao
+import dev.aarso.data.dao.DelegationEventDao
 import dev.aarso.data.dao.EmbeddingDao
 import dev.aarso.data.dao.FormStateDao
 import dev.aarso.data.dao.GhostBranchDao
@@ -15,6 +16,7 @@ import dev.aarso.data.dao.MessageNodeDao
 import dev.aarso.data.dao.ReceiptDao
 import dev.aarso.data.dao.RecoverySnapshotDao
 import dev.aarso.data.dao.TaskDao
+import dev.aarso.data.dao.ThreadMarkerDao
 import dev.aarso.data.dao.TokenCountDao
 import dev.aarso.data.dao.VerdictDao
 import dev.aarso.data.dao.VersionDao
@@ -22,6 +24,7 @@ import dev.aarso.data.dao.WatchDao
 import dev.aarso.data.entity.BufferJournalEntryEntity
 import dev.aarso.data.entity.BufferRegistryEntity
 import dev.aarso.data.entity.CompactionDirectiveEntity
+import dev.aarso.data.entity.DelegationEventEntity
 import dev.aarso.data.entity.FormStateEntity
 import dev.aarso.data.entity.GhostBranchEntity
 import dev.aarso.data.entity.LedgerEntryEntity
@@ -31,6 +34,7 @@ import dev.aarso.data.entity.MessageNodeEntity
 import dev.aarso.data.entity.ReceiptEntity
 import dev.aarso.data.entity.RecoverySnapshotEntity
 import dev.aarso.data.entity.TaskEntity
+import dev.aarso.data.entity.ThreadMarkerEntity
 import dev.aarso.data.entity.TokenCountEntity
 import dev.aarso.data.entity.VerdictEntity
 import dev.aarso.data.entity.VersionEntity
@@ -54,8 +58,10 @@ import dev.aarso.data.entity.WatchedItemEntity
         CompactionDirectiveEntity::class,
         GhostBranchEntity::class,
         FormStateEntity::class,
+        ThreadMarkerEntity::class,
+        DelegationEventEntity::class,
     ],
-    version = 8,
+    version = 9,
     // Schema export is off in Phase 0 (no migrations yet). Turn on with a
     // room.schemaLocation KSP arg once the schema needs to be versioned. v4->v5
     // (loop-surface ledger columns, CORE_PHASES.md P3) rides the same
@@ -69,8 +75,12 @@ import dev.aarso.data.entity.WatchedItemEntity
     // Conversation Instrument tables — verdicts/bookmarks/versions/compaction directives/ghost
     // branches/form states). Neither line touches a table the other added, so the merge is purely
     // additive; v8 is one past the higher of the two (v7), not a renumbering of either line.
+    // v8->v9 (THREAD_TOPOLOGY_PLAN.md WP1): two new tables, thread_markers/delegation_events —
+    // dev.aarso.domain.thread.ThreadMarker/DelegationEvent, fronted by ThreadMarkerStore/
+    // DelegationStore (CurationStore's own shape). Same destructive-migration pattern as every
+    // prior bump; both tables are brand new (nothing to migrate data out of).
     // dev.aarso.domain.contracts.MigrationRunner is real, tested scaffolding for whichever future
-    // bump needs an actual Migration — this bump still doesn't, same as v1->v7.
+    // bump needs an actual Migration — this bump still doesn't, same as v1->v8.
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -91,6 +101,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun compactionDirectiveDao(): CompactionDirectiveDao
     abstract fun ghostBranchDao(): GhostBranchDao
     abstract fun formStateDao(): FormStateDao
+    abstract fun threadMarkerDao(): ThreadMarkerDao
+    abstract fun delegationEventDao(): DelegationEventDao
 
     companion object {
         const val NAME = "aarso.db"

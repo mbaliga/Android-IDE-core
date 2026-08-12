@@ -182,6 +182,15 @@ class AppContainer(context: Context) {
         database.formStateDao(),
     )
 
+    /** THREAD_TOPOLOGY_PLAN.md WP1's thread-topology stores: retroactive markers (chapters,
+     *  session starts) and delegation ("choose for me") records, both shaped like
+     *  [curationStore] — fronting their own Room tables (`thread_markers`/`delegation_events`,
+     *  AppDatabase v9), never writing to MessageNode.metadata. */
+    val threadMarkerStore: dev.aarso.data.ThreadMarkerStore =
+        dev.aarso.data.ThreadMarkerStore(database.threadMarkerDao())
+    val delegationStore: dev.aarso.data.DelegationStore =
+        dev.aarso.data.DelegationStore(database.delegationEventDao())
+
     /** The Aarso event log's write side (STUDIO_UX_SPEC.md §10) — off by default, per-signal
      *  toggles; see [dev.aarso.domain.mirror.AarsoCaptureSettings]. No settings UI exists yet to
      *  flip these on, so [aarsoCaptureSettings] currently always resolves to

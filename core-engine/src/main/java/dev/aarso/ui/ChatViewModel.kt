@@ -179,6 +179,8 @@ class ChatViewModel(
     private val ledgerStore: dev.aarso.data.LedgerStore,
     private val catalogStore: dev.aarso.data.ModelCatalogStore,
     private val curationStore: dev.aarso.data.CurationStore,
+    private val threadMarkerStore: dev.aarso.data.ThreadMarkerStore,
+    private val delegationStore: dev.aarso.data.DelegationStore,
     private val aarsoEventLog: dev.aarso.domain.mirror.AarsoEventLog,
     private val appContext: Context,
 ) : ViewModel() {
@@ -1109,6 +1111,55 @@ class ChatViewModel(
         ).fidelity
     }
 
+    // ---- Thread topology (THREAD_TOPOLOGY_PLAN.md WP1) --------------------------------------
+
+    val threadMarkers: StateFlow<Map<String, List<dev.aarso.domain.thread.ThreadMarker>>> = threadMarkerStore.markers
+        .map { list -> list.filter { it.anchorMsgId != null }.groupBy { it.anchorMsgId!! } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val delegations: StateFlow<Map<String, List<dev.aarso.domain.thread.DelegationEvent>>> = delegationStore.delegations
+        .map { list -> list.filter { it.anchorMsgId != null }.groupBy { it.anchorMsgId!! } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** The conversation root [msgId] currently belongs to, or null if [msgId] isn't in the tree (shouldn't happen for a live turn action, but the tree is the source of truth, not a cached assumption). */
+    private suspend fun rootIdFor(msgId: String): String? =
+        dev.aarso.domain.tree.Conversations.rootOf(repository.tree(), msgId)
+
+    /** TurnActionsSheet: "Mark chapter here…" — same shape as [markVersion]: caller supplies the anchor + a name, the root is resolved from the tree, not passed in. */
+    fun markChapter(anchorMsgId: String, label: String, note: String? = null) {
+        viewModelScope.launch {
+            val rootId = rootIdFor(anchorMsgId) ?: return@launch
+            val marker = threadMarkerStore.markChapter(rootId, anchorMsgId, label, note)
+            aarsoEventLog.record(
+                dev.aarso.domain.mirror.AarsoEventKind.CHAPTER_MARK,
+                """{"markerId":"${marker.id}","anchorMsgId":"$anchorMsgId","label":${org.json.JSONObject.quote(label)}}""",
+                now = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    fun renameChapter(marker: dev.aarso.domain.thread.ThreadMarker, label: String, note: String? = marker.note) {
+        viewModelScope.launch { threadMarkerStore.renameChapter(marker, label, note) }
+    }
+
+    fun removeChapter(marker: dev.aarso.domain.thread.ThreadMarker) {
+        viewModelScope.launch { threadMarkerStore.removeChapter(marker) }
+    }
+
+    /** TurnActionsSheet: "Start fresh session here" — [anchorMsgId] defaults to the currently active leaf when invoked without one. */
+    fun markSessionStart(anchorMsgId: String? = activeLeafId.value) {
+        viewModelScope.launch {
+            val anchor = anchorMsgId ?: return@launch
+            val rootId = rootIdFor(anchor) ?: return@launch
+            val marker = threadMarkerStore.markSessionStart(rootId, anchor)
+            aarsoEventLog.record(
+                dev.aarso.domain.mirror.AarsoEventKind.SESSION_START,
+                """{"markerId":"${marker.id}"}""",
+                now = System.currentTimeMillis(),
+            )
+        }
+    }
+
     /**
      * Curation sheet: "Rewind from here." Ghosts the branch that was active (if any existed
      * below [nodeId]) and moves the active leaf to [nodeId] — the same primitive [branchFrom]
@@ -1222,6 +1273,8 @@ class ChatViewModel(
                     c.ledgerStore,
                     c.modelCatalogStore,
                     c.curationStore,
+                    c.threadMarkerStore,
+                    c.delegationStore,
                     c.aarsoEventLog,
                     app.applicationContext,
                 )

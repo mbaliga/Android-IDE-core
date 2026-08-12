@@ -134,6 +134,11 @@ fun ChatScreen(
     // name-entry dialog, same shape as flagStep's own follow-on dialog above.
     var versionNameStep by remember { mutableStateOf<PathView.Step?>(null) }
     var versionNameInput by remember { mutableStateOf("") }
+    // THREAD_TOPOLOGY_PLAN.md WP1's TurnActionsSheet rows ("Mark chapter here…"/"Start fresh
+    // session here"): the chapter name prompt reuses versionNameStep's own dialog pattern above;
+    // session-start needs no name prompt, it fires straight from the sheet.
+    var chapterNameStep by remember { mutableStateOf<PathView.Step?>(null) }
+    var chapterNameInput by remember { mutableStateOf("") }
     // D1: dismissible "Connect your repos" home card (session-scoped dismissal).
     var connectDismissed by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -594,6 +599,8 @@ fun ChatScreen(
             // via the same contract CompactionEngine uses, and preserves it.
             onToggleMustInclude = { viewModel.toggleMustInclude(step.node.id) },
             onRewind = { viewModel.rewindFrom(step.node.id); actionStep = null },
+            onMarkChapter = { chapterNameInput = ""; chapterNameStep = step; actionStep = null },
+            onStartSessionHere = { viewModel.markSessionStart(step.node.id); actionStep = null },
         )
     }
 
@@ -628,6 +635,34 @@ fun ChatScreen(
                 ) { Text("Mark") }
             },
             dismissButton = { TextButton(onClick = { versionNameStep = null }) { Text("Cancel") } },
+        )
+    }
+
+    // THREAD_TOPOLOGY_PLAN.md WP1: TurnActionsSheet's "Mark chapter here…" naming prompt — same
+    // shape as versionNameStep's own dialog above.
+    chapterNameStep?.let { step ->
+        AlertDialog(
+            onDismissRequest = { chapterNameStep = null },
+            title = { Text("Mark chapter here") },
+            text = {
+                HyleField(
+                    value = chapterNameInput,
+                    onValueChange = { chapterNameInput = it },
+                    label = "Chapter name",
+                    singleLine = true,
+                    placeholder = "e.g. Auth flow rewrite",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = chapterNameInput.isNotBlank(),
+                    onClick = {
+                        viewModel.markChapter(step.node.id, chapterNameInput.trim())
+                        chapterNameStep = null
+                    },
+                ) { Text("Mark") }
+            },
+            dismissButton = { TextButton(onClick = { chapterNameStep = null }) { Text("Cancel") } },
         )
     }
 }
@@ -944,6 +979,8 @@ private fun TurnActionsSheet(
     onSetFidelity: (dev.aarso.domain.curation.Fidelity) -> Unit = {},
     onToggleMustInclude: () -> Unit = {},
     onRewind: () -> Unit = {},
+    onMarkChapter: () -> Unit = {},
+    onStartSessionHere: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -959,6 +996,12 @@ private fun TurnActionsSheet(
             }
             TextButton(onClick = onMarkVersion, modifier = Modifier.fillMaxWidth()) {
                 Text("Mark branch as Version…")
+            }
+            TextButton(onClick = onMarkChapter, modifier = Modifier.fillMaxWidth()) {
+                Text("Mark chapter here…")
+            }
+            TextButton(onClick = onStartSessionHere, modifier = Modifier.fillMaxWidth()) {
+                Text("Start fresh session here")
             }
             Text(
                 "Compaction",

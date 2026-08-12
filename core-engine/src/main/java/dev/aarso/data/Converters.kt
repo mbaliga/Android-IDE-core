@@ -6,6 +6,10 @@ import dev.aarso.domain.curation.Fidelity
 import dev.aarso.domain.curation.GhostReason
 import dev.aarso.domain.tasks.TaskSource
 import dev.aarso.domain.tasks.TaskState
+import dev.aarso.domain.thread.DelegationKind
+import dev.aarso.domain.thread.DelegationOutcome
+import dev.aarso.domain.thread.ThreadMarkerKind
+import dev.aarso.domain.thread.ThreadMarkerSource
 import dev.aarso.domain.watch.WatchKind
 import org.json.JSONArray
 import org.json.JSONObject
@@ -88,6 +92,30 @@ class Converters {
 
     @TypeConverter
     fun toGhostReason(name: String): GhostReason = GhostReason.valueOf(name)
+
+    @TypeConverter
+    fun fromThreadMarkerKind(kind: ThreadMarkerKind): String = kind.name
+
+    @TypeConverter
+    fun toThreadMarkerKind(name: String): ThreadMarkerKind = ThreadMarkerKind.valueOf(name)
+
+    @TypeConverter
+    fun fromThreadMarkerSource(source: ThreadMarkerSource): String = source.name
+
+    @TypeConverter
+    fun toThreadMarkerSource(name: String): ThreadMarkerSource = ThreadMarkerSource.valueOf(name)
+
+    @TypeConverter
+    fun fromDelegationKind(kind: DelegationKind): String = kind.name
+
+    @TypeConverter
+    fun toDelegationKind(name: String): DelegationKind = DelegationKind.valueOf(name)
+
+    @TypeConverter
+    fun fromDelegationOutcome(outcome: DelegationOutcome): String = outcome.name
+
+    @TypeConverter
+    fun toDelegationOutcome(name: String): DelegationOutcome = DelegationOutcome.valueOf(name)
 
     companion object {
         /** float32 array -> little-endian BLOB, for embedding vectors. */

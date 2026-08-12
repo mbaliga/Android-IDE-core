@@ -20,7 +20,11 @@ data class AarsoEvent(
     val sessionRef: String? = null,
 )
 
-/** The event kinds named in STUDIO_UX_SPEC.md §10's schema, verbatim. */
+/** The event kinds named in STUDIO_UX_SPEC.md §10's schema, verbatim, plus THREAD_TOPOLOGY_PLAN.md
+ *  WP1's five thread-topology additions (FORK_CREATED/SPAWN_CREATED/CHAPTER_MARK/SESSION_START/
+ *  DELEGATION — wire shape `schemas/thread/thread-event.schema.json`,
+ *  [dev.aarso.domain.thread.ThreadEvent]/[dev.aarso.domain.thread.ThreadCodec]). Same write-only,
+ *  inert-until-toggled contract as every other kind here (this file's own KDoc, binding rule 4). */
 enum class AarsoEventKind(val wire: String) {
     VERDICT("verdict"),
     BOOKMARK("bookmark"),
@@ -30,4 +34,9 @@ enum class AarsoEventKind(val wire: String) {
     MODEL_CHOICE("model_choice"),
     COMPACTION_RUN("compaction_run"),
     COMPOSER_EDIT_DELTA("composer_edit_delta"),
+    FORK_CREATED("fork_created"),
+    SPAWN_CREATED("spawn_created"),
+    CHAPTER_MARK("chapter_mark"),
+    SESSION_START("session_start"),
+    DELEGATION("delegation"),
 }
