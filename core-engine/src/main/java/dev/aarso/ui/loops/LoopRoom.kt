@@ -69,7 +69,9 @@ import dev.aarso.domain.loop.Loop
 import dev.aarso.domain.loop.LoopBudget
 import dev.aarso.domain.loop.LoopParams
 import dev.aarso.domain.loop.LoopState
+import dev.aarso.domain.loop.RecordingGatewayPolicy
 import dev.aarso.domain.model.ModelSpec
+import dev.aarso.domain.thread.DelegationKind
 import dev.aarso.inference.EngineGenerator
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleChip
@@ -276,18 +278,25 @@ fun LoopRoom(onClose: () -> Unit) {
                 }
                 val fallback = runnable.first()
                 val graph = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
-                GraphRunner(generatorFor = { bn ->
-                    val spec = bn.ext["model"]?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback
-                    genFor(spec)
-                }).run(
+                // THREAD_TOPOLOGY_PLAN.md WP8: capture every gateway auto-choice this run makes
+                // (owner decision 2's GATEWAY_AUTO surface) — see RecordingGatewayPolicy's KDoc
+                // for why persisting happens below, after the run, rather than mid-choose.
+                val recordingPolicy = RecordingGatewayPolicy()
+                GraphRunner(
+                    generatorFor = { bn ->
+                        val spec = bn.ext["model"]?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback
+                        genFor(spec)
+                    },
+                    gatewayPolicy = recordingPolicy,
+                ).run(
                     graph = graph,
                     objective = objective,
                     params = params,
                     budget = budget,
                     onStep = { step -> liveSteps = liveSteps + step },
-                )
+                ) to recordingPolicy
             }.fold(
-                { result ->
+                { (result, recordingPolicy) ->
                     graphResult = result
                     ranNodeIds = result.steps.map { it.nodeId }.toSet()
                     liveSteps = result.steps
@@ -304,6 +313,13 @@ fun LoopRoom(onClose: () -> Unit) {
                         )
                         entries.forEach { container.ledgerStore.append(it) }
                         loggedNote = "Logged ${result.steps.size} step(s) to Tree · run $runId"
+                    }
+                    for (choice in recordingPolicy.recorded) {
+                        container.delegationRecorder.record(
+                            kind = DelegationKind.GATEWAY_AUTO,
+                            chosenRef = choice.chosenEdgeRef,
+                            alternatives = choice.alternativeRefs,
+                        )
                     }
                 },
                 { runError = it.message },

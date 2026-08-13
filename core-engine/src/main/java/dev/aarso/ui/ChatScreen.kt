@@ -359,6 +359,8 @@ fun ChatScreen(
                             onSwitch = { dir -> viewModel.switchAlternative(step.node.id, dir) },
                             onLongPress = { actionStep = step },
                             onCompare = { viewModel.openCompare(step.node.id) },
+                            onChooseForMe = { viewModel.chooseForMe(step.node.id) },
+                            chooseForMeEnabled = state.genPhase == GenPhase.IDLE,
                             bridge = bridge,
                             onViewFullPrior = { srcRoot?.let { viewModel.openConversation(it) } },
                             highlighted = findOpen && currentFindHit?.nodeId == step.node.id,
@@ -789,6 +791,7 @@ fun ChatScreen(
             tokenScores = tokenScores,
             tokenAvailability = tokenAvailability,
             ledgerTotals = ledgerTotals,
+            delegationCounts = state.delegationCounts,
             locale = java.util.Locale.getDefault(),
             onDismiss = { showInstruments = false },
         )
@@ -1400,6 +1403,8 @@ private fun InstrumentsPanel(
     tokenScores: List<dev.aarso.domain.inspect.TokenScore>,
     tokenAvailability: dev.aarso.domain.inspect.Availability,
     ledgerTotals: dev.aarso.domain.ledger.LedgerAggregations.Totals,
+    /** THREAD_TOPOLOGY_PLAN.md WP8's descriptive "delegated N · kept N · reverted N" card. */
+    delegationCounts: dev.aarso.domain.thread.DelegationCounts.Counts,
     locale: java.util.Locale,
     onDismiss: () -> Unit,
 ) {
@@ -1447,6 +1452,14 @@ private fun InstrumentsPanel(
                     availability = tokenAvailability,
                     summary = dev.aarso.domain.inspect.TokenInspector.summary(tokenScores, tokenAvailability),
                 )
+
+                // THREAD_TOPOLOGY_PLAN.md WP8: "delegated N · kept N · reverted N" — purely
+                // descriptive, no interpretation (binding constraint 3 / CLAUDE.md rule 4).
+                // Hidden with nothing delegated yet rather than showing an all-zero row.
+                if (delegationCounts.total > 0) {
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    dev.aarso.ui.components.DelegationCountsRow(delegationCounts)
+                }
             }
         }
     }
@@ -1625,6 +1638,11 @@ private fun MessageTurn(
     onViewFullPrior: () -> Unit = {},
     /** "Compare alternatives" on the pager row — only ever shown when [PathView.Step.isBranchPoint]. */
     onCompare: () -> Unit = {},
+    /** THREAD_TOPOLOGY_PLAN.md WP8: "Choose for me" beside the pager — [dev.aarso.ui.ChatViewModel.chooseForMe].
+     *  Separate from [enabled] because a choose-for-me call runs a real model turn (`genPhase`),
+     *  which [enabled] (driven by the streaming flag) doesn't reflect on its own. */
+    onChooseForMe: () -> Unit = {},
+    chooseForMeEnabled: Boolean = enabled,
     /** THREAD_TOPOLOGY_PLAN.md WP4: message drag gestures — see [MessageBubble]'s own KDoc for
      *  what each one does; all default to the toggles-off/no-op shape so every other MessageTurn
      *  caller (there are none today, but the parity with MessageBubble's own defaults matters)
@@ -1688,6 +1706,9 @@ private fun MessageTurn(
                 TextButton(onClick = { onSwitch(+1) }, enabled = enabled) { Text("›") }
                 TextButton(onClick = onCompare, enabled = enabled) {
                     Text("Compare alternatives", style = MaterialTheme.typography.labelSmall)
+                }
+                TextButton(onClick = onChooseForMe, enabled = chooseForMeEnabled) {
+                    Text("Choose for me", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

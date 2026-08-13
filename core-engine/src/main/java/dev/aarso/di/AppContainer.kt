@@ -203,6 +203,13 @@ class AppContainer(context: Context) {
         settings = { aarsoCaptureSettings },
     )
 
+    /** THREAD_TOPOLOGY_PLAN.md WP8: the shared "record twice" writer (queryable [delegationStore]
+     *  row + inert [aarsoEventLog] line) for every "choose for me" surface — [dev.aarso.ui.ChatViewModel]
+     *  and [dev.aarso.ui.loops.LoopRoom] (the `GATEWAY_AUTO` surface) both use this one instance
+     *  rather than duplicating the two-write sequence. See [dev.aarso.data.DelegationRecorder]'s KDoc. */
+    val delegationRecorder: dev.aarso.data.DelegationRecorder =
+        dev.aarso.data.DelegationRecorder(delegationStore, aarsoEventLog)
+
     /** The free-tier guide (bundled JSON, Nooz-refreshed) + per-provider free-tier usage. */
     val freeTierStore: dev.aarso.data.FreeTierStore = dev.aarso.data.FreeTierStore(context)
     val freeTierUsageStore: dev.aarso.data.FreeTierUsageStore = dev.aarso.data.FreeTierUsageStore(context)

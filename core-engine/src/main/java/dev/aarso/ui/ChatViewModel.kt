@@ -109,6 +109,9 @@ data class ChatUiState(
      *  wired for the first time by [dev.aarso.domain.instrument.InstrumentsAssembly]. Null with
      *  no active leaf. */
     val instrumentsAssembly: dev.aarso.domain.scope.ContextAssembly.Assembled? = null,
+    /** THREAD_TOPOLOGY_PLAN.md WP8: this conversation's "delegated N · kept N · reverted N"
+     *  rollup for the Instruments panel's descriptive card — see [dev.aarso.domain.thread.DelegationCounts]. */
+    val delegationCounts: dev.aarso.domain.thread.DelegationCounts.Counts = dev.aarso.domain.thread.DelegationCounts.EMPTY,
     val prefillPending: Boolean = false,
     val engineAvailable: Boolean = true,
     /** True when no model is active at all — the first-run / setup state. */
@@ -150,6 +153,8 @@ private data class Transient(
     val lastTurnTokens: List<GeneratedToken> = emptyList(),
     /** THREAD_TOPOLOGY_PLAN.md WP7 — see [ChatUiState.instrumentsAssembly]. */
     val instrumentsAssembly: dev.aarso.domain.scope.ContextAssembly.Assembled? = null,
+    /** THREAD_TOPOLOGY_PLAN.md WP8 — see [ChatUiState.delegationCounts]. */
+    val delegationCounts: dev.aarso.domain.thread.DelegationCounts.Counts = dev.aarso.domain.thread.DelegationCounts.EMPTY,
     val prefillPending: Boolean = false,
     val error: String? = null,
     val genPhase: GenPhase = GenPhase.IDLE,
@@ -195,6 +200,7 @@ class ChatViewModel(
     private val curationStore: dev.aarso.data.CurationStore,
     private val threadMarkerStore: dev.aarso.data.ThreadMarkerStore,
     private val delegationStore: dev.aarso.data.DelegationStore,
+    private val delegationRecorder: dev.aarso.data.DelegationRecorder,
     private val receiptStore: dev.aarso.data.ReceiptStore,
     private val aarsoEventLog: dev.aarso.domain.mirror.AarsoEventLog,
     private val appContext: Context,
@@ -514,6 +520,7 @@ class ChatViewModel(
                 tokenStats = t.tokenStats,
                 lastTurnTokens = t.lastTurnTokens,
                 instrumentsAssembly = t.instrumentsAssembly,
+                delegationCounts = t.delegationCounts,
                 prefillPending = t.prefillPending,
                 engineAvailable = spec != null && engines.isRunnable(spec),
                 noModelActive = spec == null,
@@ -1010,6 +1017,16 @@ class ChatViewModel(
                 )
                 repository.insert(node)
                 moveLeaf(node.id) // continue from the convergence
+                // THREAD_TOPOLOGY_PLAN.md WP8: council auto-merge acceptance is one of the four
+                // unified "choose for me" surfaces (owner decision 2) — record it the same way
+                // chooseForMe records MODEL_PICK_BRANCH, with the individual voices as alternatives.
+                delegationRecorder.record(
+                    kind = dev.aarso.domain.thread.DelegationKind.COUNCIL_AUTOMERGE,
+                    rootId = rootIdFor(userNode.id),
+                    anchorMsgId = userNode.id,
+                    chosenRef = node.id,
+                    alternatives = kids.map { it.id },
+                )
                 transient.value = transient.value.copy(genPhase = GenPhase.IDLE)
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = t.message ?: "merge failed")
@@ -1078,6 +1095,80 @@ class ChatViewModel(
             val nextIndex = (currentIndex + direction).mod(children.size)
             moveLeaf(tree.descendToLeaf(children[nextIndex].id))
             recomputeStatusAsync()
+        }
+    }
+
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP8: "Choose for me" beside the pager row — owner decision 2's one
+     * genuinely *new* "choose for me" surface (model-picks-at-branch-point; the other three reuse
+     * existing council/gateway/default machinery). Asks the active model to pick one of
+     * [branchNodeId]'s alternatives via [dev.aarso.domain.thread.DelegationPrompts], commits to
+     * that alternative's tip the same way [branchFrom] does, and records a
+     * [dev.aarso.domain.thread.DelegationKind.MODEL_PICK_BRANCH] delegation. An unparseable model
+     * reply moves nothing and records nothing — see [dev.aarso.domain.thread.DelegationPrompts.parseChoice]'s
+     * KDoc on why a failed parse is never silently treated as "picked the first one."
+     */
+    fun chooseForMe(branchNodeId: String) {
+        if (transient.value.genPhase != GenPhase.IDLE) return
+        val spec = activeModelId.value?.let { registry.byId(it) } ?: return
+        val engine = engines.engineFor(spec) ?: return
+        viewModelScope.launch {
+            val tree = repository.tree()
+            val leaf = activeLeafId.value
+            val activeChildId = leaf?.let { l ->
+                val path = tree.pathToRoot(l)
+                val idx = path.indexOfFirst { it.id == branchNodeId }
+                if (idx < 0) null else path.getOrNull(idx + 1)?.id
+            }
+            val compare = dev.aarso.domain.tree.SiblingCompares.build(tree, branchNodeId, activeChildId)
+            if (compare.alternatives.size < 2) return@launch
+            GenerationService.start(appContext)
+            stopRequested = false
+            try {
+                transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
+                engine.loadModel(spec.modelPath ?: "(dev)", spec.contextWindow)
+                val objective = tree.node(branchNodeId)?.content.orEmpty()
+                val now = System.currentTimeMillis()
+                val msgs = listOf(
+                    MessageNode(
+                        "cfm-sys", null, Role.SYSTEM,
+                        dev.aarso.domain.thread.DelegationPrompts.chooseSystemPrompt(), createdAt = now,
+                    ),
+                    MessageNode(
+                        "cfm-usr", "cfm-sys", Role.USER,
+                        dev.aarso.domain.thread.DelegationPrompts.chooseUserPrompt(objective, compare.alternatives.map { it.preview }),
+                        createdAt = now + 1,
+                    ),
+                )
+                transient.value = transient.value.copy(genPhase = GenPhase.GENERATING)
+                val sb = StringBuilder()
+                collectCancellable {
+                    engine.generate(msgs, SamplingParams()).collect { sb.append(it.text) }
+                }
+                val idx = dev.aarso.domain.thread.DelegationPrompts.parseChoice(sb.toString(), compare.alternatives.size)
+                if (idx == null) {
+                    transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = "Couldn't parse a choice from the model's reply.")
+                    return@launch
+                }
+                val chosen = compare.alternatives[idx]
+                val rootId = rootIdFor(branchNodeId)
+                val alternatives = compare.alternatives.filterIndexed { i, _ -> i != idx }.map { it.childId }
+                moveLeaf(chosen.leafId)
+                delegationRecorder.record(
+                    kind = dev.aarso.domain.thread.DelegationKind.MODEL_PICK_BRANCH,
+                    rootId = rootId,
+                    anchorMsgId = branchNodeId,
+                    chosenRef = chosen.childId,
+                    alternatives = alternatives,
+                    now = System.currentTimeMillis(),
+                )
+                transient.value = transient.value.copy(genPhase = GenPhase.IDLE)
+                recomputeStatusAsync()
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = t.message ?: "choose for me failed")
+            } finally {
+                GenerationService.stop(appContext)
+            }
         }
     }
 
@@ -1609,7 +1700,10 @@ class ChatViewModel(
     /** Recompute the per-path instrumentation: token I/O ratio and context fit. */
     private suspend fun recomputeStatus(spec: ModelSpec, leafId: String?) {
         if (leafId == null) {
-            transient.value = transient.value.copy(context = null, tokenStats = null, instrumentsAssembly = null)
+            transient.value = transient.value.copy(
+                context = null, tokenStats = null, instrumentsAssembly = null,
+                delegationCounts = dev.aarso.domain.thread.DelegationCounts.EMPTY,
+            )
             return
         }
         // THREAD_TOPOLOGY_PLAN.md WP3: the instrument reflects what would actually be SENT —
@@ -1660,7 +1754,59 @@ class ChatViewModel(
             budget = dev.aarso.domain.scope.ContextAssembly.ContextBudget(total = spec.contextWindow, reserved = 0),
         )
 
-        transient.value = transient.value.copy(context = context, tokenStats = stats, instrumentsAssembly = assembled)
+        // THREAD_TOPOLOGY_PLAN.md WP8: correlate this conversation's PENDING delegations against
+        // the effective path just computed above, then reflect the up-to-date rollup — same
+        // cadence as the rest of the per-path instrumentation (recomputed on every branch/switch/
+        // rewind/send, not on a separate poll).
+        val delegationCounts = recomputeDelegationOutcomes(chatId, path)
+
+        transient.value = transient.value.copy(
+            context = context, tokenStats = stats, instrumentsAssembly = assembled,
+            delegationCounts = delegationCounts,
+        )
+    }
+
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP8: resolves [rootId]'s still-PENDING delegations against the
+     * current effective [path] via [dev.aarso.domain.thread.DelegationOutcomes.correlate], then
+     * returns the fresh [dev.aarso.domain.thread.DelegationCounts.Counts] for the Instruments
+     * panel's descriptive card. Only [dev.aarso.domain.thread.DelegationKind.MODEL_PICK_BRANCH]
+     * and [dev.aarso.domain.thread.DelegationKind.COUNCIL_AUTOMERGE] delegations carry an
+     * [dev.aarso.domain.thread.DelegationEvent.anchorMsgId] that's a real node in *this*
+     * conversation's tree — `GATEWAY_AUTO` (recorded mid-loop-run, not tied to a conversation node
+     * — see [dev.aarso.domain.loop.RecordingGatewayPolicy]'s KDoc) and any not-yet-produced
+     * `AUTO_DEFAULT` stay PENDING here; they're still counted in the totals, just never resolved
+     * by this path-based signal. A documented gap, not a silent one.
+     */
+    private suspend fun recomputeDelegationOutcomes(rootId: String, path: List<MessageNode>): dev.aarso.domain.thread.DelegationCounts.Counts {
+        val pending = delegationStore.forRoot(rootId).filter { it.outcome == dev.aarso.domain.thread.DelegationOutcome.PENDING }
+        if (pending.isNotEmpty()) {
+            val pathIds = path.map { it.id }
+            for (delegation in pending) {
+                val chosen = delegation.chosenRef ?: continue
+                val branchIdx = delegation.anchorMsgId?.let { pathIds.indexOf(it) } ?: -1
+                if (branchIdx < 0) continue // branch point isn't on the active path (or unknown) — can't correlate yet.
+                val activeChildId = pathIds.getOrNull(branchIdx + 1)
+                val status = if (activeChildId == chosen) {
+                    dev.aarso.domain.thread.DelegationOutcomes.ChoiceStatus.STILL_ACTIVE
+                } else {
+                    dev.aarso.domain.thread.DelegationOutcomes.ChoiceStatus.SWITCHED_OFF
+                }
+                // See DelegationOutcomes' KDoc: a PENDING delegation found SWITCHED_OFF has, by
+                // construction, not yet crossed the KEPT window while active (an earlier call
+                // here would already have resolved it otherwise) — 0 is always within the window.
+                val turnsSinceChoice = if (status == dev.aarso.domain.thread.DelegationOutcomes.ChoiceStatus.STILL_ACTIVE) {
+                    (pathIds.size - 1) - (branchIdx + 1)
+                } else {
+                    0
+                }
+                val outcome = dev.aarso.domain.thread.DelegationOutcomes.correlate(status, turnsSinceChoice)
+                if (outcome != dev.aarso.domain.thread.DelegationOutcome.PENDING) {
+                    delegationRecorder.resolveOutcome(delegation, outcome)
+                }
+            }
+        }
+        return dev.aarso.domain.thread.DelegationCounts.summarize(delegationStore.forRoot(rootId))
     }
 
     companion object {
@@ -1700,6 +1846,7 @@ class ChatViewModel(
                     c.curationStore,
                     c.threadMarkerStore,
                     c.delegationStore,
+                    c.delegationRecorder,
                     c.receiptStore,
                     c.aarsoEventLog,
                     app.applicationContext,
