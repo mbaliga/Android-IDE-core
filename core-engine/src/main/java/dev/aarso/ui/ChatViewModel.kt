@@ -1834,6 +1834,12 @@ class ChatViewModel(
      *  observer remark card reads this to decide whether to offer "Show observations" at all. */
     val observerEnabled: StateFlow<Boolean> get() = session.observerEnabled
 
+    /** Live mirror of [dev.aarso.data.SessionStore.disclosureTier] — **WP11**: `GraphRoom`'s "Deep
+     *  view" entry point reads this (via [dev.aarso.domain.disclosure.Disclosure.isRevealed] against
+     *  [dev.aarso.domain.disclosure.Surface.GRAPH_DEEP]) to decide whether to offer the G6 WebView
+     *  room at all, the same "surface + tier" split every other disclosure-gated entry point uses. */
+    val disclosureTier: StateFlow<String> get() = session.disclosureTier
+
     /** Descriptive remarks about the current whole-app graph, or empty while the observer toggle is
      *  off ([threadObserver]'s own "inert by default" contract — see its KDoc). Presented on
      *  request only (a tap in GraphRoom), never pushed, per THREAD_TOPOLOGY_PLAN.md's ObserverScript note. */

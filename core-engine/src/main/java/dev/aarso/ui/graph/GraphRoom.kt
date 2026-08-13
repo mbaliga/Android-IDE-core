@@ -93,9 +93,13 @@ private val NODE_SIZE = 40.dp
  * The **observer remark card** is a separate, explicit "Observations" toggle that calls
  * [ChatViewModel.observerRemarks] — gated by [ChatViewModel.observerEnabled] (owner decision 5) —
  * never fetched automatically, per [dev.aarso.domain.thread.ObserverScript]'s "presented on
- * request, never pushed" rule. A future WP11 adds a "Deep view" entry point here into the G6
- * WebView room for the same graph (`docs/design`'s hybrid-rendering decision) — out of this WP's
- * scope; nothing below assumes it exists yet.
+ * request, never pushed" rule.
+ *
+ * **WP11** adds the "Deep view" entry point next to it: once [graph] has loaded and
+ * [dev.aarso.domain.disclosure.Surface.GRAPH_DEEP] is revealed at the session's current
+ * [dev.aarso.domain.disclosure.DisclosureTier], a second button opens [GraphWebRoom] — the same
+ * [ThreadGraph] snapshot, rendered by G6 in a locked-down WebView (`docs/design`'s hybrid-
+ * rendering decision) as a second full-screen overlay on top of this one.
  */
 @Composable
 fun GraphRoom(
@@ -117,7 +121,15 @@ fun GraphRoom(
     var showObserverPanel by remember { mutableStateOf(false) }
     var observerRemarks by remember { mutableStateOf<List<String>>(emptyList()) }
     var observerLoading by remember { mutableStateOf(false) }
+    var showDeepView by remember { mutableStateOf(false) }
     val observerEnabled by viewModel.observerEnabled.collectAsState()
+    val disclosureTier by viewModel.disclosureTier.collectAsState()
+    // WP11's G6 deep-view entry point — Surface.GRAPH_DEEP is POWER-tier, same "surface + tier"
+    // gate every other disclosure-controlled entry point uses (Disclosure.isRevealed).
+    val deepViewRevealed = dev.aarso.domain.disclosure.Disclosure.isRevealed(
+        dev.aarso.domain.disclosure.Surface.GRAPH_DEEP,
+        dev.aarso.domain.disclosure.Disclosure.tierOf(disclosureTier),
+    )
     val scope = rememberCoroutineScope()
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -130,7 +142,15 @@ fun GraphRoom(
                 ) {
                     TextButton(onClick = onClose) { Text("‹ Back") }
                     Text("Graph", style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = { showObserverPanel = !showObserverPanel }) { Text("Observations") }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // THREAD_TOPOLOGY_PLAN.md WP11: the same graph this room already loaded,
+                        // handed to the G6 WebView room rather than re-fetched — GraphWebRoom
+                        // takes a plain ThreadGraph, not a ViewModel, so it stays a pure renderer.
+                        if (deepViewRevealed && graph != null) {
+                            TextButton(onClick = { showDeepView = true }) { Text("Deep view") }
+                        }
+                        TextButton(onClick = { showObserverPanel = !showObserverPanel }) { Text("Observations") }
+                    }
                 }
                 HorizontalDivider()
 
@@ -237,6 +257,15 @@ fun GraphRoom(
             )
         } else {
             selectedNodeId = null
+        }
+    }
+
+    if (showDeepView) {
+        val g = graph
+        if (g != null) {
+            GraphWebRoom(graph = g, onClose = { showDeepView = false })
+        } else {
+            showDeepView = false
         }
     }
 }

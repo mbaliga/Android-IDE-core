@@ -45,6 +45,14 @@ enum class Surface(val minTier: DisclosureTier, val mandatory: Boolean = false) 
     COUNCIL(DisclosureTier.POWER),
     VOICE(DisclosureTier.POWER),
     INSTRUMENTS(DisclosureTier.POWER),
+
+    /** THREAD_TOPOLOGY_PLAN.md WP11's G6 "deep graph room" (`ui/graph/GraphWebRoom.kt`) — the
+     *  "Deep view" entry point inside `ui/graph/GraphRoom.kt` (WP10's native surface). POWER
+     *  tier per the plan's own WP11 bullet: a locked-down WebView running a vendored
+     *  third-party graph-visualization library is exactly the kind of added-complexity surface
+     *  disclosure exists to keep out of the default Core/Studio experience, not something the
+     *  native [TREE_MAP]/GraphRoom surface needs gated the same way. */
+    GRAPH_DEEP(DisclosureTier.POWER),
 }
 
 /**
