@@ -555,6 +555,36 @@ private fun GlobalSettings(
     }
     HorizontalDivider()
 
+    // THREAD_TOPOLOGY_PLAN.md WP9 — the graph observer, off by default (owner decision 5). No
+    // graph room reads this yet (WP10); the switch exists so the substrate's inert-by-default
+    // contract is real and testable ahead of that surface, not a dead control.
+    Text("Observer (inert)", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Lets a local pass describe your conversation topology structurally — message/fork/" +
+            "marker/delegation counts, nothing interpreted. Off by default; no graph surface " +
+            "reads this yet.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val observerEnabled by session.observerEnabled.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Enable graph observer", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Reads only what's already on-device (the tree, markers, delegations) — never " +
+                    "the capture log.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
+    }
+    HorizontalDivider()
+
     Text("Git & coding", style = MaterialTheme.typography.titleMedium)
     GitConnect()
     HorizontalDivider()

@@ -210,6 +210,19 @@ class AppContainer(context: Context) {
     val delegationRecorder: dev.aarso.data.DelegationRecorder =
         dev.aarso.data.DelegationRecorder(delegationStore, aarsoEventLog)
 
+    /** THREAD_TOPOLOGY_PLAN.md WP9: the graph observer, gated by [sessionStore]'s
+     *  `observerEnabled` toggle (default off — owner decision 5). Reads [repository]/
+     *  [threadMarkerStore]/[delegationStore] only, never [aarsoEventLog] (binding constraint 3).
+     *  No consumer wired in yet — WP10's observer remark card is the first UI reader; this exists
+     *  so the substrate is real ahead of that surface, same "no consumer wired in yet" pattern
+     *  this file uses throughout. */
+    val threadObserver: dev.aarso.data.ThreadObserver = dev.aarso.data.ThreadObserver(
+        repository = repository,
+        markerStore = threadMarkerStore,
+        delegationStore = delegationStore,
+        enabled = { sessionStore.observerEnabled.value },
+    )
+
     /** The free-tier guide (bundled JSON, Nooz-refreshed) + per-provider free-tier usage. */
     val freeTierStore: dev.aarso.data.FreeTierStore = dev.aarso.data.FreeTierStore(context)
     val freeTierUsageStore: dev.aarso.data.FreeTierUsageStore = dev.aarso.data.FreeTierUsageStore(context)

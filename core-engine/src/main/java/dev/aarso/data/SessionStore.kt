@@ -260,6 +260,18 @@ class SessionStore(context: Context) {
         _gestureRadialFanEnabled.value = on
     }
 
+    // THREAD_TOPOLOGY_PLAN.md WP9: the graph observer's off-by-default gate (owner decision 5 —
+    // "observer ships built but INERT behind an off-by-default settings toggle, AarsoCaptureSettings
+    // pattern"). [dev.aarso.data.ThreadObserver] reads this via a lambda, not a captured snapshot,
+    // so flipping it here takes effect on the observer's next call without any extra wiring.
+    private val _observerEnabled = MutableStateFlow(prefs.getBoolean(KEY_OBSERVER, false))
+    val observerEnabled: StateFlow<Boolean> = _observerEnabled.asStateFlow()
+
+    fun setObserverEnabled(on: Boolean) {
+        prefs.edit().putBoolean(KEY_OBSERVER, on).apply()
+        _observerEnabled.value = on
+    }
+
     companion object {
         // A clean, generic blue (a shipped, AA-verified preset) — neutral default in place of
         // the Aeon violet, which stays available as a preset.
@@ -303,5 +315,6 @@ class SessionStore(context: Context) {
         private const val KEY_GESTURE_VERDICT = "gestureVerdictDragEnabled"
         private const val KEY_GESTURE_QUOTE_REPLY = "gestureQuoteReplyEnabled"
         private const val KEY_GESTURE_RADIAL = "gestureRadialFanEnabled"
+        private const val KEY_OBSERVER = "threadObserverEnabled"
     }
 }
