@@ -290,5 +290,5 @@ class AppContainer(context: Context) {
     val searchDatabaseHandle: dev.aarso.data.search.SearchDatabaseHandle =
         dev.aarso.data.search.SearchDriverFactory.create(context)
     val searchRepository: dev.aarso.data.search.SearchRepository =
-        dev.aarso.data.search.SearchRepository(repository, sessionStore, ledgerStore, searchDatabaseHandle.database)
+        dev.aarso.data.search.SearchRepository(repository, sessionStore, ledgerStore, threadMarkerStore, searchDatabaseHandle.database)
 }

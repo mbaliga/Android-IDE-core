@@ -2,6 +2,7 @@ package dev.aarso.data.search
 
 import android.content.Context
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import com.eygraber.sqldelight.androidx.driver.AndroidxSqliteDatabaseType
 import com.eygraber.sqldelight.androidx.driver.AndroidxSqliteDriver
@@ -42,8 +43,61 @@ object SearchDriverFactory {
         // behind (verified empirically by SearchIndexerTest's "remove deletes..." case failing
         // without this line).
         driver.execute(identifier = null, sql = "PRAGMA foreign_keys = ON", parameters = 0, binders = null)
+        ensureFacetColumns(driver)
         installSyncTriggers(driver)
         return SearchDatabaseHandle(SearchDatabase(driver), driver)
+    }
+
+    /** `conv_facets` columns added by THREAD_TOPOLOGY_PLAN.md WP6, name -> the DDL fragment
+     *  after the name in an `ALTER TABLE ... ADD COLUMN` statement. Declared once so
+     *  [ensureFacetColumns]'s "what to check for" and "what to add" can't drift apart. */
+    private val FACET_COLUMNS_ADDED_WP6 = linkedMapOf(
+        "lineage_parent" to "TEXT",
+        "lineage_kind" to "TEXT",
+        "chapter_count" to "INTEGER NOT NULL DEFAULT 0",
+        "compaction_count" to "INTEGER NOT NULL DEFAULT 0",
+    )
+
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP6's upgrade path: adds `conv_facets`'
+     * `lineage_parent`/`lineage_kind`/`chapter_count`/`compaction_count` columns to an
+     * **already-existing** database file, idempotently.
+     *
+     * Why this is needed even though `Search.sq`'s `CREATE TABLE conv_facets` already declares
+     * these columns: [SearchDatabase.Schema] only runs that `CREATE TABLE` the first time a
+     * database file is opened. There is no `.sqm`-versioned migration wired up for this schema —
+     * this repo keeps every FTS5-virtual-table-adjacent statement as raw SQL specifically because
+     * SQLDelight 2.1.0's analyzer `ClassCastException`s on it (see [installSyncTriggers]'s KDoc),
+     * and a declared migration file would hit the exact same limitation for a schema this close
+     * to `conv_fts`. Without this, a database file created by a build that predates WP6 would
+     * open with the four columns simply missing, and the first `upsertFacets`/`selectFacets` call
+     * would throw "no such column" at runtime.
+     *
+     * `PRAGMA table_info` first, so a column already present — every fresh [createInMemory] test
+     * database, or a device database this has already run against once — is never re-added:
+     * SQLite's `ALTER TABLE ADD COLUMN` has no `IF NOT EXISTS` form and throws `duplicate column
+     * name` on a repeat, unlike the `CREATE TRIGGER IF NOT EXISTS` idiom [installSyncTriggers] gets
+     * to use.
+     */
+    internal fun ensureFacetColumns(driver: SqlDriver) {
+        val existing = HashSet<String>()
+        driver.executeQuery(
+            identifier = null,
+            sql = "PRAGMA table_info(conv_facets)",
+            mapper = { cursor ->
+                while (cursor.next().value) {
+                    cursor.getString(1)?.let { existing += it } // column index 1 = "name"
+                }
+                QueryResult.Value(Unit)
+            },
+            parameters = 0,
+            binders = null,
+        )
+        FACET_COLUMNS_ADDED_WP6.forEach { (name, ddl) ->
+            if (name !in existing) {
+                driver.execute(identifier = null, sql = "ALTER TABLE conv_facets ADD COLUMN $name $ddl", parameters = 0, binders = null)
+            }
+        }
     }
 
     /**

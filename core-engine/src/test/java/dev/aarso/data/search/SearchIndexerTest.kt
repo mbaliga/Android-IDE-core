@@ -15,6 +15,10 @@ class SearchIndexerTest {
         archived: Boolean = false,
         projectId: String? = null,
         updatedAt: Long = 0L,
+        lineageParent: String? = null,
+        lineageKind: String? = null,
+        chapterCount: Long = 0L,
+        compactionCount: Long = 0L,
     ) = SearchProjector.Row(
         convId = convId,
         title = titleRaw.lowercase(),
@@ -36,6 +40,10 @@ class SearchIndexerTest {
         hasCode = false,
         costMinor = 0L,
         lastUsedAt = updatedAt,
+        lineageParent = lineageParent,
+        lineageKind = lineageKind,
+        chapterCount = chapterCount,
+        compactionCount = compactionCount,
     )
 
     @Test fun `reindex writes every row and makes it searchable`() {
@@ -177,5 +185,33 @@ class SearchIndexerTest {
         assertFalse(handle.verifyAndRepairIfNeeded())
         val hits = handle.database.searchQueries.searchCandidates("cache", 10).executeAsList()
         assertEquals(listOf("c1"), hits.map { it.conv_id })
+    }
+
+    // ---- lineage + chapter/compaction facets (THREAD_TOPOLOGY_PLAN.md WP6) -------------------
+
+    @Test fun `lineage and marker-count facets round-trip through reindex`() {
+        val db = SearchDriverFactory.createInMemory().database
+        SearchIndexer.reindex(
+            db,
+            listOf(row("fork", lineageParent = "orig", lineageKind = "FORK", chapterCount = 3, compactionCount = 1)),
+            nowMillis = 1L,
+        )
+
+        val facets = db.searchQueries.selectFacets("fork").executeAsOne()
+        assertEquals("orig", facets.lineage_parent)
+        assertEquals("FORK", facets.lineage_kind)
+        assertEquals(3L, facets.chapter_count)
+        assertEquals(1L, facets.compaction_count)
+    }
+
+    @Test fun `a root with no lineage indexes with null lineage columns and zero counts`() {
+        val db = SearchDriverFactory.createInMemory().database
+        SearchIndexer.reindex(db, listOf(row("origin")), nowMillis = 1L)
+
+        val facets = db.searchQueries.selectFacets("origin").executeAsOne()
+        assertEquals(null, facets.lineage_parent)
+        assertEquals(null, facets.lineage_kind)
+        assertEquals(0L, facets.chapter_count)
+        assertEquals(0L, facets.compaction_count)
     }
 }

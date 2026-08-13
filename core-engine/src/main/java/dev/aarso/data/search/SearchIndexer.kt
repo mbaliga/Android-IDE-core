@@ -145,7 +145,15 @@ object SearchIndexer {
             branch_count == row.branchCount &&
             has_image == row.hasImage.toSqlBoolean() &&
             has_code == row.hasCode.toSqlBoolean() &&
-            cost_minor == row.costMinor
+            cost_minor == row.costMinor &&
+            // THREAD_TOPOLOGY_PLAN.md WP6: a fork/spawn or a new chapter/compaction-run marker
+            // changes none of the columns above, so without these the incremental sync() would
+            // never notice one landed — same "facet edit with no updated_at change" gap starring/
+            // archiving/project-assignment already had before those were added here.
+            lineage_parent == row.lineageParent &&
+            lineage_kind == row.lineageKind &&
+            chapter_count == row.chapterCount &&
+            compaction_count == row.compactionCount
 
     private fun writeRow(database: SearchDatabase, row: SearchProjector.Row) {
         database.searchQueries.upsertProjection(
@@ -172,6 +180,10 @@ object SearchIndexer {
             has_code = row.hasCode.toSqlBoolean(),
             cost_minor = row.costMinor,
             last_used_at = row.lastUsedAt,
+            lineage_parent = row.lineageParent,
+            lineage_kind = row.lineageKind,
+            chapter_count = row.chapterCount,
+            compaction_count = row.compactionCount,
         )
     }
 

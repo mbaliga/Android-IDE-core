@@ -3,8 +3,11 @@ package dev.aarso.data.search
 import dev.aarso.data.LedgerStore
 import dev.aarso.data.MessageTreeRepository
 import dev.aarso.data.SessionStore
+import dev.aarso.data.ThreadMarkerStore
+import dev.aarso.domain.ledger.LedgerEntry
 import dev.aarso.domain.search.SearchHit
 import dev.aarso.domain.search.query.ParsedQuery
+import dev.aarso.domain.tree.MessageTree
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -35,6 +38,10 @@ class SearchRepository(
     private val treeRepository: MessageTreeRepository,
     private val sessionStore: SessionStore,
     private val ledgerStore: LedgerStore,
+    /** THREAD_TOPOLOGY_PLAN.md WP6: source of the `lineage_parent`/`lineage_kind`/
+     *  `chapter_count`/`compaction_count` facet columns — the same [ThreadMarkerStore]
+     *  [dev.aarso.ui.ChatViewModel] already reads for [dev.aarso.domain.thread.ThreadChains]. */
+    private val threadMarkerStore: ThreadMarkerStore,
     private val database: SearchDatabase,
 ) {
 
@@ -44,7 +51,8 @@ class SearchRepository(
         val archived = sessionStore.archivedRoots.value
         val projects = sessionStore.conversationProjects.value
         val ledgerByConversation = ledgerStore.entries().first().groupBy { it.chatId }
-        val rows = SearchProjector.project(tree, starred, archived, projects, ledgerByConversation)
+        val markersByRoot = threadMarkerStore.markers.first().groupBy { it.rootId }
+        val rows = SearchProjector.project(tree, starred, archived, projects, ledgerByConversation, markersByRoot)
         SearchIndexer.reindex(database, rows, nowMillis)
     }
 
@@ -57,7 +65,9 @@ class SearchRepository(
      *
      * Every input that can change what a conversation matches is watched, not just the tree:
      * starring, archiving and project assignment all change facet values without touching a
-     * conversation's last-activity time, and the ledger changes its `cost:`.
+     * conversation's last-activity time, the ledger changes its `cost:`, and (THREAD_TOPOLOGY_PLAN.md
+     * WP6) a fork/spawn or a chapter/compaction-run marker changes `lineage_parent`/`lineage_kind`/
+     * `chapter_count`/`compaction_count` the exact same way.
      *
      * The [DEBOUNCE_MS] window matters more than it looks: a generating turn writes to the tree
      * repeatedly, and re-projecting the whole corpus per write would be pure waste. Debouncing
@@ -73,14 +83,23 @@ class SearchRepository(
         reindexAll(nowMillis())
         onIndexed(database.searchQueries.countProjections().executeAsOne())
 
+        // kotlinx.coroutines' typed `combine` tops out at 5 flows; nested rather than switching to
+        // the untyped vararg form (which would trade this file's compile-time column safety for a
+        // same-shape `Array<Any?>` cast) to fold in the 6th (thread markers, WP6).
         combine(
-            treeRepository.observeTree(),
-            sessionStore.bookmarkedRoots,
-            sessionStore.archivedRoots,
-            sessionStore.conversationProjects,
-            ledgerStore.entries(),
-        ) { tree, starred, archived, projects, ledger ->
-            SearchProjector.project(tree, starred, archived, projects, ledger.groupBy { it.chatId })
+            combine(
+                treeRepository.observeTree(),
+                sessionStore.bookmarkedRoots,
+                sessionStore.archivedRoots,
+                sessionStore.conversationProjects,
+                ledgerStore.entries(),
+            ) { tree, starred, archived, projects, ledger -> ProjectionInputs(tree, starred, archived, projects, ledger) },
+            threadMarkerStore.markers,
+        ) { inputs, markers ->
+            SearchProjector.project(
+                inputs.tree, inputs.starred, inputs.archived, inputs.projects,
+                inputs.ledger.groupBy { it.chatId }, markers.groupBy { it.rootId },
+            )
         }
             .debounce(DEBOUNCE_MS)
             .collect { rows ->
@@ -90,6 +109,17 @@ class SearchRepository(
 
         error("keepIndexFresh collects forever; reaching here means the source flow completed")
     }
+
+    /** The pre-WP6 5-flow [combine]'s output, named so the outer 2-flow [combine] (adding
+     *  [ThreadMarkerStore.markers]) reads as a plain pair rather than an anonymous [Pair] of
+     *  five things. */
+    private data class ProjectionInputs(
+        val tree: MessageTree,
+        val starred: Set<String>,
+        val archived: Set<String>,
+        val projects: Map<String, String>,
+        val ledger: List<LedgerEntry>,
+    )
 
     /** Takes an already-[ParsedQuery] rather than raw text: the search overlay parses on every
      *  keystroke to paint chips/diagnostics, so re-parsing here would be waste, and a second

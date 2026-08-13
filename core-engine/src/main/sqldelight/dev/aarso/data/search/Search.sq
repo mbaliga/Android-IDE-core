@@ -36,7 +36,16 @@ CREATE TABLE conv_facets (
                                              -- the actual source field's unit, not spec §4's
                                              -- "cost_micros" (this app has no micros-denominated
                                              -- cost data; renaming avoids a misleading unit)
-  last_used_at INTEGER
+  last_used_at INTEGER,
+  -- THREAD_TOPOLOGY_PLAN.md WP6 ("mega-thread + search facets"): projected from the same
+  -- ThreadMarker facts dev.aarso.domain.thread.ThreadChains reads — a LINEAGE_SRC marker's
+  -- payload (lineage_parent/lineage_kind) and CHAPTER/COMPACTION_RUN marker counts for this
+  -- root. lineage_kind is a dev.aarso.domain.tree.TreeFork.LineageKind name ('FORK'|'SPAWN'),
+  -- NULL exactly when lineage_parent is NULL (this conv is a chain origin, not a fork/spawn).
+  lineage_parent   TEXT,
+  lineage_kind     TEXT,
+  chapter_count    INTEGER NOT NULL DEFAULT 0,
+  compaction_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_facets_composite ON conv_facets(archived, starred, project_id);
 CREATE INDEX idx_proj_updated ON conv_projection(updated_at DESC);
@@ -131,15 +140,16 @@ SELECT count(*) FROM conv_projection;
 selectIndexStamps:
 SELECT p.conv_id, p.updated_at, p.projection_version,
        f.starred, f.archived, f.project_id, f.model_ids,
-       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor,
+       f.lineage_parent, f.lineage_kind, f.chapter_count, f.compaction_count
 FROM conv_projection p
 LEFT JOIN conv_facets f ON f.conv_id = p.conv_id;
 
 -- SearchProjector (WP5) produces one Row per conversation; the indexer (WP6) writes it as one
 -- upsertProjection + one upsertFacets call per conv_id, inside the same chunk transaction.
 upsertFacets:
-INSERT INTO conv_facets(conv_id, starred, archived, project_id, model_ids, turn_count, branch_count, has_image, has_code, cost_minor, last_used_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO conv_facets(conv_id, starred, archived, project_id, model_ids, turn_count, branch_count, has_image, has_code, cost_minor, last_used_at, lineage_parent, lineage_kind, chapter_count, compaction_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(conv_id) DO UPDATE SET
   starred = excluded.starred,
   archived = excluded.archived,
@@ -150,7 +160,11 @@ ON CONFLICT(conv_id) DO UPDATE SET
   has_image = excluded.has_image,
   has_code = excluded.has_code,
   cost_minor = excluded.cost_minor,
-  last_used_at = excluded.last_used_at;
+  last_used_at = excluded.last_used_at,
+  lineage_parent = excluded.lineage_parent,
+  lineage_kind = excluded.lineage_kind,
+  chapter_count = excluded.chapter_count,
+  compaction_count = excluded.compaction_count;
 
 selectFacets:
 SELECT * FROM conv_facets WHERE conv_id = ?;

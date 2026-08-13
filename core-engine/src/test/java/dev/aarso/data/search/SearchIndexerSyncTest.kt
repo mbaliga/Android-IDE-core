@@ -22,6 +22,7 @@ class SearchIndexerSyncTest {
         archived: Boolean = false,
         projectId: String? = null,
         turnCount: Long = 2,
+        chapterCount: Long = 0,
     ) = SearchProjector.Row(
         convId = convId,
         title = "conversation $convId", snippet = "", body = bodyRaw.lowercase(),
@@ -31,6 +32,7 @@ class SearchIndexerSyncTest {
         starred = starred, archived = archived, projectId = projectId, modelIds = "",
         turnCount = turnCount, branchCount = 0,
         hasImage = false, hasCode = false, costMinor = 0, lastUsedAt = NOW,
+        chapterCount = chapterCount,
     )
 
     private fun freshIndex(rows: List<SearchProjector.Row>): SearchDatabaseHandle =
@@ -104,6 +106,16 @@ class SearchIndexerSyncTest {
         val handle = freshIndex(listOf(row("a", turnCount = 2)))
         SearchIndexer.sync(handle.database, listOf(row("a", turnCount = 40)), NOW)
         assertEquals(listOf("a"), ids(handle, "gradle turns:>10"))
+    }
+
+    @Test fun `a chapter-count-only change (e_g_ marking a chapter) is still picked up by sync`() {
+        // THREAD_TOPOLOGY_PLAN.md WP6: same class of gap starring/archiving/project already had —
+        // marking a chapter changes conv_facets.chapter_count without touching updated_at, so an
+        // updated_at-only staleness check would silently miss it.
+        val handle = freshIndex(listOf(row("a", chapterCount = 0)))
+        val result = SearchIndexer.sync(handle.database, listOf(row("a", chapterCount = 1)), NOW)
+        assertEquals(1, result.updated)
+        assertEquals(1L, handle.database.searchQueries.selectFacets("a").executeAsOne().chapter_count)
     }
 
     @Test fun `sync leaves the resume checkpoint consistent, so a later reindex is a no-op`() {

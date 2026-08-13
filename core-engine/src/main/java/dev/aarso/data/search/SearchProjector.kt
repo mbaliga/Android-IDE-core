@@ -4,6 +4,9 @@ import dev.aarso.domain.MessageNode
 import dev.aarso.domain.Role
 import dev.aarso.domain.ledger.LedgerEntry
 import dev.aarso.domain.search.Segmenter
+import dev.aarso.domain.thread.ThreadChains
+import dev.aarso.domain.thread.ThreadMarker
+import dev.aarso.domain.thread.ThreadMarkerKind
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.MessageTree
 
@@ -22,8 +25,11 @@ import dev.aarso.domain.tree.MessageTree
 object SearchProjector {
 
     /** Bump when the projection logic changes shape — `index_state.projection_version` uses
-     *  this to trigger a resumable rebuild (WP6) rather than silently indexing stale rows. */
-    const val PROJECTION_VERSION = 1L
+     *  this to trigger a resumable rebuild (WP6) rather than silently indexing stale rows.
+     *  2 (THREAD_TOPOLOGY_PLAN.md WP6): [Row] gained the `lineageParent`/`lineageKind`/
+     *  `chapterCount`/`compactionCount` facet columns, sourced from [ThreadMarker]s a
+     *  pre-existing index was never asked to fold in. */
+    const val PROJECTION_VERSION = 2L
 
     /** Characters of the first assistant (or user, if none) turn kept as the raw snippet. */
     private const val SNIPPET_CHARS = 220
@@ -52,6 +58,16 @@ object SearchProjector {
         val hasCode: Boolean,
         val costMinor: Long,
         val lastUsedAt: Long?,
+        /** THREAD_TOPOLOGY_PLAN.md WP6 — the [ThreadChains.LineagePointer.srcRootId] of this
+         *  conversation's [ThreadMarkerKind.LINEAGE_SRC] marker, or null when it's a chain
+         *  origin (never forked/spawned). Defaults preserve every pre-WP6 call site that builds
+         *  a [Row] without thread-marker data (JVM tests included). */
+        val lineageParent: String? = null,
+        /** [dev.aarso.domain.tree.TreeFork.LineageKind] name ("FORK"/"SPAWN"), null exactly when
+         *  [lineageParent] is null. */
+        val lineageKind: String? = null,
+        val chapterCount: Long = 0L,
+        val compactionCount: Long = 0L,
     )
 
     /**
@@ -60,6 +76,13 @@ object SearchProjector {
      * [starredRoots]/[projects] from `SessionStore`, [ledgerByConversation] from `LedgerStore`
      * grouped by `chatId`. [archivedRoots] is new (a `SessionStore` addition, same shape as
      * `bookmarkedRoots`) — `is:archived` isn't in either of those existing flows yet.
+     *
+     * @param markersByRoot every [ThreadMarker], grouped by `rootId` (THREAD_TOPOLOGY_PLAN.md
+     *   WP6) — the source of `lineage_parent`/`lineage_kind`/`chapter_count`/`compaction_count`.
+     *   Defaults to empty so every pre-WP6 caller (including this file's own existing JVM tests)
+     *   keeps compiling unchanged; a root with no entry here simply projects as a chain origin
+     *   with zero chapter/compaction counts, which is the honest answer when no marker data was
+     *   supplied.
      */
     fun project(
         tree: MessageTree,
@@ -67,6 +90,7 @@ object SearchProjector {
         archivedRoots: Set<String>,
         projects: Map<String, String>,
         ledgerByConversation: Map<String, List<LedgerEntry>>,
+        markersByRoot: Map<String, List<ThreadMarker>> = emptyMap(),
     ): List<Row> =
         Conversations.summarize(tree).map { summary ->
             projectOne(
@@ -76,6 +100,7 @@ object SearchProjector {
                 archived = summary.rootId in archivedRoots,
                 projectId = projects[summary.rootId],
                 ledgerEntries = ledgerByConversation[summary.rootId].orEmpty(),
+                markers = markersByRoot[summary.rootId].orEmpty(),
             )
         }
 
@@ -86,7 +111,12 @@ object SearchProjector {
         archived: Boolean,
         projectId: String?,
         ledgerEntries: List<LedgerEntry>,
+        markers: List<ThreadMarker>,
     ): Row {
+        // THREAD_TOPOLOGY_PLAN.md WP6: the same LINEAGE_SRC-payload parse ThreadChains uses for
+        // mega-thread stitching, reused here rather than re-decoded — one JSON shape, one reader.
+        val lineage = markers.firstOrNull { it.kind == ThreadMarkerKind.LINEAGE_SRC }
+            ?.let(ThreadChains::lineagePointer)
         val nodes = subtreeNodes(tree, summary.rootId)
         val bodyRaw = nodes.joinToString("\n\n") { it.content }.trim()
         val snippetRaw = (nodes.firstOrNull { it.role == Role.ASSISTANT } ?: nodes.firstOrNull { it.role == Role.USER })
@@ -119,6 +149,10 @@ object SearchProjector {
             // No per-open timestamp exists (SessionStore.conversationOpens is a count, not a
             // clock) — last activity is the closest honest proxy for "last used".
             lastUsedAt = summary.lastUpdatedAt,
+            lineageParent = lineage?.srcRootId,
+            lineageKind = lineage?.lineageKind?.name,
+            chapterCount = markers.count { it.kind == ThreadMarkerKind.CHAPTER }.toLong(),
+            compactionCount = markers.count { it.kind == ThreadMarkerKind.COMPACTION_RUN }.toLong(),
         )
     }
 

@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.aarso.domain.Role
+import dev.aarso.domain.thread.ThreadChains
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.TreeOutline
 import dev.aarso.ui.ChatViewModel
@@ -55,6 +56,7 @@ fun TreeRoom(
     onNodeChosen: () -> Unit,
 ) {
     val rows by viewModel.treeOutline.collectAsState()
+    val chains by viewModel.threadChains.collectAsState()
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val container = (context.applicationContext as dev.aarso.AarsoApp).container
@@ -74,13 +76,14 @@ fun TreeRoom(
         )
 
         // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
-        // commits branch, builds branch. Builds moved here from Develop.
+        // commits branch, builds branch. Builds moved here from Develop. "Chain" (WP6) is the
+        // cross-conversation view: every root grouped into its Fork/Spawn mega-thread.
         var treeTab by remember { mutableStateOf(0) }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
         ) {
-            listOf("Conversation", "Commits", "Builds").forEachIndexed { i, label ->
+            listOf("Conversation", "Commits", "Builds", "Chain").forEachIndexed { i, label ->
                 HyleChip(treeTab == i, { treeTab = i }, label)
             }
         }
@@ -154,12 +157,16 @@ fun TreeRoom(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(20.dp),
             )
-            else -> Column(
+            2 -> Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             ) {
                 // Builds live in the Tree now (§6.1): the build branch, tied to its commit.
                 dev.aarso.ui.develop.BuildsFacet()
             }
+            else -> ChainListView(
+                chains = chains,
+                onOpen = { rootId -> viewModel.openConversation(rootId); onNodeChosen() },
+            )
         }
     }
 
@@ -210,6 +217,112 @@ private fun shareText(context: android.content.Context, title: String, text: Str
     context.startActivity(
         android.content.Intent.createChooser(send, title).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
     )
+}
+
+/**
+ * THREAD_TOPOLOGY_PLAN.md WP6's "Chain" chip: every conversation grouped into its Fork/Spawn
+ * mega-thread ([dev.aarso.domain.thread.ThreadChains]), cross-conversation (unlike the
+ * "Conversation" tab above, which is scoped to the active root). A chain with no fork/spawn
+ * history renders as one compact row; a multi-root chain expands into its family, oldest first,
+ * each link tagged with how it joined ([TreeFork.LineageKind]) and how many chapter/compaction
+ * markers it carries.
+ */
+@Composable
+private fun ChainListView(chains: List<ThreadChains.Chain>, onOpen: (String) -> Unit) {
+    if (chains.isEmpty()) {
+        Text(
+            "No conversations yet. Fork or Spawn from a turn (radial menu → Branch/Fork/Spawn) " +
+                "to grow a chain here.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(20.dp),
+        )
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+        contentPadding = PaddingValues(vertical = 12.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        items(chains, key = { it.originRootId }) { chain -> ChainCard(chain, onOpen) }
+    }
+}
+
+@Composable
+private fun ChainCard(chain: ThreadChains.Chain, onOpen: (String) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(vertical = 6.dp),
+    ) {
+        if (chain.isMultiRoot) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    "⑂ ${chain.rootCount} conversations",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (chain.totalChapters > 0 || chain.totalCompactions > 0) {
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        buildString {
+                            if (chain.totalChapters > 0) append("${chain.totalChapters} chapters")
+                            if (chain.totalChapters > 0 && chain.totalCompactions > 0) append(" · ")
+                            if (chain.totalCompactions > 0) append("${chain.totalCompactions} compactions")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            chain.links.forEach { link -> ChainLinkRow(link, indent = true, onOpen) }
+        } else {
+            ChainLinkRow(chain.links.single(), indent = false, onOpen)
+        }
+    }
+}
+
+@Composable
+private fun ChainLinkRow(link: ThreadChains.ChainLink, indent: Boolean, onOpen: (String) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = { onOpen(link.rootId) })
+            .padding(start = if (indent) 24.dp else 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                link.title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val lineage = link.lineage
+            if (lineage != null) {
+                Text(
+                    // TreeFork.LineageKind.name is lowercased for display; an unrecognised/absent
+                    // kind (a future WP's lineage source, or a malformed payload) still shows the
+                    // link exists — "linked from …" — rather than hiding it.
+                    "${lineage.lineageKind?.name?.lowercase() ?: "linked"} from a prior turn",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (link.chapterCount > 0) {
+            Text(
+                "${link.chapterCount} ch",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable

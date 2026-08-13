@@ -7,8 +7,13 @@ import dev.aarso.domain.ledger.LedgerEntry
 import dev.aarso.domain.ledger.Provenance
 import dev.aarso.domain.ledger.Status
 import dev.aarso.domain.ledger.Tier
+import dev.aarso.domain.thread.ThreadMarker
+import dev.aarso.domain.thread.ThreadMarkerKind
+import dev.aarso.domain.thread.ThreadMarkerSource
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.MessageTree
+import dev.aarso.domain.tree.TreeFork
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -198,5 +203,65 @@ class SearchProjectorTest {
 
     @Test fun `empty tree projects to no rows`() {
         assertTrue(SearchProjector.project(MessageTree(emptyList()), emptySet(), emptySet(), emptyMap(), emptyMap()).isEmpty())
+    }
+
+    // ---- lineage + chapter/compaction facets (THREAD_TOPOLOGY_PLAN.md WP6) -------------------
+
+    private fun lineageMarker(rootId: String, srcRootId: String, kind: TreeFork.LineageKind = TreeFork.LineageKind.FORK) = ThreadMarker(
+        id = "lineage-$rootId",
+        rootId = rootId,
+        kind = ThreadMarkerKind.LINEAGE_SRC,
+        at = 0L,
+        source = ThreadMarkerSource.SYSTEM,
+        payloadJson = JSONObject().put("srcRootId", srcRootId).put("srcNodeId", "m").put("lineageKind", kind.name).toString(),
+    )
+
+    private fun chapterMarker(rootId: String, at: Long) = ThreadMarker(
+        id = "chapter-$rootId-$at", rootId = rootId, anchorMsgId = "m", kind = ThreadMarkerKind.CHAPTER,
+        label = "ch", at = at, source = ThreadMarkerSource.USER,
+    )
+
+    private fun compactionMarker(rootId: String, at: Long) = ThreadMarker(
+        id = "compaction-$rootId-$at", rootId = rootId, anchorMsgId = "m", kind = ThreadMarkerKind.COMPACTION_RUN,
+        at = at, source = ThreadMarkerSource.SYSTEM,
+    )
+
+    @Test fun `a root with no thread markers projects with default lineage and zero counts`() {
+        val tree = MessageTree(listOf(node("u1", null, Role.USER, "hello", 1L)))
+        val row = SearchProjector.project(tree, emptySet(), emptySet(), emptyMap(), emptyMap()).single()
+        assertNull(row.lineageParent)
+        assertNull(row.lineageKind)
+        assertEquals(0L, row.chapterCount)
+        assertEquals(0L, row.compactionCount)
+    }
+
+    @Test fun `a forked root's lineage_parent and lineage_kind come from its LINEAGE_SRC marker`() {
+        val tree = MessageTree(listOf(node("fork-root", null, Role.SYSTEM, "spawned prose", 1L)))
+        val markersByRoot = mapOf("fork-root" to listOf(lineageMarker("fork-root", "orig-root", TreeFork.LineageKind.SPAWN)))
+        val row = SearchProjector.project(tree, emptySet(), emptySet(), emptyMap(), emptyMap(), markersByRoot).single()
+        assertEquals("orig-root", row.lineageParent)
+        assertEquals("SPAWN", row.lineageKind)
+    }
+
+    @Test fun `chapter and compaction counts reflect only this root's markers`() {
+        val tree = MessageTree(
+            listOf(
+                node("r1", null, Role.USER, "hi", 1L),
+                node("r2", null, Role.USER, "hey", 2L),
+            ),
+        )
+        val markersByRoot = mapOf(
+            "r1" to listOf(chapterMarker("r1", 1L), chapterMarker("r1", 2L), compactionMarker("r1", 3L)),
+            "r2" to listOf(chapterMarker("r2", 1L)),
+        )
+        val rows = SearchProjector.project(tree, emptySet(), emptySet(), emptyMap(), emptyMap(), markersByRoot).associateBy { it.convId }
+        assertEquals(2L, rows.getValue("r1").chapterCount)
+        assertEquals(1L, rows.getValue("r1").compactionCount)
+        assertEquals(1L, rows.getValue("r2").chapterCount)
+        assertEquals(0L, rows.getValue("r2").compactionCount)
+    }
+
+    @Test fun `PROJECTION_VERSION is 2 -- WP6 changed the projection shape`() {
+        assertEquals(2L, SearchProjector.PROJECTION_VERSION)
     }
 }

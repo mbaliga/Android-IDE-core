@@ -1176,6 +1176,20 @@ class ChatViewModel(
         .map { list -> list.filter { it.anchorMsgId != null }.groupBy { it.anchorMsgId!! } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP6's "mega-thread": every conversation grouped by
+     * [dev.aarso.domain.thread.ThreadChains] into Fork/Spawn-connected chains, newest activity
+     * first — TreeRoom's "Chain" chip view and ChatsRoom's "spawned from …" chip both read this
+     * one flow rather than re-deriving lineage groupings independently. Cross-conversation like
+     * [conversations] above it (not scoped to the active root), and combined from the same two
+     * already-live flows [conversations] and [threadMarkerStore]'s full marker list — no new
+     * store or query.
+     */
+    val threadChains: StateFlow<List<dev.aarso.domain.thread.ThreadChains.Chain>> =
+        combine(conversations, threadMarkerStore.markers) { summaries, markers ->
+            dev.aarso.domain.thread.ThreadChains.build(summaries, markers)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** The conversation root [msgId] currently belongs to, or null if [msgId] isn't in the tree (shouldn't happen for a live turn action, but the tree is the source of truth, not a cached assumption). */
     private suspend fun rootIdFor(msgId: String): String? =
         dev.aarso.domain.tree.Conversations.rootOf(repository.tree(), msgId)

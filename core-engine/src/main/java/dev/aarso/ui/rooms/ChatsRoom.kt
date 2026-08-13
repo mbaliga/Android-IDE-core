@@ -45,7 +45,9 @@ import dev.aarso.domain.library.ConversationProjection
 import dev.aarso.domain.search.query.ChatsPreset
 import dev.aarso.domain.search.query.ConversationFacetFilter
 import dev.aarso.domain.search.query.QueryParser
+import dev.aarso.domain.thread.ThreadChains
 import dev.aarso.domain.tree.Conversations
+import dev.aarso.domain.tree.TreeFork
 import dev.aarso.ui.ChatViewModel
 import dev.aarso.domain.library.Conversations as LibConversations
 import dev.aarso.ui.hyle.HyleButton
@@ -86,7 +88,17 @@ fun ChatsRoom(
 
     val conversations by viewModel.conversations.collectAsState()
     val imageNodes by viewModel.imageNodes.collectAsState()
+    val threadChains by viewModel.threadChains.collectAsState()
     val state by viewModel.uiState.collectAsState()
+    // THREAD_TOPOLOGY_PLAN.md WP6's "spawned from …" chip: a rootId -> lineage-pointer map
+    // flattened from every chain's links (no new store — [ChatViewModel.threadChains] already
+    // combines the same [Conversations.Summary] list this room renders with the marker data),
+    // plus a title lookup so the chip can name the source conversation, not just say "a prior
+    // conversation" when the source is still around to be named.
+    val lineageByRoot = remember(threadChains) {
+        threadChains.flatMap { it.links }.mapNotNull { link -> link.lineage?.let { link.rootId to it } }.toMap()
+    }
+    val titleByRoot = remember(conversations) { conversations.associate { it.rootId to it.title } }
     val bookmarked by session.bookmarkedRoots.collectAsState()
     val projects by session.conversationProjects.collectAsState()
     val opens by session.conversationOpens.collectAsState()
@@ -144,6 +156,7 @@ fun ChatsRoom(
                 conversations = list, emptyMessage = empty, activeIds = activeIds, firstNodeId = firstNodeId,
                 bookmarked = bookmarked, projects = projects, enabled = !state.isGenerating,
                 generating = state.isGenerating,
+                lineageByRoot = lineageByRoot, titleByRoot = titleByRoot,
                 // "Watched" is the model's own flag (binding rule 2), not a guess from its id.
                 generatingWatched = state.models.firstOrNull { it.id == state.activeModelId }?.watched == true,
                 onOpen = { viewModel.openConversation(it.rootId); onClose() },
@@ -222,6 +235,10 @@ private class ConversationListProps(
     val bookmarked: Set<String>,
     val projects: Map<String, String>,
     val enabled: Boolean,
+    /** THREAD_TOPOLOGY_PLAN.md WP6: this conversation's Fork/Spawn source, if any (rootId ->
+     *  lineage pointer), and a rootId -> title lookup to name that source when it's known. */
+    val lineageByRoot: Map<String, ThreadChains.LineagePointer> = emptyMap(),
+    val titleByRoot: Map<String, String> = emptyMap(),
     /** True while a turn is generating into the open conversation. */
     val generating: Boolean,
     /** True when the model producing that turn is a **watched** (cloud) one — the only
@@ -355,6 +372,21 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
                         "▸ $project",
                         style = MaterialTheme.typography.labelSmall,
                         color = c.violet,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                // THREAD_TOPOLOGY_PLAN.md WP6: "spawned from …" — this card's own lineage, not
+                // the whole chain (that's TreeRoom's "Chain" chip); a source that's still around
+                // is named, a deleted one still says how this conversation began rather than
+                // pretending it has no history.
+                p.lineageByRoot[conv.rootId]?.let { lineage ->
+                    val verb = if (lineage.lineageKind == TreeFork.LineageKind.SPAWN) "Spawned" else "Forked"
+                    val srcTitle = p.titleByRoot[lineage.srcRootId]
+                    Text(
+                        if (srcTitle != null) "$verb from: $srcTitle" else "$verb from a prior conversation",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = c.textMid,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
