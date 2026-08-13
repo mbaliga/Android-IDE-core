@@ -493,6 +493,68 @@ private fun GlobalSettings(
     }
     HorizontalDivider()
 
+    // THREAD_TOPOLOGY_PLAN.md WP4 — one switch per gesture channel the message-bubble drag
+    // detector arbitrates (binding constraint 4: every gesture needs a disable toggle here).
+    // Turning a switch off never removes the underlying action — it's always still reachable via
+    // the chevron row / TurnActionsSheet / TalkBack custom actions; this just stops the drag from
+    // triggering it, for anyone who finds the hold-and-pull motion fights their own touch habits.
+    Text("Gestures", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Message-bubble drags — hold briefly, then pull. Every one has a tap equivalent " +
+            "(chevrons, the long-press sheet) whether or not it's on here.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val gestureVerdictDrag by session.gestureVerdictDragEnabled.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Verdict drag", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Pull a message up/down to rate it (§4.2) instead of just the chevron buttons.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
+    }
+    val gestureQuoteReply by session.gestureQuoteReplyEnabled.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Reply / quote drag", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Pull a message left to reply, right to quote it into the composer.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
+    }
+    val gestureRadialFan by session.gestureRadialFanEnabled.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Branch / Fork / Spawn fan", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Pull a message right and hold to open the radial menu instead of quoting.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
+    }
+    HorizontalDivider()
+
     Text("Git & coding", style = MaterialTheme.typography.titleMedium)
     GitConnect()
     HorizontalDivider()

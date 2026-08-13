@@ -5,7 +5,6 @@ package dev.aarso.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,8 +56,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -77,12 +79,16 @@ import dev.aarso.domain.GeneratedToken
 import dev.aarso.domain.Role
 import dev.aarso.domain.bridge.BridgeCodec
 import dev.aarso.domain.bridge.SummaryBridge
+import dev.aarso.domain.gesture.ComposerQuote
 import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
+import dev.aarso.hyle.cells.HyleRadialMenu
+import dev.aarso.hyle.cells.HyleRadialMenuItem
+import dev.aarso.hyle.cells.rememberHyleHaptics
 import dev.aarso.ui.components.SummaryNodeCard
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleChip
@@ -172,8 +178,18 @@ fun ChatScreen(
     // item index by one when shown — read the same signal here so find-scroll lands on the
     // right row instead of one off.
     val ctx0 = LocalContext.current
-    val gitHosts by (ctx0.applicationContext as dev.aarso.AarsoApp).container.gitHostStore.hosts.collectAsState()
+    val container0 = (ctx0.applicationContext as dev.aarso.AarsoApp).container
+    val gitHosts by container0.gitHostStore.hosts.collectAsState()
     val findScrollPrefix = if (!connectDismissed && gitHosts.isEmpty()) 1 else 0
+    // THREAD_TOPOLOGY_PLAN.md WP4: Settings → Gestures — every switch OFF collapses
+    // Modifier.messageGestures back to nothing but the always-available long-press (parity rule,
+    // binding constraint 4: gestures are additive sugar, never the only way in).
+    val gestureVerdictDrag by container0.sessionStore.gestureVerdictDragEnabled.collectAsState()
+    val gestureQuoteReply by container0.sessionStore.gestureQuoteReplyEnabled.collectAsState()
+    val gestureRadialFan by container0.sessionStore.gestureRadialFanEnabled.collectAsState()
+    val gestureToggles = remember(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan) {
+        MessageGestureToggles(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan)
+    }
     LaunchedEffect(currentFindHit) {
         val hit = currentFindHit ?: return@LaunchedEffect
         val stepIndex = state.steps.indexOfFirst { it.node.id == hit.nodeId }
@@ -324,6 +340,34 @@ fun ChatScreen(
                                 if (next == null) viewModel.clearVerdict(step.node.id) else viewModel.setVerdict(step.node.id, next)
                             },
                             onToggleBookmark = { viewModel.toggleMessageBookmark(step.node.id) },
+                            // THREAD_TOPOLOGY_PLAN.md WP4: message drag gestures — the pure
+                            // MessageDragLogic classifier decides WHAT happened; everything below
+                            // is just "what to do about it," identical to what the equivalent
+                            // tappable control already does (TurnActionsSheet / VerdictBookmarkRow
+                            // chevrons), so gesture and tap stay two doors to the same action.
+                            gestureToggles = gestureToggles,
+                            onVerdictDragCommit = { grade ->
+                                val previous = verdicts[step.node.id]
+                                viewModel.setVerdict(step.node.id, grade)
+                                scope.launch {
+                                    val result = snackbar.showSnackbar(
+                                        message = "Marked ${verdictLabel(grade)}",
+                                        actionLabel = "Undo",
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        if (previous != null) {
+                                            viewModel.setVerdict(step.node.id, previous.grade)
+                                        } else {
+                                            viewModel.clearVerdict(step.node.id)
+                                        }
+                                    }
+                                }
+                            },
+                            onReplyDrag = { input = ComposerQuote.reply(input, step.node.content) },
+                            onQuoteDrag = { input = ComposerQuote.quote(input, step.node.content) },
+                            onBranchDrag = { viewModel.branchFrom(step.node.id) },
+                            onForkDrag = { viewModel.forkFrom(step.node.id) },
+                            onSpawnDrag = { viewModel.spawnFrom(step.node.id) },
                         )
                     }
                     // Single streaming bubble — only when not in a council fan-out.
@@ -616,6 +660,11 @@ fun ChatScreen(
             onFork = { viewModel.forkFrom(step.node.id); actionStep = null },
             onSpawn = { viewModel.spawnFrom(step.node.id); actionStep = null },
             onCompactFromHere = { viewModel.openCompactionPreview(step.node.id); actionStep = null },
+            // THREAD_TOPOLOGY_PLAN.md WP4: the tappable parity for pull-right/pull-left —
+            // previously flagged "not built this pass" in this sheet's own KDoc; same
+            // ComposerQuote transform the drag callbacks use.
+            onQuote = { input = ComposerQuote.quote(input, step.node.content); actionStep = null },
+            onReply = { input = ComposerQuote.reply(input, step.node.content); actionStep = null },
         )
     }
 
@@ -1032,9 +1081,11 @@ private fun ModelRow(m: ModelOption, active: Boolean, onSelect: (String) -> Unit
 /**
  * Long-press actions for one turn (STUDIO_UX_SPEC.md §4.6's curation sheet, thumb-ordered):
  * bookmark, mark-as-version, compaction directive (must-include + fidelity dial), rewind, the
- * pre-existing branch/copy/flag actions. Not built this pass (flagged, not silently skipped):
- * "Re-run with…" (needs Roundtable, PC-B, not built), "Convert → Task/Incident" (the spec marks
- * this item "(Studio)"), "Quote in composer," "Read aloud," "Raw view" (no L4 view exists yet).
+ * pre-existing branch/copy/flag actions, and — since THREAD_TOPOLOGY_PLAN.md WP4 — the tappable
+ * parity for the pull-left/pull-right drags ([onReply]/[onQuote]). Not built this pass (flagged,
+ * not silently skipped): "Re-run with…" (needs Roundtable, PC-B, not built), "Convert →
+ * Task/Incident" (the spec marks this item "(Studio)"), "Read aloud," "Raw view" (no L4 view
+ * exists yet).
  */
 @Composable
 private fun TurnActionsSheet(
@@ -1060,6 +1111,10 @@ private fun TurnActionsSheet(
     /** THREAD_TOPOLOGY_PLAN.md WP3: "entry from... TurnActionsSheet" — opens the compaction
      *  preview anchored at this turn ([dev.aarso.ui.ChatViewModel.openCompactionPreview]). */
     onCompactFromHere: () -> Unit = {},
+    /** WP4: tappable parity for the pull-right/release drag ([dev.aarso.domain.gesture.MessageDragLogic.Intent.Quote]). */
+    onQuote: () -> Unit = {},
+    /** WP4: tappable parity for the pull-left/release drag ([dev.aarso.domain.gesture.MessageDragLogic.Intent.Reply]). */
+    onReply: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -1132,6 +1187,13 @@ private fun TurnActionsSheet(
             }
             TextButton(onClick = onSpawn, modifier = Modifier.fillMaxWidth()) {
                 Text("Spawn from here — new conversation, condensed")
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            TextButton(onClick = onQuote, modifier = Modifier.fillMaxWidth()) {
+                Text("Quote in composer")
+            }
+            TextButton(onClick = onReply, modifier = Modifier.fillMaxWidth()) {
+                Text("Reply")
             }
             TextButton(
                 onClick = {
@@ -1388,6 +1450,17 @@ private fun MessageTurn(
     onViewFullPrior: () -> Unit = {},
     /** "Compare alternatives" on the pager row — only ever shown when [PathView.Step.isBranchPoint]. */
     onCompare: () -> Unit = {},
+    /** THREAD_TOPOLOGY_PLAN.md WP4: message drag gestures — see [MessageBubble]'s own KDoc for
+     *  what each one does; all default to the toggles-off/no-op shape so every other MessageTurn
+     *  caller (there are none today, but the parity with MessageBubble's own defaults matters)
+     *  keeps compiling unchanged. */
+    gestureToggles: MessageGestureToggles = MessageGestureToggles(),
+    onVerdictDragCommit: (Int) -> Unit = {},
+    onReplyDrag: () -> Unit = {},
+    onQuoteDrag: () -> Unit = {},
+    onBranchDrag: () -> Unit = {},
+    onForkDrag: () -> Unit = {},
+    onSpawnDrag: () -> Unit = {},
 ) {
     val fromUser = step.node.role == Role.USER
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1406,6 +1479,13 @@ private fun MessageTurn(
                 onVerdictUp = onVerdictUp,
                 onVerdictDown = onVerdictDown,
                 onToggleBookmark = onToggleBookmark,
+                gestureToggles = gestureToggles,
+                onVerdictDragCommit = onVerdictDragCommit,
+                onReplyDrag = onReplyDrag,
+                onQuoteDrag = onQuoteDrag,
+                onBranchDrag = onBranchDrag,
+                onForkDrag = onForkDrag,
+                onSpawnDrag = onSpawnDrag,
             )
         }
         // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
@@ -1446,6 +1526,16 @@ private fun MessageTurn(
 private fun costLine(minor: String, tokensIn: String, tokensOut: String): String {
     val m = minor.toLongOrNull() ?: 0L
     return "≈ $m  ·  in $tokensIn / out $tokensOut tok"
+}
+
+/** The four verdict detents' human labels (STUDIO_UX_SPEC.md §4.2) — shared by the chevron row's
+ *  inline label and, since THREAD_TOPOLOGY_PLAN.md WP4, the verdict-drag commit's snackbar. */
+private fun verdictLabel(grade: Int): String = when (grade) {
+    2 -> "reference-grade"
+    1 -> "useful"
+    -1 -> "off"
+    -2 -> "wrong"
+    else -> "cleared"
 }
 
 /** One council voice (§4b): agent label, its answer, and a "continue with this". */
@@ -1489,64 +1579,180 @@ private fun MessageBubble(
     onVerdictUp: () -> Unit = {},
     onVerdictDown: () -> Unit = {},
     onToggleBookmark: () -> Unit = {},
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP4 — the drag gestures this bubble now arbitrates via
+     * `Modifier.messageGestures` (`MessageGestures.kt`), on top of the plain tap controls above:
+     * hold 150ms then pull up/down = the verdict ribbon (annotation only — patent design-around,
+     * see [dev.aarso.domain.gesture.MessageDragLogic]'s KDoc); pull left = reply-quote into the
+     * composer; pull right + release = quote into the composer; pull right + hold ≥400ms = the
+     * Branch/Fork/Spawn radial fan (Owner decision 1); 500ms stationary = [onLongPress] (same
+     * TurnActionsSheet the plain long-press already opens); double-tap = [onToggleBookmark] (same
+     * as before — now routed through the same classifier instead of `combinedClickable`). All
+     * default to no-ops so this composable's shape is backward compatible.
+     */
+    gestureToggles: MessageGestureToggles = MessageGestureToggles(),
+    onVerdictDragCommit: (Int) -> Unit = {},
+    onReplyDrag: () -> Unit = {},
+    onQuoteDrag: () -> Unit = {},
+    onBranchDrag: () -> Unit = {},
+    onForkDrag: () -> Unit = {},
+    onSpawnDrag: () -> Unit = {},
 ) {
     val fromUser = role == Role.USER
+    val haptics = rememberHyleHaptics()
+    var dragPreviewGrade by remember { mutableStateOf<Int?>(null) }
+    var draggingVertical by remember { mutableStateOf(false) }
+    var horizontalHint by remember { mutableStateOf<HorizontalDragDirection?>(null) }
+    var radialAnchor by remember { mutableStateOf<Offset?>(null) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
     ) {
         Column(horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start) {
-            Card(
-                modifier = Modifier.combinedClickable(
-                    onClick = {},
-                    onLongClick = onLongPress,
-                    // Double-tap to bookmark (§4.3) — combinedClickable natively
-                    // disambiguates single/double/long, so this doesn't fight onLongClick.
-                    onDoubleClick = onToggleBookmark,
-                ).let {
-                    // S9: the current find-in-chat hit's row (row-level marker — see InChatFind.kt's
-                    // KDoc for why not a sub-string highlight).
-                    if (highlighted) it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium) else it
-                },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (fromUser) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHighest
-                    },
-                ),
-            ) {
-                Column(Modifier.padding(12.dp)) {
-                    when {
-                        // An image turn: the node's payload is the generated file (§6).
-                        imagePath != null -> FileImage(
-                            path = imagePath,
-                            modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+            // Wraps just the Card (not the whole turn) so the radial fan's anchor Offset — which
+            // messageGestures reports relative to THIS Box's own pointerInput node — lines up with
+            // where HyleRadialMenu draws it, with no cross-composable coordinate conversion.
+            Box {
+                Card(
+                    modifier = Modifier
+                        .messageGestures(
+                            enabled = true,
+                            toggles = gestureToggles,
+                            haptics = haptics,
+                            callbacks = MessageGestureCallbacks(
+                                onVerdictPreview = { grade ->
+                                    draggingVertical = true
+                                    dragPreviewGrade = grade
+                                },
+                                onCommitVerdict = { grade ->
+                                    draggingVertical = false
+                                    dragPreviewGrade = null
+                                    onVerdictDragCommit(grade)
+                                },
+                                onReply = {
+                                    horizontalHint = null
+                                    onReplyDrag()
+                                },
+                                onQuote = {
+                                    horizontalHint = null
+                                    onQuoteDrag()
+                                },
+                                onHorizontalPreview = { direction -> horizontalHint = direction },
+                                onOpenRadial = { anchor -> radialAnchor = anchor },
+                                onLongPress = onLongPress,
+                                onDoubleTap = onToggleBookmark,
+                                onGestureEnded = {
+                                    draggingVertical = false
+                                    dragPreviewGrade = null
+                                    horizontalHint = null
+                                },
+                            ),
                         )
-                        fromUser || role == Role.SYSTEM -> Text(content)
-                        // Persisted model turns render as markdown (legibility); the
-                        // live stream keeps per-token entropy colouring instead. We run
-                        // the text through the JVM-tested StreamingMarkdown.reconcile so a
-                        // turn that was stopped mid-fence (a dangling ``` that would swallow
-                        // the rest of the bubble) renders cleanly; it's idempotent on
-                        // well-formed markdown, so a complete turn passes through unchanged.
-                        else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
-                    }
-                    if (stopped) {
-                        Text(
-                            "· stopped here",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary,
-                        )
+                        .semantics {
+                            // Binding constraint 4 / STUDIO_UX_SPEC.md §4: every gesture ships a
+                            // TalkBack custom action with the same name as its tappable control.
+                            customActions = buildList {
+                                if (role == Role.ASSISTANT) {
+                                    add(CustomAccessibilityAction("Rate up") { onVerdictUp(); true })
+                                    add(CustomAccessibilityAction("Rate down") { onVerdictDown(); true })
+                                }
+                                add(CustomAccessibilityAction(if (bookmarked) "Remove bookmark" else "Bookmark message") { onToggleBookmark(); true })
+                                add(CustomAccessibilityAction("Reply") { onReplyDrag(); true })
+                                add(CustomAccessibilityAction("Quote in composer") { onQuoteDrag(); true })
+                                add(CustomAccessibilityAction("Branch from here") { onBranchDrag(); true })
+                                add(CustomAccessibilityAction("Fork from here") { onForkDrag(); true })
+                                add(CustomAccessibilityAction("Spawn from here") { onSpawnDrag(); true })
+                                add(CustomAccessibilityAction("Open message actions") { onLongPress(); true })
+                            }
+                        }
+                        .let {
+                            // S9: the current find-in-chat hit's row (row-level marker — see InChatFind.kt's
+                            // KDoc for why not a sub-string highlight).
+                            if (highlighted) it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium) else it
+                        },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (fromUser) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        },
+                    ),
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        when {
+                            // An image turn: the node's payload is the generated file (§6).
+                            imagePath != null -> FileImage(
+                                path = imagePath,
+                                modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
+                            )
+                            fromUser || role == Role.SYSTEM -> Text(content)
+                            // Persisted model turns render as markdown (legibility); the
+                            // live stream keeps per-token entropy colouring instead. We run
+                            // the text through the JVM-tested StreamingMarkdown.reconcile so a
+                            // turn that was stopped mid-fence (a dangling ``` that would swallow
+                            // the rest of the bubble) renders cleanly; it's idempotent on
+                            // well-formed markdown, so a complete turn passes through unchanged.
+                            else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
+                        }
+                        if (stopped) {
+                            Text(
+                                "· stopped here",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
                     }
                 }
+                // Owner decision 1 / plan's "Gesture arbitration": pull right + hold ≥400ms fans
+                // Branch/Fork/Spawn at the drag's anchor point. Glyphs are plain DrawScope
+                // primitives (no icon asset needed for three items); HyleHaptics.tap() on each
+                // pick is HyleRadialMenu's own built-in feedback, not duplicated here.
+                radialAnchor?.let { anchor ->
+                    HyleRadialMenu(
+                        visible = true,
+                        anchor = anchor,
+                        items = listOf(
+                            HyleRadialMenuItem(
+                                label = "Branch",
+                                glyph = { tint -> drawLine(tint, center.copy(y = 0f), center, strokeWidth = 3f) },
+                                onClick = onBranchDrag,
+                            ),
+                            HyleRadialMenuItem(
+                                label = "Fork",
+                                glyph = { tint -> drawCircle(tint, radius = size.minDimension / 3f) },
+                                onClick = onForkDrag,
+                            ),
+                            HyleRadialMenuItem(
+                                label = "Spawn",
+                                glyph = { tint -> drawRect(tint, topLeft = center * 0.4f, size = size * 0.5f) },
+                                onClick = onSpawnDrag,
+                            ),
+                        ),
+                        onDismiss = { radialAnchor = null },
+                    )
+                }
             }
+            // The judgment ribbon while a vertical drag is live (§4.2), and a lighter hint for the
+            // horizontal reply/quote channel — both purely additive to the tappable row below,
+            // never a replacement for it.
+            if (draggingVertical) {
+                VerdictDragRibbon(
+                    visible = true,
+                    grade = dragPreviewGrade,
+                    bookmarked = bookmarked,
+                    // Version-spine membership isn't plumbed to the bubble in this WP (it would
+                    // need the tree's ancestor path, not just this message's own state) — the
+                    // preview chip is honest about the OTHER two signals it has and simply omits
+                    // this floor rather than guessing. Forward-pointer for whichever later WP
+                    // wires ThreadRail/instruments through the full tree (WP5+).
+                    isOnVersionSpine = false,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            HorizontalDragHint(direction = horizontalHint, modifier = Modifier.padding(top = 4.dp))
             // Verdict + bookmark row (§4.2/§4.3 Regular-mode controls — the parity-gate
-            // requirement: every gesture ships with a tappable equivalent in the same PR. This
-            // *is* the shipped mechanism for v1; the spec's hold-drag gesture is additive sugar
-            // layered on the same setVerdict/toggleMessageBookmark calls, not built this pass —
-            // owner-verify territory for gesture-conflict tuning against the existing long-press,
-            // deliberately not risked without a device to test on).
+            // requirement: every gesture ships with a tappable equivalent in the same PR).
             // Fixed per adversarial review: the double-tap-to-bookmark gesture above is wired
             // unconditionally on every role's Card, but this row used to render only for
             // Role.ASSISTANT — a user/system message could be bookmarked with no visible pin and

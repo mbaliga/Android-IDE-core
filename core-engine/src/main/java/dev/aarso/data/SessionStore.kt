@@ -232,6 +232,34 @@ class SessionStore(context: Context) {
         _disclosureTier.value = tier
     }
 
+    // THREAD_TOPOLOGY_PLAN.md WP4: Settings → Gestures — three independent disable toggles
+    // (binding constraint 4: "an entry in Settings → Gestures where it can be disabled"), one per
+    // channel the drag detector arbitrates. Default ON (the gesture ships as the primary path;
+    // every channel's tappable equivalent stays available regardless of these switches).
+    private val _gestureVerdictDragEnabled = MutableStateFlow(prefs.getBoolean(KEY_GESTURE_VERDICT, true))
+    val gestureVerdictDragEnabled: StateFlow<Boolean> = _gestureVerdictDragEnabled.asStateFlow()
+
+    private val _gestureQuoteReplyEnabled = MutableStateFlow(prefs.getBoolean(KEY_GESTURE_QUOTE_REPLY, true))
+    val gestureQuoteReplyEnabled: StateFlow<Boolean> = _gestureQuoteReplyEnabled.asStateFlow()
+
+    private val _gestureRadialFanEnabled = MutableStateFlow(prefs.getBoolean(KEY_GESTURE_RADIAL, true))
+    val gestureRadialFanEnabled: StateFlow<Boolean> = _gestureRadialFanEnabled.asStateFlow()
+
+    fun setGestureVerdictDragEnabled(on: Boolean) {
+        prefs.edit().putBoolean(KEY_GESTURE_VERDICT, on).apply()
+        _gestureVerdictDragEnabled.value = on
+    }
+
+    fun setGestureQuoteReplyEnabled(on: Boolean) {
+        prefs.edit().putBoolean(KEY_GESTURE_QUOTE_REPLY, on).apply()
+        _gestureQuoteReplyEnabled.value = on
+    }
+
+    fun setGestureRadialFanEnabled(on: Boolean) {
+        prefs.edit().putBoolean(KEY_GESTURE_RADIAL, on).apply()
+        _gestureRadialFanEnabled.value = on
+    }
+
     companion object {
         // A clean, generic blue (a shipped, AA-verified preset) — neutral default in place of
         // the Aeon violet, which stays available as a preset.
@@ -272,5 +300,8 @@ class SessionStore(context: Context) {
         private const val KEY_CONV_OPENS = "conversationOpens"
         private const val KEY_COUNCIL_DEFAULT = "councilDefault"
         private const val KEY_DISCLOSURE = "disclosureTier"
+        private const val KEY_GESTURE_VERDICT = "gestureVerdictDragEnabled"
+        private const val KEY_GESTURE_QUOTE_REPLY = "gestureQuoteReplyEnabled"
+        private const val KEY_GESTURE_RADIAL = "gestureRadialFanEnabled"
     }
 }
