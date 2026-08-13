@@ -89,6 +89,37 @@ class ThreadMarkerStore(private val dao: ThreadMarkerDao) {
      * conversation* (there is no such message; the source lives in a different root entirely for
      * a Fork/Spawn, unlike CHAPTER's same-conversation anchor).
      */
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP3's compaction-run writer: a SYSTEM-sourced
+     * [ThreadMarkerKind.COMPACTION_RUN] marker anchored at the newest message a run compacted.
+     * [dev.aarso.domain.curation.CompactionBoundary] reads these back (per-path "newest applicable
+     * anchor wins") so later turns reconstruct the prompt above this point from the
+     * [dev.aarso.domain.curation.Receipt] at [receiptObjectId] (looked up via
+     * [dev.aarso.data.ReceiptStore.forObjectId]) instead of resending the verbatim originals.
+     * [payloadJson]-carried [receiptObjectId] is deliberately just a back-reference, not the
+     * receipt itself — the receipt is the durable, byte-comparable record; this marker only
+     * points to it.
+     */
+    suspend fun markCompactionRun(
+        rootId: String,
+        anchorMsgId: String,
+        receiptObjectId: String,
+        now: Long = System.currentTimeMillis(),
+    ): ThreadMarker {
+        val payload = JSONObject().put("receiptObjectId", receiptObjectId).toString()
+        val marker = ThreadMarker(
+            id = UUID.randomUUID().toString(),
+            rootId = rootId,
+            anchorMsgId = anchorMsgId,
+            kind = ThreadMarkerKind.COMPACTION_RUN,
+            at = now,
+            source = ThreadMarkerSource.SYSTEM,
+            payloadJson = payload,
+        )
+        dao.insert(marker.toEntity())
+        return marker
+    }
+
     suspend fun markLineageSource(
         newRootId: String,
         srcRootId: String,

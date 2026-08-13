@@ -219,6 +219,7 @@ fun ChatScreen(
                 onToggle = { viewModel.setInstrumentsExpanded(!instrumentsExpanded) },
                 entropyColoring = entropyColoring,
                 onEntropyColoring = viewModel::setEntropyColoring,
+                onOpenCompaction = { viewModel.openCompactionPreview() },
             )
             if (findOpen) {
                 InChatFindBar(
@@ -614,6 +615,7 @@ fun ChatScreen(
             onStartSessionHere = { viewModel.markSessionStart(step.node.id); actionStep = null },
             onFork = { viewModel.forkFrom(step.node.id); actionStep = null },
             onSpawn = { viewModel.spawnFrom(step.node.id); actionStep = null },
+            onCompactFromHere = { viewModel.openCompactionPreview(step.node.id); actionStep = null },
         )
     }
 
@@ -625,6 +627,40 @@ fun ChatScreen(
             compare = compare,
             onContinue = { leafId -> viewModel.branchFrom(leafId); viewModel.closeCompare() },
             onDismiss = { viewModel.closeCompare() },
+        )
+    }
+
+    // THREAD_TOPOLOGY_PLAN.md WP3: the Compaction preview sheet + its loud F3-violation dialog.
+    val compactionPreview by viewModel.compactionPreview.collectAsState()
+    val compactionRunning by viewModel.compactionRunning.collectAsState()
+    compactionPreview?.let { rows ->
+        CompactionSheet(
+            rows = rows,
+            running = compactionRunning,
+            onRun = { viewModel.runCompaction() },
+            onDismiss = { viewModel.closeCompactionPreview() },
+        )
+    }
+    val compactionFailure by viewModel.compactionFailure.collectAsState()
+    compactionFailure?.let { violations ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCompactionFailure() },
+            title = { Text("Compaction failed") },
+            text = {
+                Column {
+                    Text(
+                        "${violations.size} message(s) marked \"reproduce exactly\" came back " +
+                            "altered. Nothing was saved — the conversation is unchanged.",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    for (v in violations.take(5)) {
+                        Text("• ${v.msgId}", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissCompactionFailure() }) { Text("OK") }
+            },
         )
     }
 
@@ -756,6 +792,9 @@ private fun InstrumentsStrip(
     onToggle: () -> Unit,
     entropyColoring: Boolean,
     onEntropyColoring: (Boolean) -> Unit,
+    /** THREAD_TOPOLOGY_PLAN.md WP3: "entry from InstrumentsStrip" — opens the compaction preview
+     *  for the active leaf. Null hides the row (nothing to compact with no leaf yet). */
+    onOpenCompaction: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         // A model that can't run is a gating state, not an instrument — always visible.
@@ -826,6 +865,13 @@ private fun InstrumentsStrip(
                 modifier = Modifier.weight(1f),
             )
             Switch(checked = entropyColoring, onCheckedChange = onEntropyColoring)
+        }
+        // THREAD_TOPOLOGY_PLAN.md WP3: "entry from InstrumentsStrip" — opens the Compaction
+        // preview for the active leaf; nothing is generated until the sheet's own confirm.
+        if (onOpenCompaction != null && state.steps.isNotEmpty()) {
+            TextButton(onClick = onOpenCompaction, modifier = Modifier.fillMaxWidth()) {
+                Text("Compact conversation…", style = MaterialTheme.typography.labelSmall)
+            }
         }
         // Instant, model-free prompt lint (§6a), recomputed as you type.
         val lint = remember(input) { PromptLinter.lint(input) }
@@ -1011,6 +1057,9 @@ private fun TurnActionsSheet(
     /** WP2: "Spawn from here" — condensed bridge-summary new conversation
      *  ([dev.aarso.ui.ChatViewModel.spawnFrom]). */
     onSpawn: () -> Unit = {},
+    /** THREAD_TOPOLOGY_PLAN.md WP3: "entry from... TurnActionsSheet" — opens the compaction
+     *  preview anchored at this turn ([dev.aarso.ui.ChatViewModel.openCompactionPreview]). */
+    onCompactFromHere: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -1032,6 +1081,9 @@ private fun TurnActionsSheet(
             }
             TextButton(onClick = onStartSessionHere, modifier = Modifier.fillMaxWidth()) {
                 Text("Start fresh session here")
+            }
+            TextButton(onClick = onCompactFromHere, modifier = Modifier.fillMaxWidth()) {
+                Text("Compact conversation from here…")
             }
             Text(
                 "Compaction",
@@ -1093,6 +1145,70 @@ private fun TurnActionsSheet(
             if (InvocationFeatures.FLAG_OUTPUT_ENABLED && step.node.role == Role.ASSISTANT) {
                 TextButton(onClick = onFlag, modifier = Modifier.fillMaxWidth()) {
                     Text("Flag this output…")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * THREAD_TOPOLOGY_PLAN.md WP3's Compaction preview sheet (STUDIO_UX_SPEC.md §5.2): every row's
+ * fate is resolved by [dev.aarso.domain.curation.CompactionPreviewPresenter] with NO model call —
+ * nothing is generated or sent anywhere until [onRun] is tapped, which is
+ * [dev.aarso.ui.ChatViewModel.runCompaction] actually calling the agent and mechanically
+ * verifying F3 before anything is persisted (a violation surfaces as the sheet's sibling loud
+ * dialog in [ChatScreen], never silently here).
+ */
+@Composable
+private fun CompactionSheet(
+    rows: List<dev.aarso.domain.curation.CompactionPreviewPresenter.Row>,
+    running: Boolean,
+    onRun: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = { if (!running) onDismiss() }) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text("Compaction preview", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "${rows.size} message(s) — nothing is sent to a model until you run this.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                items(rows, key = { it.msgId }) { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            row.excerpt,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            row.fate.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (row.resolution.isFailureTombstone) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                LocalHyleColors.current.violet
+                            },
+                        )
+                    }
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss, enabled = !running) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                if (running) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    HyleButton("Run compaction", onClick = onRun)
                 }
             }
         }

@@ -181,6 +181,7 @@ class ChatViewModel(
     private val curationStore: dev.aarso.data.CurationStore,
     private val threadMarkerStore: dev.aarso.data.ThreadMarkerStore,
     private val delegationStore: dev.aarso.data.DelegationStore,
+    private val receiptStore: dev.aarso.data.ReceiptStore,
     private val aarsoEventLog: dev.aarso.domain.mirror.AarsoEventLog,
     private val appContext: Context,
 ) : ViewModel() {
@@ -650,7 +651,11 @@ class ChatViewModel(
                 prefillPending = false,
                 genPhase = GenPhase.GENERATING,
             )
-            val path = repository.path(userNode.id)
+            val fullPath = repository.path(userNode.id)
+            // THREAD_TOPOLOGY_PLAN.md WP3: route the prompt through the newest compaction
+            // boundary, if one applies to this path — the model sees the compacted
+            // representation above the boundary, not the resent verbatim originals.
+            val path = effectivePromptPath(fullPath)
             val genStart = System.currentTimeMillis()
             val tokens = mutableListOf<GeneratedToken>()
             collectCancellable {
@@ -708,7 +713,11 @@ class ChatViewModel(
             // and costs nothing — the sovereignty record. On-device only; never leaves the device.
             // Guarded so a ledger write can never fail the turn itself.
             runCatching {
-                val chatId = path.firstOrNull()?.id ?: userNode.id
+                // The chat's identity is the TRUE root, from the untruncated fullPath — a
+                // compaction-boundary DROPPED root (rare, but possible for an F0 root with no
+                // must-include directive) must never change which conversation a ledger entry
+                // is filed under.
+                val chatId = fullPath.firstOrNull()?.id ?: userNode.id
                 val inCount = cloudUsage?.inputTokens?.toLong()
                     ?: runCatching { engine.countTokens(path.joinToString("\n") { it.content }).toLong() }.getOrDefault(0L)
                 ledgerStore.append(
@@ -1206,6 +1215,160 @@ class ChatViewModel(
         }
     }
 
+    // ---- Compaction runs (THREAD_TOPOLOGY_PLAN.md WP3) -------------------------------------
+
+    /** InstrumentsStrip / TurnActionsSheet "Compact conversation…": the preview rows for a run
+     *  anchored at [anchorMsgId] (defaults to the active leaf) — nothing is generated or sent to
+     *  a model yet, see [dev.aarso.domain.curation.CompactionPreviewPresenter]'s own KDoc. */
+    private val _compactionPreview = MutableStateFlow<List<dev.aarso.domain.curation.CompactionPreviewPresenter.Row>?>(null)
+    val compactionPreview: StateFlow<List<dev.aarso.domain.curation.CompactionPreviewPresenter.Row>?> = _compactionPreview.asStateFlow()
+
+    /** The anchor a confirmed [runCompaction] call will run against — set alongside
+     *  [_compactionPreview] so the sheet's confirm action doesn't need the anchor threaded back
+     *  through the UI layer. */
+    private var compactionAnchorId: String? = null
+
+    private val _compactionRunning = MutableStateFlow(false)
+    val compactionRunning: StateFlow<Boolean> = _compactionRunning.asStateFlow()
+
+    /** A run whose F3 (must-reproduce-exactly) contract was violated — CompactionSheet's
+     *  **loud** failure dialog (binding constraint: "a violation fails the run loudly — never
+     *  silently"). Nothing was persisted when this is non-null. */
+    private val _compactionFailure = MutableStateFlow<List<dev.aarso.domain.curation.F3Violation>?>(null)
+    val compactionFailure: StateFlow<List<dev.aarso.domain.curation.F3Violation>?> = _compactionFailure.asStateFlow()
+
+    fun openCompactionPreview(anchorMsgId: String? = activeLeafId.value) {
+        val anchor = anchorMsgId ?: return
+        compactionAnchorId = anchor
+        viewModelScope.launch {
+            val messages = repository.path(anchor)
+            _compactionPreview.value = dev.aarso.domain.curation.CompactionPreviewPresenter.build(
+                messages = messages,
+                directives = curationStore.directives.first().associateBy { it.msgId },
+                verdicts = curationStore.verdicts.first().associateBy { it.msgId },
+                bookmarkedIds = curationStore.bookmarks.first().mapTo(mutableSetOf()) { it.ref.msgId },
+                versionSpineIds = versionSpineIds(),
+            )
+        }
+    }
+
+    fun closeCompactionPreview() {
+        _compactionPreview.value = null
+        compactionAnchorId = null
+    }
+
+    fun dismissCompactionFailure() {
+        _compactionFailure.value = null
+    }
+
+    /** [dev.aarso.domain.curation.VersionSpines.computeIds] over the current tree + version set —
+     *  shared by the preview and the real run so both resolve fidelity identically. */
+    private suspend fun versionSpineIds(): Set<String> {
+        val versions = curationStore.versions.first()
+        return runCatching { dev.aarso.domain.curation.VersionSpines.computeIds(repository.tree(), versions) }
+            .getOrDefault(emptySet())
+    }
+
+    /**
+     * CompactionSheet's confirm action: actually calls the model ([dev.aarso.inference.EngineCompactionAgent])
+     * for every message the preview resolved to a non-verbatim, non-dropped fate, mechanically
+     * verifies F3 survived byte-for-byte, and — only on success — persists the
+     * [dev.aarso.domain.curation.Receipt] via [receiptStore] and records a
+     * [dev.aarso.domain.thread.ThreadMarkerKind.COMPACTION_RUN] marker anchored at [anchorMsgId]
+     * so [effectivePromptPath] picks it up on the next turn. A [dev.aarso.domain.curation.CompactionRunResult.Failure]
+     * saves nothing — the loud dialog is the only effect.
+     */
+    fun runCompaction(anchorMsgId: String? = compactionAnchorId) {
+        if (_compactionRunning.value) return
+        val anchor = anchorMsgId ?: return
+        val spec = activeModelId.value?.let { registry.byId(it) } ?: return
+        val engine = engines.engineFor(spec) ?: return
+        viewModelScope.launch {
+            _compactionRunning.value = true
+            try {
+                val rootId = rootIdFor(anchor) ?: return@launch
+                val messages = repository.path(anchor)
+                val now = System.currentTimeMillis()
+                engine.loadModel(spec.modelPath ?: "(dev)", spec.contextWindow)
+                val result = dev.aarso.domain.curation.CompactionEngine.run(
+                    messages = messages,
+                    directives = curationStore.directives.first().associateBy { it.msgId },
+                    verdicts = curationStore.verdicts.first().associateBy { it.msgId },
+                    bookmarkedIds = curationStore.bookmarks.first().mapTo(mutableSetOf()) { it.ref.msgId },
+                    versionSpineIds = versionSpineIds(),
+                    agent = dev.aarso.inference.EngineCompactionAgent(engine),
+                    now = now,
+                )
+                when (result) {
+                    is dev.aarso.domain.curation.CompactionRunResult.Failure -> {
+                        _compactionFailure.value = result.violations
+                    }
+                    is dev.aarso.domain.curation.CompactionRunResult.Success -> {
+                        val envelope = dev.aarso.contracts.common.ContractEnvelope(
+                            schemaVersion = "1.0.0",
+                            objectId = java.util.UUID.randomUUID().toString(),
+                            createdAtUtc = java.time.Instant.ofEpochMilli(now),
+                            producer = dev.aarso.contracts.common.ProducerRef(name = "core-engine", version = "1.0.0"),
+                            payload = result.receipt,
+                        )
+                        val objectId = receiptStore.append(
+                            "compaction-run",
+                            envelope,
+                            dev.aarso.domain.curation.CompactionReceiptCodec::encodeReceipt,
+                        )
+                        threadMarkerStore.markCompactionRun(rootId, anchor, objectId, now)
+                        aarsoEventLog.record(
+                            dev.aarso.domain.mirror.AarsoEventKind.COMPACTION_RUN,
+                            """{"anchorMsgId":"$anchor","receiptObjectId":"$objectId","entries":${result.receipt.entries.size}}""",
+                            now = now,
+                        )
+                        _compactionPreview.value = null
+                        compactionAnchorId = null
+                        recomputeStatusAsync(spec)
+                    }
+                }
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(error = t.message ?: "compaction failed")
+            } finally {
+                _compactionRunning.value = false
+            }
+        }
+    }
+
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP3's "prompt truncation above newest boundary node": if a
+     * [dev.aarso.domain.thread.ThreadMarkerKind.COMPACTION_RUN] marker applies to [fullPath],
+     * returns the [dev.aarso.domain.curation.CompactionBoundary.effectivePath] built from that
+     * run's persisted [dev.aarso.domain.curation.Receipt]; otherwise returns [fullPath] unchanged.
+     * Fails open (returns [fullPath]) on any lookup/decode problem — a stale or unreadable
+     * boundary must never block sending a turn, it just means this turn resends more context than
+     * strictly necessary.
+     */
+    private suspend fun effectivePromptPath(fullPath: List<MessageNode>): List<MessageNode> {
+        val rootId = fullPath.firstOrNull()?.id ?: return fullPath
+        val markers = runCatching { threadMarkerStore.forRoot(rootId) }.getOrDefault(emptyList())
+        val pathIds = fullPath.map { it.id }
+        val boundaryAnchorId = dev.aarso.domain.curation.CompactionBoundary.newestBoundaryAnchorId(markers, pathIds)
+            ?: return fullPath
+        val marker = markers
+            .filter { it.kind == dev.aarso.domain.thread.ThreadMarkerKind.COMPACTION_RUN && it.anchorMsgId == boundaryAnchorId }
+            .maxByOrNull { it.at }
+            ?: return fullPath
+        val objectId = marker.payloadJson
+            ?.let { runCatching { org.json.JSONObject(it).optString("receiptObjectId") }.getOrNull() }
+            ?.takeIf { it.isNotBlank() }
+            ?: return fullPath
+        val receipt = loadReceipt(objectId) ?: return fullPath
+        return dev.aarso.domain.curation.CompactionBoundary.effectivePath(fullPath, boundaryAnchorId, receipt.entries)
+    }
+
+    private suspend fun loadReceipt(objectId: String): dev.aarso.domain.curation.Receipt? {
+        val row = receiptStore.forObjectId(objectId).first().lastOrNull() ?: return null
+        return runCatching {
+            dev.aarso.domain.contracts.EnvelopeCodec.decode(row.second, dev.aarso.domain.curation.CompactionReceiptCodec::decodeReceipt).payload
+        }.getOrNull()
+    }
+
     // ---- Fork / Spawn / lineage + compare (THREAD_TOPOLOGY_PLAN.md WP2) --------------------
 
     /**
@@ -1412,9 +1575,18 @@ class ChatViewModel(
             transient.value = transient.value.copy(context = null, tokenStats = null)
             return
         }
-        val path = repository.path(leafId)
+        // THREAD_TOPOLOGY_PLAN.md WP3: the instrument reflects what would actually be SENT —
+        // route through the newest compaction boundary the same way runTurn does, so "ctx
+        // used/window" and the token ratio don't overstate a conversation a compaction run has
+        // already shrunk.
+        val path = effectivePromptPath(repository.path(leafId))
 
-        // Token I/O ratio from stored counts — independent of the active model.
+        // Token I/O ratio from stored counts — independent of the active model. Stored counts
+        // are per ORIGINAL msgId, so a message compacted to a shorter GIST/FAITHFUL/TOMBSTONE
+        // text still reports its pre-compaction count here (a DROPPED message correctly
+        // contributes nothing, since it's absent from `path` entirely) — an honest known gap,
+        // not silently wrong: the ratio undercounts how much a compacted-but-kept message
+        // actually shrank, never overcounts.
         val counts = path.map { it.role to repository.totalTokens(it.id) }
         val stats = TokenStats.of(counts)
 
@@ -1466,6 +1638,7 @@ class ChatViewModel(
                     c.curationStore,
                     c.threadMarkerStore,
                     c.delegationStore,
+                    c.receiptStore,
                     c.aarsoEventLog,
                     app.applicationContext,
                 )

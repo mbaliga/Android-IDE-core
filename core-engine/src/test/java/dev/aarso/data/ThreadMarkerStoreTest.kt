@@ -139,4 +139,37 @@ class ThreadMarkerStoreTest {
         assertEquals(1, found.size)
         assertEquals(ThreadMarkerKind.LINEAGE_SRC, found.single().kind)
     }
+
+    // ---- markCompactionRun (THREAD_TOPOLOGY_PLAN.md WP3) ---------------------------------------
+
+    @Test fun `markCompactionRun creates a SYSTEM COMPACTION_RUN marker anchored at the boundary message`() = runTest {
+        val store = store()
+        val marker = store.markCompactionRun(rootId = "root-1", anchorMsgId = "msg-9", receiptObjectId = "receipt-1", now = 10L)
+        assertEquals(ThreadMarkerKind.COMPACTION_RUN, marker.kind)
+        assertEquals(ThreadMarkerSource.SYSTEM, marker.source)
+        assertEquals("msg-9", marker.anchorMsgId)
+        assertEquals("root-1", marker.rootId)
+    }
+
+    @Test fun `markCompactionRun's payload carries only the receipt object id`() = runTest {
+        val store = store()
+        val marker = store.markCompactionRun("root-1", "msg-9", receiptObjectId = "receipt-xyz", now = 10L)
+        val payload = org.json.JSONObject(marker.payloadJson!!)
+        assertEquals("receipt-xyz", payload.getString("receiptObjectId"))
+    }
+
+    @Test fun `markCompactionRun is findable via forAnchor, same as a CHAPTER marker`() = runTest {
+        val store = store()
+        store.markCompactionRun("root-1", "msg-9", "receipt-1", now = 10L)
+        val found = store.forAnchor("msg-9")
+        assertEquals(1, found.size)
+        assertEquals(ThreadMarkerKind.COMPACTION_RUN, found.single().kind)
+    }
+
+    @Test fun `two compaction runs on the same root are both retained -- append-only, not replace`() = runTest {
+        val store = store()
+        store.markCompactionRun("root-1", "msg-5", "receipt-1", now = 10L)
+        store.markCompactionRun("root-1", "msg-9", "receipt-2", now = 20L)
+        assertEquals(2, store.forRoot("root-1").size)
+    }
 }
