@@ -99,6 +99,16 @@ data class ChatUiState(
     val context: ContextCheck? = null,
     /** Input/output token ratio for the visible path (§5a). */
     val tokenStats: TokenStats? = null,
+    /** THREAD_TOPOLOGY_PLAN.md WP7: the last completed turn's per-token stream, kept past the
+     *  point [Transient.stream] resets to empty when generation finishes — so the Instruments
+     *  panel's TokenHeatmap can inspect the turn that just finished, not only a still-streaming
+     *  one. Empty until a turn has completed this session. */
+    val lastTurnTokens: List<GeneratedToken> = emptyList(),
+    /** THREAD_TOPOLOGY_PLAN.md WP7: "what does the model see" for the active leaf's effective
+     *  (compaction-boundary-aware) path — [dev.aarso.domain.scope.ContextAssembly]'s own ledger,
+     *  wired for the first time by [dev.aarso.domain.instrument.InstrumentsAssembly]. Null with
+     *  no active leaf. */
+    val instrumentsAssembly: dev.aarso.domain.scope.ContextAssembly.Assembled? = null,
     val prefillPending: Boolean = false,
     val engineAvailable: Boolean = true,
     /** True when no model is active at all — the first-run / setup state. */
@@ -136,6 +146,10 @@ private data class Transient(
     val stream: StreamState = StreamState(),
     val context: ContextCheck? = null,
     val tokenStats: TokenStats? = null,
+    /** THREAD_TOPOLOGY_PLAN.md WP7 — see [ChatUiState.lastTurnTokens]. */
+    val lastTurnTokens: List<GeneratedToken> = emptyList(),
+    /** THREAD_TOPOLOGY_PLAN.md WP7 — see [ChatUiState.instrumentsAssembly]. */
+    val instrumentsAssembly: dev.aarso.domain.scope.ContextAssembly.Assembled? = null,
     val prefillPending: Boolean = false,
     val error: String? = null,
     val genPhase: GenPhase = GenPhase.IDLE,
@@ -498,6 +512,8 @@ class ChatViewModel(
                 activeModelLabel = spec?.displayName ?: "No model",
                 context = t.context,
                 tokenStats = t.tokenStats,
+                lastTurnTokens = t.lastTurnTokens,
+                instrumentsAssembly = t.instrumentsAssembly,
                 prefillPending = t.prefillPending,
                 engineAvailable = spec != null && engines.isRunnable(spec),
                 noModelActive = spec == null,
@@ -738,7 +754,14 @@ class ChatViewModel(
                     ),
                 )
             }
-            transient.value = transient.value.copy(stream = StreamState(), genPhase = GenPhase.IDLE)
+            // THREAD_TOPOLOGY_PLAN.md WP7: snapshot this turn's per-token stream into
+            // lastTurnTokens before the reset below empties it — the Instruments panel's
+            // TokenHeatmap inspects the turn that just finished, not only a live one.
+            transient.value = transient.value.copy(
+                stream = StreamState(),
+                lastTurnTokens = tokens.toList(),
+                genPhase = GenPhase.IDLE,
+            )
             recomputeStatus(spec, assistantNode.id)
         } catch (t: Throwable) {
             transient.value = transient.value.copy(
@@ -1586,7 +1609,7 @@ class ChatViewModel(
     /** Recompute the per-path instrumentation: token I/O ratio and context fit. */
     private suspend fun recomputeStatus(spec: ModelSpec, leafId: String?) {
         if (leafId == null) {
-            transient.value = transient.value.copy(context = null, tokenStats = null)
+            transient.value = transient.value.copy(context = null, tokenStats = null, instrumentsAssembly = null)
             return
         }
         // THREAD_TOPOLOGY_PLAN.md WP3: the instrument reflects what would actually be SENT —
@@ -1612,7 +1635,32 @@ class ChatViewModel(
             val rendered = ChatTemplates.forId(spec.templateId).render(path)
             checkContext(engine.countTokens(rendered), spec.contextWindow)
         }
-        transient.value = transient.value.copy(context = context, tokenStats = stats)
+
+        // THREAD_TOPOLOGY_PLAN.md WP7: "what does the model see" — wire Doc 03's
+        // ContextAssembly floor over the same effective path, for the Instruments panel.
+        // One CorpusPiece per turn already on `path` (so it inherits the compaction-boundary
+        // routing above); filed under the conversation's assigned project (SessionStore.
+        // conversationProjects) or, when unassigned, the conversation's own root id — chat has
+        // no cross-project corpus concept yet, so Scope stays pinned to a single bucket (see
+        // InstrumentsAssembly's own KDoc). Reuses `counts` above instead of re-querying
+        // totalTokens per node.
+        val chatId = path.firstOrNull()?.id ?: leafId
+        val projectId = session.conversationProjects.value[chatId] ?: chatId
+        val turns = path.mapIndexed { index, node ->
+            dev.aarso.domain.instrument.InstrumentsAssembly.PathTurn(
+                nodeId = node.id,
+                tokenCount = counts[index].second,
+                label = "${node.role.name.lowercase()}: ${node.content.take(60).replace('\n', ' ')}",
+            )
+        }
+        val assembled = dev.aarso.domain.instrument.InstrumentsAssembly.assembleConversation(
+            turns = turns,
+            convId = chatId,
+            projectId = projectId,
+            budget = dev.aarso.domain.scope.ContextAssembly.ContextBudget(total = spec.contextWindow, reserved = 0),
+        )
+
+        transient.value = transient.value.copy(context = context, tokenStats = stats, instrumentsAssembly = assembled)
     }
 
     companion object {

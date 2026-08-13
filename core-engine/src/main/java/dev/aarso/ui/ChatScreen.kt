@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
@@ -154,6 +155,9 @@ fun ChatScreen(
     var chapterNameInput by remember { mutableStateOf("") }
     // D1: dismissible "Connect your repos" home card (session-scoped dismissal).
     var connectDismissed by remember { mutableStateOf(false) }
+    // THREAD_TOPOLOGY_PLAN.md WP7: the Instruments panel — entry from the expanded
+    // InstrumentsStrip below.
+    var showInstruments by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -277,6 +281,7 @@ fun ChatScreen(
                 entropyColoring = entropyColoring,
                 onEntropyColoring = viewModel::setEntropyColoring,
                 onOpenCompaction = { viewModel.openCompactionPreview() },
+                onOpenInstruments = { showInstruments = true },
             )
             if (findOpen) {
                 InChatFindBar(
@@ -765,6 +770,30 @@ fun ChatScreen(
         )
     }
 
+    // THREAD_TOPOLOGY_PLAN.md WP7: the Instruments panel, entered from the expanded
+    // InstrumentsStrip above. Mounts ContextAssembly's ledger (via the ViewModel's
+    // instrumentsAssembly), the last turn's token-confidence heatmap (via lastTurnTokens), and
+    // this conversation's on-device usage totals (folded from the ledger the "Myself" screen
+    // already reads, scoped to this chat's root id — same on-device-only source, no telemetry).
+    if (showInstruments) {
+        val ledgerEntries by container0.ledgerStore.entries().collectAsState(initial = emptyList())
+        val chatId = state.steps.firstOrNull()?.node?.id
+        val ledgerTotals = remember(ledgerEntries, chatId) {
+            dev.aarso.domain.instrument.InstrumentsAssembly.totalsForChat(ledgerEntries, chatId ?: "")
+        }
+        val (tokenScores, tokenAvailability) = remember(state.lastTurnTokens) {
+            dev.aarso.domain.instrument.InstrumentsAssembly.tokenScores(state.lastTurnTokens)
+        }
+        InstrumentsPanel(
+            assembled = state.instrumentsAssembly,
+            tokenScores = tokenScores,
+            tokenAvailability = tokenAvailability,
+            ledgerTotals = ledgerTotals,
+            locale = java.util.Locale.getDefault(),
+            onDismiss = { showInstruments = false },
+        )
+    }
+
     flagStep?.let { step ->
         FlagOutputDialog(
             content = step.node.content,
@@ -896,6 +925,10 @@ private fun InstrumentsStrip(
     /** THREAD_TOPOLOGY_PLAN.md WP3: "entry from InstrumentsStrip" — opens the compaction preview
      *  for the active leaf. Null hides the row (nothing to compact with no leaf yet). */
     onOpenCompaction: (() -> Unit)? = null,
+    /** THREAD_TOPOLOGY_PLAN.md WP7: "entry from expanded InstrumentsStrip" — opens the
+     *  Instruments panel (ContextAssembly ledger, token I/O, per-token confidence heatmap).
+     *  Null hides the row. */
+    onOpenInstruments: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         // A model that can't run is a gating state, not an instrument — always visible.
@@ -972,6 +1005,13 @@ private fun InstrumentsStrip(
         if (onOpenCompaction != null && state.steps.isNotEmpty()) {
             TextButton(onClick = onOpenCompaction, modifier = Modifier.fillMaxWidth()) {
                 Text("Compact conversation…", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        // THREAD_TOPOLOGY_PLAN.md WP7: "entry from expanded InstrumentsStrip" — opens the
+        // Instruments panel (context-assembly ledger, token I/O, per-token confidence).
+        if (onOpenInstruments != null && state.steps.isNotEmpty()) {
+            TextButton(onClick = onOpenInstruments, modifier = Modifier.fillMaxWidth()) {
+                Text("Instruments…", style = MaterialTheme.typography.labelSmall)
             }
         }
         // Instant, model-free prompt lint (§6a), recomputed as you type.
@@ -1324,6 +1364,89 @@ private fun CompactionSheet(
                 } else {
                     HyleButton("Run compaction", onClick = onRun)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * THREAD_TOPOLOGY_PLAN.md WP7 — the Instruments panel: the full "what does the model see /
+ * how sure was it / what did it cost" view behind the InstrumentsStrip's collapsed summary
+ * line. Purely compositional — every card here already exists and was previously unmounted
+ * (see the plan's "what already exists" inventory); this dialog is the first caller:
+ *
+ *  - `BudgetMeter` (`dev.aarso.ui.components.StateComponents`) over `assembled.meter` — the
+ *    plan's named standalone budget-bar composable, mounted here for the first time anywhere
+ *    in the app (repo-wide, it had zero callers before this WP). Shown as its own headline
+ *    reading, ahead of [ScopeInspector]'s fuller included/cut ledger (whose own inline bar is
+ *    a separate, pre-existing rendering of the same meter and is left as is — out of this
+ *    WP's scope to touch that already-shipped component).
+ *  - [ScopeInspector] over [assembled] — Doc 03's context-assembly floor ledger
+ *    ([dev.aarso.domain.scope.ContextAssembly], wired to a real conversation for the first
+ *    time by [dev.aarso.domain.instrument.InstrumentsAssembly] — see that object's KDoc for
+ *    the honest caveat on what "included/cut" means for chat today).
+ *  - [InputOutputCard] over [ledgerTotals] — the on-device usage ledger (Doc 07 "Myself"),
+ *    folded down to this one conversation instead of the whole-account view.
+ *  - [TokenHeatmap] over the last completed turn's per-token entropy, honest about
+ *    [tokenAvailability] when the active engine reports no logprobs (every cloud turn today).
+ *
+ * "Change scope" has nowhere to go yet: chat has no project-scope *picker* UI at all — this
+ * WP wires the ledger reader, not a new scope-selection surface — so it is a documented
+ * no-op rather than a pre-build of a feature this WP doesn't own.
+ */
+@Composable
+private fun InstrumentsPanel(
+    assembled: dev.aarso.domain.scope.ContextAssembly.Assembled?,
+    tokenScores: List<dev.aarso.domain.inspect.TokenScore>,
+    tokenAvailability: dev.aarso.domain.inspect.Availability,
+    ledgerTotals: dev.aarso.domain.ledger.LedgerAggregations.Totals,
+    locale: java.util.Locale,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+            Column(
+                Modifier
+                    .padding(16.dp)
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Instruments",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                if (assembled != null) {
+                    dev.aarso.ui.components.BudgetMeter(meter = assembled.meter)
+                    Spacer(Modifier.height(12.dp))
+                    dev.aarso.ui.components.ScopeInspector(
+                        assembled = assembled,
+                        onChangeScope = {}, // see class KDoc: no scope picker exists yet.
+                    )
+                } else {
+                    Text(
+                        "No active conversation yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                dev.aarso.ui.components.InputOutputCard(ledgerTotals, locale, "USD", showCost = false)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                Text("Per-token confidence — last turn", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(6.dp))
+                dev.aarso.ui.components.TokenHeatmap(
+                    cells = dev.aarso.domain.inspect.TokenInspector.heatmap(tokenScores),
+                    availability = tokenAvailability,
+                    summary = dev.aarso.domain.inspect.TokenInspector.summary(tokenScores, tokenAvailability),
+                )
             }
         }
     }
