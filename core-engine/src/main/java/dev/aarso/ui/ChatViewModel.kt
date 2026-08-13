@@ -203,6 +203,7 @@ class ChatViewModel(
     private val delegationRecorder: dev.aarso.data.DelegationRecorder,
     private val receiptStore: dev.aarso.data.ReceiptStore,
     private val aarsoEventLog: dev.aarso.domain.mirror.AarsoEventLog,
+    private val threadObserver: dev.aarso.data.ThreadObserver,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -1809,6 +1810,35 @@ class ChatViewModel(
         return dev.aarso.domain.thread.DelegationCounts.summarize(delegationStore.forRoot(rootId))
     }
 
+    // ---- Thread topology (THREAD_TOPOLOGY_PLAN.md WP10 — GraphRoom) -------------------------
+
+    /**
+     * A fresh, whole-app [dev.aarso.domain.thread.ThreadGraph] snapshot for `ui/graph/GraphRoom.kt`
+     * — every conversation, not just the active one, same "cross-conversation like [threadChains]"
+     * shape. Calls [dev.aarso.domain.thread.ThreadGraphProjector.project] directly rather than
+     * going through [threadObserver]: the graph substrate is plain structural re-shape of facts
+     * that already exist (its own KDoc — "computes no drift/idiolect number"), not the interpretive
+     * "observer" surface owner decision 5 gates behind a toggle; only [observerRemarks] below goes
+     * through that gate. [dev.aarso.domain.thread.ThreadGraphProjector]'s own KDoc names this
+     * exact call as its second caller, alongside [dev.aarso.data.ThreadObserver].
+     */
+    suspend fun loadThreadGraph(): dev.aarso.domain.thread.ThreadGraph =
+        dev.aarso.domain.thread.ThreadGraphProjector.project(
+            tree = repository.tree(),
+            markers = threadMarkerStore.markers.first(),
+            delegations = delegationStore.delegations.first(),
+            generatedAtUtc = java.time.Instant.now(),
+        )
+
+    /** Live mirror of [dev.aarso.data.SessionStore.observerEnabled] (owner decision 5) — GraphRoom's
+     *  observer remark card reads this to decide whether to offer "Show observations" at all. */
+    val observerEnabled: StateFlow<Boolean> get() = session.observerEnabled
+
+    /** Descriptive remarks about the current whole-app graph, or empty while the observer toggle is
+     *  off ([threadObserver]'s own "inert by default" contract — see its KDoc). Presented on
+     *  request only (a tap in GraphRoom), never pushed, per THREAD_TOPOLOGY_PLAN.md's ObserverScript note. */
+    suspend fun observerRemarks(): List<String> = threadObserver.remarks()
+
     companion object {
         private const val REWRITE_SYSTEM =
             "You improve user prompts. Output ONLY the rewritten prompt — clearer, " +
@@ -1849,6 +1879,7 @@ class ChatViewModel(
                     c.delegationRecorder,
                     c.receiptStore,
                     c.aarsoEventLog,
+                    c.threadObserver,
                     app.applicationContext,
                 )
             }

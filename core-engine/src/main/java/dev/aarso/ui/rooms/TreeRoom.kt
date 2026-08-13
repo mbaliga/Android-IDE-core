@@ -64,6 +64,10 @@ fun TreeRoom(
     val scope = rememberCoroutineScope()
     var note by remember { mutableStateOf<String?>(null) }
     var handoff by remember { mutableStateOf<String?>(null) }
+    // THREAD_TOPOLOGY_PLAN.md WP10: whether the native GraphRoom overlay is open — function-scope
+    // (not inside the Column below) so the `if (showGraphRoom)` launch at the bottom of this
+    // composable, alongside `handoff?.let { ... }`, can see it.
+    var showGraphRoom by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         HyleTitle("Tree")
@@ -77,14 +81,23 @@ fun TreeRoom(
 
         // Brief §6.1: the Tree is tabbed over one git-like tree — conversation branches,
         // commits branch, builds branch. Builds moved here from Develop. "Chain" (WP6) is the
-        // cross-conversation view: every root grouped into its Fork/Spawn mega-thread.
+        // cross-conversation view: every root grouped into its Fork/Spawn mega-thread. "Graph"
+        // (WP10) opens the native living-graph room on top, rather than swapping tab content —
+        // there's nothing to show inline, so selecting it launches `GraphRoom` as its own
+        // full-screen overlay and returns here (tab 0) when it closes.
         var treeTab by remember { mutableStateOf(0) }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
         ) {
-            listOf("Conversation", "Commits", "Builds", "Chain").forEachIndexed { i, label ->
-                HyleChip(treeTab == i, { treeTab = i }, label)
+            listOf("Conversation", "Commits", "Builds", "Chain", "Graph").forEachIndexed { i, label ->
+                HyleChip(
+                    treeTab == i,
+                    {
+                        if (i == 4) showGraphRoom = true else treeTab = i
+                    },
+                    label,
+                )
             }
         }
 
@@ -181,6 +194,14 @@ fun TreeRoom(
             },
             confirmButton = { HyleButton("Share", onClick = { shareText(context, "Aarso handoff", text); handoff = null }) },
             dismissButton = { HyleButton("Close", onClick = { handoff = null }) },
+        )
+    }
+
+    if (showGraphRoom) {
+        dev.aarso.ui.graph.GraphRoom(
+            viewModel = viewModel,
+            onOpenNode = { nodeId -> viewModel.branchFrom(nodeId); onNodeChosen() },
+            onClose = { showGraphRoom = false },
         )
     }
 }
