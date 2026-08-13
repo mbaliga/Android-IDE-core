@@ -5,8 +5,10 @@ import dev.aarso.data.entity.ThreadMarkerEntity
 import dev.aarso.domain.thread.ThreadMarker
 import dev.aarso.domain.thread.ThreadMarkerKind
 import dev.aarso.domain.thread.ThreadMarkerSource
+import dev.aarso.domain.tree.TreeFork
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.json.JSONObject
 import java.util.UUID
 
 /**
@@ -74,6 +76,39 @@ class ThreadMarkerStore(private val dao: ThreadMarkerDao) {
             kind = ThreadMarkerKind.SESSION_START,
             at = now,
             source = ThreadMarkerSource.USER,
+        )
+        dao.insert(marker.toEntity())
+        return marker
+    }
+
+    /**
+     * THREAD_TOPOLOGY_PLAN.md WP2's fork/spawn writer: a SYSTEM-sourced [ThreadMarkerKind.LINEAGE_SRC]
+     * marker on the newly created conversation, pointing back to where it came from. `anchorMsgId`
+     * is deliberately null — per this table's own schema doc, LINEAGE_SRC "points into
+     * `payloadJson` for its own reference shape" rather than anchoring a message *in this new
+     * conversation* (there is no such message; the source lives in a different root entirely for
+     * a Fork/Spawn, unlike CHAPTER's same-conversation anchor).
+     */
+    suspend fun markLineageSource(
+        newRootId: String,
+        srcRootId: String,
+        srcNodeId: String,
+        lineageKind: TreeFork.LineageKind,
+        now: Long = System.currentTimeMillis(),
+    ): ThreadMarker {
+        val payload = JSONObject()
+            .put("srcRootId", srcRootId)
+            .put("srcNodeId", srcNodeId)
+            .put("lineageKind", lineageKind.name)
+            .toString()
+        val marker = ThreadMarker(
+            id = UUID.randomUUID().toString(),
+            rootId = newRootId,
+            anchorMsgId = null,
+            kind = ThreadMarkerKind.LINEAGE_SRC,
+            at = now,
+            source = ThreadMarkerSource.SYSTEM,
+            payloadJson = payload,
         )
         dao.insert(marker.toEntity())
         return marker

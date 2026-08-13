@@ -4,6 +4,7 @@ import dev.aarso.data.dao.ThreadMarkerDao
 import dev.aarso.data.entity.ThreadMarkerEntity
 import dev.aarso.domain.thread.ThreadMarkerKind
 import dev.aarso.domain.thread.ThreadMarkerSource
+import dev.aarso.domain.tree.TreeFork
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -103,5 +104,39 @@ class ThreadMarkerStoreTest {
         val store = store()
         store.markChapter("root-1", "msg-1", label = "chapter one", now = 1L)
         assertEquals(1, store.markers.first().size)
+    }
+
+    // ---- markLineageSource (THREAD_TOPOLOGY_PLAN.md WP2) --------------------------------------
+
+    @Test fun `markLineageSource creates a SYSTEM LINEAGE_SRC marker with no anchor`() = runTest {
+        val store = store()
+        val marker = store.markLineageSource(
+            newRootId = "new-root", srcRootId = "old-root", srcNodeId = "old-msg",
+            lineageKind = TreeFork.LineageKind.FORK, now = 10L,
+        )
+        assertEquals(ThreadMarkerKind.LINEAGE_SRC, marker.kind)
+        assertEquals(ThreadMarkerSource.SYSTEM, marker.source)
+        assertNull(marker.anchorMsgId)
+        assertEquals("new-root", marker.rootId)
+    }
+
+    @Test fun `markLineageSource payload carries the src pointers and lineage kind`() = runTest {
+        val store = store()
+        val marker = store.markLineageSource(
+            newRootId = "new-root", srcRootId = "old-root", srcNodeId = "old-msg",
+            lineageKind = TreeFork.LineageKind.SPAWN, now = 10L,
+        )
+        val payload = org.json.JSONObject(marker.payloadJson!!)
+        assertEquals("old-root", payload.getString("srcRootId"))
+        assertEquals("old-msg", payload.getString("srcNodeId"))
+        assertEquals("SPAWN", payload.getString("lineageKind"))
+    }
+
+    @Test fun `markLineageSource is scoped to the new root via forRoot`() = runTest {
+        val store = store()
+        store.markLineageSource("new-root", "old-root", "old-msg", TreeFork.LineageKind.FORK, now = 1L)
+        val found = store.forRoot("new-root")
+        assertEquals(1, found.size)
+        assertEquals(ThreadMarkerKind.LINEAGE_SRC, found.single().kind)
     }
 }

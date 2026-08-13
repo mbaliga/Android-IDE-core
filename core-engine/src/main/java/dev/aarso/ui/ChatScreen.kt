@@ -75,12 +75,15 @@ import dev.aarso.domain.markdown.StreamingMarkdown
 import dev.aarso.core_engine.R
 import dev.aarso.domain.GeneratedToken
 import dev.aarso.domain.Role
+import dev.aarso.domain.bridge.BridgeCodec
+import dev.aarso.domain.bridge.SummaryBridge
 import dev.aarso.domain.instrument.Confidence
 import dev.aarso.domain.prompt.LintSeverity
 import dev.aarso.domain.prompt.PromptLinter
 import dev.aarso.domain.tree.Conversations
 import dev.aarso.domain.tree.PathView
 import dev.aarso.flavor.InvocationFeatures
+import dev.aarso.ui.components.SummaryNodeCard
 import dev.aarso.ui.hyle.HyleButton
 import dev.aarso.ui.hyle.HyleChip
 import dev.aarso.ui.hyle.HyleField
@@ -282,11 +285,19 @@ fun ChatScreen(
                         }
                     }
                     items(state.steps, key = { it.node.id }) { step ->
+                        // THREAD_TOPOLOGY_PLAN.md WP2: a bridge node (interaction-model switch or
+                        // Spawn) carries a decodable structural payload — render SummaryNodeCard
+                        // instead of the plain bubble when it does.
+                        val bridge = step.node.metadata[BridgeCodec.BRIDGE_PAYLOAD_KEY]?.let(BridgeCodec::decode)
+                        val srcRoot = step.node.metadata["lineage.srcRoot"]
                         MessageTurn(
                             step = step,
                             enabled = !state.isGenerating,
                             onSwitch = { dir -> viewModel.switchAlternative(step.node.id, dir) },
                             onLongPress = { actionStep = step },
+                            onCompare = { viewModel.openCompare(step.node.id) },
+                            bridge = bridge,
+                            onViewFullPrior = { srcRoot?.let { viewModel.openConversation(it) } },
                             highlighted = findOpen && currentFindHit?.nodeId == step.node.id,
                             verdict = verdicts[step.node.id],
                             bookmarked = messageBookmarks[step.node.id]?.any { it.ref.blockIndex == null } == true,
@@ -601,6 +612,19 @@ fun ChatScreen(
             onRewind = { viewModel.rewindFrom(step.node.id); actionStep = null },
             onMarkChapter = { chapterNameInput = ""; chapterNameStep = step; actionStep = null },
             onStartSessionHere = { viewModel.markSessionStart(step.node.id); actionStep = null },
+            onFork = { viewModel.forkFrom(step.node.id); actionStep = null },
+            onSpawn = { viewModel.spawnFrom(step.node.id); actionStep = null },
+        )
+    }
+
+    // THREAD_TOPOLOGY_PLAN.md WP2: "Compare alternatives" — stacked cards for every sibling at a
+    // branch point, reached from the pager row's new TextButton.
+    val compareSheet by viewModel.compareSheet.collectAsState()
+    compareSheet?.let { compare ->
+        CompareSheet(
+            compare = compare,
+            onContinue = { leafId -> viewModel.branchFrom(leafId); viewModel.closeCompare() },
+            onDismiss = { viewModel.closeCompare() },
         )
     }
 
@@ -981,6 +1005,12 @@ private fun TurnActionsSheet(
     onRewind: () -> Unit = {},
     onMarkChapter: () -> Unit = {},
     onStartSessionHere: () -> Unit = {},
+    /** THREAD_TOPOLOGY_PLAN.md WP2: "Fork from here" — full-fidelity copy into a new,
+     *  independent conversation ([dev.aarso.ui.ChatViewModel.forkFrom]). */
+    onFork: () -> Unit = {},
+    /** WP2: "Spawn from here" — condensed bridge-summary new conversation
+     *  ([dev.aarso.ui.ChatViewModel.spawnFrom]). */
+    onSpawn: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -1044,6 +1074,12 @@ private fun TurnActionsSheet(
             }
             TextButton(onClick = onBranch, modifier = Modifier.fillMaxWidth()) {
                 Text("Branch from here — try a different route")
+            }
+            TextButton(onClick = onFork, modifier = Modifier.fillMaxWidth()) {
+                Text("Fork from here — new conversation, full history")
+            }
+            TextButton(onClick = onSpawn, modifier = Modifier.fillMaxWidth()) {
+                Text("Spawn from here — new conversation, condensed")
             }
             TextButton(
                 onClick = {
@@ -1230,22 +1266,32 @@ private fun MessageTurn(
     onVerdictUp: () -> Unit = {},
     onVerdictDown: () -> Unit = {},
     onToggleBookmark: () -> Unit = {},
+    /** THREAD_TOPOLOGY_PLAN.md WP2: non-null for a bridge node (interaction-model switch or
+     *  Spawn) — [SummaryNodeCard] replaces the plain [MessageBubble] when set. */
+    bridge: SummaryBridge? = null,
+    onViewFullPrior: () -> Unit = {},
+    /** "Compare alternatives" on the pager row — only ever shown when [PathView.Step.isBranchPoint]. */
+    onCompare: () -> Unit = {},
 ) {
     val fromUser = step.node.role == Role.USER
     Column(modifier = Modifier.fillMaxWidth()) {
-        MessageBubble(
-            role = step.node.role,
-            content = step.node.content,
-            imagePath = step.node.metadata[Conversations.IMAGE_KEY],
-            stopped = step.node.metadata["stopped"] == "true",
-            onLongPress = onLongPress,
-            highlighted = highlighted,
-            verdict = verdict,
-            bookmarked = bookmarked,
-            onVerdictUp = onVerdictUp,
-            onVerdictDown = onVerdictDown,
-            onToggleBookmark = onToggleBookmark,
-        )
+        if (bridge != null) {
+            SummaryNodeCard(bridge = bridge, onViewFullPrior = onViewFullPrior)
+        } else {
+            MessageBubble(
+                role = step.node.role,
+                content = step.node.content,
+                imagePath = step.node.metadata[Conversations.IMAGE_KEY],
+                stopped = step.node.metadata["stopped"] == "true",
+                onLongPress = onLongPress,
+                highlighted = highlighted,
+                verdict = verdict,
+                bookmarked = bookmarked,
+                onVerdictUp = onVerdictUp,
+                onVerdictDown = onVerdictDown,
+                onToggleBookmark = onToggleBookmark,
+            )
+        }
         // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
         step.node.metadata["costMinor"]?.let { minor ->
             val tin = step.node.metadata["tokensIn"] ?: "?"
@@ -1269,6 +1315,9 @@ private fun MessageTurn(
                     style = MaterialTheme.typography.labelMedium,
                 )
                 TextButton(onClick = { onSwitch(+1) }, enabled = enabled) { Text("›") }
+                TextButton(onClick = onCompare, enabled = enabled) {
+                    Text("Compare alternatives", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }

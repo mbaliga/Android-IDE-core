@@ -357,26 +357,67 @@ class ChatViewModel(
 
     fun cancelInteractionChange() { _pendingInteractionChange.value = null }
 
-    /** Confirmed: summarize the active path, append it as a new branch, then switch the model. */
+    private fun interactionModeLabel(mode: ComposerMode): String = when (mode) {
+        ComposerMode.MODELS -> "Council · models"
+        ComposerMode.PERSONAS -> "Council · personas"
+        else -> "Single"
+    }
+
+    /** The [dev.aarso.domain.provenance.ProvenanceState] a text call on [spec] would carry — the
+     *  same watched-object honesty every other provenance-tagged surface in this app uses. Null
+     *  [spec] (no model call happened at all, e.g. a bare-excerpt fallback) is [ProvenanceState.LOCAL]:
+     *  trivially true, since nothing left the device when nothing ran. */
+    private fun provenanceFor(spec: ModelSpec?): dev.aarso.domain.provenance.ProvenanceState =
+        if (spec?.runtime == Runtime.CLOUD) dev.aarso.domain.provenance.ProvenanceState.CLOUD else dev.aarso.domain.provenance.ProvenanceState.LOCAL
+
+    /** [MessageNode] path -> [dev.aarso.domain.bridge.PriorTurn]s, the shared adapter every bridge
+     *  builder ([confirmInteractionChange], [spawnFrom]) feeds into [dev.aarso.domain.bridge.SummaryBridges.selectCarryForward]. */
+    private fun priorTurnsOf(path: List<MessageNode>): List<dev.aarso.domain.bridge.PriorTurn> =
+        path.filter { it.role != Role.SYSTEM && it.content.isNotBlank() }
+            .map { dev.aarso.domain.bridge.PriorTurn(role = it.role.wire, text = it.content, tokenEstimate = it.content.length / 4) }
+
+    /**
+     * Confirmed: summarize the active path, append it as a new branch, then switch the model.
+     * The branch's node carries both its long-standing plain-text content (fed to future model
+     * calls) and, since THREAD_TOPOLOGY_PLAN.md WP2 (`bridge`/`bridge.payload` metadata — see
+     * [dev.aarso.domain.bridge.BridgeCodec]), a [dev.aarso.domain.bridge.SummaryBridge] structural
+     * payload ChatScreen mounts via [dev.aarso.ui.components.SummaryNodeCard] instead of a plain
+     * bubble — this is the exact mid-conversation-switch case that component's own KDoc names.
+     */
     fun confirmInteractionChange() {
         val mode = _pendingInteractionChange.value ?: return
         _pendingInteractionChange.value = null
         if (transient.value.genPhase != GenPhase.IDLE) return
         viewModelScope.launch {
             try {
-                val summary = summarizeActivePath()
-                val parent = activeLeafId.value?.let { repository.node(it) }
-                val label = when (mode) {
-                    ComposerMode.MODELS -> "Council · models"
-                    ComposerMode.PERSONAS -> "Council · personas"
-                    else -> "Single"
-                }
+                val leaf = activeLeafId.value
+                val summary = summarizeActivePath(leaf)
+                val parent = leaf?.let { repository.node(it) }
+                val label = interactionModeLabel(mode)
+                val spec = activeModelId.value?.let { registry.byId(it) }
+                val ancestors = leaf?.let { repository.tree().pathToRoot(it) }.orEmpty()
+                val switchEvent = dev.aarso.domain.bridge.SwitchEvent(
+                    kind = dev.aarso.domain.bridge.SwitchKind.INTERACTION_MODEL,
+                    from = interactionModeLabel(currentInteractionMode()),
+                    to = label,
+                )
+                val bridge = dev.aarso.domain.bridge.SummaryBridges.build(
+                    event = switchEvent,
+                    priorTurns = priorTurnsOf(ancestors),
+                    authorModel = spec?.id,
+                    authorProvenance = provenanceFor(spec),
+                )
                 val node = Nodes.child(
                     parent = parent,
                     role = Role.SYSTEM,
                     content = "Interaction model → $label. Summary of the conversation so far:\n\n$summary",
                     now = System.currentTimeMillis(),
-                    metadata = mapOf("interactionSwitch" to mode.name, "summary" to "true"),
+                    metadata = mapOf(
+                        "interactionSwitch" to mode.name,
+                        "summary" to "true",
+                        dev.aarso.domain.bridge.BridgeCodec.BRIDGE_KEY to "interaction_switch",
+                        dev.aarso.domain.bridge.BridgeCodec.BRIDGE_PAYLOAD_KEY to dev.aarso.domain.bridge.BridgeCodec.encode(bridge),
+                    ),
                 )
                 repository.insert(node)
                 moveLeaf(node.id)
@@ -388,9 +429,14 @@ class ChatViewModel(
         }
     }
 
-    /** A concise brief of the active path — model-made if a model is runnable, else an excerpt. */
-    private suspend fun summarizeActivePath(): String {
-        val leaf = activeLeafId.value ?: return "(no conversation yet)"
+    /**
+     * A concise brief of the path ending at [leafId] — model-made if a model is runnable, else an
+     * excerpt. Defaults to the active leaf (its original caller, [confirmInteractionChange]);
+     * generalized to take an explicit anchor so [spawnFrom] (THREAD_TOPOLOGY_PLAN.md WP2) can reuse
+     * the exact same prose pattern for an arbitrary spawn point rather than duplicating it.
+     */
+    private suspend fun summarizeActivePath(leafId: String? = activeLeafId.value): String {
+        val leaf = leafId ?: return "(no conversation yet)"
         val path = repository.tree().pathToRoot(leaf)
         val transcript = path.filter { it.role != Role.SYSTEM && it.content.isNotBlank() }
             .joinToString("\n") {
@@ -1158,6 +1204,151 @@ class ChatViewModel(
                 now = System.currentTimeMillis(),
             )
         }
+    }
+
+    // ---- Fork / Spawn / lineage + compare (THREAD_TOPOLOGY_PLAN.md WP2) --------------------
+
+    /**
+     * Radial-menu / TurnActionsSheet "Fork from here": a full-fidelity, independent copy of the
+     * conversation up to [nodeId] (see [dev.aarso.domain.tree.TreeFork]'s own KDoc for exactly
+     * which nodes get copied and why) — lands the active leaf on the new conversation's tip.
+     * Records the lineage receipt twice, the same "write-only log + queryable store" split every
+     * other thread-topology writer here uses: an inert [dev.aarso.domain.mirror.AarsoEventKind.FORK_CREATED]
+     * log line (Issue #2 — write-only, never read back) and a queryable
+     * [dev.aarso.domain.thread.ThreadMarkerKind.LINEAGE_SRC] marker the Conversations/Tree rooms
+     * can read to show "forked from …" (a later WP's surface; this WP only writes the marker).
+     */
+    fun forkFrom(nodeId: String) {
+        if (transient.value.genPhase != GenPhase.IDLE) return
+        viewModelScope.launch {
+            val srcRootId = rootIdFor(nodeId) ?: return@launch
+            val now = System.currentTimeMillis()
+            val result = runCatching {
+                dev.aarso.domain.tree.TreeFork.copySubtree(repository.tree(), nodeId, srcRootId, now)
+            }.getOrElse {
+                transient.value = transient.value.copy(error = it.message ?: "fork failed")
+                return@launch
+            }
+            result.nodes.forEach { repository.insert(it) }
+            moveLeaf(result.newRootId)
+            threadMarkerStore.markLineageSource(
+                newRootId = result.newRootId,
+                srcRootId = srcRootId,
+                srcNodeId = nodeId,
+                lineageKind = dev.aarso.domain.tree.TreeFork.LineageKind.FORK,
+                now = now,
+            )
+            recordLineageEvent(dev.aarso.domain.thread.ThreadEventKind.FORK_CREATED, srcRootId, nodeId, result.newRootId, now)
+            recomputeStatusAsync()
+        }
+    }
+
+    /**
+     * Radial-menu / TurnActionsSheet "Spawn from here": a lightweight independent conversation
+     * anchored by a single [dev.aarso.domain.bridge.SpawnBridge] bridge node — condensed carry-
+     * forward rather than [forkFrom]'s full copy. The bridge's prose (the node's actual, model-fed
+     * content) reuses [summarizeActivePath]'s pattern generalized to [nodeId]; its structural
+     * display payload ([dev.aarso.domain.bridge.BridgeCodec]) is what
+     * [dev.aarso.ui.components.SummaryNodeCard] mounts.
+     */
+    fun spawnFrom(nodeId: String) {
+        if (transient.value.genPhase != GenPhase.IDLE) return
+        viewModelScope.launch {
+            val srcRootId = rootIdFor(nodeId) ?: return@launch
+            val ancestors = repository.tree().pathToRoot(nodeId)
+            if (ancestors.isEmpty()) return@launch
+            val now = System.currentTimeMillis()
+            try {
+                val prose = summarizeActivePath(nodeId)
+                val spec = activeModelId.value?.let { registry.byId(it) }
+                val srcExcerpt = ancestors.lastOrNull { it.content.isNotBlank() }?.content.orEmpty()
+                val spawnBridge = dev.aarso.domain.bridge.SpawnBridges.build(
+                    srcRootId = srcRootId,
+                    srcNodeId = nodeId,
+                    srcExcerpt = srcExcerpt,
+                    priorTurns = priorTurnsOf(ancestors),
+                    authorModel = spec?.id,
+                    authorProvenance = provenanceFor(spec),
+                )
+                val rootNode = Nodes.child(
+                    parent = null,
+                    role = Role.SYSTEM,
+                    content = prose,
+                    now = now,
+                    metadata = mapOf(
+                        dev.aarso.domain.tree.TreeFork.LINEAGE_KIND_KEY to dev.aarso.domain.tree.TreeFork.LineageKind.SPAWN.name,
+                        dev.aarso.domain.tree.TreeFork.LINEAGE_SRC_ROOT_KEY to srcRootId,
+                        dev.aarso.domain.tree.TreeFork.LINEAGE_SRC_NODE_KEY to nodeId,
+                        dev.aarso.domain.tree.TreeFork.LINEAGE_AT_KEY to now.toString(),
+                        dev.aarso.domain.bridge.BridgeCodec.BRIDGE_KEY to "spawn",
+                        dev.aarso.domain.bridge.BridgeCodec.BRIDGE_PAYLOAD_KEY to dev.aarso.domain.bridge.BridgeCodec.encode(spawnBridge.summary),
+                    ),
+                )
+                repository.insert(rootNode)
+                moveLeaf(rootNode.id)
+                threadMarkerStore.markLineageSource(
+                    newRootId = rootNode.id,
+                    srcRootId = srcRootId,
+                    srcNodeId = nodeId,
+                    lineageKind = dev.aarso.domain.tree.TreeFork.LineageKind.SPAWN,
+                    now = now,
+                )
+                recordLineageEvent(dev.aarso.domain.thread.ThreadEventKind.SPAWN_CREATED, srcRootId, nodeId, rootNode.id, now)
+                recomputeStatusAsync()
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(error = t.message ?: "spawn failed")
+            }
+        }
+    }
+
+    /** Shared FORK_CREATED/SPAWN_CREATED writer for [forkFrom]/[spawnFrom] — the append-only,
+     *  write-only event log (Issue #2: nothing here reads it back), encoded via
+     *  [dev.aarso.domain.thread.ThreadCodec] so the payload matches `schemas/thread/thread-event.schema.json`
+     *  field-for-field rather than a hand-rolled JSON string. */
+    private suspend fun recordLineageEvent(
+        kind: dev.aarso.domain.thread.ThreadEventKind,
+        srcRootId: String,
+        srcNodeId: String,
+        newRootId: String,
+        now: Long,
+    ) {
+        val event = dev.aarso.domain.thread.ThreadEvent(
+            eventId = java.util.UUID.randomUUID().toString(),
+            kind = kind,
+            occurredAtUtc = java.time.Instant.ofEpochMilli(now),
+            rootId = newRootId,
+            anchorMsgId = srcNodeId,
+            srcRootId = srcRootId,
+            srcNodeId = srcNodeId,
+            newRootId = newRootId,
+        )
+        val eventKind = if (kind == dev.aarso.domain.thread.ThreadEventKind.FORK_CREATED) {
+            dev.aarso.domain.mirror.AarsoEventKind.FORK_CREATED
+        } else {
+            dev.aarso.domain.mirror.AarsoEventKind.SPAWN_CREATED
+        }
+        aarsoEventLog.record(eventKind, dev.aarso.domain.thread.ThreadCodec.encodeThreadEvent(event).toString(), now = now)
+    }
+
+    /** "Compare alternatives" on the pager row: the sheet's data for the branch point [branchNodeId]. */
+    private val _compareSheet = MutableStateFlow<dev.aarso.domain.tree.SiblingCompares.Compare?>(null)
+    val compareSheet: StateFlow<dev.aarso.domain.tree.SiblingCompares.Compare?> = _compareSheet.asStateFlow()
+
+    fun openCompare(branchNodeId: String) {
+        viewModelScope.launch {
+            val tree = repository.tree()
+            val leaf = activeLeafId.value
+            val activeChildId = leaf?.let { l ->
+                val path = tree.pathToRoot(l)
+                val idx = path.indexOfFirst { it.id == branchNodeId }
+                if (idx < 0) null else path.getOrNull(idx + 1)?.id
+            }
+            _compareSheet.value = dev.aarso.domain.tree.SiblingCompares.build(tree, branchNodeId, activeChildId)
+        }
+    }
+
+    fun closeCompare() {
+        _compareSheet.value = null
     }
 
     /**
