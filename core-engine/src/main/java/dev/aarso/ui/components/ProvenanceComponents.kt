@@ -44,8 +44,11 @@ import dev.aarso.domain.provenance.RoutingDecision
  * Compose material3 + foundation.
  */
 
-/** The non-colour primary cue: resolve the domain [ProvenanceState.iconKey] to a text glyph. */
-private fun glyphFor(iconKey: String): String = when (iconKey) {
+/** The non-colour primary cue: resolve the domain [ProvenanceState.iconKey] to a text glyph.
+ *  `internal` (not `private`) so other provenance-rendering surfaces in this module —
+ *  [dev.aarso.ui.components.ThreadRail] — reuse the exact same glyph vocabulary instead of
+ *  re-deriving it. */
+internal fun glyphFor(iconKey: String): String = when (iconKey) {
     "home" -> "⌂"
     "cloud" -> "☁"
     "split" -> "◐"

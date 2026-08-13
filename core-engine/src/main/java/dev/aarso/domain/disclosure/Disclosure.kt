@@ -35,6 +35,11 @@ enum class Surface(val minTier: DisclosureTier, val mandatory: Boolean = false) 
     TREE_MAP(DisclosureTier.STUDIO),
     THEME_ENGINE(DisclosureTier.STUDIO),
 
+    /** THREAD_TOPOLOGY_PLAN.md's dash minimap (`ui/components/ThreadRail.kt`) — legible enough to
+     *  be worth showing once a user is past the bare-minimum Core tier, but not mandatory: it's
+     *  additionally gated at render time by `controller.atHome` (hidden while a room is open). */
+    THREAD_RAIL(DisclosureTier.STUDIO),
+
     LOOPS(DisclosureTier.POWER),
     GIT_CODING(DisclosureTier.POWER),
     COUNCIL(DisclosureTier.POWER),

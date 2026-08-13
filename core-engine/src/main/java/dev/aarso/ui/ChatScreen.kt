@@ -122,6 +122,10 @@ fun ChatScreen(
     onFindRequestConsumed: () -> Unit = {},
     /** Reverse continuity: promote what's in the find bar to the app-wide search overlay. */
     onSearchAllChats: (String) -> Unit = {},
+    /** THREAD_TOPOLOGY_PLAN.md WP5: ThreadRail is hidden whenever the spatial shell isn't at home
+     *  (`controller.atHome` — avoids colliding with an open room's own edge peek / parked card).
+     *  Defaults true so ChatScreen stays usable stand-alone (previews, tests) without a controller. */
+    showThreadRail: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
@@ -190,6 +194,43 @@ fun ChatScreen(
     val gestureToggles = remember(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan) {
         MessageGestureToggles(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan)
     }
+
+    // THREAD_TOPOLOGY_PLAN.md WP5: ThreadRail — the dash minimap over the active path.
+    val threadMarkers by viewModel.threadMarkers.collectAsState()
+    val railView = remember(state.steps, verdicts, messageBookmarks, versionsByTip, compactionDirectives, threadMarkers, state.genPhase, state.activeModelId, state.models) {
+        // Provenance per turn, resolved the same way every other provenance-tagged surface in
+        // this app does (ModelOption.watched — binding rule 2's own "watched object" flag);
+        // a user/system turn ran no model at all, so it's trivially LOCAL (nothing left the
+        // device), same reasoning ChatViewModel's own private `provenanceFor` uses.
+        val modelsById = state.models.associateBy { it.id }
+        val provenanceOf: (dev.aarso.domain.MessageNode) -> dev.aarso.domain.provenance.ProvenanceState = { node ->
+            val modelId = node.modelId
+            when {
+                modelId == null -> dev.aarso.domain.provenance.ProvenanceState.LOCAL
+                modelsById[modelId]?.watched == true -> dev.aarso.domain.provenance.ProvenanceState.CLOUD
+                modelsById[modelId] != null -> dev.aarso.domain.provenance.ProvenanceState.LOCAL
+                else -> dev.aarso.domain.provenance.ProvenanceState.UNKNOWN // a model no longer in the catalog — honest, not guessed
+            }
+        }
+        val live = if (state.genPhase != GenPhase.IDLE) {
+            dev.aarso.ui.state.ThreadRailPresenter.LiveGeneration(watched = modelsById[state.activeModelId]?.watched == true)
+        } else null
+        dev.aarso.ui.state.ThreadRailPresenter.present(
+            steps = state.steps,
+            verdicts = verdicts,
+            bookmarks = messageBookmarks,
+            versionsByTip = versionsByTip,
+            directives = compactionDirectives,
+            markersByAnchor = threadMarkers,
+            provenanceOf = provenanceOf,
+            live = live,
+        )
+    }
+    val onRailJump: (String) -> Unit = { nodeId ->
+        val stepIndex = state.steps.indexOfFirst { it.node.id == nodeId }
+        if (stepIndex >= 0) scope.launch { listState.animateScrollToItem(findScrollPrefix + stepIndex) }
+    }
+
     LaunchedEffect(currentFindHit) {
         val hit = currentFindHit ?: return@LaunchedEffect
         val stepIndex = state.steps.indexOfFirst { it.node.id == hit.nodeId }
@@ -463,6 +504,17 @@ fun ChatScreen(
                             Text("⌕", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                         }
                     }
+                }
+
+                // THREAD_TOPOLOGY_PLAN.md WP5: the dash minimap — hidden whenever the spatial
+                // shell isn't at home (avoids EdgePeek/parked-card collision, per the ThreadRail
+                // section's own gating rule) or there's nothing yet to map.
+                if (showThreadRail && !railView.isEmpty) {
+                    dev.aarso.ui.components.ThreadRail(
+                        dashes = railView.dashes,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        onJump = onRailJump,
+                    )
                 }
             }
 

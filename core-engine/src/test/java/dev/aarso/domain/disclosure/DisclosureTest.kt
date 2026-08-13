@@ -19,6 +19,12 @@ class DisclosureTest {
         assertFalse(Disclosure.isRevealed(Surface.LOOPS, DisclosureTier.STUDIO))
     }
 
+    @Test fun `ThreadRail is a studio surface, hidden at core`() {
+        assertFalse(Disclosure.isRevealed(Surface.THREAD_RAIL, DisclosureTier.CORE))
+        assertTrue(Disclosure.isRevealed(Surface.THREAD_RAIL, DisclosureTier.STUDIO))
+        assertTrue(Disclosure.isRevealed(Surface.THREAD_RAIL, DisclosureTier.POWER))
+    }
+
     @Test fun `power reveals everything`() {
         assertTrue(Surface.entries.all { Disclosure.isRevealed(it, DisclosureTier.POWER) })
     }

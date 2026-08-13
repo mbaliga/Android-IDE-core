@@ -422,6 +422,9 @@ fun SpatialRoot() {
                         searchViewModel.onQueryChange(query)
                         searchOpen = true
                     },
+                    // THREAD_TOPOLOGY_PLAN.md WP5: ThreadRail hides whenever a room is open —
+                    // the same `atHome` fact that already gates spatialPinch's own drag capture.
+                    showThreadRail = controller.atHome,
                 )
                 // The other lenses keep the z-axis reachable: same pinch, same thread.
                 CenterView.TERMINAL -> CenterTerminalView(
