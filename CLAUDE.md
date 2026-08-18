@@ -1,4 +1,4 @@
-# CLAUDE.md — Aarso / Workbench build handoff
+# CLAUDE.md — Fonebrew (formerly "Aarso/Workbench") build handoff
 
 **Aarso** (*mirror*; package `dev.aarso`) is a local-first Android app for working with multiple
 AI models. Its design thesis is **legibility + cognitive sovereignty** — a *tool-as-argument*
@@ -16,11 +16,16 @@ The product is a **post-desktop, touch-native computing environment** that makes
 effortless. The agent is what lets you do real computing work without desktop fluency.
 
 Two names, two scopes (do not conflate):
-- **Workbench** — *placeholder* for the **host app** (the computing environment). Not final; the
-  naming brief is owner-decided. Everything that isn't the lens is Workbench.
+- **Fonebrew** — the **host app** (the computing environment) — **owner-decided, final** (was the
+  placeholder "Workbench"; that name is retired, don't reintroduce it). Everything that isn't the
+  lens is Fonebrew. The launcher label (`core-engine/src/main/res/values/strings.xml` /
+  `src/full/…`) reads "Fonebrew" — **do not revert it to "Aarso."**
 - **Aarso** (*mirror*) — the **within-axis self-reflection lens** only. Bounded `domain/mirror/`
   seam, ships **inert**, carries **no §5b/§5c metric logic** — ⛔ blocked on Issue #2 (rule 4).
-  Package rename (`dev.aarso` → host name) is decoupled, deferred to a late "Sprint R".
+  Package name (`dev.aarso`), class names (`AarsoApp`, `Theme.Aarso`), and repo names are
+  **unchanged for now** — the rename is decoupled from the app-facing name above, deferred to a
+  late "Sprint R." Don't let that stale internal naming pull the *user-facing* label back to
+  "Aarso"; the two are independent axes.
 
 ## Binding rules (owner-set, do not relax)
 1. **No telemetry, analytics, or phoning home. Ever.** Zero such dependencies.
@@ -121,7 +126,8 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   Compose **Foundation 1.8** (`BasicText`'s `TextAutoSize`). `composeBom = 2025.05.01` (Foundation
   1.8.2) satisfies it. Pinning an older BoM → runtime `NoSuchMethodError` on every markdown turn
   (this was the launch/send crash). Keep BoM ≥ 1.8 or downgrade the renderer in lockstep.
-- **APK delivery:** push the APK as `aarso-sd.apk` on the **orphan branch `apk-dist`** (`--force`).
+- **APK delivery:** push the APK as `fonebrew-sd.apk` on the **orphan branch `apk-dist`**
+  (`--force`).
 - **CI caveat:** the workflow runs the JVM gate only — the native assemble is `if: false` (it OOMs
   the runner), so **CI never launches the app**. A device-only launch/render crash passes CI. The
   in-app **crash-recovery harness** exists precisely because of this. **Red `build-test` is a
@@ -144,7 +150,7 @@ A family of cooperating apps, not a monolith. Dependency direction sinks toward 
 
 | Component | What | Source | Status |
 |---|---|---|---|
-| **Aarso/Workbench** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
+| **Fonebrew** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
 | **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
 | **PM + authoring** | a companion project-management surface | not in this repo | repo pending owner; code in main, to carve out |
 | **Sound & haptics** | companion authoring app | **open** | not started |
@@ -152,7 +158,7 @@ A family of cooperating apps, not a monolith. Dependency direction sinks toward 
 Integration rule: the routing engine needs a **stable public API** from day one. See `docs/STATE.md`
 intelligence, never hold others' keys).
 
-## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `aarso-sd.apk`)
+## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `fonebrew-sd.apk`)
 Everything below compiled + JVM-tested + assembled; **device behaviour is owner-verified.** Full
 detail in `docs/STATE.md`.
 
@@ -203,5 +209,5 @@ detail in `docs/STATE.md`.
    (`agentic-ide.md`, `information-architecture.md`, `workflow-builder.md`); `docs/handoff/
    hyle-extraction.md` — the split plan, now **executed** (Hyle lives in `mbaliga/Hyle-Design-System`;
    kept as historical record).
-3. Keep the gate green, ship small legible PRs to `main`, refresh `aarso-sd.apk` on `apk-dist`,
-   and be honest that on-device behaviour is owner-verified.
+3. Keep the gate green, ship small legible PRs to `main`, refresh `fonebrew-sd.apk` on
+   `apk-dist`, and be honest that on-device behaviour is owner-verified.
