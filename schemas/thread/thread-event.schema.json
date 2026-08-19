@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/thread/thread-event.schema.json",
-  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadEvent is the wire shape for the five new dev.aarso.domain.mirror.AarsoEventKind values THREAD_TOPOLOGY_PLAN.md's Data model section names verbatim (FORK_CREATED, SPAWN_CREATED, CHAPTER_MARK, SESSION_START, DELEGATION), carried as a ContractEnvelope<ThreadEvent> payload (FB-RAT-COM-011) — same relationship EnvelopeCodecTest exercises for ErrorEnvelope. Per binding constraint 3 (Issue #2): AarsoEventLog stays write-only and this schema documents its APPEND shape only; nothing here computes, interprets, or reads the log back — no §5b/§5c drift logic. The DELEGATION variant's outcome/outcomeAt fields double as the wire shape for THREAD_TOPOLOGY_PLAN.md's separate `delegation_events` Room table (dev.aarso.data.DelegationStore) — one JSON shape, two consumers (the inert append-only log, and the queryable Room store), deliberately not duplicated into a fourth schema file.",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/thread/thread-event.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadEvent is the wire shape for the five new dev.fonebrew.domain.mirror.AarsoEventKind values THREAD_TOPOLOGY_PLAN.md's Data model section names verbatim (FORK_CREATED, SPAWN_CREATED, CHAPTER_MARK, SESSION_START, DELEGATION), carried as a ContractEnvelope<ThreadEvent> payload (FB-RAT-COM-011) — same relationship EnvelopeCodecTest exercises for ErrorEnvelope. Per binding constraint 3 (Issue #2): AarsoEventLog stays write-only and this schema documents its APPEND shape only; nothing here computes, interprets, or reads the log back — no §5b/§5c drift logic. The DELEGATION variant's outcome/outcomeAt fields double as the wire shape for THREAD_TOPOLOGY_PLAN.md's separate `delegation_events` Room table (dev.fonebrew.data.DelegationStore) — one JSON shape, two consumers (the inert append-only log, and the queryable Room store), deliberately not duplicated into a fourth schema file.",
   "title": "ThreadEvent",
   "description": "One thread-topology event: a fork/spawn creation, a chapter mark, a session-start mark, or a delegation ('choose for me') record. Which of the kind-specific field groups below is populated (and required) is fixed structurally by `kind`, mirroring schemas/workspace/buffer-journal-entry.schema.json's opType-conditional field pattern.",
   "type": "object",
@@ -55,7 +55,7 @@
     "markerId": {
       "type": ["string", "null"],
       "default": null,
-      "description": "CHAPTER_MARK/SESSION_START only: the dev.aarso.domain.thread.ThreadMarker.id this event records the creation of — the event log and the marker row are two independent facts about the same action (write-only log vs. queryable store), correlated by this id."
+      "description": "CHAPTER_MARK/SESSION_START only: the dev.fonebrew.domain.thread.ThreadMarker.id this event records the creation of — the event log and the marker row are two independent facts about the same action (write-only log vs. queryable store), correlated by this id."
     },
     "label": {
       "type": ["string", "null"],
@@ -65,7 +65,7 @@
     "delegationId": {
       "type": ["string", "null"],
       "default": null,
-      "description": "DELEGATION only: the dev.aarso.domain.thread.DelegationEvent.id this event records."
+      "description": "DELEGATION only: the dev.fonebrew.domain.thread.DelegationEvent.id this event records."
     },
     "delegationKind": {
       "oneOf": [{ "$ref": "#/$defs/DelegationKind" }, { "type": "null" }],
@@ -86,7 +86,7 @@
     "outcome": {
       "oneOf": [{ "$ref": "#/$defs/DelegationOutcome" }, { "type": "null" }],
       "default": null,
-      "description": "DELEGATION only: PENDING at creation; KEPT/REVERTED once dev.aarso.domain.thread.DelegationOutcomes.correlate (a later work package) resolves it. Tracked descriptively only, per owner decision 2 — 'kept-vs-reverted tracked descriptively only.'"
+      "description": "DELEGATION only: PENDING at creation; KEPT/REVERTED once dev.fonebrew.domain.thread.DelegationOutcomes.correlate (a later work package) resolves it. Tracked descriptively only, per owner decision 2 — 'kept-vs-reverted tracked descriptively only.'"
     },
     "outcomeAt": {
       "type": ["string", "null"],

@@ -5,7 +5,7 @@
   "semanticDigest": "sha256:be53e9697bd9fced158e244c414139fb588cb91af9c3a54930148129e54a362b",
   "surfaceImplementation": {
     "surface": "PHONE",
-    "name": "dev.aarso.full",
+    "name": "dev.fonebrew.full",
     "version": "0.13.0"
   },
   "findings": [

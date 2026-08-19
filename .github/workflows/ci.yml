@@ -151,7 +151,7 @@ jobs:
         run: ./gradlew --no-daemon :app:assembleFullDebug
       - name: Upload sideload APK (download this to install on a device)
         # The installable artifact: `full` flavor + debug build → app-full-debug.apk
-        # (appId dev.aarso.full). Appears under "Artifacts" on the Actions run summary
+        # (appId dev.fonebrew.full). Appears under "Artifacts" on the Actions run summary
         # page. `error` on no-files so a wrong output path fails loudly instead of
         # silently producing an empty artifact.
         uses: actions/upload-artifact@v4

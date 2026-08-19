@@ -1,4 +1,4 @@
-android-ide-core / Aarso / Workbench (dev.aarso) — Third-Party NOTICE
+android-ide-core / Aarso / Workbench (dev.fonebrew) — Third-Party NOTICE
 ========================================================================
 
 This file lists the runtime dependencies packaged into the app (both `full` and
@@ -173,7 +173,7 @@ asset has no POM for the license-report tool to read. Listed here by hand instea
 
 - **AntV G6 5.1.1** (`third_party/g6/g6.min.js`, embedded verbatim into the committed
   `core-engine/src/main/assets/graph/graph-room.html` by `scripts/build-graph-room.js`) — the
-  graph-visualization engine behind the G6 "deep graph room" (`dev.aarso.ui.graph.GraphWebRoom`).
+  graph-visualization engine behind the G6 "deep graph room" (`dev.fonebrew.ui.graph.GraphWebRoom`).
   MIT License, Copyright (c) 2018 Alipay.inc. Full text prepended verbatim as a header comment in
   `third_party/g6/g6.min.js` itself; reproduced here:
 

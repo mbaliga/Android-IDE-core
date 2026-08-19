@@ -261,7 +261,7 @@ rendering-handoff.md task — a side Claude chat can refine the AGSL and hand it
 
 ### 6. Voice / STT not started
 
-`AarsoRecognitionService` is a deliberate stub. On-device STT is the eventual path
+`FonebrewRecognitionService` is a deliberate stub. On-device STT is the eventual path
 (no cloud telemetry). Deferred until the loop builder and Git UX are solid.
 
 ### 7. §5b/§5c blocked

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/common/conformance-suite.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/common/conformance-suite.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ConformanceSuite descriptor per FB-RAT-COM-011 and FB-RAT-DIST-004 (Definition of Ready/Done: contract-first DoR/DoD + the 8 conformance test classes as release governance). Typically carried as the `payload` of a ContractEnvelope<ConformanceSuite> (see envelope.schema.json); `suiteId` below is this object's own FB-RAT-COM-002 stable ID.",
   "title": "ConformanceSuite",
   "type": "object",

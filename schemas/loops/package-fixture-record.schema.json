@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/package-fixture-record.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/package-fixture-record.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. PackageFixtureRecord = one entry under a .floop package's fixtures/ directory (floop-container-format.v1.json requiredTopLevelLayout: 'keyed per fixture-keying.v1 (nodeId, iterationIndex, callIndex) — NOT tests/fixtures/'). Keying resolved at LOOP_WEB_STUDIO_SPEC.md §6 (10_DUAL_VALIDATION_ADDENDUM.md §D 'Fixture keying is unspecified'): keying by node ID alone breaks on retries, by ordinal alone breaks on branch changes, by prompt hash alone breaks on every prompt edit — hence the three-part key plus a recorded-but-non-binding prompt digest.",
   "title": "PackageFixtureRecord",
   "description": "A single recorded simulation/replay/fault-injection fixture, keyed on (nodeId, iterationIndex, callIndex). Feeds LOOP-TEST-001 (a node with no required fixture and no explicit test-coverage declaration is a build finding) and LOOP-TEST-002 (a fixture whose recorded prompt digest no longer matches the node's current prompt is STALE, a WARNING, never a silent miss or silent wrong-match).",

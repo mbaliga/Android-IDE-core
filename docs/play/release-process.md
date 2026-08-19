@@ -1,8 +1,8 @@
 # Play release process (play flavor)
 
-The Play build is the `play` flavor (`dev.aarso`): policy-safe catalog, no
+The Play build is the `play` flavor (`dev.fonebrew`): policy-safe catalog, no
 overlay bubble / screen capture, in-app output flagging. The sideload build
-stays `full` (`dev.aarso.full`) on the `apk-dist` branch.
+stays `full` (`dev.fonebrew.full`) on the `apk-dist` branch.
 
 ## One-time setup (owner)
 
@@ -19,7 +19,7 @@ stays `full` (`dev.aarso.full`) on the `apk-dist` branch.
    keyPassword=…
    ```
    (CI alternative: env vars `AARSO_KEYSTORE_FILE/_PASSWORD/_ALIAS`, `AARSO_KEY_PASSWORD`.)
-2. Play Console: create the app (`dev.aarso`), **enroll in Play App Signing**
+2. Play Console: create the app (`dev.fonebrew`), **enroll in Play App Signing**
    (Google holds the app key; the keystore above is only the upload key).
 3. Fill: Data safety (`data-safety.md`), content rating (`content-rating.md`),
    GenAI declaration (`genai-declaration.md`), privacy policy URL (hosting —

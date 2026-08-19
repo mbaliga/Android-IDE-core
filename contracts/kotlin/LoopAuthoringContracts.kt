@@ -20,16 +20,16 @@
 // and the presentation/layout exclusion list), loop-validation-rules.v1.json (finding codes),
 // capability-ids.v1.json (authorityLadder, capability IDs).
 //
-// This file is in the SAME package as LoopDefinitionContracts.kt (dev.aarso.contracts.loops)
+// This file is in the SAME package as LoopDefinitionContracts.kt (dev.fonebrew.contracts.loops)
 // and reaches into two of its types by ordinary same-package visibility, no import needed:
 // AuthorityRung (PerCapabilityAuthorityDelta.before/after) and LicenseRef
 // (LicenseChange.previousLicenseRef/newLicenseRef reuse LoopDefinitionContracts.kt's LicenseRef
 // as-is rather than redefining it — the same "reuse, don't redefine" discipline
-// contracts/kotlin/ExecutionContracts.kt applies to dev.aarso.contracts.common.ArtifactRef).
+// contracts/kotlin/ExecutionContracts.kt applies to dev.fonebrew.contracts.common.ArtifactRef).
 //
 // Toolchain constraint (binding): kotlinc-compilable with NO third-party dependencies —
 // stdlib + java.time.Instant only, plus one FIRST-PARTY cross-domain import
-// (dev.aarso.contracts.common.ArtifactRef, for LoopDraft.testWorkspaceRef) — the same kind of
+// (dev.fonebrew.contracts.common.ArtifactRef, for LoopDraft.testWorkspaceRef) — the same kind of
 // import contracts/kotlin/ExecutionContracts.kt and contracts/kotlin/AuthorityContracts.kt's
 // sibling domains already make for a shape "genuinely shared with the common envelope", per the
 // WP-1L task brief. No kotlinx-serialization, no kotlinx-datetime, no Android imports, no
@@ -55,9 +55,9 @@
 // schema-side acknowledgement of that gap) — flagged inline at that constructor, not silently
 // exploited without comment.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
-import dev.aarso.contracts.common.ArtifactRef
+import dev.fonebrew.contracts.common.ArtifactRef
 import java.time.Instant
 
 private val SEMANTIC_DIGEST_PATTERN = Regex("^sha256:[0-9a-f]{64}\$")
@@ -73,7 +73,7 @@ enum class ActorClass { USER, DISTILLER, AI_PROPOSAL, IMPORT_MIGRATION, UPSTREAM
 
 enum class ValidationStatus { NOT_VALIDATED, VALIDATING, VALID, INVALID }
 
-/** loop-validation-rules.v1.json's exact three severityLevels. Deliberately distinct from dev.aarso.contracts.common.ErrorSeverity (which has a fourth, CRITICAL, band) — different closed vocabularies for different domains, not conflated. */
+/** loop-validation-rules.v1.json's exact three severityLevels. Deliberately distinct from dev.fonebrew.contracts.common.ErrorSeverity (which has a fourth, CRITICAL, band) — different closed vocabularies for different domains, not conflated. */
 enum class FindingSeverity { ERROR, WARNING, INFO }
 
 /**
@@ -225,7 +225,7 @@ data class LoopDraft(
     val sourceSurface: SourceSurface,
     /** Draft-level presentation/layout metadata, named after and excluded by the same key names semantic-digest.v1.json's exclusionListV1 drops from a packaged LoopDefinition. */
     val presentation: Map<String, Any?> = emptyMap(),
-    /** Reused as-is from dev.aarso.contracts.common.ArtifactRef (not redefined here) — a test/fixture workspace bundle. Null before any simulation/replay has produced a workspace. */
+    /** Reused as-is from dev.fonebrew.contracts.common.ArtifactRef (not redefined here) — a test/fixture workspace bundle. Null before any simulation/replay has produced a workspace. */
     val testWorkspaceRef: ArtifactRef? = null,
     /** §15: append-only local history of revisions. Never reused after deletion — [draftId] identity, not enforced by this constructor (a store-level obligation over time, not a single-instance structural property). */
     val localHistory: List<DraftRevisionRecord> = emptyList(),

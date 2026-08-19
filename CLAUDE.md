@@ -1,6 +1,6 @@
 # CLAUDE.md — Fonebrew (formerly "Aarso/Workbench") build handoff
 
-**Aarso** (*mirror*; package `dev.aarso`) is a local-first Android app for working with multiple
+**Aarso** (*mirror*; package `dev.fonebrew`) is a local-first Android app for working with multiple
 AI models. Its design thesis is **legibility + cognitive sovereignty** — a *tool-as-argument*
 artifact, not a generic chat client. Where a fork exists, prefer the option that makes
 routing/influence visible and keeps the user in the loop, even at some cost to convenience.
@@ -22,7 +22,7 @@ Two names, two scopes (do not conflate):
   `src/full/…`) reads "Fonebrew" — **do not revert it to "Aarso."**
 - **Aarso** (*mirror*) — the **within-axis self-reflection lens** only. Bounded `domain/mirror/`
   seam, ships **inert**, carries **no §5b/§5c metric logic** — ⛔ blocked on Issue #2 (rule 4).
-  Package name (`dev.aarso`), class names (`AarsoApp`, `Theme.Aarso`), and repo names are
+  Package name (`dev.fonebrew`), class names (`FonebrewApp`, `Theme.Aarso`), and repo names are
   **unchanged for now** — the rename is decoupled from the app-facing name above, deferred to a
   late "Sprint R." Don't let that stale internal naming pull the *user-facing* label back to
   "Aarso"; the two are independent axes.

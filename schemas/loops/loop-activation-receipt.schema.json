@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-activation-receipt.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/loop-activation-receipt.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopActivationReceipt is one instance of the general Receipt-envelope-with-a-receiptType-enum concept named at docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §10 and 10_DUAL_VALIDATION_ADDENDUM.md §E — that full consolidation (one Receipt<T> wrapper for every receipt kind in the constellation) is WP-2 scope, NOT designed here; `receiptType` below is this document's forward-compatible seam for that future union, fixed to the single literal value this domain owns today. Required-field content is FB-RAT-IMP-009 verbatim ('every installation records source, package digest, signature state, validation report, bindings digest, authority grant IDs, and installation receipt'), specializing the FB-RAT-COM-008 provenance minimum the same way schemas/integrations/import-receipt.v1.schema.json specializes it for the DATA_IMPORT profile — cross-referenced, not re-derived.",
   "title": "LoopActivationReceipt",
   "description": "The durable, append-only record written on entry to InstallationState.INSTALLED (docs/ratified/loops/LOOP_IMPORT_ACTIVATION_CONTRACT.md §3, §10). A correction is a NEW receipt with a fresh receiptId, never an in-place edit of an existing one (FB-RAT-COM-006).",

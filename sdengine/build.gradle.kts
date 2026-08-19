@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.aarso.sdengine"
+    namespace = "dev.fonebrew.sdengine"
     compileSdk = 36
 
     defaultConfig {

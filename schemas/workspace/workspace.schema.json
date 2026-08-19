@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/workspace.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/workspace.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Workspace per FB-RAT-WS-001: the top-level durable object the Workspace Kernel is authoritative for (projects, files, buffers, indexes, tasks, language sessions, launch state, recovery). Typically carried as the `payload` of a ContractEnvelope<Workspace> (see schemas/common/envelope.schema.json), inheriting schemaVersion/objectId/createdAtUtc/producer from that outer envelope where one wraps it; `workspaceId` below is this object's own FB-RAT-COM-002 stable ID, independent of `displayName`.",
   "title": "Workspace",
   "type": "object",

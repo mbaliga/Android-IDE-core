@@ -17,19 +17,19 @@
 
     <!--
       No android:name/icon/theme/label here — this is a library manifest (namespace
-      dev.aarso.core_engine), merged into whichever thin :app declares android:name for the
-      real dev.aarso.AarsoApp (see that app's own AndroidManifest.xml). Every class reference
-      below is fully qualified (dev.aarso.*), not relative, because a relative name (".Foo")
-      would resolve against THIS module's namespace (dev.aarso.core_engine) — one level off
-      from where the actual moved classes still live (dev.aarso.*, unchanged by the move).
+      dev.fonebrew.core_engine), merged into whichever thin :app declares android:name for the
+      real dev.fonebrew.FonebrewApp (see that app's own AndroidManifest.xml). Every class reference
+      below is fully qualified (dev.fonebrew.*), not relative, because a relative name (".Foo")
+      would resolve against THIS module's namespace (dev.fonebrew.core_engine) — one level off
+      from where the actual moved classes still live (dev.fonebrew.*, unchanged by the move).
     -->
     <application android:allowBackup="false" android:supportsRtl="true">
 
         <activity
-            android:name="dev.aarso.ui.MainActivity"
+            android:name="dev.fonebrew.ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.Aarso">
+            android:theme="@style/Theme.Fonebrew">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -54,20 +54,20 @@
         </activity>
 
         <service
-            android:name="dev.aarso.service.GenerationService"
+            android:name="dev.fonebrew.service.GenerationService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <!-- Holds priority + shows progress while model downloads run. -->
         <service
-            android:name="dev.aarso.service.DownloadService"
+            android:name="dev.fonebrew.service.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <!-- §7: device assistant (assist-gesture summon). Select Aarso under
              Settings → Default apps → Digital assistant. -->
         <service
-            android:name="dev.aarso.service.AarsoInteractionService"
+            android:name="dev.fonebrew.service.FonebrewInteractionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter>
@@ -78,11 +78,11 @@
                 android:resource="@xml/interaction_service" />
         </service>
         <service
-            android:name="dev.aarso.service.AarsoInteractionSessionService"
+            android:name="dev.fonebrew.service.FonebrewInteractionSessionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
         <service
-            android:name="dev.aarso.service.AarsoRecognitionService"
+            android:name="dev.fonebrew.service.FonebrewRecognitionService"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />

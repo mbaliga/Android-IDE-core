@@ -11,7 +11,7 @@
 > **Status legend:** ✅ done (gate-green; Compose compile-verified, device-owner-verified) ·
 > 🟡 partial/in-works · ⛔ pending/not-started · 🔒 owner-gated. **CI never launches the app** —
 > pure domain logic is JVM-tested; all runtime/render/gesture/hardware behaviour is **owner-verified
-> on the RedMagic**. Package `dev.aarso.*`; Kotlin + Compose; manual DI (`AppContainer`, no Hilt).
+> on the RedMagic**. Package `dev.fonebrew.*`; Kotlin + Compose; manual DI (`AppContainer`, no Hilt).
 >
 > **Studio Suite brief pointer (added P0-core, 2026-07-11):** the free-tier work driving this
 > repo's next phases (P1 Task substrate + free floor, P2 Watchlist, P3 loop-engine extension) is

@@ -53,7 +53,7 @@ WP-1L has reported), up from WP-7's 1394-test baseline.
 §9's transition table makes `WAITING_AUTHORITY` (reached via `PREFLIGHT` or `WAITING_BINDING`)
 the **only** path to `READY` — every run structurally visits it, even one that needs no real
 device target or explicit grant. `GraphRunner` itself has no device-binding or authority concept
-at all (it calls an abstract `dev.aarso.domain.council.Generator`, already resolved by the
+at all (it calls an abstract `dev.fonebrew.domain.council.Generator`, already resolved by the
 caller) — so for the runs this pass can actually exercise, both states are genuinely "nothing to
 wait for." `LoopRunDriver` models this honestly with two seams (`resolveBinding`/
 `resolveAuthority`, both `suspend () -> Boolean`, defaulting to `{ true }`) rather than silently

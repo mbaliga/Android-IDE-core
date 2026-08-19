@@ -18,7 +18,7 @@ Fonebrew/Aarso's spine is one append-only, git-like message tree. The owner want
 
 ## Placement decisions (recommended, with reasons)
 
-- **Graph substrate lives in core** (`dev.aarso.domain.thread`, pure JVM, extraction-ready per the `search-core` precedent) — **NOT** the public Shared-Libraries-asoc repo: compaction semantics are under the owner's **patent hold** (Personal-Tracker D-V; core went private as the stopgap; do-not-relocate rule). **Not Hyle**: shared-libs exists precisely because non-design-system code kept landing in Hyle. Record the decision in Personal-Tracker `DECISIONS.md` (also flag: Shared-Libraries-asoc missing from `CONSTELLATION.md`).
+- **Graph substrate lives in core** (`dev.fonebrew.domain.thread`, pure JVM, extraction-ready per the `search-core` precedent) — **NOT** the public Shared-Libraries-asoc repo: compaction semantics are under the owner's **patent hold** (Personal-Tracker D-V; core went private as the stopgap; do-not-relocate rule). **Not Hyle**: shared-libs exists precisely because non-design-system code kept landing in Hyle. Record the decision in Personal-Tracker `DECISIONS.md` (also flag: Shared-Libraries-asoc missing from `CONSTELLATION.md`).
 - The G6 kit HTML lands in **core** (`core-engine/src/main/assets/graph/`), not Hyle — no Hyle repo change needed. (Separate owner backlog note: Hyle repo root has **no LICENSE file** despite `package.json` MIT — close independently.)
 
 ## What already exists (verified inventory — reuse, don't rebuild)

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/common/artifact-ref.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ArtifactRef per FB-RAT-COM-011 — a digest-addressed reference to a byte artifact (build output, imported file, model weights, log bundle, etc.). Typically carried as the `payload` of a ContractEnvelope<ArtifactRef> (see envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc from that outer envelope; `id` below is this object's own FB-RAT-COM-002 stable ID.",
   "title": "ArtifactRef",
   "type": "object",

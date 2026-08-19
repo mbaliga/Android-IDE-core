@@ -6,7 +6,7 @@
 ## Why deferred, and why on-device
 
 Aarso has **no speech recognition today, by design**:
-`service/AarsoRecognitionService.kt` is a deliberate stub that returns
+`service/FonebrewRecognitionService.kt` is a deliberate stub that returns
 `ERROR_CLIENT` — the app is summoned by *gesture*, not a wake-word, and does no
 listening. Adding voice is therefore net-new and runs straight into the binding
 rule:

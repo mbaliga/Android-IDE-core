@@ -165,7 +165,7 @@ deskilling claim we argue against). Direction: workshop / forge / seat-of-self-r
   does the spatial model need a rethink for an OS-like surface? **Owner + Opus-thinking.** 🎨
 - **Arduino path.** v1 (delegate-to-Pi) ships now and is fully legible. v2 (on-device USB-OTG)
   is the device-gated stretch. Confirm v1-first.
-- **Rename timing (Sprint R).** Decoupled mechanical sweep `dev.aarso` → `dev.<name>` (package,
+- **Rename timing (Sprint R).** Decoupled mechanical sweep `dev.fonebrew` → `dev.<name>` (package,
   appIds `…full`/`…`, `apk-dist` branch, install URL, docs). Run **after** the name is locked;
   low-risk, CI-checked. Recommend: not now (don't block the build); soon (before launch/portfolio).
 - **Cost placement (HANDOFF §9 G).** Still open: G1 standalone+inline / G2 standalone / G3

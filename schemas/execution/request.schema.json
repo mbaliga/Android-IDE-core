@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/execution/request.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/execution/request.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionRequest per FB-RAT-EXE-001. Typically carried as the `payload` of a ContractEnvelope<ExecutionRequest> (see schemas/common/envelope.schema.json). `id` is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId.",
   "title": "ExecutionRequest",
   "description": "A request to run a typed operation against a specific ExecutionTarget (by id — not embedded, see schemas/execution/target.schema.json). Structurally operationalizes: FB-RAT-EXE-007 (secret handles, never raw values), FB-RAT-EXE-008 (external idempotency key + duplicate behavior declared before execution), FB-RAT-COM-012 (no contract bypass — `authorityGrant` is required, never optional, so a request cannot skip the authority seam), and the platform-grounding MUST-rule that an open-ended operation class MUST NOT declare fgsType DATA_SYNC or MEDIA_PROCESSING (Service.onTimeout() would kill it mid-work with no extension).",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/devices/device-identity.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/devices/device-identity.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceIdentity per FB-RAT-DEV-002 (device object model). Typically carried as the `payload` of a ContractEnvelope<DeviceIdentity> (see schemas/common/envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc from that outer envelope; `deviceIdentityId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId — a device keeps the same deviceIdentityId across reconnects, USB-port moves, and re-enumeration.",
   "title": "DeviceIdentity",
   "description": "What a discovered device claims to be: USB family classification, board reference (via Arduino CLI/PlatformIO metadata per FB-RAT-DEV-009, never a separate owned board catalog), MCU, USB descriptor, serial number, bootloader entry method, capabilities, and — load-bearing per FB-RAT-DEV-004 — an explicit identification-confidence claim a flash preflight gates on. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §2.",
@@ -48,7 +48,7 @@
       "oneOf": [
         {
           "allOf": [
-            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/capability-manifest.schema.json" },
+            { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/capability-manifest.schema.json" },
             {
               "type": "object",
               "properties": {

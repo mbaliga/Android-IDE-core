@@ -23,9 +23,9 @@ fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
 android {
-    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.aarso. Matches the actual
-    // package the moved :core-engine Kotlin sources still declare (dev.aarso.*, unchanged by
-    // the extraction) — a relative android:name in this module's manifest (e.g. ".AarsoApp")
+    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.fonebrew. Matches the actual
+    // package the moved :core-engine Kotlin sources still declare (dev.fonebrew.*, unchanged by
+    // the extraction) — a relative android:name in this module's manifest (e.g. ".FonebrewApp")
     // resolves correctly against it.
     namespace = "dev.aarso"
     compileSdk = 36

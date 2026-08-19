@@ -17,7 +17,7 @@ Required behavior from a real implementation (not just structural validation):
      compaction-run boundary writer — the only two SYSTEM producers this plan defines) REJECTS
      writing a `label`/`note` that is anything other than a plain structural fact (a name, an id,
      a boundary description) — never an interpretive judgment about the user.
-  3. `dev.aarso.domain.mirror.AarsoEventLog` stays write-only and `ThreadGraphProjector` (WP9)
+  3. `dev.fonebrew.domain.mirror.AarsoEventLog` stays write-only and `ThreadGraphProjector` (WP9)
      reads Room stores only, never the event log (binding constraint 3) — this fixture's defect
      would be exactly as severe if it appeared in a ThreadEvent instead of a ThreadMarker; it is
      filed against ThreadMarker here because THAT is the shape a SYSTEM writer populates today

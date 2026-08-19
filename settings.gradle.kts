@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 includeBuild("hyle-design-system")
 
 // Aarso ("mirror"); design thesis: legibility + cognitive sovereignty.
-rootProject.name = "Aarso"
+rootProject.name = "Fonebrew"
 include(":app")
 include(":core-engine")
 include(":sdengine")

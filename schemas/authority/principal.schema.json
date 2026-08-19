@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/authority/principal.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/authority/principal.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Principal per FB-RAT-AUTH-001..004 (GRANT MODEL 'Principals:' list). Typically carried as the `payload` of a ContractEnvelope<Principal> (see schemas/common/envelope.schema.json), inheriting schemaVersion/objectId/producer/createdAtUtc from that outer envelope — `principalId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId.",
   "title": "Principal",
   "description": "Something authority can be granted to: a human user, or one of five non-human actor kinds this constellation runs on the user's behalf (FB-RAT-AUTH-001 — scoped capabilities are always granted TO a specific principal, never to a broad ambient trust label like 'the agent'). `parentPrincipalId` is the structural spine FB-RAT-AUTH-004 (no implicit privilege expansion) and FB-RAT-AUTH-007 (REJECTED — no automatic/transitive authority inheritance) are built on: every non-USER principal MUST declare who spawned it, so a policy engine can walk the chain back to the accountable human and refuse to let a child hold more authority than its parent ever held (see docs/ratified/CAPABILITY_AUTHORITY_MODEL.md §7/§10 and fixtures/authority/adversarial/decision-child-exceeds-parent.adversarial.json).",

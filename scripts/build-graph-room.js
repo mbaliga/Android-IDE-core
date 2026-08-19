@@ -1,5 +1,5 @@
 // Assemble the self-contained G6 "deep graph room" HTML asset that
-// `dev.aarso.ui.graph.GraphWebRoom` loads into a locked-down WebView
+// `dev.fonebrew.ui.graph.GraphWebRoom` loads into a locked-down WebView
 // (THREAD_TOPOLOGY_PLAN.md WP11). Mirrors the guard idiom of
 // hyle-design-system/scripts/build-color-picker.js and build-texture-surface.js: read a
 // vendored/extracted source verbatim, fail loudly if it doesn't look like what this script
@@ -72,7 +72,7 @@ const CSP =
 // touches the vendored library's own code, only calls the public `G6.Graph` API it exports.
 // One entry point, one direction: `window.__graphRoom.load(jsonText)` is called from Kotlin via
 // WebView.evaluateJavascript with a pre-serialized ThreadGraph JSON string (see
-// dev.aarso.domain.thread.ThreadGraphJson.toJsonString's own KDoc, which names this exact call
+// dev.fonebrew.domain.thread.ThreadGraphJson.toJsonString's own KDoc, which names this exact call
 // as its forward pointer) — there is no reverse (JS-to-Kotlin) channel: no
 // addJavascriptInterface is registered on the Android side (see GraphWebRoom.kt), which is the
 // "narrow bridge" binding constraint 7 asks for — the narrowest bridge is one that doesn't

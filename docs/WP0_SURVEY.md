@@ -284,11 +284,11 @@ loop-contract corpus as untouched.
 
 ## 2. Package naming inventory
 
-| Repo | `dev.aarso` (or its subpackages) | `Aarso` (display) | `fonebru`/`Fonebrew`/`FoneBru` (any case) |
+| Repo | `dev.fonebrew` (or its subpackages) | `Aarso` (display) | `fonebru`/`Fonebrew`/`FoneBru` (any case) |
 |---|---|---|---|
 | **core** (`android-ide-core`) | 1,631 grep lines across code+docs; every Kotlin `package`/`import`, every `namespace`/`applicationId`, `rootProject.name = "Aarso"` (`settings.gradle.kts:36`) | 291 occurrences (app display name, doc prose, KDoc, `docs/brand/aarso-logo.svg`) | **6 total, all in docs, zero in code.** `docs/STATE.md:100,101,220`; `docs/CORE_PHASES.md:19` — "Brand string is 'FoneBru' (owner ruling 2026-07-11). Package rename stays deferred (Sprint R) — do not touch Gradle identifiers."; `docs/HANDOFF-CURRENT.md:19`; `docs/handoff/device-independence.md:17` |
-| **aarso** (`Aarso` repo) | package `dev.aarso.mirror` (`MirrorLens.kt`, `MirrorSeam.kt`) | small — repo is literally named/branded Aarso throughout its 5 files | not reported — the aarso report did not run a naming-inventory grep; no Fonebrew occurrence appears in the file contents quoted in that report |
-| **studio** (`Android-IDE-Studio`) | packages `dev.aarso`, `dev.aarso.studio_pm`, `dev.aarso.studio_launch`, `dev.aarso.studio.entitlement` | present (app labels, docs) | appears as a **git branch name** (`claude/fonebrew-development-clzu43`, the checked-out branch) and as a **doc filename** (`docs/FONEBREW_OVERVIEW.md`, touched by merged PR #84 and again by `origin/main`'s `8c04bff`) — still zero occurrences in any Kotlin package declaration per that report |
+| **aarso** (`Aarso` repo) | package `dev.fonebrew.mirror` (`MirrorLens.kt`, `MirrorSeam.kt`) | small — repo is literally named/branded Aarso throughout its 5 files | not reported — the aarso report did not run a naming-inventory grep; no Fonebrew occurrence appears in the file contents quoted in that report |
+| **studio** (`Android-IDE-Studio`) | packages `dev.fonebrew`, `dev.fonebrew.studio_pm`, `dev.fonebrew.studio_launch`, `dev.fonebrew.studio.entitlement` | present (app labels, docs) | appears as a **git branch name** (`claude/fonebrew-development-clzu43`, the checked-out branch) and as a **doc filename** (`docs/FONEBREW_OVERVIEW.md`, touched by merged PR #84 and again by `origin/main`'s `8c04bff`) — still zero occurrences in any Kotlin package declaration per that report |
 | **hyle** (`Hyle-Design-System`) | packages `dev.aarso.hyle`, `dev.aarso.crashrecovery`, `dev.aarso.hyle.worlds` | present (module/artifact naming) | not mentioned anywhere in the hyle report |
 
 **Bottom line (from the core report, the only one that ran an explicit count):** "Fonebrew"/
@@ -331,7 +331,7 @@ inert seam repo** — the "mirror" self-reflection lens — and **not the main a
 - Content is a swappable-implementation seam pattern (`MirrorLens` interface, `InertMirrorLens`
   no-op default, `MirrorSeam` holder with `install`/`uninstall`) plus a doc
   (`docs/EVENT_CONTRACT.md`) that documents an event-log write-side contract whose **actual code
-  lives in the other repo** (`android-ide-core`, package `dev.aarso.domain.mirror`) — not present
+  lives in the other repo** (`android-ide-core`, package `dev.fonebrew.domain.mirror`) — not present
   here.
 - Currently always **OFF**: `AppContainer.kt` (in the other repo) hard-codes
   `AarsoCaptureSettings.OFF`; no settings UI to enable it exists.
@@ -350,7 +350,7 @@ seam/inert-default/install pattern in `MirrorLens.kt`/`MirrorSeam.kt` — nothin
 ## 5. Studio repo state
 
 **Thin composite build**, real (not just documented): `app/` (Application class + entitlement
-gate only — `app/src/main/java/dev/aarso/StudioApp.kt`, 31 lines, subclasses core's `AarsoApp`,
+gate only — `app/src/main/java/dev/aarso/StudioApp.kt`, 31 lines, subclasses core's `FonebrewApp`,
 only overrides `onCreate()` → `installStudioEntryPoint(this)`) + `:studio-pm` + `:studio-launch` +
 a `core/` git submodule providing `dev.aarso:core-engine` via `includeBuild`
 (`settings.gradle.kts:69-73`, explicit `dependencySubstitution`).
@@ -363,7 +363,7 @@ a `core/` git submodule providing `dev.aarso:core-engine` via `includeBuild`
   `ab3567e`, "Search M0–M3") — so the pin is one PR behind current core `main`, just not for the
   reason the doc gives.
 - **`studio-pm/`** — real `com.android.library`: `ProjectRoom.kt` (299 lines, Board/List/
-  Waterfall, imports `dev.aarso.domain.pm.{BoardCard,BoardColumn,Boards}` from core-engine),
+  Waterfall, imports `dev.fonebrew.domain.pm.{BoardCard,BoardColumn,Boards}` from core-engine),
   `StudioRooms.kt` (`installStudioProjectRoom()`).
 - **`studio-launch/`** — real `com.android.library`: `StoreListing.kt` (75 lines, pure-Kotlin Play
   listing generator), `StudioDevelopFacets.kt` (Launch tab: store-listing form + scaffold drafts,

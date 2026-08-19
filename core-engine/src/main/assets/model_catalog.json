@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "lastUpdated": "2026-07-11",
-  "_note": "Bundled offline fallback snapshot of Nooz's ai-catalogue/models.json (https://github.com/mbaliga/nooz/tree/claude/app-build-d1f9s6/ai-catalogue) — Aarso does not hand-maintain its own model list. dev.aarso.data.ModelCatalogStore prefers a synced filesDir override (written by ModelCatalogUpdater on a consented refresh) and falls back to this bundled copy for the offline/first-run case. See that repo's ai-catalogue/README.md for the honesty rules (never fabricate a downloadUrl/sha256) and the consumer contract.",
+  "_note": "Bundled offline fallback snapshot of Nooz's ai-catalogue/models.json (https://github.com/mbaliga/nooz/tree/claude/app-build-d1f9s6/ai-catalogue) — Aarso does not hand-maintain its own model list. dev.fonebrew.data.ModelCatalogStore prefers a synced filesDir override (written by ModelCatalogUpdater on a consented refresh) and falls back to this bundled copy for the offline/first-run case. See that repo's ai-catalogue/README.md for the honesty rules (never fabricate a downloadUrl/sha256) and the consumer contract.",
   "models": [
     {
       "id": "qwen2.5-1.5b-instruct-q4",

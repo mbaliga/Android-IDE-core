@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-draft.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/loop-draft.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopDraft per LOOP_ENGINEERING_SPEC_V2.1 §2.1 (mutable authoring state) and §15 (draft revision + concurrency contract). Cross-references, does not redefine: semantic-digest.v1.json (exclusionListV1 — presentation/layout metadata), loop-validation-rules.v1.json (validationState.findings[].code), loop-definition.v2.schema.json (the `graph` field's EMBEDDED mode is loosely typed on purpose — see that field's description for why a draft is deliberately NOT required to validate against the strict LoopDefinition schema at every autosave point). LOOP_PHONE_AUTHORING_SPEC.md §13's DRAFT_CLEAN/DIRTY_JOURNALED persistence state machine and §8's BASE_REVISION/PROPOSED/APPLIED/DISCARDED AI-proposal machine are phone-surface UI states layered on top of this wire object, not restated here — this schema models the durable LoopDraft object and its concurrency contract, not either UI state machine.",
   "title": "LoopDraft",
   "description": "Mutable authoring state with stable draft identity, revision, graph, presentation/layout metadata, validation state, test workspace reference, source surface, and local history (§2.1). A draft is not trusted or publishable until packaged (LOOP_ENGINEERING_SPEC_V2.1 §20). This file also defines, as sibling top-level $defs, the draft-revision/concurrency contract (§15): DraftMutationRequest (a proposed mutation against an expected revision) and DraftMutationConflictReport (the semantic-conflict rejection a stale mutation MUST receive — never last-write-wins).",
@@ -27,7 +27,7 @@
     "validationState": { "$ref": "#/$defs/ValidationState" },
     "testWorkspaceRef": {
       "oneOf": [
-        { "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json" },
+        { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/artifact-ref.schema.json" },
         { "type": "null" }
       ],
       "description": "A test/fixture workspace bundle for this draft, reused as-is from schemas/common/artifact-ref.schema.json (not redefined here) — same cross-file $ref pattern schemas/execution/receipt.schema.json and schemas/devices/firmware-artifact.schema.json already use for a byte artifact reused wholesale. Null before any simulation/replay has produced a workspace."

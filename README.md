@@ -5,7 +5,7 @@ open, on-device "Claude Code with loop engineering" that grows into a real **age
 chat with any model (on-device GGUF + cloud), a git-like message **tree**, a **Council**
 of models, a free-form **Loop** graph engine (GraphRunner + BPMN 2.0), the agentic **repo
 loop** (read → propose → per-hunk review → commit), **Devices** (Pi / Arduino / ESP / USB),
-and a full spatial IA. **Open core**, package `dev.aarso.*` (rename deferred).
+and a full spatial IA. **Open core**, package `dev.fonebrew.*` (rename deferred).
 
 ## Binding rules (do not relax)
 1. **No telemetry, analytics, or phoning home. Ever.**

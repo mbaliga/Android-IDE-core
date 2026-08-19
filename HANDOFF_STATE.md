@@ -191,7 +191,7 @@ required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
   real Gradle attempt, zero regression on the 30 pre-existing `LexicalSearchTest` tests. Full
   detail: `docs/WP6_GATE_REPORT.md`. Summary: `contracts/kotlin/SearchContracts.kt` — the first
   formal search contract this build-out has written (no prior ratified spec existed for this
-  domain); does NOT redefine an embedder interface (`dev.aarso.embedding.Embedder` already
+  domain); does NOT redefine an embedder interface (`dev.fonebrew.embedding.Embedder` already
   satisfies that requirement, checked before writing anything). `WorkspaceSearchProjector` maps a
   WP-3 `BufferSnapshotEntry` into the exact `SearchDoc` shape the real, already-shipped
   `LexicalSearch` engine consumes — literally reusing the existing ranking code, not forking it.

@@ -303,7 +303,7 @@ explicit gap. During WP-2, a real Android SDK + JDK toolchain became available i
 files, this corpus's 8 plus WP-1's 6 — was wired into `core-engine`'s build as a real compiled
 source directory. **First compile attempt failed**, for exactly the reason a lexical scan cannot
 catch: `LoopAuthoringContracts.kt` and `LoopPackageContracts.kt` both declare
-`data class ValidationFinding` in the same package (`dev.aarso.contracts.loops`) — a genuine
+`data class ValidationFinding` in the same package (`dev.fonebrew.contracts.loops`) — a genuine
 Kotlin redeclaration. Notably, **three separate WP-1L authoring-phase agents had already spotted
 this exact collision while writing their own files** and left explicit comments about it —
 `LoopActivationContracts.kt`'s header comment named it a "KNOWN PRE-EXISTING PACKAGE CONFLICT,"

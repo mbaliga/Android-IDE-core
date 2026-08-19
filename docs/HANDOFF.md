@@ -27,7 +27,7 @@
 
 ## 1. North star
 
-**Aarso** (*mirror*; package `dev.aarso`) is a **local-first Android app for working with
+**Aarso** (*mirror*; package `dev.fonebrew`) is a **local-first Android app for working with
 multiple AI models**, whose design thesis is **legibility + cognitive sovereignty** — a
 *tool-as-argument* artifact, not a generic chat client. One thesis sentence:
 
@@ -248,7 +248,7 @@ Legend: ✅ built & CI-green · 🟡 partial · 🔌 headless engine, UI/runtime
 
 ### 6.9 §7 invocation layer (full flavor)
 - ✅ Share-sheet + PROCESS_TEXT → `data/SharedIntake`; assist gesture + recognition trio
-  (`service/AarsoInteraction*`, `AarsoRecognitionService` is a deliberate STT stub);
+  (`service/FonebrewInteraction*`, `FonebrewRecognitionService` is a deliberate STT stub);
   floating bubble (`service/OverlayService`); screen-capture + ML Kit OCR
   (`service/ScreenCaptureService`). 📱 all owner-verified.
 
@@ -295,7 +295,7 @@ CI-green** (287 tests). Touchable wireframe UI exists for every new pillar.
 - **B1**: relocate Develop to the bottom **dev room** (needs the spatial-map reorg:
   Models folds into Settings; bottom axis opens Develop) — gesture code, device-verified.
 - Loop room: free-form canvas editing UI; lifecycle UI; material (ferrofluid) port to atoms.
-- On-device **voice/STT** for NL authoring (`AarsoRecognitionService` stub).
+- On-device **voice/STT** for NL authoring (`FonebrewRecognitionService` stub).
 
 ### 8.4 Owner-only / blocked
 - **§5b drift + §5c self-observation** — ⛔ blocked on **Issue #2** (idiolect baseline +

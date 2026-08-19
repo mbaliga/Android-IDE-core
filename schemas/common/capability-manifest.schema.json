@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/common/capability-manifest.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/common/capability-manifest.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. CapabilityManifest per FB-RAT-COM-011 — used by LSP/DAP/execution/devices/model providers/extensions to declare supported operations, limits, versions, and target requirements. Typically carried as the `payload` of a ContractEnvelope<CapabilityManifest> (see envelope.schema.json), inheriting schemaVersion/producer/createdAtUtc from that outer envelope; `manifestId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId (a manifest can be re-wrapped in a fresh envelope on re-issue without changing identity).",
   "title": "CapabilityManifest",
   "type": "object",
