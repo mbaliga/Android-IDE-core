@@ -195,6 +195,63 @@ asset has no POM for the license-report tool to read. Listed here by hand instea
   > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   > SOFTWARE.
 
+- **three.js v0.180.0** + `examples/jsm` addons (`OrbitControls`, and the loaders in
+  docs/design/objects-3d.md §2's format matrix: `GLTFLoader`, `OBJLoader`, `MTLLoader`,
+  `STLLoader`, `PLYLoader`, `FBXLoader`, `ColladaLoader`, `3MFLoader`, `USDZLoader`) — same
+  reasoning as the AntV G6 entry above (a vendored asset, no Maven POM for the license-report
+  tool to read), with one difference in *how* it got vendored: three.js ships as ES module
+  *source*, not a single prebuilt UMD file, so `scripts/build-object-viewer.js` bundles it via
+  esbuild from the npm package `three@0.180.0` into `third_party/threejs/object-viewer.bundle.min.js`,
+  embedded verbatim into the committed `core-engine/src/main/assets/object3d/object-viewer.html`
+  by that same script — the offline 3D object viewer behind
+  `dev.fonebrew.ui.object3d.ObjectViewerRoom`. MIT License, Copyright © 2010-2025 three.js authors.
+  Full text prepended verbatim as a header comment in
+  `third_party/threejs/object-viewer.bundle.min.js` itself; reproduced here:
+
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in
+  > all copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  > THE SOFTWARE.
+
+- **fflate v0.8.2** (as vendored inside three.js's own
+  `examples/jsm/libs/fflate.module.js`) — a second MIT library folded into the same bundle,
+  pulled in transitively by `GLTFLoader`/`3MFLoader`/`USDZLoader` for synchronous zip/inflate of
+  embedded assets (docs/design/objects-3d.md §2's 3MF/USDZ rows are both ZIP/OPC containers).
+  Same reasoning as the two entries above — no Maven POM, hand-appended here and in
+  `third_party/threejs/object-viewer.bundle.min.js`'s own header comment. MIT License, Copyright
+  (c) 2026 Arjun Barrett. Full text:
+
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all
+  > copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  > SOFTWARE.
+
 ## Android Software Development Kit License (Google Play services) (4 artifacts)
 
 - `com.google.android.gms:play-services-base:18.5.0`
