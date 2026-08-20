@@ -62,4 +62,25 @@ class TreeArchiveTest {
         val plan = TreeBackup.importPlan(listOf(child, root), emptySet())
         assertEquals(listOf("p", "c"), plan.toInsert.map { it.id })
     }
+
+    // docs/design/objects-3d.md §8: "Export-everything includes the directory."
+    @Test fun `object3d files round-trip through the archive as base64 under their own prefix`() {
+        val files = mapOf(
+            "ab12.glb" to byteArrayOf(1, 2, 3, 4, 5),
+            "cd34.json" to "{\"schemaVersion\":\"1.0.0\"}".toByteArray(Charsets.UTF_8),
+        )
+        val archived = TreeArchive.writeObject3dFiles(files)
+
+        assertEquals(setOf("aarso/objects3d/ab12.glb", "aarso/objects3d/cd34.json"), archived.keys)
+        val back = TreeArchive.readObject3dFiles(archived)
+        assertEquals(files.keys, back.keys)
+        assertTrue(files["ab12.glb"].contentEquals(back["ab12.glb"]))
+        assertTrue(files["cd34.json"].contentEquals(back["cd34.json"]))
+    }
+
+    @Test fun `readObject3dFiles ignores node files and the manifest`() {
+        val nodeFiles = TreeArchive.write(nodes)
+        val object3dFiles = TreeArchive.writeObject3dFiles(mapOf("x.glb" to byteArrayOf(9)))
+        assertEquals(setOf("x.glb"), TreeArchive.readObject3dFiles(nodeFiles + object3dFiles).keys)
+    }
 }

@@ -143,6 +143,11 @@ class AppContainer(context: Context) {
     val imageStore: ImageStore = ImageStore(context)
     val imageProviderStore: ImageProviderStore = ImageProviderStore(context)
 
+    /** 3D object generation/import (docs/design/objects-3d.md): saved model files + watched
+     *  3D-cloud-provider configs — same shape as the image pair above. */
+    val object3dStore: dev.fonebrew.data.Object3dStore = dev.fonebrew.data.Object3dStore(context)
+    val object3dProviderStore: dev.fonebrew.data.Object3dProviderStore = dev.fonebrew.data.Object3dProviderStore(context)
+
     /** Content routed in from share / process-text / assist (§7). */
     val sharedIntake: SharedIntake = SharedIntake()
 

@@ -65,6 +65,8 @@ import dev.fonebrew.inference.EngineGenerator
 import dev.fonebrew.domain.cloud.ProviderKind
 import dev.fonebrew.domain.image.ImageProvider
 import dev.fonebrew.domain.image.ImageProviderKind
+import dev.fonebrew.data.Object3dProviderConfig
+import dev.fonebrew.domain.object3d.Object3dCloudProvider
 import dev.fonebrew.flavor.InvocationFeatures
 import dev.fonebrew.ui.SettingsViewModel
 import dev.fonebrew.ui.hyle.HyleButton
@@ -252,7 +254,8 @@ private fun ColumnScope.ProviderTab(
             if (scope == ProviderScope.CLOUD) ImageSettings(viewModel)
             else LocalModels("image", openOverlay, closeOverlay)
         SettingsTab.VIDEO -> PlannedProvider("Video", scope)
-        SettingsTab.OBJECT3D -> PlannedProvider("3D-model", scope)
+        SettingsTab.OBJECT3D ->
+            if (scope == ProviderScope.CLOUD) Object3dCloudSettings(viewModel) else Object3dOnDeviceSettings()
         SettingsTab.GLOBAL -> Unit // handled by SettingsRoom
     }
 }
@@ -682,6 +685,106 @@ private fun ImageSettings(viewModel: SettingsViewModel) {
         ImageProviderRow(p, viewModel.hasImageKey(p.id)) { viewModel.removeImage(p.id) }
     }
     ImageProviderForm(onSave = viewModel::saveImage)
+}
+
+/** docs/design/objects-3d.md §1/§4: "On-device explains the procedural path (uses the active
+ *  chat model — nothing extra to download)." Unlike Image/Text, there is no separate on-device
+ *  3D model to manage — [dev.fonebrew.inference.object3d.ProceduralObjectEngine] prompts whatever
+ *  chat model is already active, so this tab is explanatory only, not another Models shelf. */
+@Composable
+private fun Object3dOnDeviceSettings() {
+    Text("On-device 3D generation", style = MaterialTheme.typography.titleSmall)
+    Text(
+        "Prompts your active chat model for a compact 3D scene (or, if it prefers, raw mesh " +
+            "text) — nothing extra to download. The result is checked before it's saved; an " +
+            "invalid reply gets one corrected retry, then an honest failure. Reach it from the " +
+            "composer's + menu → \"Generate 3D…\" → On-device.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** docs/design/objects-3d.md §1/§5: Meshy/Tripo provider configs, each a watched object
+ *  (binding rule 2) — same shape as [ImageSettings], key encrypted via [KeystoreSecret] on save. */
+@Composable
+private fun Object3dCloudSettings(viewModel: SettingsViewModel) {
+    val object3dProviders by viewModel.object3dProviders.collectAsState()
+    Text(
+        "On-device generation is the default; cloud 3D providers are watched and opt-in " +
+            "per use, keys encrypted on this device.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    for (p in object3dProviders) {
+        Object3dProviderRow(p, viewModel.hasObject3dKey(p.id)) { viewModel.removeObject3d(p.id) }
+    }
+    Object3dProviderForm(onSave = viewModel::saveObject3d)
+}
+
+@Composable
+private fun Object3dProviderRow(provider: Object3dProviderConfig, hasKey: Boolean, onDelete: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("${provider.displayName} · watched", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${provider.kind.label} · ${provider.baseUrl}" + if (hasKey) " · key set" else " · no key",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hasKey) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                )
+            }
+            TextButton(onClick = onDelete) { Text("Remove") }
+        }
+    }
+}
+
+@Composable
+private fun Object3dProviderForm(
+    onSave: (Object3dCloudProvider, String, String, String) -> Unit,
+) {
+    var kind by remember { mutableStateOf(Object3dCloudProvider.MESHY) }
+    var name by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf(kind.apiBaseUrl) }
+    var apiKey by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HyleDropdownField(
+            value = kind.label,
+            options = Object3dCloudProvider.entries.map { it.label },
+            onSelect = { i ->
+                kind = Object3dCloudProvider.entries[i]
+                baseUrl = kind.apiBaseUrl
+            },
+            label = "Type",
+            modifier = Modifier.fillMaxWidth(),
+        )
+        HyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
+        HyleField(
+            baseUrl, { baseUrl = it },
+            label = "Base URL",
+            mandatory = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        HyleField(
+            apiKey, { apiKey = it },
+            label = "API key (encrypted on-device)",
+            mandatory = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        HyleButton(
+            "Save 3D provider",
+            onClick = { onSave(kind, name, baseUrl, apiKey); name = ""; apiKey = "" },
+            enabled = apiKey.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 /** Connect a Git host you own (watched): tree backup + the coding assistant. The

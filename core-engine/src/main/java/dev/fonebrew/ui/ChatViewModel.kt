@@ -30,6 +30,9 @@ import dev.fonebrew.domain.Role
 import dev.fonebrew.domain.SamplingParams
 import dev.fonebrew.domain.council.Council
 import dev.fonebrew.domain.image.ImageParams
+import dev.fonebrew.domain.object3d.Object3dFormat
+import dev.fonebrew.domain.object3d.Object3dFormatSniffer
+import dev.fonebrew.domain.object3d.ProceduralSceneCodec
 import dev.fonebrew.domain.instrument.TokenStats
 import dev.fonebrew.domain.model.ContextCheck
 import dev.fonebrew.domain.model.DefaultModelPolicy
@@ -42,11 +45,17 @@ import dev.fonebrew.domain.tree.Nodes
 import dev.fonebrew.domain.tree.PathView
 import dev.fonebrew.domain.tree.TreeOutline
 import android.content.Context
+import dev.fonebrew.data.Object3dNodeMeta
+import dev.fonebrew.data.Object3dSource
 import dev.fonebrew.embedding.EmbeddingLogger
+import dev.fonebrew.inference.EngineGenerator
 import dev.fonebrew.inference.EngineProvider
 import dev.fonebrew.inference.InferenceEngine
 import dev.fonebrew.inference.ModelRegistry
 import dev.fonebrew.inference.image.ImageEngineFactory
+import dev.fonebrew.inference.object3d.CloudObject3dEngineFactory
+import dev.fonebrew.inference.object3d.ProceduralObjectEngine
+import dev.fonebrew.inference.object3d.ProceduralOutcome
 import dev.fonebrew.service.GenerationService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -75,10 +84,15 @@ data class ModelOption(
 )
 
 /**
- * The composer mode: one voice, a council of them (never labelled "MoE"), or an
- * image turn (§6 of the spatial redesign — Images is a mode, not a room).
+ * The composer mode: one voice, a council of them (never labelled "MoE"), an
+ * image turn (§6 of the spatial redesign — Images is a mode, not a room), or a
+ * 3D-object turn (docs/design/objects-3d.md §1 — same "mode, not a room" shape).
  */
-enum class ComposerMode { SINGLE, PERSONAS, MODELS, IMAGE }
+enum class ComposerMode { SINGLE, PERSONAS, MODELS, IMAGE, OBJECT3D }
+
+/** docs/design/objects-3d.md §1's mini-chooser: which engine a 3D generation uses.
+ *  On-device is always the default (binding rule 2); cloud is the explicit, per-use opt-in. */
+enum class Object3dGenScope { ON_DEVICE, CLOUD }
 
 /** One voice in the council panel (§4b) — streaming or persisted. */
 data class CouncilCard(
@@ -133,10 +147,15 @@ data class ChatUiState(
     val modelDiversity: Boolean = false,
     /** Image mode (§6): send generates an image turn instead of a text turn. */
     val imageMode: Boolean = false,
+    /** 3D-object mode (docs/design/objects-3d.md §1): send generates/imports a 3D-object turn
+     *  instead of a text turn, against [object3dScope]. */
+    val object3dMode: Boolean = false,
+    val object3dScope: Object3dGenScope = Object3dGenScope.ON_DEVICE,
 ) {
     val composerMode: ComposerMode
         get() = when {
             imageMode -> ComposerMode.IMAGE
+            object3dMode -> ComposerMode.OBJECT3D
             councilEnabled && modelDiversity -> ComposerMode.MODELS
             councilEnabled -> ComposerMode.PERSONAS
             else -> ComposerMode.SINGLE
@@ -163,6 +182,8 @@ private data class Transient(
     val councilMode: Boolean = false,
     val modelDiversity: Boolean = false,
     val imageMode: Boolean = false,
+    val object3dMode: Boolean = false,
+    val object3dScope: Object3dGenScope = Object3dGenScope.ON_DEVICE,
     /** Live per-agent streaming during a council fan-out; null when not fanning. */
     val councilStreaming: List<CouncilCard>? = null,
 )
@@ -191,6 +212,8 @@ class ChatViewModel(
     private val downloader: ModelDownloader,
     private val imageStore: ImageStore,
     private val imageProviders: ImageProviderStore,
+    private val object3dStore: dev.fonebrew.data.Object3dStore,
+    private val object3dProviders: dev.fonebrew.data.Object3dProviderStore,
     private val sdModels: SdModelStore,
     private val pricingStore: dev.fonebrew.data.PricingStore,
     private val freeTierUsage: dev.fonebrew.data.FreeTierUsageStore,
@@ -346,6 +369,22 @@ class ChatViewModel(
             councilMode = mode == ComposerMode.PERSONAS || mode == ComposerMode.MODELS,
             modelDiversity = mode == ComposerMode.MODELS,
             imageMode = mode == ComposerMode.IMAGE,
+            // OBJECT3D is entered via enterObject3dMode(scope) instead (it needs a scope from
+            // the composer's mini-chooser) — routing it through here just exits it, same as
+            // every other mode switch does to imageMode.
+            object3dMode = false,
+        )
+    }
+
+    /** docs/design/objects-3d.md §1: enter 3D-object composer mode against the mini-chooser's
+     *  [scope] pick. Exit the same way image mode does — [setComposerMode] to any other mode. */
+    fun enterObject3dMode(scope: Object3dGenScope) {
+        transient.value = transient.value.copy(
+            councilMode = false,
+            modelDiversity = false,
+            imageMode = false,
+            object3dMode = true,
+            object3dScope = scope,
         )
     }
 
@@ -536,6 +575,8 @@ class ChatViewModel(
                 councilCards = councilCards,
                 modelDiversity = t.modelDiversity,
                 imageMode = t.imageMode,
+                object3dMode = t.object3dMode,
+                object3dScope = t.object3dScope,
             )
         }.stateIn(
             viewModelScope,
@@ -593,6 +634,7 @@ class ChatViewModel(
         val trimmed = text.trim()
         if (trimmed.isEmpty() || transient.value.genPhase != GenPhase.IDLE) return
         if (transient.value.imageMode) { sendImage(trimmed); return }
+        if (transient.value.object3dMode) { sendObject3d(trimmed, transient.value.object3dScope); return }
         if (transient.value.councilMode) { sendCouncil(trimmed); return }
         val spec = activeModelId.value?.let { registry.byId(it) } ?: return
         val engine = engines.engineFor(spec) ?: return // not runnable yet
@@ -962,6 +1004,152 @@ class ChatViewModel(
                 )
             } finally {
                 GenerationService.stop(appContext)
+            }
+        }
+    }
+
+    /** What one 3D generation produced, before it's minted into a node — the shared shape
+     *  [generateObject3dOnDevice]/[generateObject3dCloud] return to [sendObject3d]. */
+    private data class Object3dGeneration(
+        val relativePath: String,
+        val format: String,
+        val source: Object3dSource,
+        val provider: dev.fonebrew.domain.object3d.Object3dCloudProvider?,
+        val producerId: String,
+    )
+
+    /**
+     * 3D-object turn (docs/design/objects-3d.md §1): the prompt becomes a user node, the
+     * generated model an assistant node carrying [Object3dNodeMeta.metadata] — every turn is a
+     * node, including 3D turns, exactly like [sendImage]'s image turns.
+     */
+    private fun sendObject3d(prompt: String, scope: Object3dGenScope) {
+        viewModelScope.launch {
+            transient.value = transient.value.copy(error = null)
+            val parent = activeLeafId.value?.let { repository.node(it) }
+            val userNode = Nodes.child(parent, Role.USER, prompt, System.currentTimeMillis())
+            try {
+                repository.insert(userNode)
+                embeddingLogger.onMessageInserted(userNode)
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(error = t.message ?: "send failed")
+                return@launch
+            }
+            moveLeaf(userNode.id)
+
+            GenerationService.start(appContext)
+            try {
+                transient.value = transient.value.copy(genPhase = GenPhase.GENERATING)
+                val generated = when (scope) {
+                    Object3dGenScope.ON_DEVICE -> generateObject3dOnDevice(prompt)
+                    Object3dGenScope.CLOUD -> generateObject3dCloud(prompt)
+                }
+                val objectNode = Nodes.child(
+                    parent = userNode,
+                    role = Role.ASSISTANT,
+                    content = "",
+                    now = System.currentTimeMillis(),
+                    modelId = generated.producerId,
+                    metadata = Object3dNodeMeta.metadata(
+                        relativePath = generated.relativePath,
+                        format = generated.format,
+                        source = generated.source,
+                        provider = generated.provider,
+                        prompt = prompt,
+                    ),
+                )
+                repository.insert(objectNode)
+                moveLeaf(objectNode.id)
+                transient.value = transient.value.copy(genPhase = GenPhase.IDLE, object3dMode = false)
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(
+                    genPhase = GenPhase.IDLE,
+                    error = t.message ?: "3D generation failed",
+                )
+            } finally {
+                GenerationService.stop(appContext)
+            }
+        }
+    }
+
+    /** §4: prompts the ACTIVE chat engine (on-device by default, binding rule 2) via the same
+     *  [EngineGenerator] seam `GitConnect`/`CodeLens` use for a one-shot model call. Never falls
+     *  back to cloud on its own — that is only ever the user's separate, explicit mini-chooser
+     *  pick (rule 2's "cloud is opt-in per use, never a hidden fallback"). */
+    private suspend fun generateObject3dOnDevice(prompt: String): Object3dGeneration {
+        val spec = activeModelId.value?.let { registry.byId(it) }
+            ?: throw IllegalStateException("no active model — pick one to generate on-device")
+        val engine = engines.engineFor(spec)
+            ?: throw IllegalStateException("the active model isn't runnable yet")
+        val generator = EngineGenerator(engine, spec.modelPath)
+        return when (val outcome = ProceduralObjectEngine(generator).generate(prompt)) {
+            is ProceduralOutcome.Dsl -> {
+                val bytes = ProceduralSceneCodec.toJsonString(outcome.scene).toByteArray(Charsets.UTF_8)
+                val relativePath = object3dStore.save(bytes, Object3dNodeMeta.DSL_JSON_EXTENSION)
+                Object3dGeneration(relativePath, Object3dNodeMeta.DSL_JSON_FORMAT, Object3dSource.ON_DEVICE_GENERATED, null, "object3d:on-device")
+            }
+            is ProceduralOutcome.RawObj -> {
+                val bytes = outcome.objText.toByteArray(Charsets.UTF_8)
+                val relativePath = object3dStore.save(bytes, "obj")
+                Object3dGeneration(relativePath, Object3dFormat.OBJ.name, Object3dSource.ON_DEVICE_GENERATED, null, "object3d:on-device")
+            }
+            is ProceduralOutcome.Failure ->
+                throw IllegalStateException("on-device 3D generation failed: " + outcome.reasons.joinToString("; "))
+        }
+    }
+
+    /** §5: a configured, keyed cloud 3D provider — always the user's explicit per-use opt-in
+     *  (the mini-chooser), never a silent fallback from the on-device path above. */
+    private suspend fun generateObject3dCloud(prompt: String): Object3dGeneration {
+        val config = object3dProviders.providers.value.firstOrNull { object3dProviders.hasApiKey(it.id) }
+            ?: throw IllegalStateException("no 3D cloud provider configured — add one in Settings → 3D")
+        val apiKey = object3dProviders.apiKey(config.id)
+            ?: throw IllegalStateException("no key for ${config.displayName}")
+        val engine = CloudObject3dEngineFactory.create(config.kind, apiKey, config.baseUrl)
+        val bytes = engine.textTo3d(prompt)
+        val format = Object3dFormatSniffer.sniff(bytes) ?: Object3dFormat.GLB
+        val relativePath = object3dStore.save(bytes, format.extensions.first())
+        return Object3dGeneration(relativePath, format.name, Object3dSource.CLOUD_GENERATED, config.kind, "object3d:${config.kind.name.lowercase()}")
+    }
+
+    /**
+     * §1's "3D file…" import: any supported file, copied into app storage and minted as a node
+     * — "the preview anything's output path" (ChatGPT, Meshy, a slicer, a scanner…). [uri] is a
+     * SAF `OpenDocument` result; the caller (ChatScreen) owns the picker itself.
+     */
+    fun importObject3d(uri: android.net.Uri, displayName: String?) {
+        if (transient.value.genPhase != GenPhase.IDLE) return
+        viewModelScope.launch {
+            transient.value = transient.value.copy(error = null)
+            try {
+                val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } ?: throw IllegalStateException("couldn't open the picked file")
+                val format = Object3dFormatSniffer.sniff(bytes, displayName)
+                    ?: throw IllegalStateException("unrecognized 3D format — none of the supported loaders matched this file")
+                val relativePath = object3dStore.save(bytes, format.extensions.first())
+
+                val parent = activeLeafId.value?.let { repository.node(it) }
+                val userNode = Nodes.child(
+                    parent, Role.USER,
+                    "3D file: ${displayName ?: format.label}",
+                    System.currentTimeMillis(),
+                )
+                repository.insert(userNode)
+                embeddingLogger.onMessageInserted(userNode)
+                moveLeaf(userNode.id)
+
+                val objectNode = Nodes.child(
+                    parent = userNode,
+                    role = Role.ASSISTANT,
+                    content = "",
+                    now = System.currentTimeMillis(),
+                    metadata = Object3dNodeMeta.metadata(relativePath, format.name, Object3dSource.IMPORTED, null, null),
+                )
+                repository.insert(objectNode)
+                moveLeaf(objectNode.id)
+            } catch (t: Throwable) {
+                transient.value = transient.value.copy(error = t.message ?: "3D import failed")
             }
         }
     }
@@ -1873,6 +2061,8 @@ class ChatViewModel(
                     c.modelDownloader,
                     c.imageStore,
                     c.imageProviderStore,
+                    c.object3dStore,
+                    c.object3dProviderStore,
                     c.sdModelStore,
                     c.pricingStore,
                     c.freeTierUsageStore,

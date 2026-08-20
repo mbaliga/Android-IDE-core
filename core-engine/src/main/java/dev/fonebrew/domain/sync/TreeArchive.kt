@@ -23,6 +23,7 @@ object TreeArchive {
     const val FORMAT_VERSION = 1
     const val MANIFEST_PATH = "aarso/manifest.json"
     private const val NODES_DIR = "aarso/nodes/"
+    private const val OBJECT3D_DIR = "aarso/objects3d/"
 
     /** Serialize [nodes] to a map of repo-relative path → file content. */
     fun write(nodes: List<MessageNode>): Map<String, String> {
@@ -40,6 +41,24 @@ object TreeArchive {
         files.entries
             .filter { it.key.startsWith(NODES_DIR) && it.key.endsWith(".json") }
             .map { nodeFromJson(it.value) }
+
+    /**
+     * docs/design/objects-3d.md §8: "Export-everything includes the directory." Same
+     * repo-relative-path -> content shape [write] uses (so it flows through the identical
+     * GitBackup/DataExport pipeline unchanged) — the objects3d/ store's binary bytes are
+     * base64-encoded so the map's value stays a plain [String], the way every other content
+     * entry here already is. [readObject3dFiles] is the exact inverse, for a future restore path
+     * (mirrors [read]'s own "ignore anything that isn't ours" filtering).
+     */
+    fun writeObject3dFiles(files: Map<String, ByteArray>): Map<String, String> =
+        files.entries.associate { (relativePath, bytes) ->
+            "$OBJECT3D_DIR$relativePath" to java.util.Base64.getEncoder().encodeToString(bytes)
+        }
+
+    fun readObject3dFiles(files: Map<String, String>): Map<String, ByteArray> =
+        files.entries
+            .filter { it.key.startsWith(OBJECT3D_DIR) }
+            .associate { it.key.removePrefix(OBJECT3D_DIR) to java.util.Base64.getDecoder().decode(it.value) }
 
     private fun nodeToJson(n: MessageNode): String {
         val obj = JSONObject()

@@ -74,6 +74,12 @@ object DataExport {
         val treeFiles = TreeArchive.write(container.repository.tree().allNodes())
         root.put("tree", JSONObject(treeFiles as Map<*, *>))
 
+        // docs/design/objects-3d.md §8: "Export-everything includes the directory."
+        val object3dFiles = TreeArchive.writeObject3dFiles(
+            container.object3dStore.list().associate { it.name to it.readBytes() },
+        )
+        root.put("object3dFiles", JSONObject(object3dFiles as Map<*, *>))
+
         root.toString(2)
     }
 }

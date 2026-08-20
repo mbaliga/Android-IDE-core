@@ -2,6 +2,7 @@
 
 package dev.fonebrew.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -140,6 +141,13 @@ fun ChatScreen(
     var input by remember { mutableStateOf("") }
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
+    // docs/design/objects-3d.md §1: the "Generate 3D…" mini-chooser (On-device / Cloud·watched).
+    var showObject3dChooser by remember { mutableStateOf(false) }
+    // The object3d node currently opened in the viewer — (relativePath, format) from the tapped
+    // node's metadata; the loaded content/error is resolved async below (file I/O off the tap).
+    var object3dViewerTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var object3dViewerContent by remember { mutableStateOf<dev.fonebrew.ui.object3d.ObjectViewerContent?>(null) }
+    var object3dViewerError by remember { mutableStateOf<String?>(null) }
     var showParticipants by remember { mutableStateOf(false) }
     var showMe by remember { mutableStateOf(false) }
     var actionStep by remember { mutableStateOf<PathView.Step?>(null) }
@@ -189,6 +197,37 @@ fun ChatScreen(
     val container0 = (ctx0.applicationContext as dev.fonebrew.FonebrewApp).container
     val gitHosts by container0.gitHostStore.hosts.collectAsState()
     val findScrollPrefix = if (!connectDismissed && gitHosts.isEmpty()) 1 else 0
+
+    // docs/design/objects-3d.md §1's "3D file…" SAF import — the picker itself lives here
+    // (ChatScreen owns activity-result launchers); the read/store/mint work is ChatViewModel's.
+    val object3dPickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { viewModel.importObject3d(it, queryDisplayName(ctx0, it)) } }
+
+    // §3: loads the tapped object3d node's bytes off the main thread and decodes them into
+    // whatever ObjectViewerRoom needs — a real model file, or (for the on-device DSL path) the
+    // scene JSON text via ProceduralSceneCodec. Re-runs whenever a different node is tapped.
+    LaunchedEffect(object3dViewerTarget) {
+        val target = object3dViewerTarget
+        object3dViewerContent = null
+        object3dViewerError = null
+        if (target == null) return@LaunchedEffect
+        val (relativePath, format) = target
+        runCatching {
+            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                container0.object3dStore.readBytes(relativePath)
+            }
+            if (format == dev.fonebrew.data.Object3dNodeMeta.DSL_JSON_FORMAT) {
+                val scene = dev.fonebrew.domain.object3d.ProceduralSceneCodec.fromJsonString(String(bytes, Charsets.UTF_8))
+                dev.fonebrew.ui.object3d.ObjectViewerContent.Procedural(scene)
+            } else {
+                dev.fonebrew.ui.object3d.ObjectViewerContent.Model(bytes, dev.fonebrew.domain.object3d.Object3dFormat.valueOf(format))
+            }
+        }.fold(
+            onSuccess = { object3dViewerContent = it },
+            onFailure = { object3dViewerError = it.message ?: "couldn't open this 3D object" },
+        )
+    }
     // THREAD_TOPOLOGY_PLAN.md WP4: Settings → Gestures — every switch OFF collapses
     // Modifier.messageGestures back to nothing but the always-available long-press (parity rule,
     // binding constraint 4: gestures are additive sugar, never the only way in).
@@ -361,6 +400,7 @@ fun ChatScreen(
                             onCompare = { viewModel.openCompare(step.node.id) },
                             onChooseForMe = { viewModel.chooseForMe(step.node.id) },
                             chooseForMeEnabled = state.genPhase == GenPhase.IDLE,
+                            onOpenObject3d = { path, format -> object3dViewerTarget = path to format },
                             bridge = bridge,
                             onViewFullPrior = { srcRoot?.let { viewModel.openConversation(it) } },
                             highlighted = findOpen && currentFindHit?.nodeId == step.node.id,
@@ -426,6 +466,7 @@ fun ChatScreen(
                                 tokens = state.streamingTokens,
                                 entropyColoring = entropyColoring,
                                 imageMode = state.imageMode,
+                                object3dMode = state.object3dMode,
                             )
                         }
                     }
@@ -570,11 +611,32 @@ fun ChatScreen(
                 }
             }
 
+            // 3D-object mode — same "entered from + sheet, banner shows + exits it" shape as
+            // image mode above (docs/design/objects-3d.md §1). The banner names the scope the
+            // mini-chooser picked, so the opt-in-per-use choice (rule 2) stays visible while typing.
+            if (state.object3dMode) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "🧊 Generating a 3D object · " +
+                            if (state.object3dScope == Object3dGenScope.CLOUD) "Cloud · watched" else "On-device",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { viewModel.setComposerMode(ComposerMode.SINGLE) }) { Text("Exit") }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val imageMode = state.imageMode
+                val object3dMode = state.object3dMode
+                val generationMode = imageMode || object3dMode
                 // The "+" (Gemini-style): attach + generation tools live here, not as pills.
                 TextButton(
                     onClick = { showPlus = true },
@@ -591,13 +653,14 @@ fun ChatScreen(
                     modifier = Modifier.weight(1f),
                     placeholder = when {
                         imageMode -> "Describe an image"
+                        object3dMode -> "Describe a 3D object"
                         state.noModelActive -> "Download a model to begin"
                         state.engineAvailable -> "Message"
                         else -> "Model not runnable yet"
                     },
-                    enabled = state.genPhase == GenPhase.IDLE && (state.engineAvailable || imageMode),
+                    enabled = state.genPhase == GenPhase.IDLE && (state.engineAvailable || generationMode),
                 )
-                if (!imageMode) {
+                if (!generationMode) {
                     TextButton(
                         onClick = { viewModel.refinePrompt(input) },
                         enabled = input.isNotBlank() && !state.rewriting &&
@@ -607,22 +670,22 @@ fun ChatScreen(
                     }
                 }
                 if (state.genPhase != GenPhase.IDLE) {
-                    // An in-flight image render has no cancel point (§6) — the
+                    // An in-flight image/3D render has no cancel point (§6/§4-5) — the
                     // button stays as state, disabled, rather than lying.
                     HyleButton(
                         "Stop",
                         onClick = { viewModel.stopGeneration() },
-                        enabled = !imageMode,
+                        enabled = !generationMode,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 } else {
                     HyleButton(
-                        if (imageMode) "Generate" else "Send",
+                        if (generationMode) "Generate" else "Send",
                         onClick = {
                             viewModel.send(input)
                             input = ""
                         },
-                        enabled = input.isNotBlank() && (state.engineAvailable || imageMode),
+                        enabled = input.isNotBlank() && (state.engineAvailable || generationMode),
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
@@ -644,8 +707,42 @@ fun ChatScreen(
     if (showPlus) {
         PlusSheet(
             onGenerateImage = { viewModel.setComposerMode(ComposerMode.IMAGE); showPlus = false },
+            onGenerateObject3d = { showPlus = false; showObject3dChooser = true },
+            onImportObject3dFile = { showPlus = false; object3dPickerLauncher.launch(arrayOf("*/*")) },
             onDismiss = { showPlus = false },
         )
+    }
+
+    if (showObject3dChooser) {
+        Object3dScopeChooserDialog(
+            onPick = { scope -> viewModel.enterObject3dMode(scope); showObject3dChooser = false },
+            onDismiss = { showObject3dChooser = false },
+        )
+    }
+
+    // docs/design/objects-3d.md §3: tapping an object3d node opens the offline viewer once its
+    // bytes/scene are loaded (see the LaunchedEffect above); a load error surfaces honestly
+    // instead of a blank/garbled viewer.
+    if (object3dViewerTarget != null) {
+        val content = object3dViewerContent
+        val loadError = object3dViewerError
+        when {
+            content != null -> dev.fonebrew.ui.object3d.ObjectViewerRoom(
+                content = content,
+                onClose = { object3dViewerTarget = null },
+            )
+            loadError != null -> AlertDialog(
+                onDismissRequest = { object3dViewerTarget = null },
+                confirmButton = { TextButton(onClick = { object3dViewerTarget = null }) { Text("Close") } },
+                title = { Text("Couldn't open this 3D object") },
+                text = { Text(loadError) },
+            )
+            else -> Dialog(onDismissRequest = { object3dViewerTarget = null }) {
+                Surface(shape = MaterialTheme.shapes.large) {
+                    Box(Modifier.padding(32.dp)) { CircularProgressIndicator() }
+                }
+            }
+        }
     }
 
     if (showParticipants) {
@@ -1033,25 +1130,33 @@ private fun InstrumentsStrip(
     }
 }
 
-/** The send mode, explicit and legible: one voice, a council, or an image (§4b/§6). */
+/** The send mode, explicit and legible: one voice, a council, an image, or a 3D object (§4b/§6,
+ *  docs/design/objects-3d.md §1). */
 /**
  * The composer "+" sheet (Gemini-style, IA §B5): attach + generation tools, instead of pills.
- * Image generation is wired today; video / 3D / file-attach are honest "soon" rows (rule 6 —
- * never claim a capability that isn't there). They map onto the provider types in Settings.
+ * Image and 3D generation are wired; video / photo-attach / file-attach are honest "soon" rows
+ * (rule 6 — never claim a capability that isn't there). They map onto the provider types in
+ * Settings.
  */
 @Composable
-private fun PlusSheet(onGenerateImage: () -> Unit, onDismiss: () -> Unit) {
+private fun PlusSheet(
+    onGenerateImage: () -> Unit,
+    onGenerateObject3d: () -> Unit,
+    onImportObject3dFile: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Create", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 PlusRow("🖼", "Image", "Generate & edit — on-device or watched cloud", enabled = true, onClick = onGenerateImage)
                 PlusRow("🎬", "Video", "Soon — no engine wired yet", enabled = false) {}
-                PlusRow("◯", "3D model", "Soon — no engine wired yet", enabled = false) {}
+                PlusRow("🧊", "Generate 3D…", "On-device or watched cloud — you pick", enabled = true, onClick = onGenerateObject3d)
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 Text("Attach", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 PlusRow("🖼", "Photo", "Soon — multimodal input not wired yet", enabled = false) {}
                 PlusRow("📎", "File", "Soon — multimodal input not wired yet", enabled = false) {}
+                PlusRow("🧊", "3D file…", "Import any supported model file to preview", enabled = true, onClick = onImportObject3dFile)
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Close") }
@@ -1060,6 +1165,66 @@ private fun PlusSheet(onGenerateImage: () -> Unit, onDismiss: () -> Unit) {
         }
     }
 }
+
+/**
+ * docs/design/objects-3d.md §1's mini-chooser: On-device / Cloud · watched, cloud opt-in per use
+ * (binding rule 2). [dev.fonebrew.ui.components.ProvenanceBadge] gives each option the same
+ * glyph+label dual-channel identity every other provenance surface in this app uses — colour is
+ * never the sole carrier of "this would leave your device."
+ */
+@Composable
+private fun Object3dScopeChooserDialog(onPick: (Object3dGenScope) -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Generate a 3D object", style = MaterialTheme.typography.titleSmall)
+                Object3dScopeRow(
+                    title = "On-device",
+                    subtitle = "Prompts your active chat model for a scene. Nothing leaves this device.",
+                    provenance = dev.fonebrew.domain.provenance.ProvenanceState.LOCAL,
+                    onClick = { onPick(Object3dGenScope.ON_DEVICE) },
+                )
+                Object3dScopeRow(
+                    title = "Cloud · watched",
+                    subtitle = "Meshy or Tripo, per your Settings → 3D provider. Opt-in for this generation only.",
+                    provenance = dev.fonebrew.domain.provenance.ProvenanceState.CLOUD,
+                    onClick = { onPick(Object3dGenScope.CLOUD) },
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Object3dScopeRow(
+    title: String,
+    subtitle: String,
+    provenance: dev.fonebrew.domain.provenance.ProvenanceState,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        dev.fonebrew.ui.components.ProvenanceBadge(provenance, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+/** Best-effort SAF display-name lookup for the picked object3d file, used both as the user-turn
+ *  label and as [dev.fonebrew.domain.object3d.Object3dFormatSniffer]'s extension fallback. Never
+ *  throws — an unresolved name just falls back to the format's own label upstream. */
+private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? =
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    }.getOrNull()
 
 @Composable
 private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Boolean, onClick: () -> Unit) {
@@ -1477,6 +1642,7 @@ private fun StreamingBubble(
     tokens: List<GeneratedToken>,
     entropyColoring: Boolean,
     imageMode: Boolean,
+    object3dMode: Boolean = false,
 ) {
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
     val uncertain = MaterialTheme.colorScheme.error
@@ -1498,6 +1664,8 @@ private fun StreamingBubble(
                 when {
                     imageMode ->
                         Text("rendering image… (on-device SD takes a minute)")
+                    object3dMode ->
+                        Text("generating a 3D object…")
                     phase == GenPhase.LOADING ->
                         Text("loading model… (first load can take a while)")
                     tokens.isEmpty() ->
@@ -1654,6 +1822,9 @@ private fun MessageTurn(
     onBranchDrag: () -> Unit = {},
     onForkDrag: () -> Unit = {},
     onSpawnDrag: () -> Unit = {},
+    /** docs/design/objects-3d.md §1: tapping an object3d node opens ObjectViewerRoom — the
+     *  callback carries the node's (relativePath, format) metadata straight through. */
+    onOpenObject3d: (relativePath: String, format: String) -> Unit = { _, _ -> },
 ) {
     val fromUser = step.node.role == Role.USER
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1664,6 +1835,13 @@ private fun MessageTurn(
                 role = step.node.role,
                 content = step.node.content,
                 imagePath = step.node.metadata[Conversations.IMAGE_KEY],
+                object3dPath = step.node.metadata[dev.fonebrew.data.Object3dNodeMeta.KEY_FILE],
+                object3dFormat = step.node.metadata[dev.fonebrew.data.Object3dNodeMeta.KEY_FORMAT],
+                onOpenObject3d = {
+                    val path = step.node.metadata[dev.fonebrew.data.Object3dNodeMeta.KEY_FILE]
+                    val format = step.node.metadata[dev.fonebrew.data.Object3dNodeMeta.KEY_FORMAT]
+                    if (path != null && format != null) onOpenObject3d(path, format)
+                },
                 stopped = step.node.metadata["stopped"] == "true",
                 onLongPress = onLongPress,
                 highlighted = highlighted,
@@ -1759,6 +1937,22 @@ private fun CouncilCardView(card: CouncilCard, enabled: Boolean, onContinue: () 
     }
 }
 
+/** docs/design/objects-3d.md §1/§3: the in-bubble affordance for a 3D-object turn — no inline
+ *  WebGL render inside the message list (that's what the locked-down ObjectViewerRoom is for),
+ *  just an honest label naming the format and a button to open it. */
+@Composable
+private fun Object3dTurnCard(format: String?, onOpen: () -> Unit) {
+    Column {
+        Text(
+            "🧊 3D object" + (format?.let { " · $it" } ?: ""),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        TextButton(onClick = onOpen, modifier = Modifier.padding(top = 4.dp)) {
+            Text("Open viewer ▸")
+        }
+    }
+}
+
 @Composable
 private fun MessageBubble(
     role: Role,
@@ -1767,6 +1961,13 @@ private fun MessageBubble(
     stopped: Boolean,
     onLongPress: () -> Unit,
     highlighted: Boolean = false,
+    /** docs/design/objects-3d.md §1/§8 — non-null exactly on an object3d turn ([object3dFormat]
+     *  is the sibling `object3d.format` value: an [dev.fonebrew.domain.object3d.Object3dFormat]
+     *  name, or [dev.fonebrew.data.Object3dNodeMeta.DSL_JSON_FORMAT] for an on-device scene).
+     *  [onOpenObject3d] opens the viewer; a no-op default keeps every other call site compiling. */
+    object3dPath: String? = null,
+    object3dFormat: String? = null,
+    onOpenObject3d: () -> Unit = {},
     /** Curation Instrument additions (STUDIO_UX_SPEC.md §4.2/§4.3) — all optional/no-op by
      *  default so every other [MessageBubble] call site (StreamingBubble etc. don't call this
      *  composable, but any future one) keeps compiling unchanged. */
@@ -1882,6 +2083,10 @@ private fun MessageBubble(
                                 path = imagePath,
                                 modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 320.dp),
                             )
+                            // A 3D-object turn (docs/design/objects-3d.md §1/§8): no inline
+                            // render (WebGL needs the locked-down ObjectViewerRoom, §3) — a
+                            // tappable card opens it.
+                            object3dPath != null -> Object3dTurnCard(format = object3dFormat, onOpen = onOpenObject3d)
                             fromUser || role == Role.SYSTEM -> Text(content)
                             // Persisted model turns render as markdown (legibility); the
                             // live stream keeps per-token entropy colouring instead. We run
