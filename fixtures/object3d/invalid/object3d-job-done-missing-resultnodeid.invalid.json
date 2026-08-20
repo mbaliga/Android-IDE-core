@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "job-invalid-0001",
+  "provider": "MESHY",
+  "providerJobId": "msy_01J9K0000000000000000BAD1",
+  "mode": "TEXT_TO_3D",
+  "prompt": "a garden gnome",
+  "sourceImageRef": null,
+  "state": "DONE",
+  "progressPercent": 100,
+  "downloadUrl": "https://assets.meshy.ai/results/msy_01J9K0000000000000000BAD1/model.glb",
+  "resultNodeId": null,
+  "errorEnvelope": null,
+  "createdAtUtc": "2026-08-15T16:00:00Z",
+  "updatedAtUtc": "2026-08-15T16:04:00Z",
+  "unknownFields": {}
+}

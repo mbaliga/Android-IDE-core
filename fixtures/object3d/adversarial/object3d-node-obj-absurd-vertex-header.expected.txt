@@ -1,0 +1,60 @@
+Fixture: fixtures/object3d/adversarial/object3d-node-obj-absurd-vertex-header.adversarial.json
+Schema: schemas/object3d/object3d-node.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+An ON_DEVICE_GENERATED node whose generation.rawOutputText is syntactically valid OBJ text
+(docs/design/objects-3d.md §4 "Raw OBJ (accepted)") — three real vertices and one real face — but
+whose leading header comments claim:
+
+    # vertices: 2000000000
+    # faces: 1000000000
+
+two billion vertices and one billion faces, wildly inconsistent with the three `v` lines and one
+`f` line the text actually contains. This is exactly §6's second adversarial minimum: "an OBJ with
+a 10^9-vertex header."
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/object3d/object3d-node.schema.json's `generation.rawOutputText` is an opaque `type:
+string` (see that field's $comment) — OBJ is a sub-language this outer JSON Schema cannot parse
+into. A 118-byte string is a 118-byte string regardless of what its comments claim about a mesh
+that isn't actually there.
+
+WHY THE HEADER ITSELF IS THE ATTACK SURFACE, NOT JUST THE ACTUAL CONTENT
+
+A naive consumer might read a "declared vertex/face count" header hint (a real convention some
+OBJ exporters use) and pre-allocate a buffer sized to it BEFORE parsing the actual geometry lines
+— exactly the pattern that turns an untrusted header comment into a memory-exhaustion vector. The
+real triangle count in this fixture is tiny; the DECLARED one is what a vulnerable implementation
+would act on.
+
+REQUIRED REAL BEHAVIOR
+
+A real on-device generation pipeline MUST, before ever writing a file or minting an Object3dNode
+from this rawOutputText, run it through dev.fonebrew.domain.object3d.ObjParser.validate, which:
+
+  1. Scans ONLY the leading comment-line header block for a declared vertex/face count BEFORE
+     doing any per-line geometry parsing (dev.fonebrew.domain.object3d.ObjParser's
+     checkDeclaredHeaderCounts pass), and
+  2. Refuses immediately — returning ObjValidation.Invalid — the moment a declared count exceeds
+     ObjParser.MAX_VERTICES (200,000) or ObjParser.MAX_FACES (200,000), specifically BEFORE any
+     buffer sized off that claim could be allocated.
+
+For this fixture, the declared 2,000,000,000 exceeds MAX_VERTICES by four orders of magnitude, so
+validate() MUST return Invalid with a reason naming "header comment declares 2000000000 vertices,
+exceeding the maximum of 200000 — refused before parsing geometry" (and the analogous face-count
+reason). The real content (3 vertices, 1 face) is NEVER reached — the header check runs first and
+short-circuits, by design, so a consumer that only trusts the header can never be fooled into
+allocating for content that was never coming. See ObjParserTest's "absurd declared vertex header is
+refused before any geometry parsing" case, which validates this exact fixture's rawOutputText.
+
+On Invalid, the pipeline MUST take the §4 structured-retry path (or fail honestly on a second
+failure) exactly as the sibling DSL-smuggling fixture's expectation describes — never persist a
+file or mint a node from unvalidated rawOutputText.
+
+Rejection code: OBJECT3D_OBJ_HEADER_COUNT_ABSURD
+Severity: WARNING (caught before any resource was actually allocated off the bogus claim).
+Retryable: true (one structured retry, per §4).
+Recovery action: re-prompt the model with the validator's reasons; on a second failure, fall back
+to an honest "could not generate a valid model" turn rather than persisting anything.

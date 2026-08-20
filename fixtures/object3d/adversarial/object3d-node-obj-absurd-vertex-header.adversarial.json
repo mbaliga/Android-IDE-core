@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-adversarial-0002",
+  "file": {
+    "relativePath": "objects3d/55ee66ff77aa88bb.obj",
+    "sizeBytes": 118,
+    "digest": null
+  },
+  "format": "OBJ",
+  "source": "ON_DEVICE_GENERATED",
+  "provider": null,
+  "prompt": "a single triangle",
+  "generation": {
+    "method": "RAW_OBJ",
+    "rawOutputText": "# aarso-object3d generated mesh\n# vertices: 2000000000\n# faces: 1000000000\nv 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3\n",
+    "retried": false
+  },
+  "provenanceState": "LOCAL",
+  "watched": false,
+  "createdAtUtc": "2026-08-15T17:15:00Z",
+  "unknownFields": {}
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-cloud-meshy-0002",
+  "file": {
+    "relativePath": "objects3d/1a2b3c4d5e6f7081.glb",
+    "sizeBytes": 2359872,
+    "digest": {
+      "algorithm": "SHA-256",
+      "digestHex": "1a2b3c4d5e6f70819f8e7d6c5b4a39281a2b3c4d5e6f70819f8e7d6c5b4a3928",
+      "byteLength": 2359872
+    }
+  },
+  "format": "GLB",
+  "source": "CLOUD_GENERATED",
+  "provider": "MESHY",
+  "prompt": "a weathered wooden treasure chest, low-poly game asset",
+  "generation": null,
+  "provenanceState": "CLOUD",
+  "watched": true,
+  "createdAtUtc": "2026-08-15T11:30:00Z",
+  "unknownFields": {}
+}

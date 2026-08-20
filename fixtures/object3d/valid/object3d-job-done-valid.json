@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "job-meshy-text-0003",
+  "provider": "MESHY",
+  "providerJobId": "msy_01J9K0000000000000000TXT3",
+  "mode": "TEXT_TO_3D",
+  "prompt": "a ceramic coffee mug with a leaf pattern",
+  "sourceImageRef": null,
+  "state": "DONE",
+  "progressPercent": 100,
+  "downloadUrl": "https://assets.meshy.ai/results/msy_01J9K0000000000000000TXT3/model.glb",
+  "resultNodeId": "node-cloud-meshy-0002",
+  "errorEnvelope": null,
+  "createdAtUtc": "2026-08-15T14:00:00Z",
+  "updatedAtUtc": "2026-08-15T14:03:12Z",
+  "unknownFields": {}
+}

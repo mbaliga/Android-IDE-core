@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "job-meshy-text-0001",
+  "provider": "MESHY",
+  "providerJobId": "msy_01J9K0000000000000000TXT1",
+  "mode": "TEXT_TO_3D",
+  "prompt": "a stylized pine tree, hand-painted texture",
+  "sourceImageRef": null,
+  "state": "QUEUED",
+  "progressPercent": null,
+  "downloadUrl": null,
+  "resultNodeId": null,
+  "errorEnvelope": null,
+  "createdAtUtc": "2026-08-15T13:00:00Z",
+  "updatedAtUtc": "2026-08-15T13:00:00Z",
+  "unknownFields": {}
+}

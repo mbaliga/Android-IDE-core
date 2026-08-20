@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/object3d/object3d-node.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Object3dNode per docs/design/objects-3d.md §6 ('object3d-node.schema.json (node metadata: object3d.file|format|source|provider|prompt)'). Typically carried as the `payload` of a ContractEnvelope<Object3dNode> (see schemas/common/envelope.schema.json), mirroring how schemas/thread/thread-marker.schema.json wraps ThreadMarker — this file documents the bare payload shape, own schemaVersion included per this corpus's convention (see thread-marker.schema.json's identical split) so the payload is independently meaningful even when read outside an envelope (e.g. embedded fixture text in a unit test). A 3D turn is a node on the same append-only message tree as any other turn (§1 'not a separate library') — this schema documents that node's object3d-specific metadata sidecar, not the tree node itself (dev.fonebrew.domain.tree owns that). `file` points at the actual bytes under app-private `objects3d/` (§8); this schema never embeds mesh bytes.",
+  "title": "Object3dNode",
+  "description": "Metadata for one 3D-object chat turn: which file backs it, its sniffed format, how it was produced (on-device generated / cloud generated / imported via SAF — §1), the cloud provider when applicable (always a watched object, binding rule 2), the generation prompt, and — for the on-device path only — the raw model output (DSL JSON or OBJ text) that was validated before the file was written (§4's 'invalid output -> one structured retry with the validator's complaint' loop; this field is what a retry/debug surface reads back).",
+  "type": "object",
+  "required": ["schemaVersion", "nodeId", "file", "format", "source", "provenanceState", "watched", "createdAtUtc"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR."
+    },
+    "nodeId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable id for this object3d metadata record, independent of the tree message node id it decorates."
+    },
+    "file": {
+      "$ref": "#/$defs/StoredFileRef"
+    },
+    "format": {
+      "$ref": "#/$defs/Object3dFormat"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["ON_DEVICE_GENERATED", "CLOUD_GENERATED", "IMPORTED"],
+      "description": "§1: 'Generate 3D...' (on-device or cloud, per-use opt-in per binding rule 2) vs '3D file...' SAF import — 'the preview anything's output path'."
+    },
+    "provider": {
+      "oneOf": [{ "$ref": "#/$defs/CloudProvider3d" }, { "type": "null" }],
+      "default": null,
+      "description": "Required non-null exactly when source=CLOUD_GENERATED (see allOf) — Settings -> 3D tab's configured provider (§1). Every cloud provider is a watched object (binding rule 2); this field never appears without provenanceState=CLOUD and watched=true alongside it."
+    },
+    "prompt": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "The user's generation prompt. Required non-blank for ON_DEVICE_GENERATED/CLOUD_GENERATED (see allOf); null for IMPORTED — an imported file was never prompted for."
+    },
+    "generation": {
+      "oneOf": [{ "$ref": "#/$defs/GenerationDebugInfo" }, { "type": "null" }],
+      "default": null,
+      "description": "Required non-null exactly when source=ON_DEVICE_GENERATED (see allOf) — §4's on-device path is the only one whose intermediate model output (DSL JSON or raw OBJ text) is captured here, pre-file-write, for the structured-retry loop. CLOUD_GENERATED gets bytes back directly from the provider (§5) with no intermediate text stage to capture; IMPORTED has no generation step at all.",
+      "$comment": "SECURITY NOTE for implementers, not enforceable by this document: `generation.rawOutputText` is untrusted model output. A decoder MUST run it through dev.fonebrew.domain.object3d.ProceduralSceneValidator (method=DSL_PRIMITIVES) or dev.fonebrew.domain.object3d.ObjParser (method=RAW_OBJ) before treating any field it contains (a DSL color string, an OBJ header comment) as trustworthy — see fixtures/object3d/adversarial/ for the two fixtures this schema structurally passes but a real validator MUST refuse."
+    },
+    "provenanceState": {
+      "type": "string",
+      "enum": ["LOCAL", "CLOUD", "MIXED", "UNKNOWN"],
+      "description": "Mirrors dev.fonebrew.domain.provenance.ProvenanceState field-for-field (binding rule 2's 'watched object' model, applied to this generic contract corpus the same way every other cloud-touching schema in schemas/ already does). A 3D node is LOCAL for ON_DEVICE_GENERATED, CLOUD for CLOUD_GENERATED, and — for IMPORTED — whatever is honestly known about the imported file's own origin (typically UNKNOWN; a future importer MAY carry forward a known provenance from the source file's own metadata, which is why MIXED/CLOUD remain legal for IMPORTED too)."
+    },
+    "watched": {
+      "type": "boolean",
+      "description": "Mirrors dev.fonebrew.domain.provenance.ProvenanceState.watched exactly: true iff provenanceState is CLOUD or MIXED, false for LOCAL/UNKNOWN (see allOf) — binding rule 2's 'visibly marked a watched object', made a structural invariant rather than left to reader discipline."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this node's metadata was minted (append-only, per CLAUDE.md's tree spine — never edited after insert)."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "properties": { "source": { "const": "CLOUD_GENERATED" } }, "required": ["source"] },
+      "then": {
+        "required": ["provider", "prompt"],
+        "properties": {
+          "provider": { "$ref": "#/$defs/CloudProvider3d" },
+          "prompt": { "type": "string", "minLength": 1 }
+        }
+      },
+      "$comment": "§1/§5: cloud generation always has a configured provider and a prompt (text-to-3D) — image-to-3D still records a prompt-equivalent description for display, per this schema's single-prompt-field simplification."
+    },
+    {
+      "if": { "properties": { "source": { "const": "ON_DEVICE_GENERATED" } }, "required": ["source"] },
+      "then": {
+        "required": ["prompt", "generation"],
+        "properties": {
+          "provider": { "const": null },
+          "prompt": { "type": "string", "minLength": 1 },
+          "generation": { "$ref": "#/$defs/GenerationDebugInfo" }
+        }
+      },
+      "$comment": "§4: the on-device path never has a cloud provider, always has a prompt, and always captures its raw model output for the retry loop."
+    },
+    {
+      "if": { "properties": { "source": { "const": "IMPORTED" } }, "required": ["source"] },
+      "then": {
+        "properties": {
+          "provider": { "const": null },
+          "prompt": { "const": null },
+          "generation": { "const": null }
+        }
+      },
+      "$comment": "§1: an imported file was never prompted for and has no generation stage — 'preview anything's output', not a generation record."
+    },
+    {
+      "if": { "properties": { "provenanceState": { "enum": ["CLOUD", "MIXED"] } }, "required": ["provenanceState"] },
+      "then": { "properties": { "watched": { "const": true } } }
+    },
+    {
+      "if": { "properties": { "provenanceState": { "enum": ["LOCAL", "UNKNOWN"] } }, "required": ["provenanceState"] },
+      "then": { "properties": { "watched": { "const": false } } }
+    }
+  ],
+  "$defs": {
+    "Object3dFormat": {
+      "type": "string",
+      "enum": ["GLB", "GLTF", "OBJ", "STL_ASCII", "STL_BINARY", "PLY", "FBX", "DAE", "THREE_MF", "USDZ"],
+      "description": "docs/design/objects-3d.md §2's format matrix, verbatim (THREE_MF = '3MF'; JSON enum values cannot start with a digit). Sniffed from magic bytes + extension by dev.fonebrew.domain.object3d.Object3dFormatSniffer — this field records the sniffer's verdict at file-write time, not a user-declared value."
+    },
+    "CloudProvider3d": {
+      "type": "string",
+      "enum": ["MESHY", "TRIPO", "CUSTOM"],
+      "description": "§1: 'kind (Meshy / Tripo; custom base URL escape hatch)'."
+    },
+    "StoredFileRef": {
+      "type": "object",
+      "required": ["relativePath", "sizeBytes"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "§8: hash-named, relative to the app-private `objects3d/` directory. MUST NOT contain a '..' path segment (path-traversal defense, same obligation schemas/common/artifact-ref.schema.json's StorageLocation carries for LOCAL_FS — see fixtures/common/adversarial/artifact-ref-path-traversal.adversarial.json for that sibling case) — this schema checks shape only; the traversal check itself is a resolver-side obligation, not expressible as a single-document structural constraint."
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "§3: files over 32 MB are refused by the viewer bridge with an honest size message before this field is ever minted that large in practice, but this schema does not itself cap the value — the 32 MB viewer limit is a WebView-bridge concern (base64 inflation), not a storage-format one."
+        },
+        "digest": {
+          "oneOf": [{ "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/envelope.schema.json#/$defs/IntegrityRef" }, { "type": "null" }],
+          "default": null,
+          "description": "Reused as-is from schemas/common/envelope.schema.json's IntegrityRef $def. Optional — null for a node minted before this field existed, or when the store has not yet backfilled a digest."
+        }
+      },
+      "additionalProperties": true
+    },
+    "GenerationDebugInfo": {
+      "type": "object",
+      "required": ["method", "rawOutputText"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["DSL_PRIMITIVES", "RAW_OBJ"],
+          "description": "§4's two accepted on-device output shapes: the 'preferred' primitive DSL, or 'accepted' raw OBJ text."
+        },
+        "rawOutputText": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The fenced ```object3d``` block content the chat engine produced, BEFORE validation (§4). Untrusted — see this schema's top-level $comment. A real producer MUST have already run this through the matching validator (ProceduralSceneValidator or ObjParser) and — on failure — MUST have executed the one structured retry before ever minting a node with this text (§4); a node whose generation.rawOutputText fails validation when re-checked is a producer bug, not a schema-catchable condition (JSON Schema cannot parse an embedded DSL/OBJ sub-language)."
+        },
+        "retried": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if the first model output failed validation and this is the text from the one allowed structured retry (§4)."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
