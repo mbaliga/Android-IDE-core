@@ -25,8 +25,14 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const vendorPath = path.join(root, 'third_party', 'g6', 'g6.min.js');
 const outPath = path.join(root, 'core-engine', 'src', 'main', 'assets', 'graph', 'graph-room.html');
+// Same bundled Plus Jakarta Sans TTF ui/theme/Type.kt uses for every native Compose surface —
+// embedded as a base64 data: URI (binding rule 1 / "assets stay local" — no @font-face src ever
+// fetched at runtime) so this is the one page in the app that DOESN'T fall back to the platform
+// default sans, per this WP's own audit finding.
+const fontPath = path.join(root, 'core-engine', 'src', 'main', 'res', 'font', 'plus_jakarta_sans.ttf');
 
 const vendored = fs.readFileSync(vendorPath, 'utf8');
+const fontBase64 = fs.readFileSync(fontPath).toString('base64');
 
 // Guard: fail loudly if the vendored file isn't what this script expects, per the
 // build-texture-surface.js precedent ("fail loudly if the source ever shifts out from under
@@ -87,6 +93,13 @@ const CSP =
 // Edge kind -> stroke colour + a distinct dash pattern (solid/dashed/dotted), same dual-channel
 // rule applied to edges.
 //
+// Fill/stroke colours come from a `theme` object GraphWebRoom.kt resolves from the live
+// dev.fonebrew.ui.theme.HyleColors (LocalHyleColors.current) and pushes alongside the graph JSON
+// on every `load()` call — see that file's own KDoc. DEFAULT_THEME below (the exact Color.kt hex
+// constants, not a guess) is only the fallback for the narrow window before that first push, or
+// if a caller ever invokes `load()` with no second argument at all; the theme this page actually
+// draws with always tracks the user's live accent/mode once Kotlin has pushed one.
+//
 // Deliberately NOT wired here (forward pointers, not built now — this WP's scope is the base
 // wiring, not every G6 feature the exploration section named as available): Fisheye,
 // EdgeBundling, BubbleSets, Minimap, Timebar. All are real exports of this vendored build
@@ -98,6 +111,26 @@ const BOOTSTRAP = `
 (function () {
   'use strict';
 
+  // Fallback only (see this script's own comment above) — the exact dev.fonebrew.ui.theme.Color.kt
+  // hex constants: TextMid, Cyan, Warning, Success, Violet.
+  var DEFAULT_THEME = {
+    textMid: '#9ca3af',
+    cyan: '#08fed5',
+    warning: '#f78819',
+    success: '#3ab700',
+    violet: '#8e7bff',
+  };
+
+  // Human vocabulary for a raw ThreadNodeKind token, mirroring GraphRoom.kt's own kindLabel() —
+  // the native room's precedent for how a node kind is surfaced to a user, never the bare enum.
+  var KIND_LABEL = {
+    MESSAGE: 'Turn',
+    FORK_ROOT: 'Fork',
+    SPAWN_ROOT: 'Spawn',
+    MARKER: 'Marker',
+    DELEGATION: 'Delegation',
+  };
+
   function shapeFor(kind) {
     switch (kind) {
       case 'MESSAGE': return 'circle';
@@ -108,26 +141,34 @@ const BOOTSTRAP = `
       default: return 'circle';
     }
   }
-  function fillFor(kind) {
+  function fillFor(kind, theme) {
     switch (kind) {
-      case 'MESSAGE': return '#9aa0a6';
-      case 'FORK_ROOT': return '#22d3ee';
-      case 'SPAWN_ROOT': return '#f5a524';
-      case 'MARKER': return '#4ade80';
-      case 'DELEGATION': return '#a78bfa';
-      default: return '#9aa0a6';
+      case 'MESSAGE': return theme.textMid;
+      case 'FORK_ROOT': return theme.cyan;
+      case 'SPAWN_ROOT': return theme.warning;
+      case 'MARKER': return theme.success;
+      case 'DELEGATION': return theme.violet;
+      default: return theme.textMid;
     }
   }
-  function edgeStyleFor(kind) {
+  function edgeStyleFor(kind, theme) {
     switch (kind) {
-      case 'REPLY': return { stroke: '#9aa0a6', lineDash: null };
-      case 'FORK': return { stroke: '#22d3ee', lineDash: null };
-      case 'SPAWN': return { stroke: '#22d3ee', lineDash: null };
-      case 'LINEAGE': return { stroke: '#a78bfa', lineDash: [4, 3] };
+      case 'REPLY': return { stroke: theme.textMid, lineDash: null };
+      case 'FORK': return { stroke: theme.cyan, lineDash: null };
+      case 'SPAWN': return { stroke: theme.cyan, lineDash: null };
+      case 'LINEAGE': return { stroke: theme.violet, lineDash: [4, 3] };
       case 'MARKER_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
       case 'DELEGATION_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
-      default: return { stroke: '#9aa0a6', lineDash: null };
+      default: return { stroke: theme.textMid, lineDash: null };
     }
+  }
+
+  // A blank/missing label used to render the raw enum token (e.g. "FORK_ROOT") straight onto the
+  // canvas — GraphRoom.kt's own kindLabel() is the native precedent this mirrors.
+  function labelFor(n) {
+    var raw = n.label;
+    if (raw && String(raw).trim().length > 0) return raw;
+    return KIND_LABEL[n.kind] || n.kind;
   }
 
   // ThreadGraph (schemas/thread/thread-graph.schema.json) -> G6 GraphData. Every style value is
@@ -135,18 +176,19 @@ const BOOTSTRAP = `
   // nothing left for G6 to resolve dynamically beyond drawing exactly what this function hands
   // it — easier to reason about, and easier for this file's own JVM asset test to have nothing
   // load-bearing to assert about G6's mapping-callback API surface.
-  function toGraphData(g) {
+  function toGraphData(g, theme) {
     const nodes = (g.nodes || []).map(function (n) {
       return {
         id: n.id,
         type: shapeFor(n.kind),
         style: {
-          fill: fillFor(n.kind),
+          fill: fillFor(n.kind, theme),
           stroke: '#fff',
           lineWidth: 1,
           label: true,
-          labelText: n.label || n.kind,
+          labelText: labelFor(n),
           labelFontSize: 10,
+          labelFontFamily: "'Plus Jakarta Sans', -apple-system, system-ui, sans-serif",
           labelFill: '#e6e6e6',
           labelPlacement: 'bottom',
         },
@@ -154,7 +196,7 @@ const BOOTSTRAP = `
       };
     });
     const edges = (g.edges || []).map(function (e, i) {
-      const st = edgeStyleFor(e.kind);
+      const st = edgeStyleFor(e.kind, theme);
       return {
         id: 'e' + i,
         source: e.from,
@@ -168,6 +210,30 @@ const BOOTSTRAP = `
   function setStatus(text) {
     var el = document.getElementById('graph-room-status');
     if (el) el.textContent = text;
+  }
+
+  // The legend row (GraphRoom.kt's own Legend() is the native precedent: a shape swatch + label
+  // per ThreadNodeKind) — rendered once at page-init with DEFAULT_THEME so the page never looks
+  // unfinished before Kotlin's first load() call, then re-rendered with the real theme once one
+  // arrives, so it never drifts from the node/edge colours actually drawn.
+  function renderLegend(theme) {
+    var el = document.getElementById('graph-room-legend');
+    if (!el) return;
+    var order = ['MESSAGE', 'FORK_ROOT', 'SPAWN_ROOT', 'MARKER', 'DELEGATION'];
+    var shapeCss = {
+      MESSAGE: 'border-radius:50%;',
+      FORK_ROOT: 'border-radius:2px;transform:rotate(45deg);',
+      SPAWN_ROOT: 'border-radius:2px;',
+      MARKER: 'border-radius:2px;transform:rotate(45deg);',
+      DELEGATION: 'border-radius:50%;',
+    };
+    el.innerHTML = order.map(function (kind) {
+      var color = fillFor(kind, theme);
+      var swatch = '<span style="display:inline-block;width:8px;height:8px;margin-right:4px;' +
+        'background:' + color + ';' + shapeCss[kind] + '"></span>';
+      return '<span style="display:inline-flex;align-items:center;margin-right:10px;">' +
+        swatch + (KIND_LABEL[kind] || kind) + '</span>';
+    }).join('');
   }
 
   var graph = null;
@@ -192,10 +258,26 @@ const BOOTSTRAP = `
   }
 
   window.__graphRoom = {
-    load: function (jsonText) {
+    load: function (jsonText, themeJsonText) {
       try {
+        var theme = DEFAULT_THEME;
+        if (themeJsonText) {
+          try {
+            var pushed = JSON.parse(themeJsonText);
+            theme = {
+              textMid: pushed.textMid || DEFAULT_THEME.textMid,
+              cyan: pushed.cyan || DEFAULT_THEME.cyan,
+              warning: pushed.warning || DEFAULT_THEME.warning,
+              success: pushed.success || DEFAULT_THEME.success,
+              violet: pushed.violet || DEFAULT_THEME.violet,
+            };
+          } catch (themeErr) {
+            theme = DEFAULT_THEME;
+          }
+        }
+        renderLegend(theme);
         var parsed = JSON.parse(jsonText);
-        var data = toGraphData(parsed);
+        var data = toGraphData(parsed, theme);
         var g = ensureGraph();
         g.setData(data);
         g.render().then(function () {
@@ -209,6 +291,7 @@ const BOOTSTRAP = `
     },
   };
 
+  renderLegend(DEFAULT_THEME);
   setStatus('waiting for data\\u2026');
 })();
 `;
@@ -221,17 +304,36 @@ const html = `<!doctype html>
 <meta http-equiv="Content-Security-Policy" content="${CSP}">
 <title>Aarso — Graph Room</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0e0e12; overflow: hidden; }
+  @font-face {
+    font-family: 'Plus Jakarta Sans';
+    src: url(data:font/ttf;base64,${fontBase64}) format('truetype');
+    font-weight: 200 800;
+    font-display: swap;
+  }
+  html, body {
+    margin: 0; height: 100%; background: #0e0e12; overflow: hidden;
+    font-family: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  }
   #graph-room-container { position: fixed; inset: 0; width: 100vw; height: 100vh; }
   #graph-room-status {
     position: fixed; left: 8px; bottom: 8px; z-index: 10;
-    font: 11px/1.4 -apple-system, system-ui, sans-serif; color: #9aa0a6;
+    font: 11px/1.4 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif; color: #9aa0a6;
     background: rgba(0, 0, 0, .45); padding: 4px 8px; border-radius: 6px; pointer-events: none;
+  }
+  #graph-room-legend {
+    position: fixed; left: 8px; bottom: 32px; z-index: 10;
+    font: 10px/1.4 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif; color: #e6e6e6;
+    background: rgba(0, 0, 0, .45); padding: 4px 8px; border-radius: 6px; pointer-events: none;
+    max-width: calc(100vw - 16px); display: flex; flex-wrap: wrap;
   }
 </style>
 </head>
 <body>
 <div id="graph-room-container"></div>
+<!-- GraphRoom.kt's own Legend() is the native precedent this mirrors (shape swatch + label per
+     ThreadNodeKind) — populated by the bootstrap script below, not hand-written here, so it never
+     drifts from the same fillFor()/KIND_LABEL maps the nodes themselves draw from. -->
+<div id="graph-room-legend"></div>
 <div id="graph-room-status">waiting for data&hellip;</div>
 <!-- BEGIN VENDORED G6 (third_party/g6/g6.min.js, verbatim + prepended MIT header) -->
 <script>

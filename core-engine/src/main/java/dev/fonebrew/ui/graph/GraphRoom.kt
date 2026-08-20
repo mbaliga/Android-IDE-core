@@ -1,9 +1,12 @@
 package dev.fonebrew.ui.graph
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,8 +45,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -57,6 +63,7 @@ import dev.aarso.hyle.cells.HyleRadialMenu
 import dev.aarso.hyle.cells.HyleRadialMenuItem
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.ui.hyle.HyleButton
+import dev.fonebrew.ui.hyle.HyleChip
 import dev.fonebrew.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 import kotlin.math.atan2
@@ -146,10 +153,23 @@ fun GraphRoom(
                         // THREAD_TOPOLOGY_PLAN.md WP11: the same graph this room already loaded,
                         // handed to the G6 WebView room rather than re-fetched — GraphWebRoom
                         // takes a plain ThreadGraph, not a ViewModel, so it stays a pure renderer.
+                        // Fixed per audit: desktop-class-kit.md §3 names graph rooms explicitly —
+                        // these are togglable-visibility controls (HyleChip's own idiom, mirroring
+                        // LoopRoom's stateTab chips), not one-shot actions like "‹ Back" (which
+                        // stays TextButton — that specific usage is the app-wide dismiss convention).
                         if (deepViewRevealed && graph != null) {
-                            TextButton(onClick = { showDeepView = true }) { Text("Deep view") }
+                            HyleChip(
+                                selected = showDeepView,
+                                onClick = { showDeepView = true },
+                                label = "Deep view",
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
                         }
-                        TextButton(onClick = { showObserverPanel = !showObserverPanel }) { Text("Observations") }
+                        HyleChip(
+                            selected = showObserverPanel,
+                            onClick = { showObserverPanel = !showObserverPanel },
+                            label = "Observations",
+                        )
                     }
                 }
                 HorizontalDivider()
@@ -220,13 +240,19 @@ fun GraphRoom(
                                 if (observerLoading) {
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                 } else {
-                                    TextButton(onClick = {
-                                        observerLoading = true
-                                        scope.launch {
-                                            observerRemarks = runCatching { viewModel.observerRemarks() }.getOrDefault(emptyList())
-                                            observerLoading = false
-                                        }
-                                    }) { Text("Refresh") }
+                                    // Fixed per audit: raw TextButton -> HyleButton(secondary) —
+                                    // same fix rationale as the header chips above.
+                                    HyleButton(
+                                        "Refresh",
+                                        onClick = {
+                                            observerLoading = true
+                                            scope.launch {
+                                                observerRemarks = runCatching { viewModel.observerRemarks() }.getOrDefault(emptyList())
+                                                observerLoading = false
+                                            }
+                                        },
+                                        secondary = true,
+                                    )
                                 }
                             }
                             if (observerRemarks.isEmpty()) {
@@ -399,6 +425,7 @@ private fun glyphFor(kind: ThreadNodeKind, colors: dev.fonebrew.ui.theme.HyleCol
  * scale+pan transform ([detectTransformGestures]) in place of `LoopCanvas`'s per-node drag — this
  * map's node positions come from [ThreadMapLayout], not a user's own arrangement.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ThreadMapCanvas(
     graph: ThreadGraph,
@@ -462,12 +489,28 @@ private fun ThreadMapCanvas(
                     val to = centerOf(edge.to) ?: continue
                     val edgeColor = when (edge.kind) {
                         ThreadEdgeKind.REPLY -> colors.textMid.copy(alpha = 0.55f)
-                        ThreadEdgeKind.FORK, ThreadEdgeKind.SPAWN -> colors.cyan.copy(alpha = 0.7f)
+                        ThreadEdgeKind.FORK -> colors.cyan.copy(alpha = 0.7f)
+                        ThreadEdgeKind.SPAWN -> colors.warning.copy(alpha = 0.7f)
                         ThreadEdgeKind.LINEAGE -> colors.violet.copy(alpha = 0.5f)
                         ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR -> colors.hairline
                     }
-                    val stroke = 1.5.dp.toPx()
-                    drawLine(edgeColor, from, to, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+                    // Fixed per audit (binding constraint 6 / WCAG 1.4.1): colour was the ONLY
+                    // channel distinguishing edge kinds (FORK and SPAWN were indistinguishable —
+                    // same colour, same dash, same everything). Dash pattern is now the redundant
+                    // channel, mirroring graph-room.html's own edgeStyleFor (the WP11 G6 bootstrap
+                    // this room's own "Deep view" opens already got this right).
+                    val pathEffect = when (edge.kind) {
+                        ThreadEdgeKind.REPLY, ThreadEdgeKind.FORK -> null
+                        ThreadEdgeKind.SPAWN -> PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))
+                        ThreadEdgeKind.LINEAGE -> PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
+                        ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR ->
+                            PathEffect.dashPathEffect(floatArrayOf(1.dp.toPx(), 3.dp.toPx()))
+                    }
+                    // A second, non-colour, non-dash channel for FORK vs SPAWN specifically (both
+                    // solid otherwise): SPAWN draws fractionally thicker, same distinction the
+                    // node glyphs already carry via shape (triangle vs rect).
+                    val stroke = if (edge.kind == ThreadEdgeKind.SPAWN) 2.2.dp.toPx() else 1.5.dp.toPx()
+                    drawLine(edgeColor, from, to, stroke, androidx.compose.ui.graphics.StrokeCap.Round, pathEffect = pathEffect)
                     if (edge.kind == ThreadEdgeKind.REPLY || edge.kind == ThreadEdgeKind.FORK || edge.kind == ThreadEdgeKind.SPAWN) {
                         val angle = atan2((to.y - from.y).toDouble(), (to.x - from.x).toDouble())
                         val aLen = 8.dp.toPx().toDouble(); val aAngle = 0.4
@@ -479,12 +522,24 @@ private fun ThreadMapCanvas(
 
             for (node in graph.nodes) {
                 val c = centerOf(node.id) ?: continue
+                // Fixed per audit (desktop-class-kit.md §0 / material-language.md's a11y section):
+                // raw pointerInput gave zero visual pressed-state feedback and no accessible name
+                // (unlike combinedClickable, plain pointerInput never creates a merged semantics
+                // node) — ThreadRail.kt (same WP batch) is meticulous about exactly this for a
+                // structurally similar canvas-drawn surface; this brings the graph nodes to parity.
+                val interactionSource = remember(node.id) { MutableInteractionSource() }
                 Box(
                     Modifier
                         .absoluteOffset { IntOffset((c.x - nodeSizePx / 2).roundToInt(), (c.y - nodeSizePx / 2).roundToInt()) }
                         .size(NODE_SIZE)
-                        .pointerInput(node.id) {
-                            detectTapGestures(onTap = { onTapNode(node.id) }, onLongPress = { onLongPressNode(node.id) })
+                        .combinedClickable(
+                            interactionSource = interactionSource,
+                            indication = LocalIndication.current,
+                            onClick = { onTapNode(node.id) },
+                            onLongClick = { onLongPressNode(node.id) },
+                        )
+                        .semantics {
+                            contentDescription = "${kindLabel(node.kind)}: ${node.label?.takeIf { it.isNotBlank() } ?: "(no label)"}"
                         },
                 ) {
                     Canvas(Modifier.fillMaxSize().padding(6.dp)) { glyphFor(node.kind, colors)(this) }

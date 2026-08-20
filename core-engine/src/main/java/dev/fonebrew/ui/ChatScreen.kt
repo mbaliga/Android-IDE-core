@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -274,6 +275,21 @@ fun ChatScreen(
         if (stepIndex >= 0) scope.launch { listState.animateScrollToItem(findScrollPrefix + stepIndex) }
     }
 
+    // Fixed per audit: VerdictDragRibbon's live capture-importance preview used to hardcode
+    // isOnVersionSpine = false everywhere ("not plumbed to the bubble in this WP"). ThreadRail
+    // already computes exactly this fact per-node via a backward pass over versionsByTip
+    // (ThreadRailPresenter.present's own "onOrAfterTip") — reused here, on the active path, so
+    // the drag ribbon's "would keep: …" preview agrees with what ThreadRail itself shows.
+    val onOrAfterVersionTip = remember(state.steps, versionsByTip) {
+        val ids = HashSet<String>()
+        var seenTip = false
+        for (i in state.steps.indices.reversed()) {
+            if (versionsByTip.containsKey(state.steps[i].node.id)) seenTip = true
+            if (seenTip) ids += state.steps[i].node.id
+        }
+        ids
+    }
+
     LaunchedEffect(currentFindHit) {
         val hit = currentFindHit ?: return@LaunchedEffect
         val stepIndex = state.steps.indexOfFirst { it.node.id == hit.nodeId }
@@ -392,6 +408,11 @@ fun ChatScreen(
                         // instead of the plain bubble when it does.
                         val bridge = step.node.metadata[BridgeCodec.BRIDGE_PAYLOAD_KEY]?.let(BridgeCodec::decode)
                         val srcRoot = step.node.metadata["lineage.srcRoot"]
+                        // Fixed per audit (WP2 known defect): confirmInteractionChange()'s bridge
+                        // stamps only lineage.srcNode (same-root branch, not a cross-root lineage
+                        // pointer) — try the cross-root path first, same as before, and fall back
+                        // to an in-place scroll to the pre-switch turn for a same-root bridge.
+                        val srcNode = step.node.metadata["lineage.srcNode"]
                         MessageTurn(
                             step = step,
                             enabled = !state.isGenerating,
@@ -402,9 +423,18 @@ fun ChatScreen(
                             chooseForMeEnabled = state.genPhase == GenPhase.IDLE,
                             onOpenObject3d = { path, format -> object3dViewerTarget = path to format },
                             bridge = bridge,
-                            onViewFullPrior = { srcRoot?.let { viewModel.openConversation(it) } },
+                            onViewFullPrior = {
+                                if (srcRoot != null) {
+                                    viewModel.openConversation(srcRoot)
+                                } else if (srcNode != null) {
+                                    val idx = state.steps.indexOfFirst { it.node.id == srcNode }
+                                    if (idx >= 0) scope.launch { listState.animateScrollToItem(findScrollPrefix + idx) }
+                                }
+                            },
                             highlighted = findOpen && currentFindHit?.nodeId == step.node.id,
                             verdict = verdicts[step.node.id],
+                            directive = compactionDirectives[step.node.id],
+                            isOnVersionSpine = onOrAfterVersionTip.contains(step.node.id),
                             bookmarked = messageBookmarks[step.node.id]?.any { it.ref.blockIndex == null } == true,
                             // Chevron tap = one detent step per tap, cycling to a clear on the
                             // third: null -> +1 -> +2 -> null (and the mirror for down). Tapping
@@ -1800,6 +1830,16 @@ private fun MessageTurn(
     onVerdictUp: () -> Unit = {},
     onVerdictDown: () -> Unit = {},
     onToggleBookmark: () -> Unit = {},
+    /** STUDIO_UX_SPEC.md §4.6: this turn's explicit compaction directive (must-include / fidelity
+     *  dial), if the curation sheet ever set one — null means "use the default fidelity," same
+     *  contract [dev.fonebrew.domain.curation.CompactionDirective] documents. Renders as a small
+     *  persistent glyph on the bubble so the state stays visible without reopening the sheet. */
+    directive: dev.fonebrew.domain.curation.CompactionDirective? = null,
+    /** THREAD_TOPOLOGY_PLAN.md WP5/WP4: true when this step sits on or before a named [Version]'s
+     *  tip on the active path — the same fact ThreadRail derives via its own backward pass over
+     *  `versionsByTip`, reused here so the verdict-drag ribbon's capture-importance preview agrees
+     *  with what ThreadRail shows for this node. */
+    isOnVersionSpine: Boolean = false,
     /** THREAD_TOPOLOGY_PLAN.md WP2: non-null for a bridge node (interaction-model switch or
      *  Spawn) — [SummaryNodeCard] replaces the plain [MessageBubble] when set. */
     bridge: SummaryBridge? = null,
@@ -1847,6 +1887,8 @@ private fun MessageTurn(
                 highlighted = highlighted,
                 verdict = verdict,
                 bookmarked = bookmarked,
+                directive = directive,
+                isOnVersionSpine = isOnVersionSpine,
                 onVerdictUp = onVerdictUp,
                 onVerdictDown = onVerdictDown,
                 onToggleBookmark = onToggleBookmark,
@@ -1871,8 +1913,11 @@ private fun MessageTurn(
             )
         }
         if (step.isBranchPoint) {
+            // Fixed per audit: five controls (‹, n/m, ›, "Compare alternatives", "Choose for me")
+            // in one fixed-width Row clip/overflow on a phone-width screen — same horizontalScroll
+            // fix this file's own ComposerModeRow already applies to an equivalent packed row.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1976,6 +2021,11 @@ private fun MessageBubble(
     onVerdictUp: () -> Unit = {},
     onVerdictDown: () -> Unit = {},
     onToggleBookmark: () -> Unit = {},
+    /** STUDIO_UX_SPEC.md §4.6 — see [MessageTurn]'s own KDoc for this param; null (the default)
+     *  renders no glyph, same as every turn before this WP had. */
+    directive: dev.fonebrew.domain.curation.CompactionDirective? = null,
+    /** See [MessageTurn]'s own KDoc — feeds [VerdictDragRibbon]'s capture-importance preview. */
+    isOnVersionSpine: Boolean = false,
     /**
      * THREAD_TOPOLOGY_PLAN.md WP4 — the drag gestures this bubble now arbitrates via
      * `Modifier.messageGestures` (`MessageGestures.kt`), on top of the plain tap controls above:
@@ -2018,14 +2068,25 @@ private fun MessageBubble(
                             toggles = gestureToggles,
                             haptics = haptics,
                             callbacks = MessageGestureCallbacks(
+                                // Fixed per audit: [enabled] gates the whole gesture channel (it
+                                // has to, to keep reply/quote/radial/long-press role-agnostic per
+                                // this file's own KDoc above), so the verdict-drag callbacks need
+                                // their own per-role no-op here — a user's own message has no
+                                // tappable verdict equivalent (VerdictBookmarkRow's showVerdict
+                                // below is already assistant-only), so a vertical drag on one must
+                                // not be able to commit a Verdict either.
                                 onVerdictPreview = { grade ->
-                                    draggingVertical = true
-                                    dragPreviewGrade = grade
+                                    if (role == Role.ASSISTANT) {
+                                        draggingVertical = true
+                                        dragPreviewGrade = grade
+                                    }
                                 },
                                 onCommitVerdict = { grade ->
-                                    draggingVertical = false
-                                    dragPreviewGrade = null
-                                    onVerdictDragCommit(grade)
+                                    if (role == Role.ASSISTANT) {
+                                        draggingVertical = false
+                                        dragPreviewGrade = null
+                                        onVerdictDragCommit(grade)
+                                    }
                                 },
                                 onReply = {
                                     horizontalHint = null
@@ -2055,6 +2116,16 @@ private fun MessageBubble(
                                     add(CustomAccessibilityAction("Rate down") { onVerdictDown(); true })
                                 }
                                 add(CustomAccessibilityAction(if (bookmarked) "Remove bookmark" else "Bookmark message") { onToggleBookmark(); true })
+                                // STUDIO_UX_SPEC.md §4.6: "TalkBack exposes each [directive glyph]
+                                // as a named action" — both open the same TurnActionsSheet the
+                                // corner glyph itself has no tap target of its own, mirroring how
+                                // "Open message actions" below already does the same for long-press.
+                                if (directive?.mustInclude == true) {
+                                    add(CustomAccessibilityAction("Must-include: open to change") { onLongPress(); true })
+                                }
+                                if (directive != null) {
+                                    add(CustomAccessibilityAction("Fidelity ${directive.fidelity.name}: open to change") { onLongPress(); true })
+                                }
                                 add(CustomAccessibilityAction("Reply") { onReplyDrag(); true })
                                 add(CustomAccessibilityAction("Quote in composer") { onQuoteDrag(); true })
                                 add(CustomAccessibilityAction("Branch from here") { onBranchDrag(); true })
@@ -2105,6 +2176,15 @@ private fun MessageBubble(
                         }
                     }
                 }
+                // Fixed per audit: STUDIO_UX_SPEC.md §4.6's compaction-directive glyph — a pin for
+                // Must-include plus 0-3 fidelity dots — used to exist only inside TurnActionsSheet;
+                // this is its persistent, always-visible trace on the bubble itself.
+                if (directive != null) {
+                    CompactionDirectiveGlyph(
+                        directive = directive,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                    )
+                }
                 // Owner decision 1 / plan's "Gesture arbitration": pull right + hold ≥400ms fans
                 // Branch/Fork/Spawn at the drag's anchor point. Glyphs are plain DrawScope
                 // primitives (no icon asset needed for three items); HyleHaptics.tap() on each
@@ -2142,12 +2222,10 @@ private fun MessageBubble(
                     visible = true,
                     grade = dragPreviewGrade,
                     bookmarked = bookmarked,
-                    // Version-spine membership isn't plumbed to the bubble in this WP (it would
-                    // need the tree's ancestor path, not just this message's own state) — the
-                    // preview chip is honest about the OTHER two signals it has and simply omits
-                    // this floor rather than guessing. Forward-pointer for whichever later WP
-                    // wires ThreadRail/instruments through the full tree (WP5+).
-                    isOnVersionSpine = false,
+                    // Fixed per audit: was hardcoded false ("not plumbed to the bubble in this
+                    // WP") — now the caller-computed fact (see [MessageTurn]'s KDoc for how it's
+                    // derived), so the "would keep: …" preview agrees with ThreadRail.
+                    isOnVersionSpine = isOnVersionSpine,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
@@ -2169,6 +2247,51 @@ private fun MessageBubble(
                 onVerdictDown = onVerdictDown,
                 onToggleBookmark = onToggleBookmark,
             )
+        }
+    }
+}
+
+/**
+ * STUDIO_UX_SPEC.md §4.6: "Compaction directives show as tiny edge glyphs on the bubble (pin
+ * glyph for must-include; 0–3 fidelity dots)." A pin when [CompactionDirective.mustInclude], plus
+ * a 3-dot ladder mirroring TurnActionsSheet's own F0..F3 fidelity dial — so an explicit directive
+ * stays visible on the thread itself, not just inside the sheet that set it.
+ */
+@Composable
+private fun CompactionDirectiveGlyph(
+    directive: dev.fonebrew.domain.curation.CompactionDirective,
+    modifier: Modifier = Modifier,
+) {
+    val c = LocalHyleColors.current
+    val filledDots = when (directive.fidelity) {
+        dev.fonebrew.domain.curation.Fidelity.F0 -> 0
+        dev.fonebrew.domain.curation.Fidelity.F1 -> 1
+        dev.fonebrew.domain.curation.Fidelity.F2 -> 2
+        dev.fonebrew.domain.curation.Fidelity.F3 -> 3
+    }
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.raised.copy(alpha = 0.92f))
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (directive.mustInclude) {
+            Text(
+                "📌",
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(end = 3.dp),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+            repeat(3) { i ->
+                Box(
+                    Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (i < filledDots) c.violet else c.hairline),
+                )
+            }
         }
     }
 }

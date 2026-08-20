@@ -478,6 +478,16 @@ class ChatViewModel(
                         "summary" to "true",
                         dev.fonebrew.domain.bridge.BridgeCodec.BRIDGE_KEY to "interaction_switch",
                         dev.fonebrew.domain.bridge.BridgeCodec.BRIDGE_PAYLOAD_KEY to dev.fonebrew.domain.bridge.BridgeCodec.encode(bridge),
+                        // Fixed (WP2 known defect): this bridge lives in the SAME tree/root as
+                        // before the switch (a branch, not a fork/spawn new root), so it never had
+                        // a cross-root lineage.srcRoot to stamp — the "View full prior context"
+                        // button in SummaryNodeCard resolved that key, found it always null, and
+                        // silently no-op'd. lineage.srcNode instead names the immediate pre-switch
+                        // node, which IS on this same path — ChatScreen falls back to scrolling to
+                        // it when lineage.srcRoot is absent. Empty string (never a null map value)
+                        // when there's somehow no parent, so the ChatScreen-side lookup fails an
+                        // honest indexOfFirst rather than crashing on a null metadata value.
+                        dev.fonebrew.domain.tree.TreeFork.LINEAGE_SRC_NODE_KEY to (parent?.id ?: ""),
                     ),
                 )
                 repository.insert(node)

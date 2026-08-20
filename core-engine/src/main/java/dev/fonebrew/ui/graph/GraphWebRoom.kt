@@ -28,13 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fonebrew.domain.thread.ThreadGraph
 import dev.fonebrew.domain.thread.ThreadGraphJson
+import dev.fonebrew.ui.theme.LocalHyleColors
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 /**
  * **WP11** — the G6 "deep graph room" (THREAD_TOPOLOGY_PLAN.md's hybrid-rendering decision:
@@ -117,6 +120,23 @@ private fun GraphWebRoomBody(graph: ThreadGraph, onClose: () -> Unit) {
 @Composable
 private fun GraphWebView(graph: ThreadGraph, modifier: Modifier = Modifier) {
     val json = remember(graph) { ThreadGraphJson.toJsonString(graph) }
+    // Fixed per audit (material-language.md's "material sovereignty" — the user isn't choosing a
+    // hex accent, they're choosing their material world): the deep-view bootstrap used to hard-
+    // code its own second palette that never matched Hyle's real tokens and could never re-theme
+    // with the user's chosen accent, because nothing ever crossed the one-way JSON bridge except
+    // the graph itself. Resolving the live [LocalHyleColors] here and pushing it alongside the
+    // graph JSON on every load call is what lets `build-graph-room.js`'s fillFor/edgeStyleFor read
+    // real theme values instead of switch-cased literals.
+    val colors = LocalHyleColors.current
+    val themeJson = remember(colors) {
+        JSONObject().apply {
+            put("textMid", colors.textMid.toWebHex())
+            put("cyan", colors.cyan.toWebHex())
+            put("warning", colors.warning.toWebHex())
+            put("success", colors.success.toWebHex())
+            put("violet", colors.violet.toWebHex())
+        }.toString()
+    }
     var pageLoaded by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
@@ -153,7 +173,7 @@ private fun GraphWebView(graph: ThreadGraph, modifier: Modifier = Modifier) {
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView, url: String?) {
                             pageLoaded = true
-                            view.evaluateJavascript(pushCall(json), null)
+                            view.evaluateJavascript(pushCall(json, themeJson), null)
                         }
 
                         override fun onReceivedError(
@@ -187,8 +207,9 @@ private fun GraphWebView(graph: ThreadGraph, modifier: Modifier = Modifier) {
             update = { webView ->
                 // Re-push on recomposition too (a no-op via the `window.__graphRoom &&` guard in
                 // the bootstrap until onPageFinished has already run once) — covers the case
-                // where [graph] changes after the first load without needing a second WebView.
-                if (pageLoaded) webView.evaluateJavascript(pushCall(json), null)
+                // where [graph] (or the live theme, e.g. an accent change) changes after the first
+                // load without needing a second WebView.
+                if (pageLoaded) webView.evaluateJavascript(pushCall(json, themeJson), null)
             },
         )
 
@@ -211,7 +232,18 @@ private const val ASSET_URL = ASSET_URL_PREFIX + "graph-room.html"
 
 /** [JSONObject.quote] produces a properly backslash/quote/control-char-escaped JS string
  *  literal (with its own surrounding quotes) — safe to splice into an `evaluateJavascript` call
- *  even though [json] is untrusted-shaped app data, because it's never interpreted as anything
- *  but a JS string literal by the receiving `JSON.parse` call in the bootstrap. */
-private fun pushCall(json: String): String =
-    "window.__graphRoom && window.__graphRoom.load(${JSONObject.quote(json)});"
+ *  even though [json]/[themeJson] are untrusted-shaped app data, because neither is ever
+ *  interpreted as anything but a JS string literal by the receiving `JSON.parse` calls in the
+ *  bootstrap. [themeJson] is the live [dev.fonebrew.ui.theme.HyleColors] resolved to hex strings
+ *  (see [Color.toWebHex]) — the deep view's own re-theme forward pointer this WP's audit named. */
+private fun pushCall(json: String, themeJson: String): String =
+    "window.__graphRoom && window.__graphRoom.load(${JSONObject.quote(json)}, ${JSONObject.quote(themeJson)});"
+
+/** `#rrggbb` (alpha dropped — every [dev.fonebrew.ui.theme.HyleColors] entry this pushes is
+ *  fully opaque) for splicing into the deep view's CSS/G6-style JSON. */
+private fun Color.toWebHex(): String {
+    val r = (red * 255f).roundToInt().coerceIn(0, 255)
+    val g = (green * 255f).roundToInt().coerceIn(0, 255)
+    val b = (blue * 255f).roundToInt().coerceIn(0, 255)
+    return "#%02x%02x%02x".format(r, g, b)
+}

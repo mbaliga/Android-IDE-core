@@ -162,6 +162,7 @@ fun ChatsRoom(
                 onOpen = { viewModel.openConversation(it.rootId); onClose() },
                 onToggleBookmark = { session.toggleBookmark(it.rootId) },
                 onSetProject = { projectDialogFor = it },
+                onOpenSource = { srcRootId -> viewModel.openConversation(srcRootId); onClose() },
             )
             when (tab) {
                 ChatsTab.IMAGE -> ImageList(imageNodes, !state.isGenerating) {
@@ -247,6 +248,10 @@ private class ConversationListProps(
     val onOpen: (Conversations.Summary) -> Unit,
     val onToggleBookmark: (Conversations.Summary) -> Unit,
     val onSetProject: (Conversations.Summary) -> Unit,
+    /** Fixed per audit: the "Spawned/Forked from: …" chip used to name its source with no way to
+     *  jump there — tapping it did the same thing as tapping anywhere else on the card (opened
+     *  THIS conversation). Navigates straight to [ThreadChains.LineagePointer.srcRootId]. */
+    val onOpenSource: (String) -> Unit = {},
 )
 
 @Composable
@@ -383,12 +388,18 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
                 p.lineageByRoot[conv.rootId]?.let { lineage ->
                     val verb = if (lineage.lineageKind == TreeFork.LineageKind.SPAWN) "Spawned" else "Forked"
                     val srcTitle = p.titleByRoot[lineage.srcRootId]
+                    // Fixed per audit: its own clickable (nested inside the outer Card's) so a tap
+                    // here jumps to the named source instead of just reopening this conversation —
+                    // an inner clickable consumes the tap before the outer Card's ever sees it.
                     Text(
                         if (srcTitle != null) "$verb from: $srcTitle" else "$verb from a prior conversation",
                         style = MaterialTheme.typography.labelSmall,
-                        color = c.textMid,
+                        color = c.violet,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clickable(enabled = p.enabled) { p.onOpenSource(lineage.srcRootId) }
+                            .semantics { contentDescription = "Open source conversation: ${srcTitle ?: "a prior conversation"}" },
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
