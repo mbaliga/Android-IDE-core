@@ -78,7 +78,6 @@ import dev.fonebrew.domain.object3d.Object3dCloudProvider
 import dev.fonebrew.flavor.InvocationFeatures
 import dev.fonebrew.ui.SettingsViewModel
 import dev.aarso.hyle.component.HyleField as DesktopHyleField
-import dev.aarso.hyle.component.HyleToggle
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleCard
 import dev.aarso.hyle.cells.HyleChip
@@ -624,11 +623,10 @@ private fun GeneralSettings(
     // Turning a switch off never removes the underlying action — it's always still reachable via
     // the chevron row / TurnActionsSheet / TalkBack custom actions; this just stops the drag from
     // triggering it, for anyone who finds the hold-and-pull motion fights their own touch habits.
-    // MERGE-NOTE: these three + the Observer switch below still render via the desktop-class
-    // kit's [HyleToggle] (component package) rather than the [HyleSwitch] (cells package) the
-    // rest of this General tab was restyled onto during the launch-line rework — preserved as
-    // named in the reunification merge brief. Worth a follow-up pass to pick one toggle widget
-    // for the whole screen once the owner has a preference.
+    // These three + the Observer switch below render via [HyleSwitch] (cells package), same as
+    // the rest of this General tab — the owner picked the square up-down switch as the standard
+    // settings toggle (2026-08-21: "the square up down toggle is fine"), retiring the merge-era
+    // mix with the desktop-class kit's HyleToggle.
     Text("Gestures", style = MaterialTheme.typography.titleMedium)
     Text(
         "Message-bubble drags — hold briefly, then pull. Every one has a tap equivalent " +
@@ -650,7 +648,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleToggle(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
+        HyleSwitch(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
     }
     val gestureQuoteReply by session.gestureQuoteReplyEnabled.collectAsState()
     Row(
@@ -666,7 +664,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleToggle(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
+        HyleSwitch(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
     }
     val gestureRadialFan by session.gestureRadialFanEnabled.collectAsState()
     Row(
@@ -682,7 +680,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleToggle(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
+        HyleSwitch(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
     }
     HorizontalDivider()
 
@@ -712,7 +710,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleToggle(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
+        HyleSwitch(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
     }
 
     // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —

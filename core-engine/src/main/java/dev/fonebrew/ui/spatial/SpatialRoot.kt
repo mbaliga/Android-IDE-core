@@ -97,10 +97,12 @@ import kotlinx.coroutines.launch
  * (the 30 000 ft view), pinch deeper for Loops (the microscopic one). **Rooms are
  * navigated spatially only** — edge drags and pinches, no room tab bar; the tab
  * metaphor is weaker than the room metaphor, so the earlier six-slot BottomNavBar is
- * gone. What the persistent bottom bar holds instead is [CenterViewTabBar]: the three
- * *views* of the centre itself (Conversation / Terminal / Background tasks), which are
- * tabs precisely because switching them is NOT a change of place — one activity, three
- * lenses, like reading a CLI session as prose, as raw transcript, or as its job table.
+ * gone. The centre's own lenses (Chat / Terminal / Tasks) are ChatScreen's OWN tab row,
+ * scoped to the chat card — this shell mounts no persistent bar of its own. (The old
+ * bottom [CenterViewTabBar] is deleted — it duplicated ChatScreen's tabs in every room,
+ * and its "Terminal" was a read-only transcript lens wearing the real shell's name;
+ * owner report 2026-08-21: "two terminals, idk how to use either of them / why are the
+ * main chat's three tabs visible everywhere I go?")
  *
  * Motion: every transition is finger-driven 1:1 and interruptible; release
  * settles on an eased cubic-bezier (0.4, 0, 0.2, 1), ~320 ms, no spring. Room
@@ -240,8 +242,6 @@ fun SpatialRoot() {
     val scope = rememberCoroutineScope()
     val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
     val controller = remember { SpatialController(scope, onSettle = haptics::settle) }
-    // Which lens the centre room is showing (not a place — see CenterViewTabBar's KDoc).
-    var centerView by remember { mutableStateOf(CenterView.CONVERSATION) }
     var searchOpen by remember { mutableStateOf(false) }
     // S9 continuity: text handed from an opened search result to that chat's find bar, held
     // here because the overlay is torn down the moment the conversation opens.
@@ -254,14 +254,11 @@ fun SpatialRoot() {
     val rootFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
 
-    // §7: content shared/selected into the app lands in the composer — go home, and to
-    // the lens that has a composer.
+    // §7: content shared/selected into the app lands in the composer — go home. (ChatScreen's
+    // own intake handler switches its tab row to the Chat lens, the one with a composer.)
     val intake by chatViewModel.intake.collectAsState()
     LaunchedEffect(intake) {
-        if (intake != null) {
-            controller.closeAll()
-            centerView = CenterView.CONVERSATION
-        }
+        if (intake != null) controller.closeAll()
     }
 
     val hProgress = controller.h.value
@@ -279,10 +276,9 @@ fun SpatialRoot() {
     // (zProgress < 0) — need Back wired the same way; otherwise Back does nothing
     // useful (backgrounds the app) from whichever direction is missing.
     BackHandler(enabled = anyRoom || abs(zProgress) > 0.001f) { controller.closeAll() }
-    // At home on a non-default lens, back first returns to the conversation view.
-    BackHandler(enabled = !anyRoom && abs(zProgress) <= 0.001f && centerView != CenterView.CONVERSATION) {
-        centerView = CenterView.CONVERSATION
-    }
+    // At home on a non-default lens, Back first returns to the Chat lens — that handler lives
+    // in ChatScreen now, beside the tab state it resets (gated on atHome so this room-closing
+    // handler still wins whenever a room is open).
 
     // a11y (Doc 00 §3.5): the spatial model is invisible to a screen reader, so announce the
     // settled room as a polite live region. We map the gesture progress to the pure
@@ -308,16 +304,11 @@ fun SpatialRoot() {
     val edgePx = with(density) { 56.dp.toPx() }
     val ac = LocalHyleColors.current
 
-    // The persistent bottom bar (CenterViewTabBar.kt — the centre room's view switcher,
-    // NOT room navigation) gets its own reserved strip via `weight(1f)` on the spatial
-    // content below, rather than overlaying on top of it — so `controller.viewport`,
-    // captured from THIS inner Box's own onSizeChanged, already excludes the bar's height
-    // and every existing offset/parkDistance calculation below needs no change.
-    Column(Modifier.fillMaxSize().background(ac.ink).systemBarsPadding()) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f)
+            .fillMaxSize()
+            .background(ac.ink)
+            .systemBarsPadding()
             .onSizeChanged { controller.viewport = it }
             .spatialEdgeDrag(controller, edgePx)
             .focusRequester(rootFocusRequester)
@@ -426,34 +417,23 @@ fun SpatialRoot() {
                 // Ink-floored rooms behind it.
                 .background(ac.raised, cardShape),
         ) {
-            when (centerView) {
-                CenterView.CONVERSATION -> ChatScreen(
-                    viewModel = chatViewModel,
-                    threadModifier = Modifier.spatialPinch(controller),
-                    onOpenModels = { controller.open(SpatialTarget.SETTINGS) },
-                    onOpenChats = { controller.open(SpatialTarget.CHATS) },
-                    onOpenSettings = { controller.open(SpatialTarget.SETTINGS) },
-                    findRequest = pendingFind,
-                    onFindRequestConsumed = { pendingFind = null },
-                    onSearchAllChats = { query ->
-                        searchViewModel.onQueryChange(query)
-                        searchOpen = true
-                    },
-                    // THREAD_TOPOLOGY_PLAN.md WP5: ThreadRail hides whenever a room is open —
-                    // the same `atHome` fact that already gates spatialPinch's own drag capture.
-                    showThreadRail = controller.atHome,
-                )
-                // The other lenses keep the z-axis reachable: same pinch, same thread.
-                CenterView.TERMINAL -> CenterTerminalView(
-                    viewModel = chatViewModel,
-                    modifier = Modifier.spatialPinch(controller),
-                )
-                CenterView.BACKGROUND -> CenterBackgroundView(
-                    center = container.downloadCenter,
-                    viewModel = chatViewModel,
-                    modifier = Modifier.spatialPinch(controller),
-                )
-            }
+            ChatScreen(
+                viewModel = chatViewModel,
+                threadModifier = Modifier.spatialPinch(controller),
+                onOpenModels = { controller.open(SpatialTarget.SETTINGS) },
+                onOpenChats = { controller.open(SpatialTarget.CHATS) },
+                onOpenSettings = { controller.open(SpatialTarget.SETTINGS) },
+                findRequest = pendingFind,
+                onFindRequestConsumed = { pendingFind = null },
+                onSearchAllChats = { query ->
+                    searchViewModel.onQueryChange(query)
+                    searchOpen = true
+                },
+                // The `atHome` fact that already gates spatialPinch's own drag capture:
+                // ChatScreen uses it to hide the ThreadRail whenever a room is open (WP5)
+                // and to keep its own tab-reset BackHandler from shadowing room-close.
+                atHome = controller.atHome,
+            )
             // While parked, the card is one big return affordance: tap or drag
             // it home; nothing inside it should react. A scrim quiets the
             // card's own content (so it can't read as overlap) and a grip pill
@@ -574,8 +554,6 @@ fun SpatialRoot() {
                 onDismiss = { searchOpen = false },
             )
         }
-    }
-    CenterViewTabBar(selected = centerView, onSelect = { centerView = it })
     }
 }
 

@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import dev.fonebrew.domain.markdown.StreamingMarkdown
 import dev.fonebrew.core_engine.R
+import androidx.activity.compose.BackHandler
 import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.domain.GeneratedToken
 import dev.fonebrew.domain.Role
@@ -157,10 +158,12 @@ fun ChatScreen(
     onFindRequestConsumed: () -> Unit = {},
     /** Reverse continuity: promote what's in the find bar to the app-wide search overlay. */
     onSearchAllChats: (String) -> Unit = {},
-    /** THREAD_TOPOLOGY_PLAN.md WP5: ThreadRail is hidden whenever the spatial shell isn't at home
-     *  (`controller.atHome` — avoids colliding with an open room's own edge peek / parked card).
-     *  Defaults true so ChatScreen stays usable stand-alone (previews, tests) without a controller. */
-    showThreadRail: Boolean = true,
+    /** The spatial shell's `controller.atHome` fact. Gates two things: the ThreadRail hides
+     *  whenever a room is open (THREAD_TOPOLOGY_PLAN.md WP5 — avoids colliding with an open
+     *  room's edge peek / parked card), and the tab-reset BackHandler below disarms so Back
+     *  closes the open room first instead of silently switching this screen's lens. Defaults
+     *  true so ChatScreen stays usable stand-alone (previews, tests) without a controller. */
+    atHome: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
@@ -288,10 +291,17 @@ fun ChatScreen(
         MessageGestureToggles(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan)
     }
 
-    // Chat / Terminal — two windows onto the same underlying capability: ask in Chat and it runs,
-    // or drive the shell directly in Terminal (§ owner spec, 2026-07-27). Background tasks is a
-    // layer BENEATH both, not a third peer tab — see [BackgroundTasksStrip].
+    // Chat / Terminal / Tasks — three lenses on the centre's one activity: ask in Chat and it
+    // runs, drive the shell directly in Terminal (§ owner spec, 2026-07-27), or watch what's
+    // running underneath in Tasks. Tasks joined as a peer tab in the 2026-08-21 consolidation:
+    // it was the bottom CenterViewTabBar's "Background" lens, and when that bar died (it showed
+    // chat's tabs in every room) the lens moved here rather than vanishing. The collapsed
+    // [BackgroundTasksStrip] inside Chat stays — it's the one-line summary; this is the full
+    // window. Back returns to Chat first (BackHandler below), same contract the bottom bar had.
     var chatTab by remember { mutableStateOf(ChatTab.CHAT) }
+    // Gated on atHome so the spatial shell's own room-closing BackHandler (registered earlier,
+    // so lower priority when both are enabled) still wins whenever a room is open.
+    BackHandler(enabled = atHome && chatTab != ChatTab.CHAT) { chatTab = ChatTab.CHAT }
     val universalTabBarPosition by container0.sessionStore.tabBarPosition.collectAsState()
     val roomTabBarOverrides by container0.sessionStore.roomTabBarPosition.collectAsState()
     val tabBarPosition = roomTabBarOverrides["chat"] ?: universalTabBarPosition
@@ -311,6 +321,7 @@ fun ChatScreen(
         listOf(
             SlashCommand("/chat", "Switch to Chat") { chatTab = ChatTab.CHAT },
             SlashCommand("/terminal", "Switch to Terminal") { chatTab = ChatTab.TERMINAL },
+            SlashCommand("/tasks", "Switch to Tasks") { chatTab = ChatTab.TASKS },
             SlashCommand("/participants", "Manage council participants") { showParticipants = true },
             SlashCommand("/models", "Switch model") { showModelSheet = true },
             SlashCommand("/image", "Generate an image") { viewModel.setComposerMode(ComposerMode.IMAGE) },
@@ -388,10 +399,15 @@ fun ChatScreen(
         if (stepIndex >= 0) listState.animateScrollToItem(findScrollPrefix + stepIndex)
     }
 
-    // §7: text shared in / selected elsewhere arrives here — prefill the input.
+    // §7: text shared in / selected elsewhere arrives here — prefill the input, and land on
+    // the lens that has a composer (the share could arrive while Terminal/Tasks is up).
     val intake by viewModel.intake.collectAsState()
     LaunchedEffect(intake) {
-        intake?.text?.let { input = it; viewModel.consumeIntake() }
+        intake?.text?.let {
+            input = it
+            chatTab = ChatTab.CHAT
+            viewModel.consumeIntake()
+        }
     }
 
     LaunchedEffect(state.steps.size, state.streamingTokens.size, state.genPhase) {
@@ -441,6 +457,11 @@ fun ChatScreen(
                 ) {
                     TerminalFacet()
                 }
+                ChatTab.TASKS -> TasksLens(
+                    center = container0.downloadCenter,
+                    viewModel = viewModel,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
                 ChatTab.CHAT -> Column(Modifier.weight(1f)) {
             BackgroundTasksStrip(activeDownloads, backgroundJobs)
             InstrumentsStrip(
@@ -703,7 +724,7 @@ fun ChatScreen(
                 // THREAD_TOPOLOGY_PLAN.md WP5: the dash minimap — hidden whenever the spatial
                 // shell isn't at home (avoids EdgePeek/parked-card collision, per the ThreadRail
                 // section's own gating rule) or there's nothing yet to map.
-                if (showThreadRail && !railView.isEmpty) {
+                if (atHome && !railView.isEmpty) {
                     dev.fonebrew.ui.components.ThreadRail(
                         dashes = railView.dashes,
                         modifier = Modifier.align(Alignment.CenterEnd),
@@ -1223,8 +1244,8 @@ private fun HomeHeader(
 }
 
 /**
- * The Chat/Terminal switcher — two windows onto the same underlying capability, not a Chat-vs-
- * something-else split (§ owner spec). Styled as [HyleSlashTabBar] (the owner's reference: a
+ * The Chat/Terminal/Tasks switcher — three windows onto the same underlying capability, not a
+ * Chat-vs-something-else split (§ owner spec). Styled as [HyleSlashTabBar] (the owner's reference: a
  * leading slot, then tabs threaded by a literal "/", no per-tab fill) rather than [HyleTabBar]'s
  * heavier filled-chip register — this switches VIEWS of one conversation, not top-level rooms.
  * "All chats" sits in the leading slot in place of the reference's generic overflow icon (owner
@@ -1258,6 +1279,15 @@ private fun ChatTabBar(
                     drawLine(tint, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
                     drawLine(tint, Offset(w * 0.18f, h * 0.68f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
                     drawLine(tint, Offset(w * 0.50f, h * 0.70f), Offset(w * 0.82f, h * 0.70f), strokeWidth = sw)
+                },
+                // The job table: dotted rows, each dot a task, each bar its lane.
+                HyleTabSpec("Tasks") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawCircle(tint, radius = sw * 0.55f, center = Offset(w * 0.20f, h * 0.36f))
+                    drawLine(tint, Offset(w * 0.34f, h * 0.36f), Offset(w * 0.82f, h * 0.36f), strokeWidth = sw)
+                    drawCircle(tint, radius = sw * 0.55f, center = Offset(w * 0.20f, h * 0.66f))
+                    drawLine(tint, Offset(w * 0.34f, h * 0.66f), Offset(w * 0.64f, h * 0.66f), strokeWidth = sw)
                 },
             ),
             selected = tab.ordinal,
@@ -1428,7 +1458,7 @@ private fun BgJobRow(job: dev.fonebrew.data.BackgroundJobs.Job, now: Long, finis
 
 /** Two windows onto the same underlying capability (§ owner spec) — never a Chat-vs-Terminal
  *  content fork, just where you're looking from. Background tasks is a layer beneath both. */
-private enum class ChatTab { CHAT, TERMINAL }
+private enum class ChatTab { CHAT, TERMINAL, TASKS }
 
 /**
  * The user-selectable status chip that replaced the fixed Me·Myself·I avatar: a single fact,

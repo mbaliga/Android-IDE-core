@@ -15,9 +15,10 @@ import dev.fonebrew.ui.spatial.SpatialRoot
  * Top-level shell: the two-screen stance once, then the spatial shell — the centre
  * room is home, the rooms sit off its edges and along the z-axis, and navigation
  * between them is spatial only (edge drags + pinch; the original "no room tab bar"
- * stance is back in force by owner correction). The persistent bottom bar is
- * CenterViewTabBar.kt: the centre room's three lenses (Conversation / Terminal /
- * Background tasks) — tabs because they are views of one activity, not places.
+ * stance is back in force by owner correction). The centre room's own lenses
+ * (Chat / Terminal / Tasks) are ChatScreen's tab row, scoped to the chat card —
+ * there is no persistent shell-level bar (the old bottom CenterViewTabBar showed
+ * chat's tabs in every room and is deleted, 2026-08-21).
  */
 @Composable
 fun AppRoot() {

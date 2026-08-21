@@ -269,6 +269,17 @@ class AppContainer(context: Context) {
     fun newSshTransport(): dev.fonebrew.domain.remote.RemoteTransport =
         dev.fonebrew.data.remote.SshjTransport(secretProvider = { remoteHostStore.secret(it) })
 
+    /** THE terminal session — one per process, shared by both terminal doors (Chat's Terminal
+     *  tab and Develop's Terminal tab; see [dev.fonebrew.data.remote.TerminalSessionHolder]'s
+     *  doc for the two-shells bug this ends). Lazy: nothing spawns until a door is opened. */
+    val terminalSession: dev.fonebrew.data.remote.TerminalSessionHolder by lazy {
+        dev.fonebrew.data.remote.TerminalSessionHolder(
+            filesDir = context.applicationContext.filesDir,
+            hostStore = remoteHostStore,
+            newTransport = ::newSshTransport,
+        )
+    }
+
     /** Durable, retrying queue for network journeys so they survive the subway (P5). The worker
      *  drains it against per-kind handlers; a permanent error (auth/no-host) parks the op for the
      *  user instead of retrying forever. */
