@@ -354,7 +354,7 @@ private fun GlobalSettings(
                 val json = dev.fonebrew.data.DataExport.toJson(container)
                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "application/json"
-                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Aarso export")
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Fonebrew export")
                     putExtra(android.content.Intent.EXTRA_TEXT, json)
                 }
                 ctx.startActivity(
@@ -394,15 +394,15 @@ private fun GlobalSettings(
     Text("Summon from anywhere", style = MaterialTheme.typography.titleMedium)
     Text(
         buildString {
-            append("• Select text in any app → tap \"Aarso\" in the selection menu.\n")
-            append("• Share anything (text or image) → choose Aarso.\n")
+            append("• Select text in any app → tap \"Fonebrew\" in the selection menu.\n")
+            append("• Share anything (text or image) → choose Fonebrew.\n")
             append(
-                "• Assist gesture: set Aarso as your Digital assistant in the system " +
+                "• Assist gesture: set Fonebrew as your Digital assistant in the system " +
                     "Settings → Apps → Default apps → Digital assistant app (this replaces Gemini). " +
-                    "It then captures the on-screen text and brings Aarso forward.",
+                    "It then captures the on-screen text and brings Fonebrew forward.",
             )
             if (InvocationFeatures.BUBBLE_AVAILABLE) {
-                append("\n• Floating bubble (below): tap to open Aarso; long-press to OCR the screen behind it.")
+                append("\n• Floating bubble (below): tap to open Fonebrew; long-press to OCR the screen behind it.")
             }
         },
         style = MaterialTheme.typography.bodySmall,
@@ -618,7 +618,7 @@ private fun GlobalSettings(
         }.getOrNull() ?: "?"
     }
     Text(
-        "Aarso $appVersionName — Konkani for “mirror”.\n\n" +
+        "Fonebrew $appVersionName — its self-reflection lens is Aarso, Konkani for “mirror”.\n\n" +
             "Local-first by design: conversations, models, and keys live on this " +
             "device. No analytics, no telemetry. Cloud models run only when you " +
             "invoke them, and only against the provider you configured.",
@@ -631,7 +631,7 @@ private fun GlobalSettings(
             Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
-                    context.startActivity(dev.aarso.crashrecovery.CrashRecovery.previewIntent(context, appLabel = "Aarso"))
+                    context.startActivity(dev.aarso.crashrecovery.CrashRecovery.previewIntent(context, appLabel = "Fonebrew"))
                 },
             )
         } else {

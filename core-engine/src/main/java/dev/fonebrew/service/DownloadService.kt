@@ -39,7 +39,7 @@ class DownloadService : Service() {
         } catch (t: Throwable) {
             // DownloadCenter keeps downloading in its own scope; never crash for
             // a notification/priority formality.
-            android.util.Log.w("Aarso", "foreground promotion refused: $t")
+            android.util.Log.w("Fonebrew", "foreground promotion refused: $t")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -95,7 +95,7 @@ class DownloadService : Service() {
             } catch (t: Throwable) {
                 // Background-start restriction: the download itself continues in
                 // DownloadCenter's scope; only the notification is lost.
-                android.util.Log.w("Aarso", "could not start download FGS: $t")
+                android.util.Log.w("Fonebrew", "could not start download FGS: $t")
             }
         }
 

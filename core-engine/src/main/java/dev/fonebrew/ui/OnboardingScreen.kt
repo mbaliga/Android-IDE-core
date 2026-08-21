@@ -44,7 +44,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
             HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
                 when (page) {
                     0 -> OnboardingPage(
-                        title = "Aarso",
+                        title = "Fonebrew",
                         subtitle = "“mirror” — Konkani",
                         body = "AI models run on this phone. Your words stay on it.\n\n" +
                             "No accounts. No analytics. No telemetry — ever.",

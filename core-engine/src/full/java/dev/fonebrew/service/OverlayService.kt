@@ -38,7 +38,7 @@ class OverlayService : Service() {
         startForeground(
             NOTIF_ID,
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Aarso")
+                .setContentTitle("Fonebrew")
                 .setContentText("Floating bubble active")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setOngoing(true)

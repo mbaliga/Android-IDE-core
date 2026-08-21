@@ -135,7 +135,7 @@ fun TreeRoom(
                         scope.launch {
                             val files = dev.fonebrew.domain.sync.TreeArchive.write(container.repository.tree().allNodes())
                             val blob = files.entries.joinToString("\n\n") { "// ${it.key}\n${it.value}" }
-                            shareText(context, "Aarso tree export", blob)
+                            shareText(context, "Fonebrew tree export", blob)
                         }
                     })
                     HyleButton("Handoff", onClick = { handoff = buildHandoff(rows) })
@@ -198,7 +198,7 @@ fun TreeRoom(
                     Text(text, style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = { HyleButton("Share", onClick = { shareText(context, "Aarso handoff", text); handoff = null }) },
+            confirmButton = { HyleButton("Share", onClick = { shareText(context, "Fonebrew handoff", text); handoff = null }) },
             dismissButton = { HyleButton("Close", onClick = { handoff = null }) },
         )
     }

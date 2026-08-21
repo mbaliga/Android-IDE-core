@@ -43,7 +43,7 @@ class ScreenCaptureService : Service() {
         startForeground(
             NOTIF_ID,
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Aarso")
+                .setContentTitle("Fonebrew")
                 .setContentText("Reading the screen…")
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setOngoing(true)

@@ -15,13 +15,13 @@ open class FonebrewApp : Application() {
     override fun onCreate() {
         // Install crash capture FIRST, so even a failure in container construction below (or a
         // later first-frame/Compose crash) lands a readable trace for the recovery screen.
-        CrashRecovery.install(this, appLabel = "Aarso")
+        CrashRecovery.install(this, appLabel = "Fonebrew")
         super.onCreate()
         // Don't let an init failure brick the process silently — record it and let MainActivity recover.
         try {
             container = AppContainer(this)
         } catch (e: Throwable) {
-            CrashRecovery.captureInitError(this, appLabel = "Aarso", e)
+            CrashRecovery.captureInitError(this, appLabel = "Fonebrew", e)
         }
     }
 }

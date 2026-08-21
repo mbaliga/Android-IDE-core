@@ -51,7 +51,7 @@ fun FlagOutputDialog(
         text = {
             Column {
                 Text(
-                    "Prepare a report you send yourself — Aarso transmits nothing on its own.",
+                    "Prepare a report you send yourself — Fonebrew transmits nothing on its own.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -70,7 +70,7 @@ fun FlagOutputDialog(
             TextButton(
                 onClick = {
                     val body = buildString {
-                        appendLine("Aarso output report")
+                        appendLine("Fonebrew output report")
                         appendLine("Category: $selected")
                         modelId?.let { appendLine("Model: $it") }
                         appendLine()
@@ -80,13 +80,13 @@ fun FlagOutputDialog(
                     val intent = if (email.isNotBlank()) {
                         Intent(Intent.ACTION_SENDTO).apply {
                             data = Uri.parse("mailto:$email")
-                            putExtra(Intent.EXTRA_SUBJECT, "Aarso output report: $selected")
+                            putExtra(Intent.EXTRA_SUBJECT, "Fonebrew output report: $selected")
                             putExtra(Intent.EXTRA_TEXT, body)
                         }
                     } else {
                         Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Aarso output report: $selected")
+                            putExtra(Intent.EXTRA_SUBJECT, "Fonebrew output report: $selected")
                             putExtra(Intent.EXTRA_TEXT, body)
                         }
                     }

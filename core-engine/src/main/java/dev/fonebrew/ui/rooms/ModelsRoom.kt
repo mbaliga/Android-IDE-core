@@ -261,7 +261,7 @@ fun ModelsRoom(
                 Text(
                     "This connects to the internet and fetches the latest model list from:\n\n" +
                         "$catalogSourceUrl\n\n" +
-                        "Aarso is on-device by default; this is the only time it reaches out for this list.",
+                        "Fonebrew is on-device by default; this is the only time it reaches out for this list.",
                 )
             },
             confirmButton = {

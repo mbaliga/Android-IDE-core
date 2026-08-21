@@ -28,7 +28,7 @@ class GitBackup(
         var created = 0
         var failed = 0
         for ((path, content) in toCreate) {
-            val req = GitContentsApi.putFile(host, path, content, "Aarso backup: $path", sha = null, token = token)
+            val req = GitContentsApi.putFile(host, path, content, "Fonebrew backup: $path", sha = null, token = token)
             val r = transport.execute(req)
             if (r.code in 200..299) created++ else failed++
         }

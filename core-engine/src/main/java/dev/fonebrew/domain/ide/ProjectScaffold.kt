@@ -52,7 +52,7 @@ object ProjectScaffold {
         require(problems.isEmpty()) { "invalid AppSpec: ${problems.joinToString("; ")}" }
 
         val pkgPath = spec.packageId.replace('.', '/')
-        val idea = spec.idea.ifBlank { "A new app, conceived on Aarso." }
+        val idea = spec.idea.ifBlank { "A new app, conceived on Fonebrew." }
 
         return listOf(
             File("settings.gradle.kts", settingsGradle(spec.appName)),
