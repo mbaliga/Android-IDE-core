@@ -3,6 +3,8 @@ package dev.fonebrew.ui.rooms
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +54,7 @@ import dev.fonebrew.domain.tree.Conversations
 import dev.fonebrew.domain.tree.TreeFork
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.domain.library.Conversations as LibConversations
+import dev.aarso.hyle.component.HyleContextMenu
 import dev.aarso.hyle.component.HyleField
 import dev.fonebrew.ui.hyle.HyleButton
 import dev.fonebrew.ui.hyle.HyleChip
@@ -330,25 +335,44 @@ private fun ImageList(imageNodes: List<MessageNode>, enabled: Boolean, onOpen: (
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary) {
     val c = LocalHyleColors.current
     val active = conv.latestLeafId in p.activeIds || p.firstNodeId == conv.rootId
     val bookmarked = conv.rootId in p.bookmarked
     val project = p.projects[conv.rootId]
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = p.enabled, onClick = { p.onOpen(conv) }),
-        colors = CardDefaults.cardColors(
-            containerColor = if (active) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-        ),
-        border = BorderStroke(1.dp, c.hairline),
-    ) {
+    val lineage = p.lineageByRoot[conv.rootId]
+    var menuOpen by remember { mutableStateOf(false) }
+
+    // Desktop-class kit §3: long-press (+ a TalkBack custom action) opens a HyleContextMenu with
+    // exactly the actions this card already exposes as buttons/chips below — see
+    // [conversationCardMenuItems]. The card's own tap-to-open and its trailing star/project
+    // buttons are untouched (clickability parity — the menu is an ADDITIONAL path, not a
+    // replacement).
+    Box(Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    enabled = p.enabled,
+                    onClick = { p.onOpen(conv) },
+                    onLongClick = { menuOpen = true },
+                )
+                .semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction("Open conversation actions") { menuOpen = true; true },
+                    )
+                },
+            colors = CardDefaults.cardColors(
+                containerColor = if (active) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+            ),
+            border = BorderStroke(1.dp, c.hairline),
+        ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             // Leading state marker — branch glyph / filled dot / hollow ring, breathing
             // only while a watched cloud model is generating into THIS conversation.
@@ -386,7 +410,7 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
                 // the whole chain (that's TreeRoom's "Chain" chip); a source that's still around
                 // is named, a deleted one still says how this conversation began rather than
                 // pretending it has no history.
-                p.lineageByRoot[conv.rootId]?.let { lineage ->
+                if (lineage != null) {
                     val verb = if (lineage.lineageKind == TreeFork.LineageKind.SPAWN) "Spawned" else "Forked"
                     val srcTitle = p.titleByRoot[lineage.srcRootId]
                     // Fixed per audit: its own clickable (nested inside the outer Card's) so a tap
@@ -455,6 +479,22 @@ private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summa
                     color = if (bookmarked) c.violet else c.textMid,
                 )
             }
+        }
+        }
+        if (menuOpen) {
+            HyleContextMenu(
+                expanded = true,
+                onDismissRequest = { menuOpen = false },
+                items = conversationCardMenuItems(bookmarked = bookmarked, hasLineageSource = lineage != null),
+                onItemClick = { id ->
+                    when (id) {
+                        "open" -> p.onOpen(conv)
+                        "toggle_star" -> p.onToggleBookmark(conv)
+                        "assign_project" -> p.onSetProject(conv)
+                        "open_source" -> lineage?.let { p.onOpenSource(it.srcRootId) }
+                    }
+                },
+            )
         }
     }
 }

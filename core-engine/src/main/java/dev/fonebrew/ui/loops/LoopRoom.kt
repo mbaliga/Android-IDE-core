@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,10 +50,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.aarso.hyle.component.HyleContextMenu
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.bpmn.BpmnArchive
 import dev.fonebrew.domain.bpmn.BpmnEdge
@@ -532,6 +536,12 @@ fun LoopRoom(onClose: () -> Unit) {
                 if (i >= 0) nodes[i] = nodes[i].copy(label = newName.ifBlank { nodes[i].label }, systemPrompt = newPrompt, modelId = newModel)
                 configNodeId = null
             },
+            // Desktop-class kit §3: the HyleContextMenu parity path's two items call the exact
+            // same operations the node's long-press NodeMenuDialog offers (menuNodeId's onConnect/
+            // onDelete below) — Connect starts the same connectingFrom-from-here mode, Delete
+            // calls the same deleteNode(id).
+            onConnect = { configNodeId = null; connectingFrom = id },
+            onDelete = { configNodeId = null; deleteNode(id) },
         )
     }
 
@@ -909,16 +919,50 @@ private fun EdgeLabelDialog(onDismiss: () -> Unit, onPick: (String?) -> Unit) {
 }
 
 @Composable
-private fun NodeConfigDialog(node: LoopNode, runnable: List<ModelSpec>, onDismiss: () -> Unit, onSave: (name: String, prompt: String, modelId: String?) -> Unit) {
+private fun NodeConfigDialog(
+    node: LoopNode,
+    runnable: List<ModelSpec>,
+    onDismiss: () -> Unit,
+    onSave: (name: String, prompt: String, modelId: String?) -> Unit,
+    // Desktop-class kit §3 parity path: same two operations as the long-press NodeMenuDialog
+    // (minus Edit — this dialog IS the edit surface already open). See [loopNodeMenuItems].
+    onConnect: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var n by remember { mutableStateOf(node.label) }
     var p by remember { mutableStateOf(node.systemPrompt) }
     var model by remember { mutableStateOf(node.modelId) }
+    var showActions by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val isTask = !isEvent(node.kind) && !node.kind.name.contains("GATEWAY")
     val options = listOf("Default model") + runnable.map { (if (it.isOnDevice) "⌂ " else "☁ ") + it.displayName }
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
             Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Edit ${node.label}", style = MaterialTheme.typography.titleMedium)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Edit ${node.label}", style = MaterialTheme.typography.titleMedium)
+                    Box {
+                        Text(
+                            "⋮",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .clickable { showActions = true }
+                                .padding(8.dp)
+                                .semantics { contentDescription = "Node actions" },
+                        )
+                        HyleContextMenu(
+                            expanded = showActions,
+                            onDismissRequest = { showActions = false },
+                            items = loopNodeMenuItems(),
+                            onItemClick = { id ->
+                                when (id) {
+                                    "connect" -> onConnect()
+                                    "delete" -> confirmDelete = true
+                                }
+                            },
+                        )
+                    }
+                }
                 HyleField(n, { n = it }, label = "Name", modifier = Modifier.fillMaxWidth())
                 if (isTask) {
                     HyleField(p, { p = it }, label = "Instructions (system prompt)", singleLine = false, modifier = Modifier.fillMaxWidth())
@@ -937,6 +981,20 @@ private fun NodeConfigDialog(node: LoopNode, runnable: List<ModelSpec>, onDismis
                 }
             }
         }
+    }
+    // Destructive confirm (binding rule: destructive actions confirm before acting) — the
+    // long-press NodeMenuDialog's own Delete button is untouched; this is only this new parity
+    // path's gate in front of the same deleteNode(id) call.
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete “${node.label}”?") },
+            text = { Text("Removes the node and any edges connected to it. This can't be undone.") },
+            confirmButton = {
+                HyleButton("Delete", onClick = { confirmDelete = false; onDelete() })
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
     }
 }
 

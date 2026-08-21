@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,13 +40,17 @@ import dev.fonebrew.domain.git.GitHostKind
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.aarso.hyle.component.HyleContextMenu
+import dev.aarso.hyle.component.HyleTree
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fonebrew.data.GitBrowse
 import dev.fonebrew.data.GitTransport
@@ -998,24 +1003,68 @@ private fun BuildsSection() {
     }
 }
 
-/** Full-screen repo browser: tap folders to descend, tap a file to view it with the
- *  Lens (CodeLensScreen with plain-English explanation). [generator] is optional — if
- *  null the Lens shows the code without explanations. */
+/** Full-screen repo browser: the desktop-class kit's `HyleTree` (docs/design/desktop-class-kit.md
+ *  §3) — the whole fetched-so-far tree stays visible (not a single-level drill-down); a
+ *  directory's chevron fetches + expands it lazily via the same [GitBrowse.list] call the old
+ *  drill-down used, a file's row tap opens it via the same [GitBrowse.read] call as before.
+ *  Long-press opens a per-row [HyleContextMenu] — see [gitBrowseMenuItems] — reachable from
+ *  TalkBack via the standard long-click semantics action Compose's `combinedClickable` registers
+ *  on each row (HyleTree owns row layout internally and exposes no per-row slot for this file to
+ *  attach a named custom action to; see the inline note at the `HyleTree` call). [generator] is
+ *  optional — if null the Lens shows the code without explanations. */
 @Composable
 private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generator: Generator?, onClose: () -> Unit) {
-    var path by remember { mutableStateOf("") }
-    var entries by remember { mutableStateOf<List<GitBrowse.Entry>>(emptyList()) }
+    // path ("" = root) -> that directory's listing, populated lazily as chevrons open it.
+    val childrenByPath = remember { mutableStateMapOf<String, List<GitBrowse.Entry>>() }
+    var expandedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var file by remember { mutableStateOf<Pair<String, String>?>(null) }
     var status by remember { mutableStateOf("") }
+    var menuPath by remember { mutableStateOf<String?>(null) }
+    // The header breadcrumb: the last path the user actually interacted with — a directory
+    // they toggled (open OR closed; see [toggle]), or the parent directory of a file they
+    // opened (see [openFile]). Unlike the old drill-down, "current location" is no longer a
+    // single navigation cursor the whole pane is scoped to, so this is best-effort orientation,
+    // not a scope — but it must still move live as the user works the tree, not sit fixed at "/".
+    var currentPath by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
 
-    LaunchedEffect(path) {
-        file = null
-        status = "loading…"
-        browse.list(host, token, path).fold(
-            { entries = it; status = if (it.isEmpty()) "empty" else "" },
-            { status = "✗ ${it.message}" },
-        )
+    fun load(path: String) {
+        if (path.isBlank()) status = "loading…"
+        scope.launch {
+            browse.list(host, token, path).fold(
+                { childrenByPath[path] = it; if (path.isBlank()) status = if (it.isEmpty()) "empty" else "" },
+                { status = "✗ ${it.message}" },
+            )
+        }
+    }
+    LaunchedEffect(host.id, host.repo) { childrenByPath.clear(); expandedIds = emptySet(); currentPath = ""; load("") }
+
+    // Every entry seen so far, by path — lets a row's `id` (all HyleTree/HyleContextMenu
+    // callbacks carry is the id) be resolved back to "is this a directory or a file".
+    val entryByPath = remember(childrenByPath.toMap()) {
+        buildMap { childrenByPath.values.forEach { list -> list.forEach { e -> put(e.path, e) } } }
+    }
+    val forest = remember(childrenByPath.toMap()) { buildGitBrowseForest(childrenByPath) }
+
+    fun openFile(path: String) {
+        currentPath = path.substringBeforeLast('/', "")
+        status = "loading ${path.substringAfterLast('/')}…"
+        scope.launch {
+            browse.read(host, token, path).fold(
+                { file = path to it; status = "" },
+                { status = "✗ ${it.message}" },
+            )
+        }
+    }
+    fun toggle(path: String) {
+        currentPath = path
+        if (path in expandedIds) {
+            expandedIds = expandedIds - path
+        } else {
+            expandedIds = expandedIds + path
+            if (path !in childrenByPath) load(path)
+        }
     }
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -1028,8 +1077,13 @@ private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generato
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text("${host.owner}/${host.repo} @ ${host.branch}", style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                        // Live breadcrumb: the last directory toggled or the parent of the last
+                        // file opened (currentPath, kept by toggle()/openFile() above) — not a
+                        // fixed "/". The old single-pane drill-down had one navigation cursor to
+                        // show here; the tree has many open branches at once, so this names
+                        // "where you last touched", not "where you are".
                         Text(
-                            if (path.isBlank()) "/" else "/$path",
+                            if (currentPath.isBlank()) "/" else "/$currentPath",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -1038,9 +1092,12 @@ private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generato
                     TextButton(onClick = onClose) { Text("Close") }
                 }
                 HorizontalDivider()
-                when {
-                    file != null -> TextButton(onClick = { file = null }) { Text("‹ Back") }
-                    path.isNotBlank() -> TextButton(onClick = { path = path.substringBeforeLast('/', "") }) { Text("‹ Up") }
+                // Up removed: chevron collapse on each row is the visible replacement affordance
+                // — the tree keeps every opened ancestor on screen, so collapsing a row's own
+                // chevron does what "Up" used to (steps back out of that directory) without
+                // discarding the rest of the tree the old single-pane drill-down had to.
+                if (file != null) {
+                    TextButton(onClick = { file = null }) { Text("‹ Back") }
                 }
                 if (status.isNotBlank()) {
                     Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1066,31 +1123,54 @@ private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generato
                         },
                     )
                 } else {
-                    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-                        for (e in entries) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (e.isDir) {
-                                            path = e.path
-                                        } else {
-                                            status = "loading ${e.name}…"
-                                            scope.launch {
-                                                browse.read(host, token, e.path).fold(
-                                                    { file = e.path to it; status = "" },
-                                                    { status = "✗ ${it.message}" },
-                                                )
-                                            }
-                                        }
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        HyleTree(
+                            roots = forest,
+                            expandedIds = expandedIds,
+                            selectedId = null,
+                            onToggleExpand = ::toggle,
+                            // Row body tap: a directory "opens" by revealing its children (the
+                            // tree's equivalent of the old descend-and-replace-the-pane
+                            // navigation — the fetch is the same GitBrowse.list call, only the
+                            // result now nests in place instead of swapping out the ancestors);
+                            // a file opens exactly as it always did, via GitBrowse.read.
+                            onSelect = { id ->
+                                val e = entryByPath[id]
+                                when {
+                                    e == null -> {}
+                                    e.isDir -> toggle(id)
+                                    else -> openFile(id)
+                                }
+                            },
+                            onLongPress = { id -> menuPath = id },
+                            // NOTE: no per-row CustomAccessibilityAction here (unlike the
+                            // combinedClickable sites this task added below in ChatsRoom/TreeRoom,
+                            // where this file owns the row Modifier directly) — HyleTree lays out
+                            // and long-press-wires every row internally (see HyleTree.kt's private
+                            // HyleTreeRowView) and exposes no per-row modifier/semantics slot to
+                            // attach a named action to. TalkBack still reaches the menu through the
+                            // long-press Compose's `combinedClickable` already registers as a
+                            // standard long-click semantics action on each row — just without a
+                            // codebase-style custom label. Giving HyleTree that per-row hook is a
+                            // Hyle-side change, out of scope here (the submodule stays untouched).
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        val mp = menuPath
+                        if (mp != null) {
+                            val e = entryByPath[mp]
+                            val isDir = e?.isDir == true
+                            HyleContextMenu(
+                                expanded = true,
+                                onDismissRequest = { menuPath = null },
+                                items = gitBrowseMenuItems(isDir = isDir, expanded = mp in expandedIds),
+                                onItemClick = { id ->
+                                    when (id) {
+                                        "toggle" -> toggle(mp)
+                                        "open" -> openFile(mp)
+                                        "copy_path" -> clipboard.setText(AnnotatedString("/$mp"))
                                     }
-                                    .padding(vertical = 10.dp),
-                            ) {
-                                Text(
-                                    (if (e.isDir) "📁  " else "📄  ") + e.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
+                                },
+                            )
                         }
                     }
                 }

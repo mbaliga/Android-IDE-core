@@ -2,6 +2,8 @@ package dev.fonebrew.ui.rooms
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -32,8 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.component.HyleContextMenu
 import dev.fonebrew.domain.Role
 import dev.fonebrew.domain.thread.ThreadChains
 import dev.fonebrew.domain.tree.Conversations
@@ -308,39 +314,61 @@ private fun ChainCard(chain: ThreadChains.Chain, onOpen: (String) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChainLinkRow(link: ThreadChains.ChainLink, indent: Boolean, onOpen: (String) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = { onOpen(link.rootId) })
-            .padding(start = if (indent) 24.dp else 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                link.title,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val lineage = link.lineage
-            if (lineage != null) {
+    // Desktop-class kit §3: long-press (+ a TalkBack custom action) opens a HyleContextMenu —
+    // see [chainLinkMenuItems]. The row's own tap-to-open stays exactly as it was.
+    var menuOpen by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { onOpen(link.rootId) },
+                    onLongClick = { menuOpen = true },
+                )
+                .semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction("Open chain link actions") { menuOpen = true; true },
+                    )
+                }
+                .padding(start = if (indent) 24.dp else 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    // TreeFork.LineageKind.name is lowercased for display; an unrecognised/absent
-                    // kind (a future WP's lineage source, or a malformed payload) still shows the
-                    // link exists — "linked from …" — rather than hiding it.
-                    "${lineage.lineageKind?.name?.lowercase() ?: "linked"} from a prior turn",
+                    link.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val lineage = link.lineage
+                if (lineage != null) {
+                    Text(
+                        // TreeFork.LineageKind.name is lowercased for display; an unrecognised/absent
+                        // kind (a future WP's lineage source, or a malformed payload) still shows the
+                        // link exists — "linked from …" — rather than hiding it.
+                        "${lineage.lineageKind?.name?.lowercase() ?: "linked"} from a prior turn",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (link.chapterCount > 0) {
+                Text(
+                    "${link.chapterCount} ch",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        if (link.chapterCount > 0) {
-            Text(
-                "${link.chapterCount} ch",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (menuOpen) {
+            HyleContextMenu(
+                expanded = true,
+                onDismissRequest = { menuOpen = false },
+                items = chainLinkMenuItems(),
+                onItemClick = { id -> if (id == "open") onOpen(link.rootId) },
             )
         }
     }
