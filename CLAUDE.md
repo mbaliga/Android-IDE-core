@@ -130,12 +130,12 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   (`--force`).
 - **CI caveat:** the workflow runs the JVM gate only — the native assemble is `if: false` (it OOMs
   the runner), so **CI never launches the app**. A device-only launch/render crash passes CI. The
-  in-app **crash-recovery harness** exists precisely because of this. **Red `build-test` is a
-  GitHub-Actions billing/minutes block, not a code or 403 flake** (corrected 2026-06-30): every run
-  dies in 3–6s with no runner assigned (job never starts) — the signature of exhausted Actions
-  minutes / spending limit on a private repo. The gate itself is green (reproduced locally: 868
-  tests, 0 failures). Fix is account-level (top up minutes / raise the limit) or rely on public
-  repos (unlimited free Actions). "Re-run to clear" does nothing — see `docs/STATE.md` §9.
+  in-app **crash-recovery harness** exists precisely because of this. **Actions are WORKING again
+  (verified 2026-08-21):** `build-test` runs for real (~6.5 min) and passes — so treat red CI as a
+  real signal again, not noise. *(Historical note, kept so the symptom stays recognizable: from
+  ~2026-06-30 to 2026-08 every run died in 3–6s with no runner assigned — exhausted Actions
+  minutes / spending limit on the private repo, fixed at the account level, never by re-running.
+  If that 3–6s-death signature ever returns, it's billing again — see `docs/STATE.md` §9.)*
 
 ## Environment honesty
 The container compiles everything but has **no device, emulator, board, or SSH host**. All
