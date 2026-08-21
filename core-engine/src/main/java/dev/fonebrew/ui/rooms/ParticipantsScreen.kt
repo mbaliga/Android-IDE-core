@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.Participant
+import dev.aarso.hyle.component.HyleField
 import dev.fonebrew.ui.hyle.HyleButton
 import dev.fonebrew.ui.hyle.HyleDropdownField
 import dev.fonebrew.ui.hyle.HyleTitle
@@ -86,14 +86,14 @@ fun ParticipantsScreen(onClose: () -> Unit) {
                         HyleButton("Remove", onClick = { rows.removeAt(i) })
                     }
                     Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
+                    HyleField(
                         value = p.name, onValueChange = { rows[i] = p.copy(name = it) },
-                        label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = "Name", singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
+                    HyleField(
                         value = p.instructions, onValueChange = { rows[i] = p.copy(instructions = it) },
-                        label = { Text("Instructions") }, modifier = Modifier.fillMaxWidth(),
+                        label = "Instructions", singleLine = false, modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(6.dp))
                     HyleDropdownField(
@@ -104,9 +104,9 @@ fun ParticipantsScreen(onClose: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
+                    HyleField(
                         value = p.memory, onValueChange = { rows[i] = p.copy(memory = it) },
-                        label = { Text("Long-term memory") }, modifier = Modifier.fillMaxWidth(),
+                        label = "Long-term memory", singleLine = false, modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
                         "Files: soon — attaching documents to a member needs file→context plumbing the engines don't have yet.",

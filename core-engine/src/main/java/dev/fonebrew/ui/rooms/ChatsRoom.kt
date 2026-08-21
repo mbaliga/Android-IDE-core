@@ -50,6 +50,7 @@ import dev.fonebrew.domain.tree.Conversations
 import dev.fonebrew.domain.tree.TreeFork
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.domain.library.Conversations as LibConversations
+import dev.aarso.hyle.component.HyleField
 import dev.fonebrew.ui.hyle.HyleButton
 import dev.fonebrew.ui.hyle.HyleChip
 import dev.fonebrew.ui.hyle.HyleTitle
@@ -472,11 +473,11 @@ private fun ProjectDialog(
         title = { Text("Project") },
         text = {
             Column {
-                androidx.compose.material3.OutlinedTextField(
+                HyleField(
                     value = text,
                     onValueChange = { text = it },
+                    label = "Project name",
                     singleLine = true,
-                    label = { Text("Project name") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (existing.isNotEmpty()) {

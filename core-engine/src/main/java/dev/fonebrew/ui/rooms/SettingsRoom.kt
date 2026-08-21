@@ -24,7 +24,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,10 +68,11 @@ import dev.fonebrew.data.Object3dProviderConfig
 import dev.fonebrew.domain.object3d.Object3dCloudProvider
 import dev.fonebrew.flavor.InvocationFeatures
 import dev.fonebrew.ui.SettingsViewModel
+import dev.aarso.hyle.component.HyleField as DesktopHyleField
+import dev.aarso.hyle.component.HyleToggle
 import dev.fonebrew.ui.hyle.HyleButton
 import dev.fonebrew.ui.hyle.HyleChip
 import dev.fonebrew.ui.hyle.HyleDropdownField
-import dev.fonebrew.ui.hyle.HyleField
 import dev.fonebrew.ui.hyle.HyleTitle
 import dev.fonebrew.ui.theme.LocalHyleColors
 import dev.fonebrew.ui.theme.ThemePicker
@@ -412,7 +412,7 @@ private fun GlobalSettings(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Floating bubble (always-on summon)", style = MaterialTheme.typography.bodyMedium)
-            Switch(
+            HyleToggle(
                 checked = bubbleOn,
                 onCheckedChange = { on ->
                     if (on) {
@@ -492,7 +492,7 @@ private fun GlobalSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
+        HyleToggle(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
     }
     HorizontalDivider()
 
@@ -522,7 +522,7 @@ private fun GlobalSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
+        HyleToggle(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
     }
     val gestureQuoteReply by session.gestureQuoteReplyEnabled.collectAsState()
     Row(
@@ -538,7 +538,7 @@ private fun GlobalSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
+        HyleToggle(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
     }
     val gestureRadialFan by session.gestureRadialFanEnabled.collectAsState()
     Row(
@@ -554,7 +554,7 @@ private fun GlobalSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
+        HyleToggle(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
     }
     HorizontalDivider()
 
@@ -584,7 +584,7 @@ private fun GlobalSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
+        HyleToggle(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
     }
     HorizontalDivider()
 
@@ -764,14 +764,14 @@ private fun Object3dProviderForm(
             label = "Type",
             modifier = Modifier.fillMaxWidth(),
         )
-        HyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
-        HyleField(
+        DesktopHyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
+        DesktopHyleField(
             baseUrl, { baseUrl = it },
             label = "Base URL",
             mandatory = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        HyleField(
+        DesktopHyleField(
             apiKey, { apiKey = it },
             label = "API key (encrypted on-device)",
             mandatory = true,
@@ -1283,14 +1283,14 @@ private fun GitConnectForm(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (kind.needsBaseUrl) {
-                    HyleField(
+                    DesktopHyleField(
                         baseUrl, { baseUrl = it },
                         label = "Instance URL", mandatory = true,
                         placeholder = "https://gitea.example.com",
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                HyleField(
+                DesktopHyleField(
                     token, { token = it },
                     label = "Access token (PAT, encrypted on-device)", mandatory = true,
                     placeholder = "paste your personal access token",
@@ -1339,7 +1339,7 @@ private fun GitConnectForm(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                HyleField(repoSearch, { repoSearch = it }, label = "Search repos", modifier = Modifier.fillMaxWidth())
+                DesktopHyleField(repoSearch, { repoSearch = it }, label = "Search repos", modifier = Modifier.fillMaxWidth())
                 val filtered = repoList.filter {
                     repoSearch.isBlank() || it.fullName.contains(repoSearch, ignoreCase = true)
                 }
@@ -1382,7 +1382,7 @@ private fun GitConnectForm(
                     }
                 }
                 if (user.email.isBlank()) {
-                    HyleField(
+                    DesktopHyleField(
                         authorEmail, { authorEmail = it },
                         label = "Git email", mandatory = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -1461,10 +1461,10 @@ private fun ImageProviderForm(
             label = "Type",
             modifier = Modifier.fillMaxWidth(),
         )
-        HyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
-        HyleField(baseUrl, { baseUrl = it }, label = "Base URL", mandatory = true, modifier = Modifier.fillMaxWidth())
-        HyleField(model, { model = it }, label = "Model id", mandatory = true, modifier = Modifier.fillMaxWidth())
-        HyleField(
+        DesktopHyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
+        DesktopHyleField(baseUrl, { baseUrl = it }, label = "Base URL", mandatory = true, modifier = Modifier.fillMaxWidth())
+        DesktopHyleField(model, { model = it }, label = "Model id", mandatory = true, modifier = Modifier.fillMaxWidth())
+        DesktopHyleField(
             apiKey, { apiKey = it },
             label = "API key (encrypted on-device)",
             mandatory = true,
@@ -1536,22 +1536,22 @@ private fun ProviderForm(
             label = "Type",
             modifier = Modifier.fillMaxWidth(),
         )
-        HyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
-        HyleField(baseUrl, { baseUrl = it }, label = "Base URL", mandatory = true, modifier = Modifier.fillMaxWidth())
-        HyleField(
+        DesktopHyleField(name, { name = it }, label = "Display name", modifier = Modifier.fillMaxWidth())
+        DesktopHyleField(baseUrl, { baseUrl = it }, label = "Base URL", mandatory = true, modifier = Modifier.fillMaxWidth())
+        DesktopHyleField(
             model, { model = it },
             label = "Model id",
             placeholder = "gpt-4o · claude-opus-4-8 · deepseek-chat",
             mandatory = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        HyleField(
+        DesktopHyleField(
             contextWindow, { contextWindow = it.filter(Char::isDigit) },
             label = "Context window (tokens)",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
-        HyleField(
+        DesktopHyleField(
             apiKey, { apiKey = it },
             label = if (editing == null) "API key (encrypted on-device)" else "API key (blank = keep stored)",
             mandatory = editing == null,

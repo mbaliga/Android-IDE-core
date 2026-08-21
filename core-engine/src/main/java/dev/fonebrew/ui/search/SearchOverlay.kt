@@ -53,6 +53,7 @@ import androidx.compose.ui.window.DialogProperties
 import dev.fonebrew.domain.search.ExplainField
 import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.query.Diagnostic
+import dev.aarso.hyle.component.HyleField as DesktopHyleField
 import dev.fonebrew.ui.hyle.HyleButton
 import dev.fonebrew.ui.hyle.HyleChip
 import dev.fonebrew.ui.hyle.HyleField
@@ -147,10 +148,9 @@ fun SearchOverlay(
                 }
 
                 Column(Modifier.padding(horizontal = 20.dp)) {
-                    HyleField(
+                    DesktopHyleField(
                         value = state.queryText,
                         onValueChange = viewModel::onQueryChange,
-                        label = "",
                         placeholder = "gradle is:starred \"exact phrase\" /regex/",
                         modifier = Modifier.fillMaxWidth(),
                     )
