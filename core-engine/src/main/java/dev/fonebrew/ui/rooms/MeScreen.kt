@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleTitle
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.provenance.ProvenanceState
 import dev.fonebrew.ui.components.ByProviderList
@@ -31,8 +33,6 @@ import dev.fonebrew.ui.components.InputOutputCard
 import dev.fonebrew.ui.components.ProvenanceBadge
 import dev.fonebrew.ui.components.SovereigntyCard
 import dev.fonebrew.ui.components.StatePane
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.hyle.HyleTitle
 import dev.fonebrew.ui.state.MyselfPresenter
 import dev.fonebrew.ui.wire.WireBox
 
@@ -73,8 +73,8 @@ fun MeScreen(onClose: () -> Unit) {
             WireBox {
                 Text("Paused by design.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    "The Aarso mirror reflects your idiolect back to you and tracks drift over time. " +
-                        "It stays inert until you set the baseline yourself (GitHub Issue #2) — Aarso " +
+                    "The mirror reflects your idiolect back to you and tracks drift over time. " +
+                        "It stays inert until you set the baseline yourself (GitHub Issue #2) — Fonebrew " +
                         "won't infer who you are. On-device only; no profiling.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

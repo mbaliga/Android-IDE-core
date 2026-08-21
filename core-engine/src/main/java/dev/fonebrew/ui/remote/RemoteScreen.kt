@@ -31,6 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleFocusLens
+import dev.aarso.hyle.cells.HyleLensActions
+import dev.aarso.hyle.cells.HyleLensHeading
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.remote.ExecChunk
 import dev.fonebrew.domain.remote.ExecRequest
@@ -202,10 +205,7 @@ fun RemoteScreen(onClose: () -> Unit) {
             } else {
                 // The rendered screen — keyed on screenVersion so each VT update recomposes.
                 key(screenVersion) {
-                    WireBox(Modifier.heightIn(min = 120.dp)) {
-                        val text = (0 until pty.screen.rows).joinToString("\n") { pty.screen.lineText(it) }.trimEnd('\n')
-                        Text(text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                    }
+                    TerminalView(screen = pty.screen, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 WireField("input (sent with Enter)", shellInput, { shellInput = it })
@@ -273,31 +273,33 @@ private fun AddHostForm(onAdd: (RemoteHost, String, Boolean) -> Unit) {
 }
 
 @Composable
-private fun TrustDialog(verdict: Trust, onAccept: () -> Unit, onReject: () -> Unit) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onReject,
-        title = { Text(if (verdict is Trust.Changed) "Host key CHANGED" else "Unknown host") },
-        text = {
-            Column {
-                when (verdict) {
-                    is Trust.Unknown -> {
-                        Text("First time connecting. Verify this fingerprint matches the server:")
-                        Spacer(Modifier.height(8.dp))
-                        Text(verdict.presented.fingerprint, fontFamily = FontFamily.Monospace)
-                    }
-                    is Trust.Changed -> {
-                        Text("The host key DIFFERS from the one you pinned. This could be a reinstall — or an interception. Do not accept unless you know why it changed.")
-                        Spacer(Modifier.height(8.dp))
-                        Text("pinned:    ${verdict.pinned.fingerprint}", fontFamily = FontFamily.Monospace)
-                        Text("presented: ${verdict.presented.fingerprint}", fontFamily = FontFamily.Monospace)
-                    }
-                    Trust.Vetted -> Text("Vetted.")
+internal fun TrustDialog(verdict: Trust, onAccept: () -> Unit, onReject: () -> Unit) {
+    // A security decision: dismissal must be an explicit Reject, never a stray tap,
+    // so onDismiss stays null and the lens cannot be dismissed by touching the ground.
+    HyleFocusLens(visible = true, onDismiss = null) {
+        HyleLensHeading(if (verdict is Trust.Changed) "Host key CHANGED" else "Unknown host")
+        Column {
+            when (verdict) {
+                is Trust.Unknown -> {
+                    Text("First time connecting. Verify this fingerprint matches the server:")
+                    Spacer(Modifier.height(8.dp))
+                    Text(verdict.presented.fingerprint, fontFamily = FontFamily.Monospace)
                 }
+                is Trust.Changed -> {
+                    Text("The host key DIFFERS from the one you pinned. This could be a reinstall — or an interception. Do not accept unless you know why it changed.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("pinned:    ${verdict.pinned.fingerprint}", fontFamily = FontFamily.Monospace)
+                    Text("presented: ${verdict.presented.fingerprint}", fontFamily = FontFamily.Monospace)
+                }
+                Trust.Vetted -> Text("Vetted.")
             }
-        },
-        confirmButton = { WireButton(if (verdict is Trust.Changed) "Accept anyway" else "Accept", onClick = onAccept) },
-        dismissButton = { WireButton("Reject", onClick = onReject) },
-    )
+        }
+        HyleLensActions {
+            WireButton("Reject", onClick = onReject)
+            Spacer(Modifier.width(8.dp))
+            WireButton(if (verdict is Trust.Changed) "Accept anyway" else "Accept", onClick = onAccept)
+        }
+    }
 }
 
 private fun phaseLabel(s: SessionState): String = when (s) {

@@ -45,7 +45,7 @@ class BpmnArchiveTest {
         assertTrue(xml.contains("isExecutable=\"false\""))
         assertTrue(xml.contains("<bpmn:userTask id=\"draft\""))
         assertTrue(xml.contains("<bpmn:exclusiveGateway id=\"gw\""))
-        // Aarso data rides in an extension element, not a custom top-level tag.
+        // Fonebrew data rides in an extension element, not a custom top-level tag.
         assertTrue(xml.contains("<bpmn:extensionElements><aarso:meta"))
         assertTrue(xml.contains("model=\"Qwen2.5-7B\""))
         // layout travels in BPMN-DI

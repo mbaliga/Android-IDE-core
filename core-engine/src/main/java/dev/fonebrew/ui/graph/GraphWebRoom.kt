@@ -35,7 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fonebrew.domain.thread.ThreadGraph
 import dev.fonebrew.domain.thread.ThreadGraphJson
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 import org.json.JSONObject
 import kotlin.math.roundToInt
 
@@ -234,12 +234,12 @@ private const val ASSET_URL = ASSET_URL_PREFIX + "graph-room.html"
  *  literal (with its own surrounding quotes) — safe to splice into an `evaluateJavascript` call
  *  even though [json]/[themeJson] are untrusted-shaped app data, because neither is ever
  *  interpreted as anything but a JS string literal by the receiving `JSON.parse` calls in the
- *  bootstrap. [themeJson] is the live [dev.fonebrew.ui.theme.HyleColors] resolved to hex strings
+ *  bootstrap. [themeJson] is the live [dev.aarso.hyle.theme.HyleColors] resolved to hex strings
  *  (see [Color.toWebHex]) — the deep view's own re-theme forward pointer this WP's audit named. */
 private fun pushCall(json: String, themeJson: String): String =
     "window.__graphRoom && window.__graphRoom.load(${JSONObject.quote(json)}, ${JSONObject.quote(themeJson)});"
 
-/** `#rrggbb` (alpha dropped — every [dev.fonebrew.ui.theme.HyleColors] entry this pushes is
+/** `#rrggbb` (alpha dropped — every [dev.aarso.hyle.theme.HyleColors] entry this pushes is
  *  fully opaque) for splicing into the deep view's CSS/G6-style JSON. */
 private fun Color.toWebHex(): String {
     val r = (red * 255f).roundToInt().coerceIn(0, 255)

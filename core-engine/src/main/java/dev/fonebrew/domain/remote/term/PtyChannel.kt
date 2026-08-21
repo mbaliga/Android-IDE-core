@@ -27,6 +27,13 @@ class PtyChannel(
         renderer?.onScreenChanged(screen)
     }
 
+    /** Full reset (grid, scrollback, cursor) — for switching to a different machine, where the
+     *  previous session's output shouldn't linger. See [ScreenBuffer.resetAll]. */
+    fun reset() {
+        screen.resetAll()
+        renderer?.onScreenChanged(screen)
+    }
+
     fun attach(renderer: TerminalRenderer) { this.renderer = renderer; renderer.onScreenChanged(screen) }
     fun detach() { renderer = null }
 }

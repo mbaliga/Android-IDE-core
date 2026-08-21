@@ -86,7 +86,7 @@ class DownloadService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "aarso.downloads"
+        private const val CHANNEL_ID = "fonebrew.downloads"
         private const val NOTIF_ID = 1002
 
         fun start(context: Context) {

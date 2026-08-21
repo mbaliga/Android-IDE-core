@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.ui.GenPhase
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
  * The two non-conversation lenses of the centre room (see [CenterView]). Both read the

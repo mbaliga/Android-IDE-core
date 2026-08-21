@@ -7,8 +7,8 @@ routing/influence visible and keeps the user in the loop, even at some cost to c
 
 > **Read `docs/STATE.md` first.** It is the living index of *what's done / pending / the end
 > goal* across the whole constellation. This file is the **build rules + how-to-continue**;
-> `docs/STATE.md` and  are the current state + business. When they
-> disagree, STATE.md is newer.
+> `docs/STATE.md` is the current engineering state. When they disagree, STATE.md is newer.
+> Business/monetization planning is tracked privately, not in this repo.
 
 ## North star + naming split
 The product is a **post-desktop, touch-native computing environment** that makes the phone a
@@ -43,7 +43,7 @@ Two names, two scopes (do not conflate):
    behaviour works — the build env has no device/emulator; the owner tests on the phone.
 
 ## Target device & conventions
-- Naming register: follow the codebase (e.g. *Aarso*, *Hyle*).
+- Naming register: follow the codebase (e.g. *Fonebrew*, *Hyle*).
 - Target: **a high-end arm64-v8a Android phone** (large unified RAM, recent Android). `minSdk 31`,
   `targetSdk/compileSdk 36`, single ABI `arm64-v8a`.
 
@@ -63,14 +63,31 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
                             cloud/ (Anthropic, OpenAI-compat, Gemini — SSE), image/
     service/                GenerationService (FGS), OverlayService, ScreenCapture (+OCR), Voice
     ui/                     AppRoot + SpatialRoot (room model, NOT bottom nav); rooms/, loops/,
-                            develop/, codelens/, ide/ (ReviewSheet), remote/, theme/, aeon/
+                            develop/, codelens/, ide/ (ReviewSheet), remote/, theme/
+                            (theme/ is now app-side theming ONLY — ThemeMode, FonebrewTheme,
+                            ThemePicker, Texture. The palette + every Hyle component moved
+                            to the :hyle library; see below.)
     security/               KeystoreSecret (AES-GCM key encryption)
   src/main/cpp/             llama_jni.cpp + CMake + llama.cpp submodule → libaarso_llama.so
   src/test/                 400+ JVM unit tests (domain/ + data-layer) — keep green
 sdengine/                   stable-diffusion.cpp submodule + sd_jni.cpp → libaarso_sd.so
 hyle-design-system/         git submodule (mbaliga/Hyle-Design-System) — the SINGLE source of
                             dev.aarso:hyle:0.2.0, composited via includeBuild (settings.gradle.kts).
-                            No vendored :hyle module here anymore.
+                            No vendored :hyle module here anymore. Hyle ships COMPONENTS, not just
+                            tokens: dev.aarso.hyle.cells (HyleField, HyleButton, HyleCard,
+                            HyleTabBar, HyleChip, HyleWellToggle, …), dev.aarso.hyle.theme
+                            (HyleColors/LocalHyleColors/accent ramp), and dev.aarso.hyle.component
+                            (the desktop-class kit). Do not re-add app-local copies — 0.1.0
+                            shipped from three divergent copies; single-sourcing exists to
+                            prevent that. Change components in the submodule.
+                            **Hyle now ships COMPONENTS, not just tokens** — it is a real
+                            dependency, not a mirror. `dev.aarso.hyle.cells` (HyleField,
+                            HyleButton, HyleCard, HyleTabBar, HyleChip, HyleWellToggle, …) and
+                            `dev.aarso.hyle.theme` (HyleColors, LocalHyleColors, the accent
+                            ramp) live there and NOWHERE else. Do not re-add an app-local copy:
+                            0.1.0 shipped from three divergent copies, which is what
+                            single-sourcing exists to prevent. Change a component in the
+                            submodule, not in app/.
 hyle-probe/                 on-device render harness app for Hyle (depends on dev.aarso:hyle)
 ```
 
@@ -146,17 +163,18 @@ machine-verified parts. Never report on-device behaviour as confirmed.
 ---
 
 ## The constellation (multi-repo / multi-app)
-A family of cooperating apps, not a monolith. Dependency direction sinks toward the routing engine.
+A family of cooperating apps, not a monolith.
 
 | Component | What | Source | Status |
 |---|---|---|---|
 | **Fonebrew** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
 | **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
-| **PM + authoring** | a companion project-management surface | not in this repo | repo pending owner; code in main, to carve out |
+| **PM + authoring** | a companion project-management surface | not in this repo | code lives elsewhere |
 | **Sound & haptics** | companion authoring app | **open** | not started |
+| **Routing engine** | on-device + cloud LLM router (any app) | not in this repo | not started here |
 
-Integration rule: the routing engine needs a **stable public API** from day one. See `docs/STATE.md`
-intelligence, never hold others' keys).
+Integration rule: the routing engine needs a **stable public API** from day one. Business/licensing
+decisions for these components are tracked privately, not in this repo.
 
 ## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `fonebrew-sd.apk`)
 Everything below compiled + JVM-tested + assembled; **device behaviour is owner-verified.** Full
@@ -180,15 +198,16 @@ detail in `docs/STATE.md`.
   never bricks; used across the constellation, not just here — see that repo's README);
   **fixed the launch/send crash** (Compose BoM → Foundation 1.8). **Preview the recovery
   screen without a real crash:** Settings → Global → About, long-press the version line
-  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Aarso")`.
+  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Fonebrew")`.
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
   (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
 - Versions this stage: v0.9.0 IA → v0.13.0 (current). See STATE.md §3 for the per-version list.
 
 **PLANNED / PENDING**
-- *Owner-blocked (need an owner action):* create the **PM/authoring**, **sound/haptics**,
-  **routing-engine** repos + grant access; then carve them out. (**Hyle is done** — its own repo
+- *Owner-blocked (need an owner action):* create the **sound/haptics** repo + grant access.
+  (**Hyle is done** — its own repo `mbaliga/Hyle-Design-System`, consumed via submodule +
+  includeBuild. PM/authoring and the routing engine are tracked outside this repo.)
 - *Engineering follow-ups:* Chat §B4 per-member **files** (needs file→context plumbing); **live
   per-step streaming in the graph Loop run** (`GraphRunner` progress callback); **video/3D**
   engines; **AI-assisted config** (parked); **drag-a-wire** Loop connect; **USB** on-device verify
@@ -197,11 +216,12 @@ detail in `docs/STATE.md`.
   (replace `PlaceholderEmbedder`); §5a base-vs-instruct diff; acceleration (Vulkan/NPU —
   benchmark, never assume); Google Play publication mechanics (AAB/signing/data-safety/screens).
 
-
-## Open owner decisions
-1. Create the new repos + grant access (PM / sound-haptics / routing engine). *(Hyle done — `mbaliga/Hyle-Design-System`.)*
-5. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, Devices/SSH
+## Open owner decisions (engineering-scoped)
+1. Create the sound/haptics repo + grant access.
+2. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, Devices/SSH
    flows, USB flash with a real board.
+
+Business/monetization decisions are tracked privately, not in this repo.
 
 ## How to continue (for the next chat)
 1. Read **`docs/STATE.md`** (the living index), then this file's binding rules + building.
@@ -211,3 +231,12 @@ detail in `docs/STATE.md`.
    kept as historical record).
 3. Keep the gate green, ship small legible PRs to `main`, refresh `fonebrew-sd.apk` on
    `apk-dist`, and be honest that on-device behaviour is owner-verified.
+
+## Reunification note (2026-08-21)
+The launch line (`fix/models-carousel-and-terminal`, 45 commits: vision input W1, web search W2,
+PTY terminal with @mentions/sigils/! escape, models carousel, onboarding wizard incl. opt-in
+AiCore/Gemini Nano, launch branding + `brand_logo` adaptive icon, Watch feature REMOVED — owner
+call, moving to Studio) was merged back into the development line (thread topology WP0–11, 3D
+objects, desktop-class kit, dev.fonebrew rename). Version spine continues the launch reset:
+0.2.0, but versionCode stays monotonic past the interim dev sideloads (18+). The launch line's
+styling and copy win where the two conflicted; the de-fork (:core-engine) architecture stands.

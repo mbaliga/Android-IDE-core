@@ -12,7 +12,7 @@ plugins {
 }
 
 // Release signing: gitignored keystore.properties, overridable via environment
-// (AARSO_KEYSTORE_FILE/_PASSWORD/_ALIAS/_KEY_PASSWORD). The upload key never
+// (FONEBREW_KEYSTORE_FILE/_PASSWORD/_ALIAS/_KEY_PASSWORD). The upload key never
 // enters the repo; Play App Signing holds the app key. Builds without either
 // stay unsigned so CI/agent environments still assemble.
 val keystoreProps = Properties().apply {
@@ -23,10 +23,9 @@ fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
 android {
-    // Aarso ("mirror"; handoff §10.1 resolved). Package: dev.fonebrew. Matches the actual
-    // package the moved :core-engine Kotlin sources still declare (dev.fonebrew.*, unchanged by
-    // the extraction) — a relative android:name in this module's manifest (e.g. ".FonebrewApp")
-    // resolves correctly against it.
+    // Fonebrew. applicationId/namespace stay dev.aarso for installed-base continuity
+    // (an id change would install as a second app); the SOURCE package is dev.fonebrew
+    // (post-rename), so android:name references in the manifest are fully qualified.
     namespace = "dev.aarso"
     compileSdk = 36
 
@@ -34,24 +33,28 @@ android {
         applicationId = "dev.aarso"
         minSdk = 31          // pragmatic floor; adjustable as system-integration lands
         targetSdk = 36       // recent Android (the target device)
-        // +1 per Play upload (docs/play/release-process.md); also bumped for sideload
+        // Fonebrew launch build (2026-07-16): resets the version spine for this brand's first
+        // ship. +1 per Play upload (docs/play/release-process.md); also bumped for sideload
         // refreshes so a new APK always installs over the previous one.
-        versionCode = 17
-        versionName = "0.13.0"
+        // Continues the launch spine (0.1.0 reset, 2026-07-16). versionCode jumps past 17
+        // because interim dev sideloads shipped 0.13.0(17) — code must stay monotonic for
+        // in-place upgrades on devices that installed those.
+        versionCode = 18
+        versionName = "0.2.0"
 
         // arm64 is the only ABI the target device (and most modern phones) needs;
         // restricting it keeps the packaged native libs (from :core-engine's AAR) small.
         ndk { abiFilters += "arm64-v8a" }
     }
 
-    val uploadKeystore = signingValue("storeFile", "AARSO_KEYSTORE_FILE")
+    val uploadKeystore = signingValue("storeFile", "FONEBREW_KEYSTORE_FILE")
     if (uploadKeystore != null) {
         signingConfigs {
             create("release") {
                 storeFile = file(uploadKeystore)
-                storePassword = signingValue("storePassword", "AARSO_KEYSTORE_PASSWORD")
-                keyAlias = signingValue("keyAlias", "AARSO_KEYSTORE_ALIAS")
-                keyPassword = signingValue("keyPassword", "AARSO_KEY_PASSWORD")
+                storePassword = signingValue("storePassword", "FONEBREW_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "FONEBREW_KEYSTORE_ALIAS")
+                keyPassword = signingValue("keyPassword", "FONEBREW_KEY_PASSWORD")
             }
         }
     }

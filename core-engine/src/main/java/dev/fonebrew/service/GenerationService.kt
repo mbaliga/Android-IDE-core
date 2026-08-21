@@ -63,7 +63,7 @@ class GenerationService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "aarso.generation"
+        private const val CHANNEL_ID = "fonebrew.generation"
         private const val NOTIF_ID = 1001
 
         fun start(context: Context) {

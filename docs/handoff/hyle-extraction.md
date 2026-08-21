@@ -1,3 +1,5 @@
+> **MERGE-NOTE (2026-08-21):** the launch line (`fix/models-carousel-and-terminal`) carries its own parallel history of this doc; this copy kept the dev line's version wholesale during reunification — reconcile when next editing.
+
 # Handoff — extract **Hyle** into its own repository
 
 > Goal: move the Hyle design system out of the app monorepo into a standalone repo

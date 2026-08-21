@@ -53,12 +53,12 @@ import androidx.compose.ui.window.DialogProperties
 import dev.fonebrew.domain.search.ExplainField
 import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.query.Diagnostic
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.hyle.component.HyleField as DesktopHyleField
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.hyle.HyleField
-import dev.fonebrew.ui.hyle.HyleTitle
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
  * S1's dormant entry pill: sits above [dev.fonebrew.ui.rooms.ChatsRoom]'s tab row, opens

@@ -20,7 +20,7 @@ import dev.fonebrew.domain.curation.Fates
 import dev.fonebrew.domain.curation.Verdict
 import dev.fonebrew.domain.gesture.MessageDragLogic
 import dev.aarso.hyle.cells.HyleHaptics
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 

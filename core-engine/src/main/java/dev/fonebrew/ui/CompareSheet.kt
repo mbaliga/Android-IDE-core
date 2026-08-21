@@ -21,9 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.theme.LocalHyleColors
 import dev.fonebrew.domain.tree.SiblingCompares
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.theme.LocalHyleColors
 
 /**
  * THREAD_TOPOLOGY_PLAN.md WP2's "Compare alternatives" surface — the pager row's `‹ n/m ›` control

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package dev.fonebrew.ui.rooms
 
 import androidx.activity.compose.BackHandler
@@ -16,13 +18,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,12 +48,14 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.aarso.hyle.cells.HyleSwitch
 import dev.aarso.hyle.component.HyleContextMenu
 import dev.aarso.hyle.component.HyleTree
-import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fonebrew.data.GitBrowse
 import dev.fonebrew.data.GitTransport
 import dev.fonebrew.domain.builds.Build
@@ -75,11 +79,12 @@ import dev.fonebrew.flavor.InvocationFeatures
 import dev.fonebrew.ui.SettingsViewModel
 import dev.aarso.hyle.component.HyleField as DesktopHyleField
 import dev.aarso.hyle.component.HyleToggle
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.hyle.HyleDropdownField
-import dev.fonebrew.ui.hyle.HyleTitle
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleDropdownField
+import dev.aarso.hyle.cells.HyleTitle
+import dev.aarso.hyle.theme.LocalHyleColors
 import dev.fonebrew.ui.theme.ThemePicker
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -87,26 +92,38 @@ import androidx.compose.foundation.layout.heightIn
 import dev.fonebrew.domain.git.GitLookupApi
 import dev.fonebrew.ui.loops.LoopRoom
 
-// The 5 Settings tabs (IA §C), each an icon. Global = config; the other four are provider
-// surfaces (Image / Text / Video / 3D) that toggle on-device ⇄ watched-cloud.
+// The 4 Settings tabs (IA §C), each an icon: General (config), Models (Text/Image/Video/3D ×
+// on-device/cloud, nested inside), Dev (Git & coding / Builds / Remote / Instruments), About.
 private enum class SettingsTab(val label: String) {
-    GLOBAL("Global"), IMAGE("Image"), TEXT("Text"), VIDEO("Video"), OBJECT3D("3D")
+    GENERAL("General"), MODELS("Models"), DEV("Dev"), ABOUT("About")
 }
 
 // Providers split by where they run: on-device (the default, rule 2) vs watched cloud.
 private enum class ProviderScope { LOCAL, CLOUD }
 
+// The four provider modalities nested inside the Models tab (owner ask): Text / Image / Video
+// / 3D, each with its own on-device ⇄ watched-cloud split (ProviderScope, above).
+private enum class ModelModality(val label: String) {
+    TEXT("Text"), IMAGE("Image"), VIDEO("Video"), OBJECT3D("3D")
+}
+
 /**
- * The room parked off the RIGHT edge (IA §C): **configuration only, never a launcher.** Five
- * icon tabs — Global + the four provider surfaces. Every cloud provider is a **watched object**:
- * opt-in, isolated, never a hidden default; keys stay in the Android Keystore.
+ * The room parked off the RIGHT edge (IA §C): **configuration only, never a launcher.** Four
+ * icon tabs — General (config), Models (Text/Image/Video/3D, each on-device ⇄ watched-cloud,
+ * nested inside), Dev (Git & coding / Builds / Remote / Instruments), and About. Every cloud
+ * provider is a **watched object**: opt-in, isolated, never a hidden default; keys stay in the
+ * Android Keystore.
  *
- * Full-screen sub-surfaces (Models, Free tiers, Remote, Git…) render in a hoisted [overlay] slot
- * at the room root, OUTSIDE the scrolling content — a scrollable child measured inside a
- * verticalScroll parent gets an infinite height constraint and crashes (the PR #39 fix).
+ * Full-screen sub-surfaces (Me·Myself·I, Free tiers, Remote, Git…) render in a hoisted
+ * [overlay] slot at the room root, OUTSIDE the scrolling content — a scrollable child measured
+ * inside a verticalScroll parent gets an infinite height constraint and crashes (the PR #39
+ * fix). On-device model management ([LocalModels], Models tab) used to need this same overlay
+ * slot for that reason — its [Coverflow] pager now gives itself an explicit bounded height
+ * instead (see that file's KDoc), so it renders directly inline in this room's own scrolling
+ * content and no longer uses [overlay] at all.
  *
  * [extraGlobalRows] mirrors [dev.fonebrew.ui.rooms.ProductRoomFree]'s `extraTabs` seam: it lets an
- * above-core layer append rows to the bottom of the Global tab (e.g. an entitlement/unlock
+ * above-core layer append rows to the bottom of the General tab (e.g. an entitlement/unlock
  * status row) without this file referencing that code.
  */
 @Composable
@@ -115,78 +132,66 @@ fun SettingsRoom(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
     extraGlobalRows: List<@Composable () -> Unit> = emptyList(),
 ) {
-    var tab by remember { mutableStateOf(SettingsTab.GLOBAL) }
+    var tab by remember { mutableStateOf(SettingsTab.GENERAL) }
     var overlay by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     BackHandler(enabled = overlay != null) { overlay = null }
+    val session = (LocalContext.current.applicationContext as dev.fonebrew.FonebrewApp).container.sessionStore
+    val universalPosition by session.tabBarPosition.collectAsState()
+    val roomOverrides by session.roomTabBarPosition.collectAsState()
+    val position = roomOverrides["settings"] ?: universalPosition
+
+    val tabBar = @Composable { SettingsTabBar(tab, position = position) { tab = it } }
+    val content: @Composable ColumnScope.() -> Unit = {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            when (tab) {
+                SettingsTab.GENERAL -> GeneralSettings(
+                    onShowSpatialMap = onShowSpatialMap,
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                    extraGlobalRows = extraGlobalRows,
+                )
+                SettingsTab.MODELS -> ModelsSettings(viewModel = viewModel)
+                SettingsTab.DEV -> DevSettings(
+                    openOverlay = { overlay = it },
+                    closeOverlay = { overlay = null },
+                )
+                SettingsTab.ABOUT -> AboutSettings()
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             HyleTitle("Settings")
-            SettingsTabBar(tab) { tab = it }
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                when (tab) {
-                    SettingsTab.GLOBAL -> GlobalSettings(
-                        onShowSpatialMap = onShowSpatialMap,
-                        openOverlay = { overlay = it },
-                        closeOverlay = { overlay = null },
-                        extraGlobalRows = extraGlobalRows,
-                    )
-                    else -> ProviderTab(
-                        tab = tab,
-                        viewModel = viewModel,
-                        openOverlay = { overlay = it },
-                        closeOverlay = { overlay = null },
-                    )
-                }
+            if (position == "BOTTOM") {
+                content()
+                tabBar()
+            } else {
+                tabBar()
+                content()
             }
         }
         overlay?.invoke()
     }
 }
 
-@Composable
-private fun SettingsTabBar(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
-    Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            SettingsTab.entries.forEach { t ->
-                val on = t == selected
-                val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                Column(
-                    modifier = Modifier.weight(1f).clickable { onSelect(t) }.padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    TabGlyph(t, tint)
-                    Spacer(Modifier.height(5.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier.height(2.dp).width(22.dp).background(
-                            if (on) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                    )
-                }
-            }
-        }
-        HorizontalDivider()
-    }
-}
-
-/** Small Aeon-style line glyphs drawn in code (the app ships no icon font). */
-@Composable
-private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color) {
-    androidx.compose.foundation.Canvas(Modifier.size(22.dp)) {
+// One HyleTabSpec per SettingsTab, glyphs unchanged from the original hand-rolled TabGlyph —
+// this IS the bar HyleTabBar (Aeon.kt) was extracted from; now it consumes the shared component
+// instead of keeping its own parallel copy (2026-07-19 tab-bar consolidation).
+private val SettingsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = SettingsTab.entries.map { t ->
+    dev.aarso.hyle.cells.HyleTabSpec(t.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
         fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
             drawLine(tint, androidx.compose.ui.geometry.Offset(x0, y0), androidx.compose.ui.geometry.Offset(x1, y1), strokeWidth = sw)
-        when (tab) {
-            SettingsTab.GLOBAL -> {
+        when (t) {
+            SettingsTab.GENERAL -> {
                 drawCircle(tint, radius = w * 0.42f, style = stroke)
                 drawOval(
                     tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.08f),
@@ -194,7 +199,61 @@ private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color)
                 )
                 line(w * 0.10f, h * 0.5f, w * 0.90f, h * 0.5f)
             }
-            SettingsTab.IMAGE -> {
+            SettingsTab.MODELS -> {
+                // A shelf: a rounded-rect case with three shelves — the Text/Image/Video/3D
+                // modalities nested inside this tab.
+                drawRoundRect(
+                    tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.14f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.72f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f), style = stroke,
+                )
+                line(w * 0.22f, h * 0.36f, w * 0.78f, h * 0.36f)
+                line(w * 0.22f, h * 0.50f, w * 0.78f, h * 0.50f)
+                line(w * 0.22f, h * 0.64f, w * 0.78f, h * 0.64f)
+            }
+            SettingsTab.DEV -> {
+                // A "<>" chevron pair.
+                val left = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.42f, h * 0.24f); lineTo(w * 0.16f, h * 0.5f); lineTo(w * 0.42f, h * 0.76f)
+                }
+                drawPath(left, tint, style = stroke)
+                val right = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.58f, h * 0.24f); lineTo(w * 0.84f, h * 0.5f); lineTo(w * 0.58f, h * 0.76f)
+                }
+                drawPath(right, tint, style = stroke)
+            }
+            SettingsTab.ABOUT -> {
+                // A circle with an "i" — dot above, stem below.
+                drawCircle(tint, radius = w * 0.42f, style = stroke)
+                drawCircle(tint, radius = w * 0.045f, center = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.32f))
+                line(w * 0.5f, h * 0.46f, w * 0.5f, h * 0.70f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSelect: (SettingsTab) -> Unit) {
+    dev.aarso.hyle.cells.HyleTabBar(
+        tabs = SettingsTabSpecs,
+        selected = SettingsTab.entries.indexOf(selected),
+        onSelect = { onSelect(SettingsTab.entries[it]) },
+        position = position,
+    )
+}
+
+// One HyleTabSpec per ModelModality — the exact glyphs the top-level Image/Text/Video/3D tabs
+// used before the Global/Image/Text/Video/3D → General/Models/Dev/About regroup, now nested
+// one level down inside the Models tab.
+private val ModelModalitySpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ModelModality.entries.map { t ->
+    dev.aarso.hyle.cells.HyleTabSpec(t.label) { tint ->
+        val w = size.width; val h = size.height
+        val sw = w * 0.09f
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+        fun line(x0: Float, y0: Float, x1: Float, y1: Float) =
+            drawLine(tint, androidx.compose.ui.geometry.Offset(x0, y0), androidx.compose.ui.geometry.Offset(x1, y1), strokeWidth = sw)
+        when (t) {
+            ModelModality.IMAGE -> {
                 drawRoundRect(
                     tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.18f),
                     size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.64f),
@@ -207,12 +266,12 @@ private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color)
                 }
                 drawPath(p, tint, style = stroke)
             }
-            SettingsTab.TEXT -> {
+            ModelModality.TEXT -> {
                 line(w * 0.16f, h * 0.30f, w * 0.84f, h * 0.30f)
                 line(w * 0.16f, h * 0.50f, w * 0.72f, h * 0.50f)
                 line(w * 0.16f, h * 0.70f, w * 0.80f, h * 0.70f)
             }
-            SettingsTab.VIDEO -> {
+            ModelModality.VIDEO -> {
                 drawRoundRect(
                     tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.10f, h * 0.24f),
                     size = androidx.compose.ui.geometry.Size(w * 0.80f, h * 0.52f),
@@ -223,7 +282,7 @@ private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color)
                 }
                 drawPath(p, tint)
             }
-            SettingsTab.OBJECT3D -> {
+            ModelModality.OBJECT3D -> {
                 drawCircle(tint, radius = w * 0.42f, style = stroke)
                 drawOval(
                     tint, topLeft = androidx.compose.ui.geometry.Offset(w * 0.06f, h * 0.34f),
@@ -234,62 +293,85 @@ private fun TabGlyph(tab: SettingsTab, tint: androidx.compose.ui.graphics.Color)
     }
 }
 
+@Composable
+private fun ModelModalityTabBar(selected: ModelModality, onSelect: (ModelModality) -> Unit) {
+    dev.aarso.hyle.cells.HyleTabBar(
+        tabs = ModelModalitySpecs,
+        selected = ModelModality.entries.indexOf(selected),
+        onSelect = { onSelect(ModelModality.entries[it]) },
+    )
+}
+
 /**
- * A provider surface (Image / Text / Video / 3D) with an on-device ⇄ watched-cloud toggle
- * (IA §C). On-device is the default (rule 2). Video/3D have no engine wired yet — shown
- * honestly as planned, never faked (rule 6).
+ * The Models tab (owner ask): Text / Image / Video / 3D as a nested tab row, each with its own
+ * on-device ⇄ watched-cloud toggle (IA §C) beneath it. On-device is the default (rule 2).
+ * Video has no engine wired yet — shown honestly as planned, never faked (rule 6); 3D has both
+ * an on-device path (the active chat model, [Object3dOnDeviceSettings]) and watched cloud
+ * providers ([Object3dCloudSettings]) — docs/design/objects-3d.md §1.
  */
 @Composable
-private fun ColumnScope.ProviderTab(
-    tab: SettingsTab,
-    viewModel: SettingsViewModel,
-    openOverlay: (@Composable () -> Unit) -> Unit,
-    closeOverlay: () -> Unit,
-) {
-    var scope by remember(tab) { mutableStateOf(ProviderScope.LOCAL) }
+private fun ColumnScope.ModelsSettings(viewModel: SettingsViewModel) {
+    var modality by remember { mutableStateOf(ModelModality.TEXT) }
+    ModelModalityTabBar(modality) { modality = it }
+    var scope by remember(modality) { mutableStateOf(ProviderScope.LOCAL) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         HyleChip(scope == ProviderScope.LOCAL, { scope = ProviderScope.LOCAL }, "On-device")
         HyleChip(scope == ProviderScope.CLOUD, { scope = ProviderScope.CLOUD }, "Cloud · watched")
     }
-    when (tab) {
-        SettingsTab.TEXT ->
+    when (modality) {
+        ModelModality.TEXT ->
             if (scope == ProviderScope.CLOUD) TextSettings(viewModel)
-            else LocalModels("chat", openOverlay, closeOverlay)
-        SettingsTab.IMAGE ->
+            else LocalModels("chat")
+        ModelModality.IMAGE ->
             if (scope == ProviderScope.CLOUD) ImageSettings(viewModel)
-            else LocalModels("image", openOverlay, closeOverlay)
-        SettingsTab.VIDEO -> PlannedProvider("Video", scope)
-        SettingsTab.OBJECT3D ->
+            else LocalModels("image")
+        ModelModality.VIDEO -> PlannedProvider("Video", scope)
+        ModelModality.OBJECT3D ->
             if (scope == ProviderScope.CLOUD) Object3dCloudSettings(viewModel) else Object3dOnDeviceSettings()
-        SettingsTab.GLOBAL -> Unit // handled by SettingsRoom
     }
 }
 
-/** On-device models for a modality — managed in the Models room (opened in the overlay slot). */
+/**
+ * On-device models for a modality — the cards render directly here now (owner ask: "the model
+ * cards are still hidden behind a button"), no extra tap into a separate overlay screen.
+ * [ChatOnDeviceShelf]/[ImageOnDeviceShelf]'s [Coverflow] pager used to need [SettingsRoom]'s
+ * hoisted `overlay` slot because a `HorizontalPager` measured inside a `verticalScroll` parent
+ * (this room's own scrolling content) gets an infinite height constraint and crashes (PR #39);
+ * [Coverflow] now gives its own pager an explicit bounded height instead (see its KDoc in
+ * ModelsRoom.kt), so it no longer needs a dedicated full-screen host and renders straight into
+ * this already-scrolling column — no Chat/Image/Bring-your-own tabs and no On-device/Cloud
+ * toggle to re-pick (owner-flagged as duplicative: both choices were already made one level up,
+ * in this very screen).
+ */
 @Composable
-private fun LocalModels(
-    kind: String,
-    openOverlay: (@Composable () -> Unit) -> Unit,
-    closeOverlay: () -> Unit,
-) {
+private fun LocalModels(kind: String) {
     val container = (LocalContext.current.applicationContext as dev.fonebrew.FonebrewApp).container
     Text(
-        "On-device $kind models run locally — the default. Download, switch, and remove them " +
-            "in the Models shelf.",
+        "On-device $kind models run locally — the default. Download, switch, and remove them below.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    HyleButton("Manage on-device models", onClick = {
-        openOverlay {
-            val modelsVm: dev.fonebrew.ui.ModelsViewModel =
-                viewModel(factory = dev.fonebrew.ui.ModelsViewModel.Factory)
-            ModelsRoom(
+    Spacer(Modifier.height(4.dp))
+    when (kind) {
+        "image" -> {
+            val imagesVm: dev.fonebrew.ui.ImagesViewModel =
+                viewModel(factory = dev.fonebrew.ui.ImagesViewModel.Factory)
+            ImageOnDeviceShelf(
                 downloads = container.downloadCenter,
-                onCustomUrl = { modelsVm.downloadCustom(it) },
-                onClose = closeOverlay,
+                onCustomUrl = { imagesVm.downloadSdModel(it) },
+                imagesViewModel = imagesVm,
             )
         }
-    })
+        else -> {
+            val modelsVm: dev.fonebrew.ui.ModelsViewModel =
+                viewModel(factory = dev.fonebrew.ui.ModelsViewModel.Factory)
+            ChatOnDeviceShelf(
+                downloads = container.downloadCenter,
+                onCustomUrl = { modelsVm.downloadCustom(it) },
+                modelsViewModel = modelsVm,
+            )
+        }
+    }
 }
 
 /** Honest placeholder for a modality with no engine wired yet (rule 6: never claim it works). */
@@ -313,9 +395,8 @@ private fun PlannedProvider(label: String, scope: ProviderScope) {
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GlobalSettings(
+private fun GeneralSettings(
     onShowSpatialMap: () -> Unit,
     openOverlay: (@Composable () -> Unit) -> Unit,
     closeOverlay: () -> Unit,
@@ -325,7 +406,7 @@ private fun GlobalSettings(
     val session = container.sessionStore
 
     // "Me · Myself · I" — the user meta (drift inert; linked accounts; usage). Provisional home
-    // is here in Global until the owner picks its spatial place (IA open question).
+    // is here in General until the owner picks its spatial place (IA open question).
     Text("You", style = MaterialTheme.typography.titleMedium)
     Text(
         "Your linked accounts, usage overview, and the (inert) self-reflection mirror.",
@@ -366,7 +447,7 @@ private fun GlobalSettings(
     }
     HorizontalDivider()
 
-    // Models are managed in the provider tabs (Image/Text/…) now; Settings is not a launcher.
+    // Models are managed in the Models tab (Text/Image/Video/3D) now; Settings is not a launcher.
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Cloud free tiers", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         dev.fonebrew.ui.guide.HelpIcon(dev.fonebrew.domain.guide.Guides.ADD_CLOUD)
@@ -389,6 +470,80 @@ private fun GlobalSettings(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     ThemePicker()
+    HorizontalDivider()
+
+    Text("Header status", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "One quiet fact in the Chat header, about the conversation you're in — or nothing at all.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val headerIndicator by session.headerIndicator.collectAsState()
+        val c = LocalHyleColors.current
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                "NONE" to "None",
+                "SOVEREIGNTY" to "Sovereignty",
+                "QUOTA" to "Quota",
+                "TIME" to "Time",
+            ).forEach { (value, label) ->
+                HyleChip(headerIndicator == value, { session.setHeaderIndicator(value) }, label)
+            }
+        }
+        Text(
+            when (headerIndicator) {
+                "SOVEREIGNTY" -> "⌂ the % of this conversation's tokens that stayed on-device."
+                "QUOTA" -> "how many watched-cloud requests you've made today, across providers."
+                "TIME" -> "how long ago this conversation started."
+                else -> "nothing shown next to Settings in Chat."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textMid,
+        )
+    }
+    HorizontalDivider()
+
+    Text("Tab bar position", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Top or bottom, thumb-reach — applies everywhere unless a room says otherwise.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val tabBarPosition by session.tabBarPosition.collectAsState()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("TOP" to "Top", "BOTTOM" to "Bottom").forEach { (value, label) ->
+                HyleChip(tabBarPosition == value, { session.setTabBarPosition(value) }, label)
+            }
+        }
+    }
+    HorizontalDivider()
+
+    Text("Terminal Ctrl-C button", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "On by default. Turn it off if your keyboard already has a control key (e.g. Clackpad) — " +
+            "typing /ctrlc always works either way.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    run {
+        val showCtrlC by session.terminalCtrlCButton.collectAsState()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Show Ctrl-C button in Terminal", style = MaterialTheme.typography.bodyMedium)
+            HyleSwitch(checked = showCtrlC, onCheckedChange = session::setTerminalCtrlCButton)
+        }
+    }
     HorizontalDivider()
 
     Text("Summon from anywhere", style = MaterialTheme.typography.titleMedium)
@@ -417,7 +572,7 @@ private fun GlobalSettings(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Floating bubble (always-on summon)", style = MaterialTheme.typography.bodyMedium)
-            HyleToggle(
+            HyleSwitch(
                 checked = bubbleOn,
                 onCheckedChange = { on ->
                     if (on) {
@@ -464,48 +619,16 @@ private fun GlobalSettings(
     }
     HorizontalDivider()
 
-    // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —
-    // reach them from the map (see "How to move around" above). Settings is config only.
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Remote", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        dev.fonebrew.ui.guide.HelpIcon(dev.fonebrew.domain.guide.Guides.CONNECT_SSH)
-    }
-    Text(
-        "Connect to your own machines over SSH — a Pi, a Dell, any server. You decide " +
-            "trust (the real fingerprint is shown); the remote's output is a watched object.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    HyleButton("Open Remote", onClick = {
-        openOverlay { dev.fonebrew.ui.remote.RemoteScreen(onClose = closeOverlay) }
-    })
-    HorizontalDivider()
-
-    Text("Instruments", style = MaterialTheme.typography.titleMedium)
-    val entropy by session.entropyColoring.collectAsState()
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("Entropy colouring", style = MaterialTheme.typography.bodyMedium)
-            Text(
-                "Tint streaming tokens by the model's per-token uncertainty (§5a).",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HyleToggle(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
-    }
-    HorizontalDivider()
-
     // THREAD_TOPOLOGY_PLAN.md WP4 — one switch per gesture channel the message-bubble drag
     // detector arbitrates (binding constraint 4: every gesture needs a disable toggle here).
     // Turning a switch off never removes the underlying action — it's always still reachable via
     // the chevron row / TurnActionsSheet / TalkBack custom actions; this just stops the drag from
     // triggering it, for anyone who finds the hold-and-pull motion fights their own touch habits.
+    // MERGE-NOTE: these three + the Observer switch below still render via the desktop-class
+    // kit's [HyleToggle] (component package) rather than the [HyleSwitch] (cells package) the
+    // rest of this General tab was restyled onto during the launch-line rework — preserved as
+    // named in the reunification merge brief. Worth a follow-up pass to pick one toggle widget
+    // for the whole screen once the owner has a preference.
     Text("Gestures", style = MaterialTheme.typography.titleMedium)
     Text(
         "Message-bubble drags — hold briefly, then pull. Every one has a tap equivalent " +
@@ -591,6 +714,59 @@ private fun GlobalSettings(
         }
         HyleToggle(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
     }
+
+    // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —
+    // reach them from the map (see "How to move around" above). Settings is config only.
+    // Git & coding / Builds / Remote / Instruments live under the Dev tab.
+
+    if (extraGlobalRows.isNotEmpty()) {
+        HorizontalDivider()
+        for (row in extraGlobalRows) row()
+    }
+}
+
+/** Build/dev surfaces moved out of General (owner ask): connect a Git host + see your builds,
+ *  connect to your own machines over SSH, and the entropy-colouring instrument. */
+@Composable
+private fun DevSettings(
+    openOverlay: (@Composable () -> Unit) -> Unit,
+    closeOverlay: () -> Unit,
+) {
+    val container = (LocalContext.current.applicationContext as dev.fonebrew.FonebrewApp).container
+    val session = container.sessionStore
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Remote", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        dev.fonebrew.ui.guide.HelpIcon(dev.fonebrew.domain.guide.Guides.CONNECT_SSH)
+    }
+    Text(
+        "Connect to your own machines over SSH — a Pi, a Dell, any server. You decide " +
+            "trust (the real fingerprint is shown); the remote's output is a watched object.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    HyleButton("Open Remote", onClick = {
+        openOverlay { dev.fonebrew.ui.remote.RemoteScreen(onClose = closeOverlay) }
+    })
+    HorizontalDivider()
+
+    Text("Instruments", style = MaterialTheme.typography.titleMedium)
+    val entropy by session.entropyColoring.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Entropy colouring", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Tint streaming tokens by the model's per-token uncertainty (§5a).",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HyleSwitch(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
+    }
     HorizontalDivider()
 
     Text("Git & coding", style = MaterialTheme.typography.titleMedium)
@@ -605,13 +781,23 @@ private fun GlobalSettings(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     BuildsSection()
-    HorizontalDivider()
+}
 
+/** Version + local-first blurb, plus (debug builds only) a long-press to preview the
+ *  crash-recovery screen without a real crash. Fonebrew leads the About text (owner instruction,
+ *  reunification-merge session) — the Konkani-etymology sentence for the Aarso mirror lens, when
+ *  it's kept at all, only ever follows it, never opens the paragraph.
+ *
+ *  :core-engine deliberately carries no versionName/DEBUG flag of its own that a future
+ *  Studio :app consuming this same module could rely on having the same value for (see
+ *  [dev.fonebrew.core_engine.BuildConfig] — an application-module concern), so the shipping
+ *  app's own versionName is read live via PackageManager rather than a baked-in BuildConfig
+ *  constant from a specific :app. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AboutSettings() {
+    val context = LocalContext.current
     Text("About", style = MaterialTheme.typography.titleMedium)
-    // Read the SHIPPING app's own versionName via PackageManager rather than a BuildConfig
-    // constant baked into this library: :core-engine deliberately carries no versionName of
-    // its own (that's an application-module concern — see :app/build.gradle.kts), and a
-    // future Studio :app consuming this same module has its own, different version number.
     val appVersionName = remember(context) {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
@@ -631,18 +817,19 @@ private fun GlobalSettings(
             Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
-                    context.startActivity(dev.aarso.crashrecovery.CrashRecovery.previewIntent(context, appLabel = "Fonebrew"))
+                    context.startActivity(
+                        dev.aarso.crashrecovery.CrashRecovery.previewIntent(
+                            context,
+                            appLabel = "Fonebrew",
+                            style = dev.fonebrew.ui.theme.FonebrewCrashRecoveryStyle,
+                        ),
+                    )
                 },
             )
         } else {
             Modifier
         },
     )
-
-    if (extraGlobalRows.isNotEmpty()) {
-        HorizontalDivider()
-        for (row in extraGlobalRows) row()
-    }
 }
 
 @Composable
@@ -669,8 +856,8 @@ private fun TextSettings(viewModel: SettingsViewModel) {
     )
     ProviderForm(
         editing = editing,
-        onSave = { id, name, kind, baseUrl, model, ctx, key ->
-            viewModel.save(id, name, kind, baseUrl, model, ctx, key)
+        onSave = { id, name, kind, baseUrl, model, ctx, vision, key ->
+            viewModel.save(id, name, kind, baseUrl, model, ctx, vision, key)
             editing = null
         },
         onCancelEdit = { editing = null },
@@ -728,12 +915,9 @@ private fun Object3dCloudSettings(viewModel: SettingsViewModel) {
 
 @Composable
 private fun Object3dProviderRow(provider: Object3dProviderConfig, hasKey: Boolean, onDelete: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+    HyleCard {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
@@ -823,77 +1007,121 @@ private fun GitConnect() {
         if (ciOpen) {
             CiPanel(h, store.token(h.id).orEmpty(), transport) { ciOpen = false }
         }
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
+        var showActions by remember(h.id) { mutableStateOf(false) }
+        val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+        HyleCard(
+            modifier = Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = { haptics.tap(); showActions = true },
+            ),
         ) {
-            Column(Modifier.padding(12.dp)) {
-                Text("${h.displayName} · watched", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "${h.kind.label} · ${h.owner}/${h.repo}@${h.branch}" +
-                        (if (store.hasToken(h.id)) " · token set" else " · no token"),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                status?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-                Row {
-                    TextButton(onClick = {
-                        val token = store.token(h.id)
-                        if (token.isNullOrBlank()) {
-                            status = "no token stored"
-                        } else {
-                            status = "testing…"
-                            scope.launch {
-                                status = transport.testConnection(h, token)
-                                    .fold({ "✓ connected · $it branch(es)" }, { "✗ ${it.message}" })
-                            }
-                        }
-                    }) { Text("Test") }
-                    TextButton(onClick = {
-                        val token = store.token(h.id)
-                        if (token.isNullOrBlank()) {
-                            status = "no token stored"
-                        } else {
-                            status = "backing up…"
-                            scope.launch {
-                                status = container.gitBackup.backUp(h, token).fold(
-                                    { "✓ backed up · ${it.created} new, ${it.skipped} already there" +
-                                        (if (it.failed > 0) ", ${it.failed} failed" else "") },
-                                    { "✗ ${it.message}" },
-                                )
-                            }
-                        }
-                    }) { Text("Back up") }
-                    TextButton(onClick = {
-                        val token = store.token(h.id)
-                        if (token.isNullOrBlank()) {
-                            status = "no token stored"
-                        } else {
-                            status = "pulling…"
-                            scope.launch {
-                                status = container.gitBackup.pull(h, token).fold(
-                                    { "✓ pulled · ${it.imported} imported, ${it.alreadyHad} already here" +
-                                        (if (it.orphans > 0) ", ${it.orphans} skipped" else "") },
-                                    { "✗ ${it.message}" },
-                                )
-                            }
-                        }
-                    }) { Text("Pull") }
-                    TextButton(onClick = {
-                        if (store.token(h.id).isNullOrBlank()) status = "no token stored" else browsing = true
-                    }) { Text("Browse") }
-                    TextButton(onClick = {
-                        if (store.token(h.id).isNullOrBlank()) status = "no token stored" else ciOpen = true
-                    }) { Text("CI") }
-                    TextButton(onClick = { store.remove(h.id) }) { Text("Remove") }
-                }
+            Text("${h.displayName} · watched", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${h.kind.label} · ${h.owner}/${h.repo}@${h.branch}" +
+                    (if (store.hasToken(h.id)) " · token set" else " · no token"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            status?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
+            // Test is the one inline action — a read-only connectivity check, safe to leave a
+            // single tap away. Everything else (Back up/Pull/Browse/CI/Remove) is a
+            // longer-running or destructive action, so it moves behind the long-press sheet
+            // below (mirrors ChatsRoom.kt's ConversationActionsSheet pattern).
+            TextButton(onClick = {
+                val token = store.token(h.id)
+                if (token.isNullOrBlank()) {
+                    status = "no token stored"
+                } else {
+                    status = "testing…"
+                    scope.launch {
+                        status = transport.testConnection(h, token)
+                            .fold({ "✓ connected · $it branch(es)" }, { "✗ ${it.message}" })
+                    }
+                }
+            }) { Text("Test") }
+        }
+        if (showActions) {
+            GitHostActionsSheet(
+                title = h.displayName,
+                onBackUp = {
+                    showActions = false
+                    val token = store.token(h.id)
+                    if (token.isNullOrBlank()) {
+                        status = "no token stored"
+                    } else {
+                        status = "backing up…"
+                        scope.launch {
+                            status = container.gitBackup.backUp(h, token).fold(
+                                { "✓ backed up · ${it.created} new, ${it.skipped} already there" +
+                                    (if (it.failed > 0) ", ${it.failed} failed" else "") },
+                                { "✗ ${it.message}" },
+                            )
+                        }
+                    }
+                },
+                onPull = {
+                    showActions = false
+                    val token = store.token(h.id)
+                    if (token.isNullOrBlank()) {
+                        status = "no token stored"
+                    } else {
+                        status = "pulling…"
+                        scope.launch {
+                            status = container.gitBackup.pull(h, token).fold(
+                                { "✓ pulled · ${it.imported} imported, ${it.alreadyHad} already here" +
+                                    (if (it.orphans > 0) ", ${it.orphans} skipped" else "") },
+                                { "✗ ${it.message}" },
+                            )
+                        }
+                    }
+                },
+                onBrowse = {
+                    showActions = false
+                    if (store.token(h.id).isNullOrBlank()) status = "no token stored" else browsing = true
+                },
+                onCi = {
+                    showActions = false
+                    if (store.token(h.id).isNullOrBlank()) status = "no token stored" else ciOpen = true
+                },
+                onRemove = {
+                    showActions = false
+                    store.remove(h.id)
+                },
+                onDismiss = { showActions = false },
+            )
         }
     }
     Text(if (hosts.isEmpty()) "Add a host" else "Add another", style = MaterialTheme.typography.titleSmall)
     GitConnectForm(newId = store.newId(), transport = transport) { host, token -> store.upsert(host, token) }
+}
+
+/** Long-press actions for a connected Git host row (mirrors ChatsRoom.kt's
+ *  ConversationActionsSheet/FolderTabActionsSheet pattern): only "Test" — a safe, read-only
+ *  connectivity check — stays inline on the row; Back up/Pull/Browse/CI and the destructive
+ *  Remove live here instead, off a long-press rather than six buttons crammed into one row. */
+@Composable
+private fun GitHostActionsSheet(
+    title: String,
+    onBackUp: () -> Unit,
+    onPull: () -> Unit,
+    onBrowse: () -> Unit,
+    onCi: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            TextButton(onClick = onBackUp, modifier = Modifier.fillMaxWidth()) { Text("Back up") }
+            TextButton(onClick = onPull, modifier = Modifier.fillMaxWidth()) { Text("Pull") }
+            TextButton(onClick = onBrowse, modifier = Modifier.fillMaxWidth()) { Text("Browse") }
+            TextButton(onClick = onCi, modifier = Modifier.fillMaxWidth()) { Text("CI") }
+            TextButton(onClick = onRemove, modifier = Modifier.fillMaxWidth()) { Text("Remove") }
+        }
+    }
 }
 
 /**
@@ -946,55 +1174,49 @@ private fun BuildsSection() {
                 for (build in list.take(5)) {
                     var installProgress by remember(build.id) { mutableStateOf<Float?>(null) }
                     var installError by remember(build.id) { mutableStateOf<String?>(null) }
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(Modifier.padding(10.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(build.name, style = MaterialTheme.typography.bodyMedium)
+                    HyleCard {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(build.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "${build.version}  ·  ${build.source.name.lowercase().replace('_', ' ')}" +
+                                        (if (build.sizeBytes > 0) "  ·  ${build.sizeBytes / (1024 * 1024)} MB" else ""),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            val url = container.buildsRepo.findApkUrl(build)
+                            if (url != null) {
+                                val prog = installProgress
+                                if (prog != null) {
                                     Text(
-                                        "${build.version}  ·  ${build.source.name.lowercase().replace('_', ' ')}" +
-                                            (if (build.sizeBytes > 0) "  ·  ${build.sizeBytes / (1024 * 1024)} MB" else ""),
+                                        if (prog < 0f) "✗" else "${(prog * 100).toInt()}%",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (prog < 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                     )
-                                }
-                                val url = container.buildsRepo.findApkUrl(build)
-                                if (url != null) {
-                                    val prog = installProgress
-                                    if (prog != null) {
-                                        Text(
-                                            if (prog < 0f) "✗" else "${(prog * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (prog < 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        )
-                                    } else {
-                                        TextButton(onClick = {
-                                            installProgress = 0f
-                                            installError = null
-                                            scope.launch {
-                                                container.apkInstaller.downloadAndInstall(url, build.name) { p ->
-                                                    installProgress = if (p.error != null) { installError = p.error; -1f } else if (p.done) null else p.fraction
-                                                }
+                                } else {
+                                    TextButton(onClick = {
+                                        installProgress = 0f
+                                        installError = null
+                                        scope.launch {
+                                            container.apkInstaller.downloadAndInstall(url, build.name) { p ->
+                                                installProgress = if (p.error != null) { installError = p.error; -1f } else if (p.done) null else p.fraction
                                             }
-                                        }) { Text("Install") }
-                                    }
+                                        }
+                                    }) { Text("Install") }
                                 }
                             }
-                            val p = installProgress
-                            if (p != null && p >= 0f) {
-                                LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                            }
-                            installError?.let {
-                                Text("✗ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                            }
+                        }
+                        val p = installProgress
+                        if (p != null && p >= 0f) {
+                            LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                        }
+                        installError?.let {
+                            Text("✗ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -1437,17 +1659,9 @@ private fun GitConnectForm(
                     }
                     for (r in filtered) {
                         val isSelected = selected?.fullName == r.fullName
-                        Card(
-                            onClick = { selected = r },
-                            colors  = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                            ),
-                            border  = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
+                        HyleCard(selected = isSelected, onClick = { selected = r }) {
                             Row(
-                                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -1498,12 +1712,9 @@ private fun GitConnectForm(
 
 @Composable
 private fun ImageProviderRow(provider: ImageProvider, hasKey: Boolean, onDelete: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+    HyleCard {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
@@ -1567,13 +1778,9 @@ private fun ProviderRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.clickable(onClick = onEdit),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+    HyleCard(onClick = onEdit) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
@@ -1593,7 +1800,7 @@ private fun ProviderRow(
 @Composable
 private fun ProviderForm(
     editing: CloudProvider?,
-    onSave: (String?, String, ProviderKind, String, String, Int, String) -> Unit,
+    onSave: (String?, String, ProviderKind, String, String, Int, Boolean, String) -> Unit,
     onCancelEdit: () -> Unit,
 ) {
     // Keyed on the provider being edited so tapping a card reloads the form.
@@ -1602,6 +1809,7 @@ private fun ProviderForm(
     var baseUrl by remember(editing) { mutableStateOf(editing?.baseUrl ?: kind.defaultBaseUrl) }
     var model by remember(editing) { mutableStateOf(editing?.model ?: "") }
     var contextWindow by remember(editing) { mutableStateOf((editing?.contextWindow ?: 8192).toString()) }
+    var supportsVision by remember(editing) { mutableStateOf(editing?.supportsVision ?: true) }
     var apiKey by remember(editing) { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1631,6 +1839,14 @@ private fun ProviderForm(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Model understands images", style = MaterialTheme.typography.bodyMedium)
+            HyleSwitch(checked = supportsVision, onCheckedChange = { supportsVision = it })
+        }
         DesktopHyleField(
             apiKey, { apiKey = it },
             label = if (editing == null) "API key (encrypted on-device)" else "API key (blank = keep stored)",
@@ -1641,8 +1857,11 @@ private fun ProviderForm(
         HyleButton(
             if (editing == null) "Save provider" else "Save changes",
             onClick = {
-                onSave(editing?.id, name, kind, baseUrl, model, contextWindow.toIntOrNull() ?: 8192, apiKey)
-                name = ""; model = ""; apiKey = ""; contextWindow = "8192"
+                onSave(
+                    editing?.id, name, kind, baseUrl, model,
+                    contextWindow.toIntOrNull() ?: 8192, supportsVision, apiKey,
+                )
+                name = ""; model = ""; apiKey = ""; contextWindow = "8192"; supportsVision = true
             },
             // A new provider needs a key; an edit may keep the stored one.
             enabled = model.isNotBlank() && (apiKey.isNotBlank() || editing != null),

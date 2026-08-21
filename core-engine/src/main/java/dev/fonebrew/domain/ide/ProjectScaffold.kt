@@ -195,14 +195,14 @@ object ProjectScaffold {
 
         $idea
 
-        _Conceived on **Aarso**. Your CI builds the APK; Aarso installs it._
+        _Conceived on **Fonebrew**. Your CI builds the APK; Fonebrew installs it._
 
         ## Build
         ```bash
         ./gradlew :app:assembleDebug
         ```
         The `.github/workflows/build.yml` workflow builds a debug APK on every push and
-        uploads it as an artifact — which Aarso lists and installs in-app.
+        uploads it as an artifact — which Fonebrew lists and installs in-app.
     """.trimIndent() + "\n"
 
     /** A CI workflow that produces an APK artifact — the other half of the IDE loop. */

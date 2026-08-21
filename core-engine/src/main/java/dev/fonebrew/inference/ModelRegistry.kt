@@ -23,11 +23,15 @@ class ModelRegistry(
     private val providers: ProviderStore,
     private val locals: LocalModelStore,
     private val devSpecs: List<ModelSpec> = emptyList(),
+    /** True once the onboarding wizard's [dev.aarso.ui.onboarding.AiCoreAvailability] probe has
+     *  confirmed on-device Gemini Nano actually works on this phone — never assumed. */
+    private val aiCoreEnabled: () -> Boolean = { false },
 ) {
 
     fun allSpecs(): List<ModelSpec> =
         locals.models.value.map { it.toSpec() } +
             devSpecs +
+            (if (aiCoreEnabled()) listOf(aiCoreNanoSpec()) else emptyList()) +
             providers.providers.value.map { it.toSpec() }
 
     fun byId(id: String): ModelSpec? = allSpecs().firstOrNull { it.id == id }
@@ -57,6 +61,22 @@ fun echoDevSpecs(): List<ModelSpec> = listOf(
     ),
 )
 
+/** Stable id for the on-device Gemini Nano spec — referenced by the onboarding wizard. */
+const val AICORE_NANO_ID = "aicore:gemini-nano"
+
+/** The on-device Gemini Nano spec, listed only while [SessionStore.aiCoreEnabled] is true. */
+fun aiCoreNanoSpec(): ModelSpec = ModelSpec(
+    id = AICORE_NANO_ID,
+    displayName = "Gemini Nano (on-device)",
+    family = "aicore",
+    contextWindow = InferenceEngine.DEFAULT_CONTEXT,
+    tokenizerId = "aicore:gemini-nano",
+    // AiCoreEngine formats its own prompt (a flattened transcript), same posture as a cloud
+    // spec — PLAIN means "the engine handles templating, not domain/template".
+    templateId = TemplateId.PLAIN,
+    runtime = Runtime.AICORE_NANO,
+)
+
 fun LocalModel.toSpec(): ModelSpec = ModelSpec(
     id = "local:$name",
     // The raw filename minus the extension: short enough for the top bar, and
@@ -68,6 +88,10 @@ fun LocalModel.toSpec(): ModelSpec = ModelSpec(
     templateId = TemplateId.CHATML, // default; future: detect from GGUF metadata
     runtime = Runtime.LOCAL_GGUF,
     modelPath = path,
+    // Local GGUF vision (mmproj) and search (app-side SearchProvider) are both out
+    // of scope this pass — see docs/design/daily-driver.md §Not-in-this-pass.
+    supportsVision = false,
+    supportsSearch = false,
 )
 
 fun CloudProvider.toSpec(): ModelSpec = ModelSpec(
@@ -80,4 +104,8 @@ fun CloudProvider.toSpec(): ModelSpec = ModelSpec(
     runtime = Runtime.CLOUD,
     providerId = id,
     watched = true,
+    // Per-instance (model ids are free-typed, no catalog to infer from).
+    supportsVision = supportsVision,
+    // Per-kind (server-side search only exists for some providers).
+    supportsSearch = kind.supportsSearch,
 )

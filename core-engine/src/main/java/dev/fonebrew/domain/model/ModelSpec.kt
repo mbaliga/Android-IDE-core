@@ -28,8 +28,17 @@ data class ModelSpec(
     val modelPath: String? = null,
     /** A "watched object" (§5c) — every cloud model is one; on-device models are not. */
     val watched: Boolean = false,
+    /** Can this spec take image input? Provider-generic (CLAUDE.md rule 2) — for
+     *  [Runtime.CLOUD] this threads from [dev.aarso.domain.cloud.CloudProvider.supportsVision]
+     *  (per-instance, user-set); local GGUF is false in this pass (mmproj out of scope). */
+    val supportsVision: Boolean = false,
+    /** Can this spec use server-side web search? Threads from
+     *  [dev.aarso.domain.cloud.ProviderKind.supportsSearch] for cloud specs; local
+     *  GGUF is false in this pass (no app-side SearchProvider seam yet). */
+    val supportsSearch: Boolean = false,
 ) {
-    val isOnDevice: Boolean get() = runtime == Runtime.ECHO_DEV || runtime == Runtime.LOCAL_GGUF
+    val isOnDevice: Boolean get() =
+        runtime == Runtime.ECHO_DEV || runtime == Runtime.LOCAL_GGUF || runtime == Runtime.AICORE_NANO
 }
 
 enum class Runtime {
@@ -38,6 +47,11 @@ enum class Runtime {
 
     /** Real local GGUF via llama.cpp — not loadable until the native build. */
     LOCAL_GGUF,
+
+    /** The phone's own on-device Gemini Nano via Android's AICore system service — only on a
+     *  narrow device set; [dev.aarso.ui.onboarding.AiCoreAvailability] gates before this is ever
+     *  offered. On-device, never watched — same footing as [LOCAL_GGUF]. */
+    AICORE_NANO,
 
     /** A user-configured cloud provider (opt-in, watched, never a default). */
     CLOUD,

@@ -35,25 +35,60 @@ class SessionStore(context: Context) {
     private val _entropyColoring = MutableStateFlow(prefs.getBoolean(KEY_ENTROPY, true))
     val entropyColoring: StateFlow<Boolean> = _entropyColoring.asStateFlow()
 
+    // On-screen Ctrl-C button in Terminal — on by default; a Settings toggle for anyone whose
+    // keyboard already has a physical/IME control key (e.g. Clackpad) to hide the now-redundant
+    // button. No keyboard detection here — it's a manual opt-out, not an automatic one. The
+    // /ctrlc slash command always works regardless of this setting.
+    private val _terminalCtrlCButton = MutableStateFlow(prefs.getBoolean(KEY_TERMINAL_CTRL_C, true))
+    val terminalCtrlCButton: StateFlow<Boolean> = _terminalCtrlCButton.asStateFlow()
+
     private val _spatialMapSeen = MutableStateFlow(prefs.getBoolean(KEY_SPATIAL_MAP, false))
     val spatialMapSeen: StateFlow<Boolean> = _spatialMapSeen.asStateFlow()
 
     // Appearance (theme engine): mode is "SYSTEM" / "LIGHT" / "DARK"; accent is "#RRGGBB".
-    // Default is a clean, neutral light Material 3 look (owner: "generic, neat and well spaced");
-    // the dark Aeon palette + violet remain selectable in Appearance.
-    private val _themeMode = MutableStateFlow(prefs.getString(KEY_THEME_MODE, "LIGHT") ?: "LIGHT")
+    // Default is the dark Hyle/Aeon AMOLED palette (CLAUDE.md invariant: "AMOLED black ground";
+    // superseded 2026-07-18 — the prior "clean, neutral light" default meant the app shipped
+    // with none of the Hyle glass-pane/texture/haptic effects visible out of the box, since
+    // those are designed against the dark palette). Light stays selectable in Appearance.
+    private val _themeMode = MutableStateFlow(prefs.getString(KEY_THEME_MODE, "DARK") ?: "DARK")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
     private val _accentColor = MutableStateFlow(prefs.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT)
     val accentColor: StateFlow<String> = _accentColor.asStateFlow()
 
+    // Chat home's header status chip (replaces the fixed Me·Myself·I avatar entry point, which
+    // remains reachable from Settings): "NONE" / "SOVEREIGNTY" / "QUOTA" / "TIME". Defaults to
+    // NONE — the header shows nothing until the user opts a fact into view, matching the
+    // minimalism direction from the 2026-07-19 UX audit rather than presuming what's useful.
+    private val _headerIndicator = MutableStateFlow(prefs.getString(KEY_HEADER_INDICATOR, "NONE") ?: "NONE")
+    val headerIndicator: StateFlow<String> = _headerIndicator.asStateFlow()
+
+    // A room's HyleTabBar can sit at the top or bottom of its own Column: "TOP" / "BOTTOM".
+    // Universal default here; a per-room override (below) wins when set. Defaults to TOP —
+    // unchanged from every room's shipped layout today.
+    private val _tabBarPosition = MutableStateFlow(prefs.getString(KEY_TAB_BAR_POSITION, "TOP") ?: "TOP")
+    val tabBarPosition: StateFlow<String> = _tabBarPosition.asStateFlow()
+
+    // Per-room tab-bar position override, same "roomIdvalue" persisted-set shape as
+    // conversationProjects. A room absent here just follows the universal default above.
+    private val _roomTabBarPosition = MutableStateFlow(loadRoomTabBarPosition())
+    val roomTabBarPosition: StateFlow<Map<String, String>> = _roomTabBarPosition.asStateFlow()
+
     // Ambient grain texture intensity, 0f (off) … 1f. Applied to the base surface only.
-    private val _textureIntensity = MutableStateFlow(prefs.getFloat(KEY_TEXTURE, 0f))
+    // Defaults on (not 0f) so the "rough surface" register is part of the shipped look, not an
+    // opt-in a new user has to go find in Settings — still a user-adjustable, turn-off-able knob.
+    private val _textureIntensity = MutableStateFlow(prefs.getFloat(KEY_TEXTURE, 0.6f))
     val textureIntensity: StateFlow<Float> = _textureIntensity.asStateFlow()
 
     // Second stop of the ambient background gradient ("#RRGGBB"); blank = no gradient.
     private val _gradientColor = MutableStateFlow(prefs.getString(KEY_GRADIENT, "") ?: "")
     val gradientColor: StateFlow<String> = _gradientColor.asStateFlow()
+
+    // Set once, by the onboarding wizard, after AiCoreAvailability confirms the phone's
+    // on-device Gemini Nano actually works — never assumed true just because the device
+    // looks capable. ModelRegistry only lists an AICORE_NANO spec while this is true.
+    private val _aiCoreEnabled = MutableStateFlow(prefs.getBoolean(KEY_AICORE, false))
+    val aiCoreEnabled: StateFlow<Boolean> = _aiCoreEnabled.asStateFlow()
 
     // Bookmarked conversation roots (the "Starred" filter in Chats).
     private val _bookmarkedRoots = MutableStateFlow(prefs.getStringSet(KEY_BOOKMARKS, emptySet())?.toSet() ?: emptySet())
@@ -145,6 +180,11 @@ class SessionStore(context: Context) {
         _entropyColoring.value = enabled
     }
 
+    fun setTerminalCtrlCButton(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TERMINAL_CTRL_C, enabled).apply()
+        _terminalCtrlCButton.value = enabled
+    }
+
     /** One-time spatial-map overlay; Settings can reset it to show the map again. */
     fun setSpatialMapSeen(seen: Boolean) {
         prefs.edit().putBoolean(KEY_SPATIAL_MAP, seen).apply()
@@ -161,6 +201,35 @@ class SessionStore(context: Context) {
         _accentColor.value = hex
     }
 
+    fun setHeaderIndicator(mode: String) {
+        prefs.edit().putString(KEY_HEADER_INDICATOR, mode).apply()
+        _headerIndicator.value = mode
+    }
+
+    fun setTabBarPosition(position: String) {
+        prefs.edit().putString(KEY_TAB_BAR_POSITION, position).apply()
+        _tabBarPosition.value = position
+    }
+
+    /** [position] "TOP"/"BOTTOM", or null to clear the override and fall back to the universal default. */
+    fun setRoomTabBarPosition(roomId: String, position: String?) {
+        val next = _roomTabBarPosition.value.toMutableMap()
+        if (position == null) next.remove(roomId) else next[roomId] = position
+        prefs.edit().putStringSet(
+            KEY_ROOM_TAB_BAR_POSITION,
+            next.entries.map { "${it.key}${it.value}" }.toSet(),
+        ).apply()
+        _roomTabBarPosition.value = next
+    }
+
+    /** The effective position for [roomId]: its own override if set, else the universal default. */
+    fun tabBarPositionFor(roomId: String): String = _roomTabBarPosition.value[roomId] ?: _tabBarPosition.value
+
+    private fun loadRoomTabBarPosition(): Map<String, String> =
+        prefs.getStringSet(KEY_ROOM_TAB_BAR_POSITION, emptySet()).orEmpty()
+            .mapNotNull { e -> e.split('', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+            .toMap()
+
     fun setTextureIntensity(value: Float) {
         val v = value.coerceIn(0f, 1f)
         prefs.edit().putFloat(KEY_TEXTURE, v).apply()
@@ -170,6 +239,11 @@ class SessionStore(context: Context) {
     fun setGradientColor(hex: String) {
         prefs.edit().putString(KEY_GRADIENT, hex).apply()
         _gradientColor.value = hex
+    }
+
+    fun setAiCoreEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AICORE, enabled).apply()
+        _aiCoreEnabled.value = enabled
     }
 
     fun toggleBookmark(rootId: String) {
@@ -301,11 +375,16 @@ class SessionStore(context: Context) {
         private const val KEY_ONBOARDED = "onboardingDone"
         private const val KEY_INSTRUMENTS = "instrumentsExpanded"
         private const val KEY_ENTROPY = "entropyColoring"
+        private const val KEY_TERMINAL_CTRL_C = "terminalCtrlCButton"
         private const val KEY_SPATIAL_MAP = "spatialMapSeen"
         private const val KEY_THEME_MODE = "themeMode"
+        private const val KEY_HEADER_INDICATOR = "headerIndicator"
+        private const val KEY_TAB_BAR_POSITION = "tabBarPosition"
+        private const val KEY_ROOM_TAB_BAR_POSITION = "roomTabBarPosition"
         private const val KEY_ACCENT = "accentColor"
         private const val KEY_TEXTURE = "textureIntensity"
         private const val KEY_GRADIENT = "gradientColor"
+        private const val KEY_AICORE = "aiCoreEnabled"
         private const val KEY_BOOKMARKS = "bookmarkedRoots"
         private const val KEY_ARCHIVED = "archivedRoots"
         private const val KEY_CONV_PROJECTS = "conversationProjects"

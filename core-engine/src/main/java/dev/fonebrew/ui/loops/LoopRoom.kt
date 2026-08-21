@@ -1,6 +1,5 @@
 package dev.fonebrew.ui.loops
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,8 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -77,11 +74,12 @@ import dev.fonebrew.domain.loop.RecordingGatewayPolicy
 import dev.fonebrew.domain.model.ModelSpec
 import dev.fonebrew.domain.thread.DelegationKind
 import dev.fonebrew.inference.EngineGenerator
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.hyle.HyleDropdownField
-import dev.fonebrew.ui.hyle.HyleField
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleDropdownField
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -129,6 +127,11 @@ private data class LoopNode(
     val yPx: Float,
     val systemPrompt: String = "",
     val modelId: String? = null,
+    /** Everything in a loaded node's BPMN `ext` this editor doesn't have a named field for —
+     *  chiefly a distilled loop's start-event provenance (source/pattern/distilledBy/
+     *  distilledOn/summary, see [dev.fonebrew.domain.loop.Distiller]). Carried through untouched
+     *  so editing and re-saving a distilled loop doesn't silently drop where it came from. */
+    val provenanceExt: Map<String, String> = emptyMap(),
 )
 
 /** A connector; [label] drives gateway branching ("approve" / "refine" / "else"). */
@@ -148,6 +151,8 @@ private fun isEvent(kind: BpmnNodeKind) =
     kind == BpmnNodeKind.START_EVENT || kind == BpmnNodeKind.END_EVENT
 
 /** Editor graph → BPMN (positions + per-node prompt/model travel in extension elements). */
+private val NAMED_EXT_KEYS = setOf("systemPrompt", "model", "role")
+
 private fun toBpmnGraph(id: String, name: String, nodes: List<LoopNode>, edges: List<LoopEdge>): BpmnGraph =
     BpmnGraph(
         id = id, name = name,
@@ -155,7 +160,9 @@ private fun toBpmnGraph(id: String, name: String, nodes: List<LoopNode>, edges: 
             BpmnNode(
                 id = n.id, kind = n.kind, name = n.label,
                 bounds = Bounds(n.xPx.toDouble(), n.yPx.toDouble()),
-                ext = buildMap {
+                // Named fields first, then whatever carried through unrecognised (a distilled
+                // loop's provenance) — named fields win if a key somehow collides.
+                ext = n.provenanceExt + buildMap {
                     if (n.systemPrompt.isNotBlank()) put("systemPrompt", n.systemPrompt)
                     n.modelId?.let { put("model", it) }
                     if (n.role.isNotBlank()) put("role", n.role)
@@ -170,6 +177,7 @@ private fun fromBpmnNodes(g: BpmnGraph): List<LoopNode> = g.nodes.map { b ->
         id = b.id, kind = b.kind, label = b.name, role = b.ext["role"].orEmpty(),
         xPx = b.bounds.x.toFloat(), yPx = b.bounds.y.toFloat(),
         systemPrompt = b.ext["systemPrompt"].orEmpty(), modelId = b.ext["model"],
+        provenanceExt = b.ext.filterKeys { it !in NAMED_EXT_KEYS },
     )
 }
 
@@ -178,10 +186,11 @@ private fun fromBpmnEdges(g: BpmnGraph): List<LoopEdge> =
 
 /**
  * The Loop editor: a free-form **graph** editor on a dot-grid canvas (docs/design/workflow-builder.md).
- * Drag a node to move it; **long-press the canvas to add** a node (Task / Gateway / End); **tap** a
- * task/gateway to edit its name, instructions and model; **long-press a node** for delete / connect.
- * Connect is tap-to-connect (long-press → "Connect from here" → tap the target). The graph runs via
- * [GraphRunner] (arbitrary graphs, gateway branching on edge labels) and saves as standard BPMN 2.0.
+ * Drag a node to move it; **long-press the canvas to add** a node (Task / Gateway / End) via a
+ * radial fan menu anchored at the touch point; **tap** a task/gateway to edit its name,
+ * instructions and model; **long-press a node** for its own radial fan (Connect / Edit / Delete).
+ * Connect is tap-to-connect (radial → Connect → tap the target). The graph runs via [GraphRunner]
+ * (arbitrary graphs, gateway branching on edge labels) and saves as standard BPMN 2.0.
  * Generation/run is owner-verified — no model in CI.
  */
 @Composable
@@ -234,11 +243,21 @@ fun LoopRoom(onClose: () -> Unit) {
     var pendingEdge by remember { mutableStateOf<Pair<String, String>?>(null) } // gateway edge awaiting a label
     var showSave by remember { mutableStateOf(false) }
     var showLoad by remember { mutableStateOf(false) }
+    var showDistill by remember { mutableStateOf(false) }
     var syncNote by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
     val colors = LocalHyleColors.current
 
+    fun loadLoop(loop: Loop) {
+        loop.bpmnXml?.let { xml ->
+            runCatching { BpmnArchive.read(xml) }.getOrNull()?.let { g ->
+                nodes.clear(); nodes.addAll(fromBpmnNodes(g))
+                edges.clear(); edges.addAll(fromBpmnEdges(g))
+                loopId = loop.id; loopName = loop.name; savedNote = "Loaded “${loop.name}”"
+            }
+        }
+    }
     fun nodeById(id: String) = nodes.firstOrNull { it.id == id }
     fun moveNode(id: String, x: Float, y: Float) {
         val i = nodes.indexOfFirst { it.id == id }
@@ -270,11 +289,15 @@ fun LoopRoom(onClose: () -> Unit) {
      *  `onStep`, then — win, budget-stopped, or cancelled alike — tree-logs the run
      *  ([GraphRunLog]) and writes its ledger rows ([GraphRunLedger]), tagged `surface = "loop"`
      *  so they're legible apart from Chat usage. A refuse-to-start (missing params) or an
-     *  immediate structural stop (no start event) writes nothing — there's no step to log. */
+     *  immediate structural stop (no start event) writes nothing — there's no step to log.
+     *  Also records every gateway auto-choice ([RecordingGatewayPolicy], WP8, owner decision 2's
+     *  GATEWAY_AUTO surface) and brackets the whole run with [dev.fonebrew.data.BackgroundJobs]
+     *  so it shows up wherever the app surfaces in-flight background work. */
     fun startRun(params: Map<String, String>, budget: LoopBudget?) {
         running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
         liveSteps = emptyList(); runBudget = budget; loggedNote = null
         runJob = scope.launch {
+            val jobId = container.backgroundJobs.start(loopName.ifBlank { "Loop" }, "loop")
             runCatching {
                 val cache = HashMap<String, EngineGenerator>()
                 fun genFor(spec: ModelSpec) = cache.getOrPut(spec.id) {
@@ -325,8 +348,9 @@ fun LoopRoom(onClose: () -> Unit) {
                             alternatives = choice.alternativeRefs,
                         )
                     }
+                    container.backgroundJobs.finish(jobId)
                 },
-                { runError = it.message },
+                { runError = it.message; container.backgroundJobs.finish(jobId, failed = true) },
             )
             running = false
             runJob = null
@@ -346,6 +370,7 @@ fun LoopRoom(onClose: () -> Unit) {
                     Text(loopName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showLoad = true }) { Text("Loops") }
+                        TextButton(onClick = { showDistill = true }, enabled = runnable.isNotEmpty()) { Text("Distill…") }
                         TextButton(onClick = { showSave = true }, enabled = objective.isNotBlank()) { Text("Save") }
                         if (running) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -363,6 +388,21 @@ fun LoopRoom(onClose: () -> Unit) {
                 savedNote?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 12.dp))
                 }
+                // Provenance surfacing (docs/design/loop-distillation.md step 5): a distilled
+                // loop's start-event carries who/what/when in its ext map, preserved end to end
+                // by LoopNode.provenanceExt — shown here so influence stays visible, never a
+                // silent black box.
+                nodes.firstOrNull { it.kind == BpmnNodeKind.START_EVENT }?.provenanceExt
+                    ?.takeIf { it.containsKey("distilledBy") }
+                    ?.let { prov ->
+                        Text(
+                            "Distilled from ${prov["source"] ?: "a source"} by ${prov["distilledBy"]} " +
+                                "on ${prov["distilledOn"]} — review before running.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
                 HorizontalDivider()
 
                 if (runnable.isEmpty()) {
@@ -406,6 +446,91 @@ fun LoopRoom(onClose: () -> Unit) {
                             color = if (running || graphResult != null || connectingFrom != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                         )
+
+                        // Radial fans, anchored at the point that was actually long-pressed —
+                        // in THIS Box, the same coordinate space LoopCanvas measures node
+                        // positions in, not a dialog centred wherever the platform likes
+                        // (owner ask, 2026-07-27). Both must live here, not elsewhere in the
+                        // tree, or `anchor` wouldn't line up with the canvas underneath it.
+                        addAt?.let { at ->
+                            fun addNode(kind: BpmnNodeKind) {
+                                val id = "n-${UUID.randomUUID().toString().take(6)}"
+                                val label = when (kind) {
+                                    BpmnNodeKind.END_EVENT -> "End"
+                                    BpmnNodeKind.EXCLUSIVE_GATEWAY -> "Gateway"
+                                    else -> "Task"
+                                }
+                                nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
+                                if (kind == BpmnNodeKind.TASK) configNodeId = id
+                            }
+                            dev.aarso.hyle.cells.HyleRadialMenu(
+                                visible = true,
+                                anchor = at,
+                                onDismiss = { addAt = null },
+                                modifier = Modifier.fillMaxSize(),
+                                items = listOf(
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Task", glyph = { tint ->
+                                        drawRoundRect(
+                                            tint,
+                                            topLeft = Offset(size.width * 0.2f, size.height * 0.3f),
+                                            size = androidx.compose.ui.geometry.Size(size.width * 0.6f, size.height * 0.4f),
+                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.08f),
+                                        )
+                                    }, onClick = { addNode(BpmnNodeKind.TASK) }),
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Gateway", glyph = { tint ->
+                                        val path = androidx.compose.ui.graphics.Path().apply {
+                                            moveTo(size.width * 0.5f, size.height * 0.1f)
+                                            lineTo(size.width * 0.9f, size.height * 0.5f)
+                                            lineTo(size.width * 0.5f, size.height * 0.9f)
+                                            lineTo(size.width * 0.1f, size.height * 0.5f)
+                                            close()
+                                        }
+                                        drawPath(path, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f))
+                                    }, onClick = { addNode(BpmnNodeKind.EXCLUSIVE_GATEWAY) }),
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "End", glyph = { tint ->
+                                        drawCircle(tint, radius = size.width * 0.32f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.1f))
+                                    }, onClick = { addNode(BpmnNodeKind.END_EVENT) }),
+                                ),
+                            )
+                        }
+
+                        menuNodeId?.let { id ->
+                            val node = nodeById(id)
+                            val nodeAnchor = node?.let { Offset(it.xPx, it.yPx) } ?: Offset.Zero
+                            val canEdit = node != null && !isEvent(node.kind)
+                            dev.aarso.hyle.cells.HyleRadialMenu(
+                                visible = true,
+                                anchor = nodeAnchor,
+                                onDismiss = { menuNodeId = null },
+                                modifier = Modifier.fillMaxSize(),
+                                items = buildList {
+                                    add(
+                                        dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Connect", glyph = { tint ->
+                                            drawLine(tint, Offset(size.width * 0.15f, size.height * 0.5f), Offset(size.width * 0.75f, size.height * 0.5f), strokeWidth = size.width * 0.09f)
+                                            val arrow = androidx.compose.ui.graphics.Path().apply {
+                                                moveTo(size.width * 0.55f, size.height * 0.3f)
+                                                lineTo(size.width * 0.85f, size.height * 0.5f)
+                                                lineTo(size.width * 0.55f, size.height * 0.7f)
+                                            }
+                                            drawPath(arrow, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f))
+                                        }, onClick = { connectingFrom = id }),
+                                    )
+                                    if (canEdit) {
+                                        add(
+                                            dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Edit", glyph = { tint ->
+                                                drawLine(tint, Offset(size.width * 0.25f, size.height * 0.75f), Offset(size.width * 0.75f, size.height * 0.25f), strokeWidth = size.width * 0.1f)
+                                            }, onClick = { configNodeId = id }),
+                                        )
+                                    }
+                                    add(
+                                        dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Delete", destructive = true, glyph = { tint ->
+                                            drawLine(tint, Offset(size.width * 0.28f, size.height * 0.28f), Offset(size.width * 0.72f, size.height * 0.72f), strokeWidth = size.width * 0.1f)
+                                            drawLine(tint, Offset(size.width * 0.72f, size.height * 0.28f), Offset(size.width * 0.28f, size.height * 0.72f), strokeWidth = size.width * 0.1f)
+                                        }, onClick = { deleteNode(id) }),
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     Column(
@@ -438,8 +563,8 @@ fun LoopRoom(onClose: () -> Unit) {
                     ) {
                         runError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
                         liveSteps.forEach { step ->
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            HyleCard(modifier = Modifier.fillMaxWidth()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(
                                             "${step.index + 1}. ${nodeById(step.nodeId)?.label ?: step.role}",
@@ -472,24 +597,6 @@ fun LoopRoom(onClose: () -> Unit) {
         }
     }
 
-    // ── Add-node palette (long-press canvas) ──────────────────────────────────
-    addAt?.let { at ->
-        AddNodeDialog(
-            onDismiss = { addAt = null },
-            onAdd = { kind ->
-                val id = "n-${UUID.randomUUID().toString().take(6)}"
-                val label = when (kind) {
-                    BpmnNodeKind.END_EVENT -> "End"
-                    BpmnNodeKind.EXCLUSIVE_GATEWAY -> "Gateway"
-                    else -> "Task"
-                }
-                nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
-                addAt = null
-                if (kind == BpmnNodeKind.TASK) configNodeId = id
-            },
-        )
-    }
-
     // ── Run sheet (P3): auto-generated params form + optional budget, refuse-to-start ────
     if (showRunSheet) {
         val graphForScan = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
@@ -500,19 +607,6 @@ fun LoopRoom(onClose: () -> Unit) {
                 showRunSheet = false
                 startRun(params, budget)
             },
-        )
-    }
-
-    // ── Node menu (long-press a node) ─────────────────────────────────────────
-    menuNodeId?.let { id ->
-        val node = nodeById(id)
-        NodeMenuDialog(
-            label = node?.label ?: id,
-            canEdit = node != null && !isEvent(node.kind),
-            onDismiss = { menuNodeId = null },
-            onEdit = { menuNodeId = null; configNodeId = id },
-            onConnect = { menuNodeId = null; connectingFrom = id },
-            onDelete = { menuNodeId = null; deleteNode(id) },
         )
     }
 
@@ -537,8 +631,8 @@ fun LoopRoom(onClose: () -> Unit) {
                 configNodeId = null
             },
             // Desktop-class kit §3: the HyleContextMenu parity path's two items call the exact
-            // same operations the node's long-press NodeMenuDialog offers (menuNodeId's onConnect/
-            // onDelete below) — Connect starts the same connectingFrom-from-here mode, Delete
+            // same operations the node's long-press radial menu offers (connectingFrom-from-here
+            // / deleteNode above) — Connect starts the same connectingFrom-from-here mode, Delete
             // calls the same deleteNode(id).
             onConnect = { configNodeId = null; connectingFrom = id },
             onDelete = { configNodeId = null; deleteNode(id) },
@@ -590,15 +684,18 @@ fun LoopRoom(onClose: () -> Unit) {
                 syncNote = "pulling…"
                 scope.launch { container.loopSyncRepo.pull().fold({ syncNote = "pulled $it loop(s) from Git" }, { syncNote = it.message }) }
             },
-            onPick = { loop ->
-                loop.bpmnXml?.let { xml ->
-                    runCatching { BpmnArchive.read(xml) }.getOrNull()?.let { g ->
-                        nodes.clear(); nodes.addAll(fromBpmnNodes(g))
-                        edges.clear(); edges.addAll(fromBpmnEdges(g))
-                        loopId = loop.id; loopName = loop.name; savedNote = "Loaded “${loop.name}”"
-                    }
-                }
-                showLoad = false
+            onPick = { loop -> loadLoop(loop); showLoad = false },
+        )
+    }
+
+    if (showDistill) {
+        DistillDialog(
+            runnable = runnable,
+            onDismiss = { showDistill = false },
+            onDistilled = { loop ->
+                store.save(loop)
+                loadLoop(loop)
+                showDistill = false
             },
         )
     }
@@ -836,13 +933,18 @@ private fun GatewayDiamond(label: String, status: NodeStatus) {
 private fun TaskCard(node: LoopNode, widthDp: androidx.compose.ui.unit.Dp, status: NodeStatus) {
     val colors = LocalHyleColors.current
     val ring = statusColor(status)
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(if (ring != null) 2.dp else 1.dp, ring ?: colors.hairline),
-        shape = MaterialTheme.shapes.small,
-        modifier = Modifier.width(widthDp),
+    // ACTIVE == this node is the current connect-from selection → HyleCard's own `selected` look.
+    // DONE gets its own success-green completion ring, layered on since HyleCard's selected is violet-only.
+    Box(
+        Modifier.width(widthDp).then(
+            if (status == NodeStatus.DONE) {
+                Modifier.border(2.dp, colors.success, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+            } else {
+                Modifier
+            },
+        ),
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        HyleCard(selected = status == NodeStatus.ACTIVE) {
             Text(node.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1)
             val sub = node.modelId?.substringAfter(':') ?: node.role.ifBlank { "task" }
             Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -863,40 +965,6 @@ private fun statusColor(status: NodeStatus): Color? {
         NodeStatus.ACTIVE -> MaterialTheme.colorScheme.primary
         NodeStatus.DONE -> colors.success
         NodeStatus.IDLE -> null
-    }
-}
-
-@Composable
-private fun AddNodeDialog(onDismiss: () -> Unit, onAdd: (BpmnNodeKind) -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Add a node", style = MaterialTheme.typography.titleMedium)
-                HyleButton("Task — an AI step", onClick = { onAdd(BpmnNodeKind.TASK) })
-                HyleButton("Gateway — a branch", onClick = { onAdd(BpmnNodeKind.EXCLUSIVE_GATEWAY) })
-                HyleButton("End", onClick = { onAdd(BpmnNodeKind.END_EVENT) })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NodeMenuDialog(label: String, canEdit: Boolean, onDismiss: () -> Unit, onEdit: () -> Unit, onConnect: () -> Unit, onDelete: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(label, style = MaterialTheme.typography.titleMedium)
-                HyleButton("Connect from here →", onClick = onConnect)
-                if (canEdit) HyleButton("Edit", onClick = onEdit)
-                HyleButton("Delete", onClick = onDelete)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Close") }
-                }
-            }
-        }
     }
 }
 
@@ -924,7 +992,7 @@ private fun NodeConfigDialog(
     runnable: List<ModelSpec>,
     onDismiss: () -> Unit,
     onSave: (name: String, prompt: String, modelId: String?) -> Unit,
-    // Desktop-class kit §3 parity path: same two operations as the long-press NodeMenuDialog
+    // Desktop-class kit §3 parity path: same two operations as the long-press radial node menu
     // (minus Edit — this dialog IS the edit surface already open). See [loopNodeMenuItems].
     onConnect: () -> Unit,
     onDelete: () -> Unit,
@@ -983,7 +1051,7 @@ private fun NodeConfigDialog(
         }
     }
     // Destructive confirm (binding rule: destructive actions confirm before acting) — the
-    // long-press NodeMenuDialog's own Delete button is untouched; this is only this new parity
+    // long-press radial menu's own Delete wedge is untouched; this is only this new parity
     // path's gate in front of the same deleteNode(id) call.
     if (confirmDelete) {
         AlertDialog(
@@ -1051,17 +1119,15 @@ private fun LoadLoopDialog(
                 } else {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (loop in shown) {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth().clickable { onPick(loop) }) {
-                                Column(Modifier.padding(10.dp)) {
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text(loop.name.ifBlank { "Untitled loop" }, style = MaterialTheme.typography.bodyMedium)
-                                        Text(loopStateLabel(loop.state), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        TextButton(onClick = { onPick(loop) }) { Text(if (loop.state == LoopState.UNUSED) "Edit" else "View") }
-                                        TextButton(onClick = { onDuplicate(loop.id) }) { Text("Duplicate") }
-                                        TextButton(onClick = { onDelete(loop.id) }) { Text("Delete") }
-                                    }
+                            HyleCard(modifier = Modifier.fillMaxWidth(), onClick = { onPick(loop) }) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(loop.name.ifBlank { "Untitled loop" }, style = MaterialTheme.typography.bodyMedium)
+                                    Text(loopStateLabel(loop.state), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(onClick = { onPick(loop) }) { Text(if (loop.state == LoopState.UNUSED) "Edit" else "View") }
+                                    TextButton(onClick = { onDuplicate(loop.id) }) { Text("Duplicate") }
+                                    TextButton(onClick = { onDelete(loop.id) }) { Text("Delete") }
                                 }
                             }
                         }

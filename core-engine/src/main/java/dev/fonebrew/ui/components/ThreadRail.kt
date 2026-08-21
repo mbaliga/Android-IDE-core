@@ -47,7 +47,7 @@ import dev.aarso.hyle.Pulse
 import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.hyle.cells.rememberHyleHaptics
 import dev.fonebrew.ui.state.ThreadRailPresenter
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
  * THREAD_TOPOLOGY_PLAN.md's ThreadRail — the right-edge dash minimap, one [ThreadRailPresenter.Dash]

@@ -16,7 +16,7 @@ import org.json.JSONObject
  *
  * No UI-facing seam interface (unlike [LedgerStore]/`LedgerSource`): nothing in this codebase
  * observes receipts reactively yet, so this follows the plain-class DI pattern (`TaskStore`,
- * `WatchStore`) rather than inventing an interface with no real second implementation or
+ * `TaskStore`) rather than inventing an interface with no real second implementation or
  * substitution need — a UI seam can be added later, over this same class, the moment something
  * actually needs to observe it.
  */

@@ -1,3 +1,5 @@
+> **MERGE-NOTE (2026-08-21):** the launch line (`fix/models-carousel-and-terminal`) carries its own parallel history of this doc; this copy kept the dev line's version wholesale during reunification — reconcile when next editing.
+
 # Aarso — Handoff (complete)
 
 > Single, self-contained handoff for any session (human or agent) picking this up.

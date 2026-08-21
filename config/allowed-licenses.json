@@ -33,6 +33,7 @@
     { "moduleLicense": "MPL-2.0" },
 
     { "moduleLicense": "Android Software Development Kit License", "moduleName": "com\\.google\\.(android\\.gms|android\\.odml):.*" },
-    { "moduleLicense": "ML Kit Terms of Service", "moduleName": "com\\.google\\.(android\\.gms|mlkit):.*" }
+    { "moduleLicense": "ML Kit Terms of Service", "moduleName": "com\\.google\\.(android\\.gms|mlkit):.*" },
+    { "moduleLicense": "AICore Terms of Service", "moduleName": "com\\.google\\.ai\\.edge\\.aicore:.*" }
   ]
 }

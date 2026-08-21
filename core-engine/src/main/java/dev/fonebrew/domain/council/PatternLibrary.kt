@@ -10,7 +10,7 @@ import dev.fonebrew.domain.bpmn.BpmnNodeKind
  * The curated reference library — the *floor* of loop distillation
  * (docs/design/loop-distillation.md). The owner's insight: orchestration papers
  * (mixture-of-agents, self-consistency, reflexion, debate, …) are **nothing but
- * loops** in Aarso's terminology. This hand-authors the first four as standard
+ * loops** in Fonebrew's terminology. This hand-authors the first four as standard
  * [BpmnGraph]s so they are runnable, readable, editable, and ownable today —
  * independent of the (later) meta-distiller that would emit new ones from a paper.
  *

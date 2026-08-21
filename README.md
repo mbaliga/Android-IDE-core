@@ -19,12 +19,12 @@ and a full spatial IA. **Open core**, package `dev.fonebrew.*` (rename deferred)
 ## The constellation
 This is the **open core** of a family. The **design system** is open in
 [`Hyle-Design-System`](https://github.com/mbaliga/Hyle-Design-System) (consumed via the
-token contract). The **self-reflection lens** is the private `Aarso` repo (a real lens
+token contract). The **self-reflection lens** is the private `Fonebrew` repo (a real lens
 installs into the core's inert `MirrorSeam`). The paid **Studio** layer (project-management
 UX, the store-publish pipeline) attaches above core through clean seams (`DevelopTabs`,
 `ProjectRoomSlot`) — so the open core ships free and complete on its own.
 
-> Extracted from the Aarso monorepo per its `docs/EXTRACTION_PLAN.md`. Public-core history
+> Extracted from the Fonebrew monorepo per its `docs/EXTRACTION_PLAN.md`. Public-core history
 > begins fresh here (orphan-start), so no proprietary code or history is carried in.
 
 ## Build

@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Aarso logo">
-  <!-- Aarso = "mirror". A symmetric mark split at a central seam: a solid form and
-       its lighter twin, sitting above their own faint reflection. Clean-room: no
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Fonebrew logo">
+  <!-- A symmetric mark split at a central seam: a solid form and its lighter twin,
+       sitting above their own faint reflection — mirror imagery, alluding to Aarso,
+       the app's internal self-reflection lens (domain/mirror/). Clean-room: no
        borrowed marks. Violet #8E7BFF on field #0E0F12 (the app's own tokens). -->
   <defs>
     <linearGradient id="violet" x1="0" y1="0" x2="0" y2="1">

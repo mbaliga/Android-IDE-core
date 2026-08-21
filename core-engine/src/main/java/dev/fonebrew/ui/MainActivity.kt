@@ -7,13 +7,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import dev.fonebrew.FonebrewApp
 import dev.aarso.crashrecovery.CrashRecovery
+import dev.aarso.hyle.theme.DefaultAccent
+import dev.aarso.hyle.theme.parseHexColor
+import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.Intake
+import dev.fonebrew.ui.theme.FonebrewCrashRecoveryStyle
 import dev.fonebrew.ui.theme.FonebrewTheme
-import dev.fonebrew.ui.theme.DefaultAccent
 import dev.fonebrew.ui.theme.ThemeMode
-import dev.fonebrew.ui.theme.parseHexColor
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,7 +25,7 @@ class MainActivity : ComponentActivity() {
         // which also lands a report via CrashRecovery.captureInitError), show the shared recovery
         // screen — NOT the app — instead of touching the (possibly uninitialised) container. This
         // finishes this Activity, so a device-only launch crash can't brick the install.
-        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Fonebrew")) return
+        if (CrashRecovery.maybeShowRecovery(this, appLabel = "Fonebrew", style = FonebrewCrashRecoveryStyle)) return
 
         val app = application as FonebrewApp
         handleIntake(intent)

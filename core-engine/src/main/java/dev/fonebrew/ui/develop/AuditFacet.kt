@@ -22,7 +22,7 @@ import dev.fonebrew.domain.audit.AuditChecklist
 import dev.fonebrew.domain.audit.AuditStatus
 
 /**
- * Audit (free/core): a **to-do list of checks, not a scanner**. Aarso deliberately does not
+ * Audit (free/core): a **to-do list of checks, not a scanner**. Fonebrew deliberately does not
  * embed heavy static analysers — each row is honest advice, and its **Run** button fires a
  * chat prompt ([AuditChecklist.promptFor]) that runs the *real* tool where the model can act
  * on the repo. The owner records the outcome by hand (Pass/Fail/Skip), or an external QA app
@@ -55,7 +55,14 @@ fun AuditFacet(onRunPrompt: (String) -> Unit) {
         WireBox {
             Text(check.title, style = MaterialTheme.typography.bodyMedium)
             Text(
-                "${check.category.name.lowercase()} · ${check.status.name.lowercase()}",
+                // Pass/Fail/Skip already show their state via the highlighted button below —
+                // repeating the word here would double-encode the same fact as label + fill.
+                // Only PENDING/RUNNING have no matching button, so only they need the word.
+                if (check.status == AuditStatus.PENDING || check.status == AuditStatus.RUNNING) {
+                    "${check.category.name.lowercase()} · ${check.status.name.lowercase()}"
+                } else {
+                    check.category.name.lowercase()
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

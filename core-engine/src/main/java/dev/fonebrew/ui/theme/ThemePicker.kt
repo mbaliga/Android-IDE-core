@@ -1,5 +1,7 @@
 package dev.fonebrew.ui.theme
 
+import dev.aarso.hyle.cells.HyleSlider
+import dev.aarso.hyle.theme.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,8 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,12 +30,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.fonebrew.FonebrewApp
-import dev.fonebrew.ui.hyle.HyleColorPicker
+import dev.aarso.hyle.cells.HyleColorPicker3D
 
 /** Curated quick-start accents — the "floor" of customization. Each is mid-bright so
  *  the ramp derivation + contrast clamp keep it AA-safe in both light and dark. */
 private val ACCENT_PRESETS = listOf(
-    "#8E7BFF", // the Aarso violet (default)
+    "#8E7BFF", // the Fonebrew violet (default)
     "#4DA3FF", // blue
     "#2DD4BF", // teal
     "#5BD16A", // green
@@ -82,23 +82,19 @@ fun ThemePicker(modifier: Modifier = Modifier) {
             }
         }
 
-        // Free colour — the reusable Hyle picker (a saturation/value field + hue slider). The
-        // ramp derivation + contrast clamp downstream keep any pick AA-legible in both modes.
-        HyleColorPicker(
+        // Free colour — Hyle's real 3D picker (hue ring + HSV/RGB/Lab/HCL slice + a live model of
+        // the space), the same one the tactile kit ships, verbatim. The ramp derivation +
+        // contrast clamp downstream keep any pick AA-legible in both modes.
+        HyleColorPicker3D(
             color = accent,
             onColorChange = { session.setAccentColor(it.toHexRgb()) },
         )
 
         SectionLabel("Texture", c.textMid)
-        Slider(
+        HyleSlider(
             value = texture,
             onValueChange = { session.setTextureIntensity(it) },
             valueRange = 0f..1f,
-            colors = SliderDefaults.colors(
-                thumbColor = c.violet,
-                activeTrackColor = c.violet,
-                inactiveTrackColor = c.inset,
-            ),
         )
 
         SectionLabel("Ambient gradient", c.textMid)

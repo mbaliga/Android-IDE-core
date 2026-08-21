@@ -9,7 +9,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * hand-built XML on write, the JDK/Android `javax.xml` DOM on read (no new
  * library — same minimal-surface stance as `TreeArchive`/`Converters`).
  *
- * A `.bpmn` opens in any BPMN tool; Aarso's own data rides in a single
+ * A `.bpmn` opens in any BPMN tool; Fonebrew's own data rides in a single
  * `<aarso:meta …/>` extension element per node, so the file stays valid-standard.
  */
 object BpmnArchive {

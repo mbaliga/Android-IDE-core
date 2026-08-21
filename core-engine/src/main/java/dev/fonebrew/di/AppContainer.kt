@@ -143,6 +143,10 @@ class AppContainer(context: Context) {
     val imageStore: ImageStore = ImageStore(context)
     val imageProviderStore: ImageProviderStore = ImageProviderStore(context)
 
+    /** User-node photo/file attachments (daily-driver.md W1 — vision input): downscaled
+     *  copies saved to filesDir/attachments/, same shape as [imageStore]. */
+    val attachmentStore: dev.fonebrew.data.AttachmentStore = dev.fonebrew.data.AttachmentStore(context)
+
     /** 3D object generation/import (docs/design/objects-3d.md): saved model files + watched
      *  3D-cloud-provider configs — same shape as the image pair above. */
     val object3dStore: dev.fonebrew.data.Object3dStore = dev.fonebrew.data.Object3dStore(context)
@@ -172,9 +176,6 @@ class AppContainer(context: Context) {
      *  same table, CORE_PHASES.md P1). */
     val taskStore: dev.fonebrew.data.TaskStore = dev.fonebrew.data.TaskStore(database.taskDao())
 
-    /** The Watchlist substrate (free floor's Watch tab — renewals/expiries/status,
-     *  CORE_PHASES.md P2). */
-    val watchStore: dev.fonebrew.data.WatchStore = dev.fonebrew.data.WatchStore(database.watchDao())
 
     /** The Conversation Instrument's data gateway (verdicts, message-level bookmarks, versions,
      *  compaction directives, ghost branches, form state — STUDIO_UX_SPEC.md §5.1). */
@@ -298,13 +299,18 @@ class AppContainer(context: Context) {
         providerStore,
         localModelStore,
         devSpecs = if (BuildConfig.DEBUG) echoDevSpecs() else emptyList(),
+        aiCoreEnabled = { sessionStore.aiCoreEnabled.value },
     )
 
-    val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore)
+    val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore, context.applicationContext)
 
     // Agentic repo loop (IA: agentic-ide #1): read repo → model proposes a ChangeSet → review → commit.
     val agentRepoRunner: dev.fonebrew.data.AgentRepoRunner =
         dev.fonebrew.data.AgentRepoRunner(gitTransport, gitHostStore, modelRegistry, engineProvider)
+
+    // Concurrent work in progress elsewhere in the app (a Loop run, the Agent proposing a
+    // change) — surfaced together in Chat's background-tasks strip.
+    val backgroundJobs: dev.fonebrew.data.BackgroundJobs = dev.fonebrew.data.BackgroundJobs()
 
     // Device recipes over the SSH spine (IA: agentic-ide #3): RPi / Arduino-via-Pi / ESP-OTA.
     val deviceRepo: dev.fonebrew.data.DeviceRepo = dev.fonebrew.data.DeviceRepo { newSshTransport() }

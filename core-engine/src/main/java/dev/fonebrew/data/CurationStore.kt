@@ -34,7 +34,7 @@ import java.util.UUID
  * [dev.fonebrew.data.dao] interfaces with one store, since these six annotation types are read and
  * combined together constantly (compaction resolution alone needs verdicts + bookmarks +
  * directives + version spines at once) — same "one store per closely-related concern" shape as
- * [TaskStore]/[WatchStore], just over six tables instead of one.
+ * [TaskStore], just over six tables instead of one.
  */
 class CurationStore(
     private val verdictDao: VerdictDao,

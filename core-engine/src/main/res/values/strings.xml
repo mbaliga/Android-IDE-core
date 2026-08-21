@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Fonebrew — the host app (naming split, CLAUDE.md): "Aarso" names only the
-         inert mirror lens now, not the app itself. -->
+    <!-- Fonebrew — display brand (owner ruling 2026-07-16, supersedes "FoneBru";
+         "Bru" is HUL-owned and litigious in India). "Aarso" ("mirror") names only the
+         inert self-reflection lens (domain/mirror/), never the host app. -->
     <string name="app_name">Fonebrew</string>
 </resources>

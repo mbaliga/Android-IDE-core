@@ -14,6 +14,6 @@ data class SamplingParams(
     val topK: Int = 20,
     val minP: Float = 0.0f,
     val repeatPenalty: Float = 1.1f,
-    val maxTokens: Int = 1024,
+    val maxTokens: Int = 8192,
     val seed: Long? = null,
 )

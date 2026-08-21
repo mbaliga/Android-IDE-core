@@ -269,3 +269,7 @@ asset has no POM for the license-report tool to read. Listed here by hand instea
 - `com.google.mlkit:vision-common:17.3.0`
 - `com.google.mlkit:vision-interfaces:16.3.0`
 
+## AICore Terms of Service (Google) (1 artifact)
+
+- `com.google.ai.edge.aicore:aicore:0.0.1-exp01`
+

@@ -100,6 +100,16 @@ class ScreenBuffer(
     /** Clear the whole screen (CSI J, mode 2); cursor unchanged. */
     fun clear() { grid = blank(rows, cols) }
 
+    /** Full reset — grid, scrollback, and cursor — for switching to a different machine
+     *  entirely, where the old session's history shouldn't linger (unlike [clear], which is
+     *  the CSI J the remote/local shell itself sends and only ever touches the visible grid). */
+    fun resetAll() {
+        grid = blank(rows, cols)
+        scrollback.clear()
+        cursor = Cursor()
+        pen = Sgr.DEFAULT
+    }
+
     /** Resize the grid, preserving overlapping content; cursor clamped. */
     fun resize(newRows: Int, newCols: Int) {
         val ng = Array(newRows) { r -> Array(newCols) { c ->

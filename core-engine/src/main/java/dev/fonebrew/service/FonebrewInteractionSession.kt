@@ -11,7 +11,7 @@ import dev.fonebrew.ui.MainActivity
 
 /**
  * The summoned assist surface (handoff §7). On the assist gesture we capture the
- * on-screen text (Assist API, tier 1) and route it into Aarso, then bring the app
+ * on-screen text (Assist API, tier 1) and route it into Fonebrew, then bring the app
  * forward — the "content → act on it" experience through a sanctioned door. We
  * can't lift the original file the way an OEM can; this is captured text.
  */
@@ -28,7 +28,7 @@ class FonebrewInteractionSession(context: Context) : VoiceInteractionSession(con
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        // Bring Aarso forward; if assist text arrives it's already routed reactively.
+        // Bring Fonebrew forward; if assist text arrives it's already routed reactively.
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         context.startActivity(intent)

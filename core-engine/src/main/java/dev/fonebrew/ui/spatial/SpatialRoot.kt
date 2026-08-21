@@ -74,7 +74,7 @@ import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.ui.ChatScreen
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.ui.ModelsViewModel
-import dev.fonebrew.ui.hyle.HyleButton
+import dev.aarso.hyle.cells.HyleButton
 import dev.fonebrew.ui.rooms.ChatsRoom
 import dev.fonebrew.ui.rooms.ProductRoomFree
 import dev.fonebrew.ui.rooms.SettingsRoom
@@ -82,7 +82,7 @@ import dev.fonebrew.ui.rooms.TreeRoom
 import dev.fonebrew.ui.search.SearchOverlay
 import dev.fonebrew.ui.search.SearchViewModel
 import androidx.compose.foundation.border
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.abs
 import kotlin.math.max
@@ -113,7 +113,7 @@ import kotlinx.coroutines.launch
 /** Which room a settle should land in. The four edges + the two z-axis depths. */
 enum class SpatialTarget { HOME, CHATS, SETTINGS, PROJECT, DEVELOP, TREE, LOOPS }
 
-class SpatialController(private val scope: CoroutineScope) {
+class SpatialController(private val scope: CoroutineScope, private val onSettle: () -> Unit = {}) {
 
     /** -1 = Settings (right) … 0 = home … +1 = Chats (left). */
     val h = Animatable(0f)
@@ -166,6 +166,7 @@ class SpatialController(private val scope: CoroutineScope) {
         }
         val clamped = if (value in -0.001f..0.001f) 0f else target
         scope.launch { h.animateTo(clamped, settleSpec) }
+        onSettle()
     }
 
     fun dragV(deltaPx: Float, min: Float, max: Float) {
@@ -192,6 +193,7 @@ class SpatialController(private val scope: CoroutineScope) {
         }
         val clamped = if (value in -0.001f..0.001f) 0f else target
         scope.launch { v.animateTo(clamped, settleSpec) }
+        onSettle()
     }
 
     fun dragZTo(value: Float) {
@@ -206,6 +208,7 @@ class SpatialController(private val scope: CoroutineScope) {
             else -> 0f
         }
         scope.launch { z.animateTo(target, settleSpec) }
+        onSettle()
     }
 
     fun open(target: SpatialTarget) {
@@ -235,7 +238,8 @@ fun SpatialRoot() {
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val scope = rememberCoroutineScope()
-    val controller = remember { SpatialController(scope) }
+    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    val controller = remember { SpatialController(scope, onSettle = haptics::settle) }
     // Which lens the centre room is showing (not a place — see CenterViewTabBar's KDoc).
     var centerView by remember { mutableStateOf(CenterView.CONVERSATION) }
     var searchOpen by remember { mutableStateOf(false) }
@@ -265,9 +269,18 @@ fun SpatialRoot() {
     val zProgress = controller.z.value
     val anyRoom = abs(hProgress) > 0.001f || abs(vProgress) > 0.001f
 
-    BackHandler(enabled = anyRoom || zProgress > 0.001f) { controller.closeAll() }
+    // Mirrors TopDock's own "do I render" check (a running download, while it would
+    // be visible) so other top-edge UI can defer to it instead of being drawn over.
+    val activeDownloads by container.downloadCenter.active.collectAsState()
+    val downloadBannerShowing = activeDownloads.values.any { it.running } &&
+        abs(hProgress) < 0.5f && abs(vProgress) < 0.5f
+
+    // Both z-axis views — pinch-IN to Tree (zProgress > 0) and pinch-OUT to Loops
+    // (zProgress < 0) — need Back wired the same way; otherwise Back does nothing
+    // useful (backgrounds the app) from whichever direction is missing.
+    BackHandler(enabled = anyRoom || abs(zProgress) > 0.001f) { controller.closeAll() }
     // At home on a non-default lens, back first returns to the conversation view.
-    BackHandler(enabled = !anyRoom && zProgress <= 0.001f && centerView != CenterView.CONVERSATION) {
+    BackHandler(enabled = !anyRoom && abs(zProgress) <= 0.001f && centerView != CenterView.CONVERSATION) {
         centerView = CenterView.CONVERSATION
     }
 
@@ -283,7 +296,11 @@ fun SpatialRoot() {
             vProgress < -0.5f -> Room.DEVELOP
             else -> Room.CHAT
         },
-        depth = if (zProgress > 0.5f) Depth.TREE else Depth.ORIGIN,
+        depth = when {
+            zProgress > 0.5f -> Depth.TREE
+            zProgress < -0.5f -> Depth.LOOPS
+            else -> Depth.ORIGIN
+        },
     )
 
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -325,7 +342,7 @@ fun SpatialRoot() {
 
         val w = controller.viewport.width.toFloat()
         val hgt = controller.viewport.height.toFloat()
-        val scale = 1f - 0.10f * max(abs(hProgress), vProgress)
+        val scale = 1f - 0.10f * max(abs(hProgress), abs(vProgress))
         // Park distance leaves exactly the grabbable band on-screen at p=1.
         fun parkDistance(extent: Float) = extent * (1f + scale) / 2f - bandPx
 
@@ -515,10 +532,16 @@ fun SpatialRoot() {
         }
 
         // ── Edge peek (§7): the structure is seen, not memorized ───────────
+        // The top-center pill hints "swipe down for Project" — but the download
+        // banner (below) docks at the same top edge with a higher zIndex and would
+        // draw straight over it. The banner is strictly more informative when both
+        // would otherwise show, so suppress the hint pill while it's up.
         if (controller.atHome) {
             EdgePeek(alignment = Alignment.CenterStart)
             EdgePeek(alignment = Alignment.CenterEnd)
-            EdgePeek(alignment = Alignment.TopCenter, vertical = true)
+            if (!downloadBannerShowing) {
+                EdgePeek(alignment = Alignment.TopCenter, vertical = true)
+            }
             EdgePeek(alignment = Alignment.BottomCenter, vertical = true)
         }
 

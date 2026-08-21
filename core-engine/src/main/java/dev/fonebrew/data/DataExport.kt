@@ -21,7 +21,7 @@ object DataExport {
     suspend fun toJson(container: AppContainer): String = withContext(Dispatchers.IO) {
         val s = container.sessionStore
         val root = JSONObject()
-        root.put("format", "aarso.export.v1")
+        root.put("format", "fonebrew.export.v1")
         root.put("exportedAt", System.currentTimeMillis())
         root.put("note", "API keys & Git tokens are NOT included — they stay in the Android Keystore (rule 5).")
 

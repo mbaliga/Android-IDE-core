@@ -1,9 +1,11 @@
 package dev.fonebrew.inference.cloud
 
+import dev.fonebrew.core_engine.BuildConfig
 import dev.fonebrew.domain.GeneratedToken
 import dev.fonebrew.domain.MessageNode
 import dev.fonebrew.domain.SamplingParams
 import dev.fonebrew.domain.cloud.CloudProvider
+import dev.fonebrew.domain.cloud.Source
 import dev.fonebrew.domain.cost.UsageAccumulator
 import dev.fonebrew.domain.cost.UsageReport
 import dev.fonebrew.inference.InferenceEngine
@@ -67,6 +69,38 @@ abstract class CloudEngine(
      */
     protected open fun usageOf(type: String?, data: String): UsageReport? = null
 
+    /**
+     * The sources a server-side web search tool surfaced during the most recent [generate]
+     * stream (W2). Provider-reported, captured live from the SSE events via [sourcesOf]; empty
+     * until a turn reports any, reset at the start of every [generate] call.
+     */
+    @Volatile
+    var lastSources: List<Source> = emptyList()
+        private set
+
+    /**
+     * Parse zero or more search-result sources out of one SSE event, or null if it carries none
+     * (i.e. this event isn't a sources-bearing one at all). Subclasses override per their
+     * response shape (e.g. Anthropic's `content_block_start` / `web_search_tool_result`).
+     * Default: no capture.
+     */
+    protected open fun sourcesOf(type: String?, data: String): List<Source>? = null
+
+    /**
+     * Whether the most recent [generate] stream was paused by the provider mid-turn (W2 — e.g.
+     * Anthropic's server-side search loop hitting its cap, `stop_reason:"pause_turn"`). Reset at
+     * the start of every [generate] call; latched true the moment [isPaused] reports it once.
+     */
+    @Volatile
+    var wasPaused: Boolean = false
+        private set
+
+    /**
+     * True when this SSE event marks a provider-side pause (not a normal end-of-stream).
+     * Subclasses override per their response shape. Default: never paused.
+     */
+    protected open fun isPaused(type: String?, data: String): Boolean = false
+
     override fun generate(
         messages: List<MessageNode>,
         params: SamplingParams,
@@ -76,16 +110,35 @@ abstract class CloudEngine(
         val request = buildRequest(messages, params)
         val usage = UsageAccumulator()
         lastUsage = UsageReport.ZERO
+        val sources = mutableListOf<Source>()
+        lastSources = emptyList()
+        wasPaused = false
         val listener = object : EventSourceListener() {
             override fun onEvent(es: EventSource, id: String?, type: String?, data: String) {
-                runCatching { usageOf(type, data) }.getOrNull()?.let {
-                    usage.merge(it); lastUsage = usage.current
+                runCatching { usageOf(type, data) }
+                    .onFailure { logSseParseFailure("usageOf", type, it) }
+                    .getOrNull()?.let {
+                        usage.merge(it); lastUsage = usage.current
+                    }
+                runCatching { sourcesOf(type, data) }
+                    .onFailure { logSseParseFailure("sourcesOf", type, it) }
+                    .getOrNull()?.let { found ->
+                        mergeSourcesByUrl(sources, found)
+                        lastSources = sources.toList()
+                    }
+                if (runCatching { isPaused(type, data) }
+                        .onFailure { logSseParseFailure("isPaused", type, it) }
+                        .getOrDefault(false)
+                ) {
+                    wasPaused = true
                 }
                 if (isDone(type, data)) {
                     close()
                     return
                 }
-                val text = runCatching { parseDelta(type, data) }.getOrNull()
+                val text = runCatching { parseDelta(type, data) }
+                    .onFailure { logSseParseFailure("parseDelta", type, it) }
+                    .getOrNull()
                 if (!text.isNullOrEmpty()) trySend(GeneratedToken(text))
             }
 
@@ -111,4 +164,31 @@ abstract class CloudEngine(
 
     /** Extract the text chunk from one SSE event, or null if it carries none. */
     protected abstract fun parseDelta(type: String?, data: String): String?
+
+    /**
+     * Debug-only visibility into a swallowed SSE parse failure — [usageOf] and [parseDelta]
+     * stay tolerant of malformed/unexpected provider events (still return null, still never
+     * crash or surface to the user), but silently eating every exception made provider drift
+     * indistinguishable from a quiet stream. Release builds stay silent.
+     */
+    private fun logSseParseFailure(fn: String, type: String?, t: Throwable) {
+        if (BuildConfig.DEBUG) {
+            android.util.Log.w("Fonebrew", "CloudEngine.$fn failed on event type=$type: $t")
+        }
+    }
+}
+
+/**
+ * Append [found] onto [into] in place, skipping any source whose `url` already appears in
+ * [into] (from an earlier SSE event on the same turn). A provider (Gemini's grounding metadata
+ * is documented as arriving cumulatively across chunks) can re-report the same source on more
+ * than one event; without this, [CloudEngine.lastSources] — and the sources footer it feeds —
+ * would show duplicate rows for one result. Factored out of [CloudEngine.generate] so the merge
+ * behaviour is unit-testable without standing up an SSE stream.
+ */
+internal fun mergeSourcesByUrl(into: MutableList<Source>, found: List<Source>) {
+    val existingUrls = into.mapTo(mutableSetOf()) { it.url }
+    for (s in found) {
+        if (existingUrls.add(s.url)) into.add(s)
+    }
 }

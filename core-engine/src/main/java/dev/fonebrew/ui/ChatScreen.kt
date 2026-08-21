@@ -2,7 +2,12 @@
 
 package dev.fonebrew.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,16 +17,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +68,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.lerp
@@ -78,30 +89,51 @@ import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import dev.fonebrew.domain.markdown.StreamingMarkdown
 import dev.fonebrew.core_engine.R
+import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.domain.GeneratedToken
 import dev.fonebrew.domain.Role
 import dev.fonebrew.domain.bridge.BridgeCodec
 import dev.fonebrew.domain.bridge.SummaryBridge
+import dev.fonebrew.domain.cloud.Source
 import dev.fonebrew.domain.gesture.ComposerQuote
 import dev.fonebrew.domain.instrument.Confidence
 import dev.fonebrew.domain.prompt.LintSeverity
 import dev.fonebrew.domain.prompt.PromptLinter
+import dev.fonebrew.domain.tree.Attachments
 import dev.fonebrew.domain.tree.Conversations
 import dev.fonebrew.domain.tree.PathView
+import dev.fonebrew.domain.tree.Sources
 import dev.fonebrew.flavor.InvocationFeatures
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.cells.HyleNavChip
+import dev.aarso.hyle.cells.HyleSlashTabBar
+import dev.aarso.hyle.cells.HyleTabSpec
+import dev.aarso.hyle.cells.FileImage
+import dev.aarso.hyle.cells.HyleFocusLens
+import dev.aarso.hyle.cells.HyleLensActions
+import dev.aarso.hyle.cells.HyleLensHeading
 import dev.aarso.hyle.cells.HyleRadialMenu
 import dev.aarso.hyle.cells.HyleRadialMenuItem
+import dev.aarso.hyle.cells.HyleSealedLens
+import dev.aarso.hyle.cells.HyleSwitch
+import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.hyle.cells.rememberHyleHaptics
+import dev.fonebrew.ui.components.MentionPopup
+import dev.fonebrew.ui.components.MentionTarget
+import dev.fonebrew.ui.components.SlashCommand
+import dev.fonebrew.ui.components.SlashCommandPopup
 import dev.fonebrew.ui.components.SummaryNodeCard
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.hyle.HyleField
-import dev.fonebrew.ui.hyle.HeaderGlyph
-import dev.fonebrew.ui.hyle.HyleHeaderButton
-import dev.fonebrew.ui.hyle.FileImage
+import dev.fonebrew.ui.components.applyMention
+import dev.fonebrew.ui.components.isShellEscape
+import dev.fonebrew.ui.components.matchMentions
+import dev.fonebrew.ui.components.matchSlashCommands
+import dev.fonebrew.ui.develop.TerminalFacet
 import dev.fonebrew.ui.search.InChatFindBar
 import dev.fonebrew.ui.search.InChatFindPresenter
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.theme.LocalHyleColors
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -139,9 +171,24 @@ fun ChatScreen(
     val messageBookmarks by viewModel.messageBookmarks.collectAsState()
     val versionsByTip by viewModel.versionsByTip.collectAsState()
     val compactionDirectives by viewModel.compactionDirectives.collectAsState()
+    // W1 (vision input): photos picked/captured but not yet sent. State lives on ChatViewModel
+    // (not a bare remember{} here — same class of bug as the composer-draft-text bug this
+    // codebase already fixed once).
+    val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     var input by remember { mutableStateOf("") }
     var showModelSheet by remember { mutableStateOf(false) }
     var showPlus by remember { mutableStateOf(false) }
+    // W1: gallery pick needs no runtime permission (Android Photo Picker); camera capture writes
+    // full-res into AttachmentStore's dir via the FileProvider agent wired in the manifest, so it
+    // also needs no storage permission.
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        uri?.let { viewModel.addPendingAttachmentFromUri(it) }
+    }
+    // The contract only returns success/failure, not the Uri — ChatViewModel remembers which
+    // path it handed out (survives rotation; the ViewModel outlives this composition).
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        viewModel.onCameraCaptureResult(success)
+    }
     // docs/design/objects-3d.md §1: the "Generate 3D…" mini-chooser (On-device / Cloud·watched).
     var showObject3dChooser by remember { mutableStateOf(false) }
     // The object3d node currently opened in the viewer — (relativePath, format) from the tapped
@@ -149,8 +196,10 @@ fun ChatScreen(
     var object3dViewerTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var object3dViewerContent by remember { mutableStateOf<dev.fonebrew.ui.object3d.ObjectViewerContent?>(null) }
     var object3dViewerError by remember { mutableStateOf<String?>(null) }
+    // WhatsApp-style: the header title opens participants/group info (the interaction-mode
+    // chooser now lives there — see ParticipantsScreen's currentMode/onModeChange), superseding
+    // the old composer-row chips + separate "Participants" TextButton.
     var showParticipants by remember { mutableStateOf(false) }
-    var showMe by remember { mutableStateOf(false) }
     var actionStep by remember { mutableStateOf<PathView.Step?>(null) }
     var flagStep by remember { mutableStateOf<PathView.Step?>(null) }
     // Curation sheet's "Mark branch as Version…" (STUDIO_UX_SPEC.md §4.4): a lightweight
@@ -239,6 +288,49 @@ fun ChatScreen(
         MessageGestureToggles(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan)
     }
 
+    // Chat / Terminal — two windows onto the same underlying capability: ask in Chat and it runs,
+    // or drive the shell directly in Terminal (§ owner spec, 2026-07-27). Background tasks is a
+    // layer BENEATH both, not a third peer tab — see [BackgroundTasksStrip].
+    var chatTab by remember { mutableStateOf(ChatTab.CHAT) }
+    val universalTabBarPosition by container0.sessionStore.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by container0.sessionStore.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["chat"] ?: universalTabBarPosition
+    val activeDownloads by container0.downloadCenter.active.collectAsState()
+    val backgroundJobs by container0.backgroundJobs.jobs.collectAsState()
+    LaunchedEffect(Unit) {
+        while (true) {
+            container0.backgroundJobs.prune()
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
+
+    // Slash commands: a keyboard-driven shortcut to the same actions the header chips, "+" sheet,
+    // and composer-mode row already expose — nothing here reaches for a navigation hook the
+    // screen doesn't already have.
+    val slashCommands = remember(onOpenChats, onOpenSettings) {
+        listOf(
+            SlashCommand("/chat", "Switch to Chat") { chatTab = ChatTab.CHAT },
+            SlashCommand("/terminal", "Switch to Terminal") { chatTab = ChatTab.TERMINAL },
+            SlashCommand("/participants", "Manage council participants") { showParticipants = true },
+            SlashCommand("/models", "Switch model") { showModelSheet = true },
+            SlashCommand("/image", "Generate an image") { viewModel.setComposerMode(ComposerMode.IMAGE) },
+            SlashCommand("/chats", "Open Chats") { onOpenChats() },
+            SlashCommand("/settings", "Open Settings") { onOpenSettings() },
+        )
+    }
+    val slashMatches = matchSlashCommands(input, slashCommands)
+
+    // @ mentions: direct a message at one council participant by name — the same "@" convention
+    // as every mention-capable chat tool, not a Fonebrew invention. Picking one inserts "@Name "
+    // into the composer; ChatViewModel.sendCouncil resolves a *leading* "@Name" (via
+    // domain.council.CouncilRouting) and narrows the fan-out to that one voice for the turn —
+    // this popup only handles the composer-insertion half.
+    val participants by container0.councilStore.participants.collectAsState()
+    val mentionTargets = remember(participants) {
+        participants.map { p -> MentionTarget(p.name, "council participant", "@${p.name} ") }
+    }
+    val mentionMatches = matchMentions(input, mentionTargets)
+
     // THREAD_TOPOLOGY_PLAN.md WP5: ThreadRail — the dash minimap over the active path.
     val threadMarkers by viewModel.threadMarkers.collectAsState()
     val railView = remember(state.steps, verdicts, messageBookmarks, versionsByTip, compactionDirectives, threadMarkers, state.genPhase, state.activeModelId, state.models) {
@@ -320,14 +412,37 @@ fun ChatScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        // SpatialRoot's outer Box already reserves the nav-bar with systemBarsPadding(); a plain
+        // imePadding() here would stack on top of that and leave a nav-bar-sized gap between the
+        // composer and the keyboard, so exclude what's already reserved.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+        ) {
             HomeHeader(
                 state = state,
                 onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
-                onOpenChats = onOpenChats,
-                onOpenSettings = onOpenSettings,
-                onOpenMe = { showMe = true },
+                onTitleClick = { showParticipants = true },
             )
+            if (tabBarPosition != "BOTTOM") {
+                ChatTabBar(
+                    tab = chatTab,
+                    onSelect = { chatTab = it },
+                    onOpenChats = onOpenChats,
+                    onOpenSettings = onOpenSettings,
+                )
+            }
+            when (chatTab) {
+                ChatTab.TERMINAL -> Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
+                    TerminalFacet()
+                }
+                ChatTab.CHAT -> Column(Modifier.weight(1f)) {
+            BackgroundTasksStrip(activeDownloads, backgroundJobs)
             InstrumentsStrip(
                 state = state,
                 input = input,
@@ -386,7 +501,7 @@ fun ChatScreen(
                                         Spacer(Modifier.size(8.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             HyleButton("Connect", onClick = onOpenSettings)
-                                            TextButton(onClick = { connectDismissed = true }) { Text("Not now") }
+                                            HyleButton("Not now", onClick = { connectDismissed = true }, secondary = true)
                                         }
                                     }
                                 }
@@ -497,6 +612,7 @@ fun ChatScreen(
                                 entropyColoring = entropyColoring,
                                 imageMode = state.imageMode,
                                 object3dMode = state.object3dMode,
+                                watched = state.models.find { it.id == state.activeModelId }?.watched ?: false,
                             )
                         }
                     }
@@ -613,15 +729,46 @@ fun ChatScreen(
                 }
             }
 
-            ComposerModeRow(
-                mode = state.composerMode,
-                enabled = state.genPhase == GenPhase.IDLE,
-                onMode = viewModel::requestComposerMode,
-            )
-            // Personas council = a group of experts you manage like a group chat (IA §B4).
-            if (state.composerMode == ComposerMode.PERSONAS) {
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    TextButton(onClick = { showParticipants = true }) { Text("Participants") }
+            if (slashMatches.isNotEmpty()) {
+                SlashCommandPopup(slashMatches) { cmd -> cmd.run(); input = "" }
+            } else if (mentionMatches.isNotEmpty()) {
+                MentionPopup(mentionMatches) { target -> input = applyMention(input, target) }
+            }
+
+            // W2 (web search): a globe chip near the "+", opt-in per turn, default off (cloud
+            // extras are opt-in — CLAUDE.md rule 2). State lives on ChatViewModel (not a bare
+            // remember{} here — same reasoning as the composer-draft-text bug this codebase
+            // already fixed once). Stays visible-but-disabled with a short reason when the
+            // active model can't search — the PlusSheet Photo/Camera row's convention (W1),
+            // never hidden (legibility thesis). Only the single-model turn wires search
+            // end-to-end this pass (council/image/3D are out of scope, same exclusion as W1's
+            // vision work), so the chip only shows in that mode.
+            if (!state.noModelActive && !state.imageMode && !state.object3dMode && !state.councilEnabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HyleChip(
+                        selected = state.webSearchOn,
+                        onClick = { viewModel.toggleWebSearch() },
+                        label = "⌕ Search",
+                        enabled = state.genPhase == GenPhase.IDLE && state.activeSupportsSearch,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (state.activeSupportsSearch) {
+                                "Web search toggle"
+                            } else {
+                                "Web search unavailable — this model can't search the web"
+                            }
+                        },
+                    )
+                    if (!state.activeSupportsSearch) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "this model can't search the web",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -660,6 +807,27 @@ fun ChatScreen(
                 }
             }
 
+            // "!cmd" runs locally instead of going to a model (Jupyter/IPython convention) —
+            // flag it before Send so it's never a silent surprise which path a message takes.
+            if (isShellEscape(input)) {
+                Text(
+                    "⌘ Runs as a shell command on this phone",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                )
+            }
+
+            // W1 (vision input): photos picked/captured but not yet sent. State lives on
+            // ChatViewModel, not a bare remember{} here (see the composer-draft-text bug this
+            // deliberately doesn't repeat) — cleared on successful send.
+            if (pendingAttachments.isNotEmpty()) {
+                PendingAttachmentStrip(
+                    attachments = pendingAttachments,
+                    onRemove = viewModel::removePendingAttachment,
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -690,14 +858,16 @@ fun ChatScreen(
                     },
                     enabled = state.genPhase == GenPhase.IDLE && (state.engineAvailable || generationMode),
                 )
-                if (!generationMode) {
-                    TextButton(
-                        onClick = { viewModel.refinePrompt(input) },
-                        enabled = input.isNotBlank() && !state.rewriting &&
-                            state.genPhase == GenPhase.IDLE && state.engineAvailable,
-                    ) {
-                        Text(if (state.rewriting) "…" else "Refine")
-                    }
+                // Always in the tree (never conditionally included) so the field/Send button
+                // beside it never shifts position entering/exiting image/3D mode — reserve the
+                // space and fade + disable instead (same jitter class already fixed elsewhere).
+                TextButton(
+                    onClick = { viewModel.refinePrompt(input) },
+                    enabled = !generationMode && input.isNotBlank() && !state.rewriting &&
+                        state.genPhase == GenPhase.IDLE && state.engineAvailable,
+                    modifier = Modifier.alpha(if (!generationMode) 1f else 0f),
+                ) {
+                    Text(if (state.rewriting) "…" else "Refine")
                 }
                 if (state.genPhase != GenPhase.IDLE) {
                     // An in-flight image/3D render has no cancel point (§6/§4-5) — the
@@ -720,9 +890,27 @@ fun ChatScreen(
                     )
                 }
             }
+                } // end ChatTab.CHAT column
+            } // end when (chatTab)
+            if (tabBarPosition == "BOTTOM") {
+                ChatTabBar(
+                    tab = chatTab,
+                    onSelect = { chatTab = it },
+                    onOpenChats = onOpenChats,
+                    onOpenSettings = onOpenSettings,
+                )
+            }
         }
 
         SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
+
+        // Loading a GGUF into memory is genuinely obstructive — typing or switching rooms
+        // mid-load races the engine's init, so the surface goes untouchable until it settles.
+        if (state.genPhase == GenPhase.LOADING) {
+            // Shown, not said: the ground goes out of reach and keeps moving, because
+            // the load genuinely is running. The words survive only for a screen reader.
+            HyleSealedLens("Loading model…")
+        }
     }
 
     if (showModelSheet) {
@@ -739,6 +927,15 @@ fun ChatScreen(
             onGenerateImage = { viewModel.setComposerMode(ComposerMode.IMAGE); showPlus = false },
             onGenerateObject3d = { showPlus = false; showObject3dChooser = true },
             onImportObject3dFile = { showPlus = false; object3dPickerLauncher.launch(arrayOf("*/*")) },
+            supportsVision = state.activeSupportsVision,
+            onPickPhoto = {
+                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                showPlus = false
+            },
+            onTakePhoto = {
+                cameraLauncher.launch(viewModel.newCameraCaptureUri())
+                showPlus = false
+            },
             onDismiss = { showPlus = false },
         )
     }
@@ -781,43 +978,43 @@ fun ChatScreen(
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.fonebrew.ui.rooms.ParticipantsScreen(onClose = { showParticipants = false })
-            }
-        }
-    }
-
-    if (showMe) {
-        Dialog(
-            onDismissRequest = { showMe = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.fonebrew.ui.rooms.MeScreen(onClose = { showMe = false })
+                dev.fonebrew.ui.rooms.ParticipantsScreen(
+                    onClose = { showParticipants = false },
+                    conversationId = state.steps.firstOrNull()?.node?.id,
+                    currentMode = state.composerMode,
+                    onModeChange = viewModel::requestComposerMode,
+                )
             }
         }
     }
 
     // Interaction model is locked once a chat starts (IA §B4): changing it branches with a summary.
+    // Grown as a HyleFocusLens (the app's own material — see docs/LENS.md) rather than a generic
+    // platform AlertDialog, matching every other confirmation in this app; this one had been
+    // missed in the earlier lens migration (owner-flagged: "the modal did not make it as I wished
+    // for it to").
     val pendingMode by viewModel.pendingInteractionChange.collectAsState()
-    pendingMode?.let { mode ->
+    HyleFocusLens(
+        visible = pendingMode != null,
+        onDismiss = { viewModel.cancelInteractionChange() },
+    ) {
+        val mode = pendingMode ?: return@HyleFocusLens
         val label = when (mode) {
             ComposerMode.MODELS -> "Council · models"
             ComposerMode.PERSONAS -> "Council · personas"
             else -> "Single"
         }
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelInteractionChange() },
-            title = { Text("Switch to $label?") },
-            text = {
-                Text(
-                    "The interaction model is locked once a conversation starts. Switching " +
-                        "starts a new branch and summarizes everything so far into it — your " +
-                        "current thread stays intact on the tree.",
-                )
-            },
-            confirmButton = { HyleButton("Branch & switch", onClick = { viewModel.confirmInteractionChange() }) },
-            dismissButton = { TextButton(onClick = { viewModel.cancelInteractionChange() }) { Text("Cancel") } },
+        HyleLensHeading(
+            title = "Switch to $label?",
+            body = "The interaction model is locked once a conversation starts. Switching " +
+                "starts a new branch and summarizes everything so far into it — your " +
+                "current thread stays intact on the tree.",
         )
+        HyleLensActions {
+            TextButton(onClick = { viewModel.cancelInteractionChange() }) { Text("Cancel") }
+            Spacer(Modifier.width(8.dp))
+            HyleButton("Branch & switch", onClick = { viewModel.confirmInteractionChange() })
+        }
     }
 
     actionStep?.let { step ->
@@ -988,54 +1185,298 @@ fun ChatScreen(
 }
 
 /**
- * The one piece of chrome the home room keeps: the conversation title (quiet,
- * left) and the model badge (right) — a dropdown affordance, cloud explicitly
- * watched (binding rule 2).
+ * The one piece of chrome the home room keeps: the conversation title (quiet, left, WhatsApp-
+ * style tappable to open [dev.fonebrew.ui.rooms.ParticipantsScreen] — group info + the
+ * interaction-mode chooser live behind the header now, not a separate composer-row of chips) and
+ * the status indicator (right). "‹ Chats"/"⚙" no longer live here — they're a permanent part of
+ * [ChatTabBar]'s leading/trailing slots now, so this header doesn't double them up regardless of
+ * whether that bar docks top or bottom.
  */
 @Composable
 private fun HomeHeader(
     state: ChatUiState,
     onBadgeTap: () -> Unit,
-    onOpenChats: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenMe: () -> Unit = {},
+    onTitleClick: () -> Unit,
 ) {
     val c = LocalHyleColors.current
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Left: the room parked off the left edge (Conversations).
-        HyleHeaderButton(
-            glyph = HeaderGlyph.ROOM_LEFT,
-            onClick = onOpenChats,
-            contentDescription = "Open conversations",
-            slantLeft = false,
-        )
-        // Centre: the conversation's own title, given the weight the mockups give it —
-        // this is the one thing naming where you are, so it reads as a title rather than
-        // the muted caption it used to be.
+        // Current conversation title (truncated) — tap opens participants/group info, same as
+        // tapping a WhatsApp chat's header.
         Text(
             state.steps.firstOrNull { it.node.role == Role.USER }
-                ?.node?.content?.lineSequence()?.firstOrNull()?.take(36)
-                ?: "New chat",
+                ?.node?.content?.lineSequence()?.firstOrNull()?.take(36) ?: "New chat",
             style = MaterialTheme.typography.titleMedium,
             color = c.textHigh,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f).clickable(onClick = onTitleClick),
+        )
+        // The user-selectable status chip (Settings -> Global -> Header status). Replaces the
+        // fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings, this
+        // slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
+        HeaderIndicator(state)
+    }
+}
+
+/**
+ * The Chat/Terminal switcher — two windows onto the same underlying capability, not a Chat-vs-
+ * something-else split (§ owner spec). Styled as [HyleSlashTabBar] (the owner's reference: a
+ * leading slot, then tabs threaded by a literal "/", no per-tab fill) rather than [HyleTabBar]'s
+ * heavier filled-chip register — this switches VIEWS of one conversation, not top-level rooms.
+ * "All chats" sits in the leading slot in place of the reference's generic overflow icon (owner
+ * ask); Settings trails. Lives here rather than split into [HomeHeader] so the whole row moves
+ * as one unit with the tab-bar-position setting (top or bottom of the screen).
+ */
+@Composable
+private fun ChatTabBar(
+    tab: ChatTab,
+    onSelect: (ChatTab) -> Unit,
+    onOpenChats: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        HyleSlashTabBar(
+            tabs = listOf(
+                HyleTabSpec("Chat") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.09f
+                    drawLine(tint, Offset(w * 0.16f, h * 0.34f), Offset(w * 0.84f, h * 0.34f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.16f, h * 0.52f), Offset(w * 0.68f, h * 0.52f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.16f, h * 0.70f), Offset(w * 0.50f, h * 0.70f), strokeWidth = sw)
+                },
+                HyleTabSpec("Terminal") { tint ->
+                    val w = size.width; val h = size.height
+                    val sw = w * 0.10f
+                    drawLine(tint, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.18f, h * 0.68f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
+                    drawLine(tint, Offset(w * 0.50f, h * 0.70f), Offset(w * 0.82f, h * 0.70f), strokeWidth = sw)
+                },
+            ),
+            selected = tab.ordinal,
+            onSelect = { onSelect(ChatTab.entries[it]) },
+            leading = {
+                HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
+            },
+        )
+        HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
+    }
+}
+
+/**
+ * Background tasks — a layer BENEATH Chat/Terminal, not a third peer tab (§ owner spec): a
+ * collapsed one-line entry inside Chat, expandable into Running/Finished sections the same shape
+ * as this app's OWN build tooling shows its parallel background agents. Two real sources, merged
+ * for display only: [DownloadCenter.active] (its own percentage) and [dev.fonebrew.data.BackgroundJobs.jobs]
+ * (a Loop run, the coding Agent proposing a change — start/finish only, no fraction). Nothing here
+ * is invented state (rule 6): a source only appears once something actually registers it.
+ */
+@Composable
+private fun BackgroundTasksStrip(
+    active: Map<String, DownloadCenter.State>,
+    jobs: List<dev.fonebrew.data.BackgroundJobs.Job>,
+) {
+    val runningJobs = jobs.filter { it.finishedAt == null }
+    val finishedJobs = jobs.filter { it.finishedAt != null }
+    val runningCount = active.size + runningJobs.size
+    if (runningCount == 0 && finishedJobs.isEmpty()) return
+
+    val c = LocalHyleColors.current
+    var expanded by remember { mutableStateOf(false) }
+
+    // A live clock for "Ns" elapsed labels on running jobs — ticks only while there's something
+    // to time AND the strip is open, so a collapsed or idle strip never recomposes on its own.
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(expanded, runningCount) {
+        if (expanded && runningCount > 0) {
+            while (true) {
+                now = System.currentTimeMillis()
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 6.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (expanded) "▾" else "▸",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textMid,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Text(
+                if (runningCount > 0) {
+                    "$runningCount background ${if (runningCount == 1) "task" else "tasks"} running"
+                } else {
+                    "${finishedJobs.size} background ${if (finishedJobs.size == 1) "task" else "tasks"} finished"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textMid,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (expanded) {
+            if (runningCount > 0) {
+                BgSectionLabel("Running")
+                active.values.forEach { s -> BgDownloadRow(s) }
+                runningJobs.forEach { j -> BgJobRow(j, now, finished = false) }
+            }
+            if (finishedJobs.isNotEmpty()) {
+                BgSectionLabel("Finished")
+                finishedJobs.sortedByDescending { it.finishedAt }.forEach { j -> BgJobRow(j, now, finished = true) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BgSectionLabel(text: String) {
+    val c = LocalHyleColors.current
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        color = c.textMid,
+        modifier = Modifier.padding(start = 22.dp, top = 6.dp, bottom = 2.dp),
+    )
+}
+
+/** A small kind glyph — download / loop / agent / other — ahead of every row's label. */
+@Composable
+private fun BgIcon(kind: String) {
+    val c = LocalHyleColors.current
+    Text(
+        when (kind) {
+            "download" -> "⇩"
+            "loop" -> "◆"
+            "agent" -> "⌁"
+            "distill" -> "✎"
+            else -> "•"
+        },
+        style = MaterialTheme.typography.labelSmall,
+        color = c.textMid,
+        modifier = Modifier.padding(end = 6.dp),
+    )
+}
+
+@Composable
+private fun BgDownloadRow(s: DownloadCenter.State) {
+    val c = LocalHyleColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BgIcon("download")
+        Text(
+            s.request.fileName,
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textHigh,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        // Right: Settings. (The mockups carry no header avatar, so the Me · Myself · I
-        // entry point is not duplicated here — it stays reachable from Settings, which
-        // already opens MeScreen.)
-        HyleHeaderButton(
-            glyph = HeaderGlyph.SETTINGS,
-            onClick = onOpenSettings,
-            contentDescription = "Open settings",
-            slantLeft = true,
+        Text(
+            when {
+                s.failed -> "failed"
+                s.paused -> "paused · ${(s.progress.fraction * 100).toInt()}%"
+                else -> "${(s.progress.fraction * 100).toInt()}%"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (s.failed) c.error else c.textMid,
         )
+    }
+}
+
+@Composable
+private fun BgJobRow(job: dev.fonebrew.data.BackgroundJobs.Job, now: Long, finished: Boolean) {
+    val c = LocalHyleColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 22.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BgIcon(job.kind)
+        Text(
+            job.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textHigh,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            if (finished) {
+                if (job.failed) "failed" else "completed"
+            } else {
+                "${((now - job.startedAt) / 1000).coerceAtLeast(0)}s"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (job.failed) c.error else c.textMid,
+        )
+    }
+}
+
+/** Two windows onto the same underlying capability (§ owner spec) — never a Chat-vs-Terminal
+ *  content fork, just where you're looking from. Background tasks is a layer beneath both. */
+private enum class ChatTab { CHAT, TERMINAL }
+
+/**
+ * The user-selectable status chip that replaced the fixed Me·Myself·I avatar: a single fact,
+ * chosen in Settings -> Global -> "Header status" ([dev.fonebrew.data.SessionStore.headerIndicator]),
+ * about the CURRENT conversation only — never a claim about the whole account/device, matching
+ * this header's existing "quiet, per-conversation" scope (the title text beside it works the
+ * same way). Renders nothing for "NONE" (the default) or before there's anything to say yet.
+ */
+@Composable
+private fun HeaderIndicator(state: ChatUiState) {
+    val context = LocalContext.current
+    val container = (context.applicationContext as dev.fonebrew.FonebrewApp).container
+    val mode by container.sessionStore.headerIndicator.collectAsState()
+    if (mode == "NONE") return
+    val c = LocalHyleColors.current
+    val rootId = state.steps.firstOrNull()?.node?.id ?: return
+
+    val label = when (mode) {
+        "SOVEREIGNTY" -> {
+            val entries by container.ledgerStore.entries().collectAsState(initial = emptyList())
+            val split = remember(entries, rootId) {
+                dev.fonebrew.domain.ledger.LedgerAggregations.provenanceSplit(
+                    entries.filter { it.chatId == rootId },
+                )
+            }
+            if (split.onDeviceTokens + split.cloudTokens <= 0L) return
+            "⌂ ${(split.sovereigntyRatio * 100).roundToInt()}%"
+        }
+        "QUOTA" -> {
+            val usage by container.freeTierUsageStore.usage.collectAsState()
+            val requestsToday = usage.values.sumOf { it.requestsToday }
+            if (requestsToday <= 0) return
+            "$requestsToday today"
+        }
+        "TIME" -> {
+            val startedAt = state.steps.firstOrNull()?.node?.createdAt ?: return
+            dev.fonebrew.ui.rooms.relativeTime(startedAt)
+        }
+        else -> return
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.inset, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = c.textMid, maxLines = 1)
     }
 }
 
@@ -1128,7 +1569,7 @@ private fun InstrumentsStrip(
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = entropyColoring, onCheckedChange = onEntropyColoring)
+            HyleSwitch(checked = entropyColoring, onCheckedChange = onEntropyColoring)
         }
         // THREAD_TOPOLOGY_PLAN.md WP3: "entry from InstrumentsStrip" — opens the Compaction
         // preview for the active leaf; nothing is generated until the sheet's own confirm.
@@ -1164,17 +1605,26 @@ private fun InstrumentsStrip(
  *  docs/design/objects-3d.md §1). */
 /**
  * The composer "+" sheet (Gemini-style, IA §B5): attach + generation tools, instead of pills.
- * Image and 3D generation are wired; video / photo-attach / file-attach are honest "soon" rows
- * (rule 6 — never claim a capability that isn't there). They map onto the provider types in
- * Settings.
+ * Image generation, 3D generation, and photo attach (W1) are wired; video / file-attach are
+ * honest "soon" rows (rule 6 — never claim a capability that isn't there). They map onto the
+ * provider types in Settings. Photo/Camera stay visible even when the active model can't see
+ * images — a disabled row with the reason as its subtitle, never a hidden one (legibility thesis).
  */
 @Composable
 private fun PlusSheet(
     onGenerateImage: () -> Unit,
     onGenerateObject3d: () -> Unit,
     onImportObject3dFile: () -> Unit,
+    supportsVision: Boolean,
+    onPickPhoto: () -> Unit,
+    onTakePhoto: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val visionReason = if (supportsVision) {
+        "Attach a photo — the active model can see images"
+    } else {
+        "This model can't see images — switch model or continue in text"
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1184,7 +1634,8 @@ private fun PlusSheet(
                 PlusRow("🧊", "Generate 3D…", "On-device or watched cloud — you pick", enabled = true, onClick = onGenerateObject3d)
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 Text("Attach", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                PlusRow("🖼", "Photo", "Soon — multimodal input not wired yet", enabled = false) {}
+                PlusRow("🖼", "Photo", visionReason, enabled = supportsVision, onClick = onPickPhoto)
+                PlusRow("📷", "Camera", visionReason, enabled = supportsVision, onClick = onTakePhoto)
                 PlusRow("📎", "File", "Soon — multimodal input not wired yet", enabled = false) {}
                 PlusRow("🧊", "3D file…", "Import any supported model file to preview", enabled = true, onClick = onImportObject3dFile)
                 Spacer(Modifier.height(8.dp))
@@ -1276,21 +1727,37 @@ private fun PlusRow(icon: String, title: String, subtitle: String, enabled: Bool
     }
 }
 
+/**
+ * W1 (vision input): photos picked/captured but not yet sent, above the composer field. Each
+ * thumbnail reuses [FileImage] (same decoder as the persisted-turn render branch) with a small
+ * ✕ to drop it before send — matching this codebase's text-glyph convention rather than a
+ * Material icon (no icon library is imported here today).
+ */
 @Composable
-private fun ComposerModeRow(mode: ComposerMode, enabled: Boolean, onMode: (ComposerMode) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+private fun PendingAttachmentStrip(attachments: List<PendingAttachment>, onRemove: (String) -> Unit) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // The interaction model (IA §B4): one model, a council of personas, or a council of
-        // different models. Image/video/3D are NOT modes here — they live behind the composer's
-        // "+" (Gemini-style, IA §B5). ("Council", not "MoE/Mixture of Experts" — binding rule 3.)
-        HyleChip(mode == ComposerMode.SINGLE, { onMode(ComposerMode.SINGLE) }, "Single", enabled = enabled)
-        HyleChip(mode == ComposerMode.PERSONAS, { onMode(ComposerMode.PERSONAS) }, "Council · personas", enabled = enabled)
-        HyleChip(mode == ComposerMode.MODELS, { onMode(ComposerMode.MODELS) }, "Council · models", enabled = enabled)
+        items(attachments, key = { it.id }) { attachment ->
+            Box(modifier = Modifier.size(64.dp)) {
+                FileImage(
+                    path = attachment.path,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)),
+                )
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
+                        .clickable { onRemove(attachment.id) },
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("✕", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1673,14 +2140,22 @@ private fun StreamingBubble(
     entropyColoring: Boolean,
     imageMode: Boolean,
     object3dMode: Boolean = false,
+    watched: Boolean = false,
 ) {
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    val uncertain = MaterialTheme.colorScheme.error
-    val onRails = MaterialTheme.colorScheme.primary
+    // Colorblind-safe: a single luminance/opacity ramp toward the existing violet, never a
+    // red-to-violet hue lerp (Hyle's hard rule — state is never encoded in hue alone).
+    val low = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val high = MaterialTheme.colorScheme.primary
     val showSpinner = phase == GenPhase.LOADING || tokens.isEmpty()
 
     Row(modifier = Modifier.fillMaxWidth()) {
         Card(
+            // Hyle's material language (dev.aarso.hyle.Finish): a watched, from-elsewhere
+            // generation is Radiant — it emits its own light, breathing on the "heartbeat, not
+            // weather" cycle (dev.aarso.hyle.Pulse.WATCHED); local work is Reflective and stays
+            // still. Motion is never the only provenance signal — the "☁"/"⌂" glyph carries it too.
+            modifier = if (watched) Modifier.hylePulse() else Modifier,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
             Row(
@@ -1697,14 +2172,14 @@ private fun StreamingBubble(
                     object3dMode ->
                         Text("generating a 3D object…")
                     phase == GenPhase.LOADING ->
-                        Text("loading model… (first load can take a while)")
+                        Text((if (watched) "☁ " else "⌂ ") + "loading model… (first load can take a while)")
                     tokens.isEmpty() ->
-                        Text("generating…")
+                        Text((if (watched) "☁ " else "⌂ ") + "generating…")
                     else -> {
                         val annotated: AnnotatedString = buildAnnotatedString {
                             for (t in tokens) {
                                 val confidence = if (entropyColoring) Confidence.fromEntropy(t.entropy) else null
-                                val color = if (confidence == null) neutral else lerp(uncertain, onRails, confidence)
+                                val color = if (confidence == null) neutral else lerp(low, high, confidence)
                                 withStyle(SpanStyle(color = color)) { append(t.text) }
                             }
                         }
@@ -1875,6 +2350,9 @@ private fun MessageTurn(
                 role = step.node.role,
                 content = step.node.content,
                 imagePath = step.node.metadata[Conversations.IMAGE_KEY],
+                // W1: user-node photo attachments — a different metadata key and visual slot from
+                // the assistant-generated-image branch above (they're never both present on one node).
+                attachments = Attachments.decode(step.node.metadata[Conversations.ATTACHMENTS_KEY]),
                 object3dPath = step.node.metadata[dev.fonebrew.data.Object3dNodeMeta.KEY_FILE],
                 object3dFormat = step.node.metadata[dev.fonebrew.data.Object3dNodeMeta.KEY_FORMAT],
                 onOpenObject3d = {
@@ -1883,6 +2361,19 @@ private fun MessageTurn(
                     if (path != null && format != null) onOpenObject3d(path, format)
                 },
                 stopped = step.node.metadata["stopped"] == "true",
+                // costMinor is only ever recorded for a watched-cloud turn that reported usage
+                // (LedgerComponents.kt) — reuse it as the provenance signal rather than adding a
+                // second source of truth for the same fact.
+                watched = step.node.metadata["costMinor"] != null,
+                costMinor = step.node.metadata["costMinor"],
+                tokensIn = step.node.metadata["tokensIn"],
+                tokensOut = step.node.metadata["tokensOut"],
+                // W2: web-search provenance — "webSearch" records the model was allowed to search
+                // this turn (the watched-object fact) independent of whether any source came back;
+                // "sources" is only ever non-empty when the provider's tool actually returned one.
+                webSearch = step.node.metadata[Conversations.WEB_SEARCH_KEY] == "true",
+                searchPaused = step.node.metadata[Conversations.SEARCH_PAUSED_KEY] == "true",
+                sources = Sources.decode(step.node.metadata[Conversations.SOURCES_KEY]),
                 onLongPress = onLongPress,
                 highlighted = highlighted,
                 verdict = verdict,
@@ -1901,21 +2392,10 @@ private fun MessageTurn(
                 onSpawnDrag = onSpawnDrag,
             )
         }
-        // Cost (G1): a small per-turn line for watched-cloud turns that reported usage.
-        step.node.metadata["costMinor"]?.let { minor ->
-            val tin = step.node.metadata["tokensIn"] ?: "?"
-            val tout = step.node.metadata["tokensOut"] ?: "?"
-            Text(
-                costLine(minor, tin, tout),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
-            )
-        }
         if (step.isBranchPoint) {
             // Fixed per audit: five controls (‹, n/m, ›, "Compare alternatives", "Choose for me")
-            // in one fixed-width Row clip/overflow on a phone-width screen — same horizontalScroll
-            // fix this file's own ComposerModeRow already applies to an equivalent packed row.
+            // in one fixed-width Row clip/overflow on a phone-width screen — the same
+            // horizontalScroll fix applied to every other packed control row in this file.
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
@@ -2003,7 +2483,23 @@ private fun MessageBubble(
     role: Role,
     content: String,
     imagePath: String?,
+    /** W1: user-node photo attachments — a different metadata key and slot from the assistant-
+     *  generated-image branch ([imagePath]); the two are never both present on one node. */
+    attachments: List<Attachments.Attachment> = emptyList(),
     stopped: Boolean,
+    /** costMinor is only ever recorded for a watched-cloud turn that reported usage — reused as
+     *  the provenance signal for the "☁"/"⌂" header glyph and Hyle's Radiant/Reflective pulse. */
+    watched: Boolean = false,
+    costMinor: String? = null,
+    tokensIn: String? = null,
+    tokensOut: String? = null,
+    // W2: web search provenance. webSearch = the model was allowed to search this turn (the
+    // watched-object fact, recorded regardless of whether it actually searched); sources = the
+    // results the provider's tool actually surfaced, if any; searchPaused = the server-side
+    // search loop hit its round cap mid-turn.
+    webSearch: Boolean = false,
+    searchPaused: Boolean = false,
+    sources: List<Source> = emptyList(),
     onLongPress: () -> Unit,
     highlighted: Boolean = false,
     /** docs/design/objects-3d.md §1/§8 — non-null exactly on an object3d turn ([object3dFormat]
@@ -2137,17 +2633,48 @@ private fun MessageBubble(
                         .let {
                             // S9: the current find-in-chat hit's row (row-level marker — see InChatFind.kt's
                             // KDoc for why not a sub-string highlight).
-                            if (highlighted) it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium) else it
+                            if (highlighted) {
+                                it.border(2.dp, LocalHyleColors.current.cyan, MaterialTheme.shapes.medium)
+                            } else {
+                                it.border(1.dp, LocalHyleColors.current.hairline, MaterialTheme.shapes.medium)
+                            }
                         },
                     colors = CardDefaults.cardColors(
                         containerColor = if (fromUser) {
-                            MaterialTheme.colorScheme.primaryContainer
+                            LocalHyleColors.current.violetDim
                         } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
+                            LocalHyleColors.current.raised
                         },
                     ),
                 ) {
                     Column(Modifier.padding(12.dp)) {
+                        // A turn reads as a **file**: a small header line (who wrote it, and —
+                        // for a watched-cloud turn — the "☁" glyph, plus "⌕" when web search was
+                        // allowed that turn (W2), never colour alone, per Hyle's provenance rule),
+                        // the body, then a metadata footer below a hairline divider.
+                        val c = LocalHyleColors.current
+                        val headerLabel = when {
+                            fromUser -> "You"
+                            role == Role.SYSTEM -> "System"
+                            watched -> "☁ Assistant · watched" + if (webSearch) " ⌕" else ""
+                            else -> "⌂ Assistant" + if (webSearch) " ⌕" else ""
+                        }
+                        Text(headerLabel, style = MaterialTheme.typography.labelSmall, color = c.textMid)
+                        Spacer(Modifier.height(4.dp))
+                        // W1: user-node photo attachments render as a thumbnail row above the
+                        // text — a different metadata key and slot from the assistant-generated-
+                        // image branch below.
+                        if (attachments.isNotEmpty()) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(attachments) { a ->
+                                    FileImage(
+                                        path = a.path,
+                                        modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                        }
                         when {
                             // An image turn: the node's payload is the generated file (§6).
                             imagePath != null -> FileImage(
@@ -2167,12 +2694,54 @@ private fun MessageBubble(
                             // well-formed markdown, so a complete turn passes through unchanged.
                             else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
                         }
-                        if (stopped) {
-                            Text(
-                                "· stopped here",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary,
-                            )
+                        if (stopped || costMinor != null || sources.isNotEmpty() || searchPaused) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = c.hairline)
+                            // Cost (G1): a small per-turn line for watched-cloud turns that
+                            // reported usage. [costMinor] is in the user's own price
+                            // denomination (we never invent a currency), so it's shown as a
+                            // plain value alongside the real token counts.
+                            if (costMinor != null) {
+                                Text(
+                                    costLine(costMinor, tokensIn ?: "?", tokensOut ?: "?"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = c.textMid,
+                                )
+                            }
+                            if (stopped) {
+                                Text("· stopped here", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                            }
+                            // W2: sources footer — each row opens the link via ACTION_VIEW;
+                            // runCatching covers the no-app-can-handle-this case (e.g. a device
+                            // with no browser), surfacing a toast on that failure so the tap
+                            // doesn't silently do nothing.
+                            if (sources.isNotEmpty()) {
+                                val context = LocalContext.current
+                                for (source in sources) {
+                                    Text(
+                                        "⌕ ${source.title}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                runCatching {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source.url)))
+                                                }.onFailure {
+                                                    Toast.makeText(context, "No app to open this link", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                            .padding(vertical = 2.dp),
+                                    )
+                                }
+                            }
+                            // v1, no auto-resume: just the visible note (plan §Capturing sources).
+                            if (searchPaused) {
+                                Text(
+                                    "search paused — the server hit its round limit; type \"continue\" to resume",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
                         }
                     }
                 }

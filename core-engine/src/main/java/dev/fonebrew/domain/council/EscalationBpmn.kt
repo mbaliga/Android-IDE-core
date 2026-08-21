@@ -15,7 +15,7 @@ import dev.fonebrew.domain.bpmn.BpmnNodeKind
  * a **user task** (BPMN's native human-in-the-loop). [expand] turns an
  * [EscalationPolicy] into that standard sub-graph, so a Cost gate transports as
  * plain BPMN and can be inspected node-by-node ("explode"); [collapse] reads the
- * policy back from the gateway's Aarso extension metadata ("collapse"). The
+ * policy back from the gateway's Fonebrew extension metadata ("collapse"). The
  * extension metadata is the source of truth, the tasks are the legible expansion.
  *
  * Pure; JVM-tested. The runtime is still [WorkflowRunner] + [Escalation.decide].

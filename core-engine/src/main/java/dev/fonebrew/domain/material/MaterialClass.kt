@@ -14,7 +14,7 @@ import dev.fonebrew.domain.model.ModelSpec
  *
  * This file is the *semantic* seam only — it answers "is this surface local or
  * from-elsewhere," nothing about colour or glow. It stays in the app because it is
- * about Aarso's own data (which engine produced a turn). The renderer that turns a
+ * about Fonebrew's own data (which engine produced a turn). The renderer that turns a
  * [MaterialClass] into specular vs emission lives in the design system and is *fed*
  * this; keeping the hue out here is deliberate (the radiant hue is still open). Pure
  * and JVM-tested.

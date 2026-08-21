@@ -5,7 +5,7 @@ package dev.fonebrew.domain.pm
  * Kanban board whose cards **are the issues in the user's own Git host repo**, not a
  * separate database. Moving a card = relabelling / closing the issue on the host;
  * the board is a *view* over your repo's issues, the way the message tree is the one
- * spine for chat. Sovereignty by construction — there is no Aarso-side board store.
+ * spine for chat. Sovereignty by construction — there is no Fonebrew-side board store.
  *
  * Column convention (legible, host-portable): an open issue's column is the first
  * `status:*` label it carries; an open issue with no status label sits in BACKLOG; a

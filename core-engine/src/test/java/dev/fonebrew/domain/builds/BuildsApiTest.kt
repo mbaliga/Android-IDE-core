@@ -35,18 +35,18 @@ class BuildsApiTest {
             [
               {"tag_name":"v2.0","target_commitish":"main","published_at":"2026-06-17T00:00:00Z",
                "assets":[
-                 {"id":42,"name":"aarso-sd.apk","browser_download_url":"https://x/aarso-sd.apk","size":66060288},
+                 {"id":42,"name":"fonebrew-sd.apk","browser_download_url":"https://x/fonebrew-sd.apk","size":66060288},
                  {"id":43,"name":"mapping.txt","browser_download_url":"https://x/mapping.txt","size":1024}
                ]},
               {"tag_name":"v1.9","target_commitish":"main","published_at":"2026-06-10T00:00:00Z",
-               "assets":[{"id":40,"name":"aarso-sd.apk","browser_download_url":"https://x/old.apk","size":65000000}]}
+               "assets":[{"id":40,"name":"fonebrew-sd.apk","browser_download_url":"https://x/old.apk","size":65000000}]}
             ]
         """.trimIndent()
         val builds = BuildsApi.parseReleases(json)
         assertEquals(2, builds.size) // the .txt asset is skipped
         assertEquals("v2.0", builds[0].version)
         assertEquals("main", builds[0].branch)
-        assertEquals("aarso-sd.apk", builds[0].name)
+        assertEquals("fonebrew-sd.apk", builds[0].name)
         assertEquals(66060288L, builds[0].sizeBytes)
         assertEquals(BuildSource.RELEASE_ASSET, builds[0].source)
     }
@@ -54,7 +54,7 @@ class BuildsApiTest {
     @Test fun `parses apks from a dist-branch contents listing`() {
         val contents = """
             [
-              {"type":"file","name":"aarso-sd.apk","sha":"a1b2c3d4e5","size":66060288,"download_url":"https://x/raw/aarso-sd.apk"},
+              {"type":"file","name":"fonebrew-sd.apk","sha":"a1b2c3d4e5","size":66060288,"download_url":"https://x/raw/fonebrew-sd.apk"},
               {"type":"file","name":"README.md","sha":"f00","size":12,"download_url":"https://x/raw/README.md"},
               {"type":"dir","name":"sub","sha":"d00","size":0,"download_url":""}
             ]

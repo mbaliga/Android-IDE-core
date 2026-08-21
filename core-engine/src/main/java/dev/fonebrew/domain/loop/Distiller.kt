@@ -11,7 +11,7 @@ import dev.fonebrew.domain.council.Generator
 /**
  * The distiller — the *ceiling* of loop distillation (docs/design/loop-distillation.md).
  * It reads a described method (a paper's method section / a pasted description) and
- * produces an editable [Loop]. Aarso eating its own tail: a loop that makes loops.
+ * produces an editable [Loop]. Fonebrew eating its own tail: a loop that makes loops.
  *
  * **Division of labour (the honest design):** the *model* does the understanding —
  * classify the method into one of a small set of orchestration topologies and extract
@@ -258,7 +258,7 @@ private object TopologyBuilder {
             val pid = "p$i"
             nodes += BpmnNode(
                 pid, BpmnNodeKind.SERVICE_TASK, "${proposer.name} ${i + 1}", tk(COL * 2, lanes[i % 3]),
-                linkedMapOf("role" to proposer.name, "instruction" to proposer.instruction, "diversity" to "encouraged"),
+                linkedMapOf("role" to proposer.name, "systemPrompt" to proposer.instruction, "diversity" to "encouraged"),
             )
             edges += BpmnEdge("e_f$i", "fork", pid)
             edges += BpmnEdge("e_j$i", pid, "join")
@@ -266,7 +266,7 @@ private object TopologyBuilder {
         nodes += BpmnNode("join", BpmnNodeKind.PARALLEL_GATEWAY, "Gather", gw(COL * 3))
         nodes += BpmnNode(
             "agg", BpmnNodeKind.SERVICE_TASK, agg.name, tk(COL * 3.7),
-            linkedMapOf("role" to agg.name, "instruction" to agg.instruction, "aggregation" to (s.aggregation ?: "synthesize")),
+            linkedMapOf("role" to agg.name, "systemPrompt" to agg.instruction, "aggregation" to (s.aggregation ?: "synthesize")),
         )
         edges += BpmnEdge("e_agg", "join", "agg")
         if (s.rounds > 1) {
@@ -294,7 +294,7 @@ private object TopologyBuilder {
             val sid = "s$i"
             nodes += BpmnNode(
                 sid, BpmnNodeKind.SERVICE_TASK, "${solver.name} ${i + 1}", tk(COL * 2, lanes[i % 3]),
-                linkedMapOf("role" to solver.name, "instruction" to solver.instruction, "note" to "sampled"),
+                linkedMapOf("role" to solver.name, "systemPrompt" to solver.instruction, "note" to "sampled"),
             )
             edges += BpmnEdge("e_f$i", "fork", sid)
             edges += BpmnEdge("e_j$i", sid, "join")
@@ -317,12 +317,12 @@ private object TopologyBuilder {
         val nodes = listOf(
             start(ext),
             BpmnNode("actor", BpmnNodeKind.SERVICE_TASK, actor.name, tk(COL),
-                linkedMapOf("role" to actor.name, "instruction" to actor.instruction)),
+                linkedMapOf("role" to actor.name, "systemPrompt" to actor.instruction)),
             BpmnNode("eval", BpmnNodeKind.SERVICE_TASK, evalr.name, tk(COL * 2),
-                linkedMapOf("role" to evalr.name, "instruction" to evalr.instruction, "diversity" to "encouraged")),
+                linkedMapOf("role" to evalr.name, "systemPrompt" to evalr.instruction, "diversity" to "encouraged")),
             BpmnNode("gw", BpmnNodeKind.EXCLUSIVE_GATEWAY, "Succeeded?", gw(COL * 3)),
             BpmnNode("reflect", BpmnNodeKind.SERVICE_TASK, refl.name, tk(COL * 2, 1),
-                linkedMapOf("role" to refl.name, "instruction" to refl.instruction, "memory" to "verbal")),
+                linkedMapOf("role" to refl.name, "systemPrompt" to refl.instruction, "memory" to "verbal")),
             BpmnNode("end", BpmnNodeKind.END_EVENT, "Solution", ev(COL * 4)),
         )
         val edges = listOf(
@@ -349,7 +349,7 @@ private object TopologyBuilder {
             val did = "d$i"
             nodes += BpmnNode(
                 did, BpmnNodeKind.SERVICE_TASK, "${debater.name} ${i + 1}", tk(COL * 2, lanes[i % 3]),
-                linkedMapOf("role" to debater.name, "instruction" to debater.instruction, "diversity" to "encouraged"),
+                linkedMapOf("role" to debater.name, "systemPrompt" to debater.instruction, "diversity" to "encouraged"),
             )
             edges += BpmnEdge("e_f$i", "fork", did)
             edges += BpmnEdge("e_j$i", did, "join")
@@ -358,7 +358,7 @@ private object TopologyBuilder {
         nodes += BpmnNode("more", BpmnNodeKind.EXCLUSIVE_GATEWAY, "More rounds?", gw(COL * 3.8))
         nodes += BpmnNode(
             "judge", BpmnNodeKind.SERVICE_TASK, judge.name, tk(COL * 4.5, 1),
-            linkedMapOf("role" to judge.name, "instruction" to judge.instruction, "aggregation" to (s.aggregation ?: "judge")),
+            linkedMapOf("role" to judge.name, "systemPrompt" to judge.instruction, "aggregation" to (s.aggregation ?: "judge")),
         )
         nodes += BpmnNode("end", BpmnNodeKind.END_EVENT, "Verdict", ev(COL * 5.6))
         edges += BpmnEdge("e_more", "join", "more")
@@ -377,7 +377,7 @@ private object TopologyBuilder {
             val nid = "step$i"
             nodes += BpmnNode(
                 nid, BpmnNodeKind.SERVICE_TASK, r.name, tk(COL * (i + 1)),
-                linkedMapOf("role" to r.name, "instruction" to r.instruction),
+                linkedMapOf("role" to r.name, "systemPrompt" to r.instruction),
             )
             edges += BpmnEdge("e$i", prev, nid)
             prev = nid

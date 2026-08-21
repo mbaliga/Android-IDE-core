@@ -1,5 +1,6 @@
 package dev.fonebrew.ui.theme
 
+import dev.aarso.hyle.theme.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -41,7 +42,7 @@ private fun schemeFrom(c: HyleColors, dark: Boolean) = if (dark) {
 }
 
 /**
- * Aarso theme — Hyle structure, now runtime-switchable. [mode] picks dark/light/
+ * Fonebrew theme — Hyle structure, now runtime-switchable. [mode] picks dark/light/
  * system; [accent] re-tints the violet ramp (sovereignty of appearance). The full
  * palette is published via [LocalHyleColors]; the matching M3 scheme is published
  * via MaterialTheme so both styles of colour lookup stay in sync.

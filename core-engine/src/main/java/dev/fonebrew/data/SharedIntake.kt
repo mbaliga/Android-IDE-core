@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Content captured from elsewhere on the device and routed *into* Aarso (handoff
+ * Content captured from elsewhere on the device and routed *into* Fonebrew (handoff
  * §7): text shared in (ACTION_SEND), a text selection (ACTION_PROCESS_TEXT), or
  * the assist gesture's on-screen text. A new front door onto the existing model
  * registry + fan-out — not a new backend.

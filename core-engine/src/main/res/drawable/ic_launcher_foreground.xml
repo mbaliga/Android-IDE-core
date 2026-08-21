@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Aarso = mirror: a violet crescent (a circle carved by an offset circle). -->
+<!-- Fonebrew's launcher icon: a violet crescent (a circle carved by an offset circle) —
+     mirror imagery, alluding to Aarso, the app's internal self-reflection lens (domain/mirror/). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"

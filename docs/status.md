@@ -1,4 +1,4 @@
-# Aarso — full state snapshot (2026-06-19)
+# Fonebrew — full state snapshot (2026-06-19)
 
 > **Purpose.** A single honest document: what exists, what's missing, what needs
 > fixing, and where the ambition points. Updated at the end of each major session.
@@ -7,7 +7,7 @@
 > Last update: 2026-06-21 (PRs #18–#31 merged → main; the headless engines are now
 > **wired into device-testable UI** + a new spatial map; APK v0.5.x on `apk-dist`.
 > See "Made real on device" below). Earlier: 2026-06-21 (PR #4; visual editor; reframe
-> to a post-desktop computing environment + Workbench/Aarso naming split).
+> to a post-desktop computing environment + Workbench/Fonebrew naming split).
 
 ---
 
@@ -78,7 +78,7 @@ wiring (SSH transport over sshj/jsch, run persistence, recipe execution) is the 
 
 ## Expanded direction (2026-06-19) — agentic Android IDE + PM + launch
 
-Owner reframed the Play-Store ambition: Aarso as a place to **conceive, build, test,
+Owner reframed the Play-Store ambition: Fonebrew as a place to **conceive, build, test,
 and launch an Android app end-to-end from the phone** ("TikTok for Android app dev"),
 with project management and launch collateral in-app. Sequencing: **foundation first,
 then the three pillars equally.** Headless, CI-verified bricks landed (UI parked in
@@ -131,7 +131,7 @@ or owner-only (§5b/§5c — Issue #2; native-accel benchmark; on-device verific
 
 ## The vision (owner's words, distilled)
 
-Aarso is not a chat client. It is a **physics engine for thought** — a place where:
+Fonebrew is not a chat client. It is a **physics engine for thought** — a place where:
 
 - **Models are instruments**, not endpoints. You compose them into loops.
 - **Sovereignty is material.** You see what runs where (on-device vs. watched-cloud),
@@ -139,7 +139,7 @@ Aarso is not a chat client. It is a **physics engine for thought** — a place w
 - **The loop is the product.** The iterative objective → propose → critique → refine
   cycle — the thing we do *with* Claude — is the feature. It should be visual, editable,
   named, shareable, and yours. Not a settings dialog.
-- **Your repos, your builds.** Aarso should be the place you develop Android apps: see
+- **Your repos, your builds.** Fonebrew should be the place you develop Android apps: see
   CI status, browse code with the Lens, install builds, run loops over your codebase.
 - **Legibility over power.** Non-technical users should be able to read the app's
   output, understand what it's doing, and feel in control — not impressed by capability
@@ -242,7 +242,7 @@ screen for new users.
 ### 3. Loops are invisible to the user
 
 The loop engine is real but the product surface is one TextButton. The spatial map
-says "Loops" but there's no Loop room. The user has no way to discover that Aarso
+says "Loops" but there's no Loop room. The user has no way to discover that Fonebrew
 can do iterative multi-model refinement.
 
 ### 4. The dev room (Branches / Tests / Builds) doesn't exist
@@ -344,5 +344,5 @@ CI: `.github/workflows/ci.yml` runs the JVM unit tests (both flavors) + a
 non-gating native `assembleFullDebug` on every push/PR. On-device behaviour
 stays owner-verified (no device in CI).
 
-APK: `https://github.com/mbaliga/mobile-llm/raw/apk-dist/aarso-sd.apk`
+APK: `https://github.com/mbaliga/mobile-llm/raw/apk-dist/fonebrew-sd.apk`
 (private repo — needs a logged-in GitHub session)

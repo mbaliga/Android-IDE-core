@@ -20,7 +20,6 @@ import dev.fonebrew.data.dao.ThreadMarkerDao
 import dev.fonebrew.data.dao.TokenCountDao
 import dev.fonebrew.data.dao.VerdictDao
 import dev.fonebrew.data.dao.VersionDao
-import dev.fonebrew.data.dao.WatchDao
 import dev.fonebrew.data.entity.BufferJournalEntryEntity
 import dev.fonebrew.data.entity.BufferRegistryEntity
 import dev.fonebrew.data.entity.CompactionDirectiveEntity
@@ -38,7 +37,6 @@ import dev.fonebrew.data.entity.ThreadMarkerEntity
 import dev.fonebrew.data.entity.TokenCountEntity
 import dev.fonebrew.data.entity.VerdictEntity
 import dev.fonebrew.data.entity.VersionEntity
-import dev.fonebrew.data.entity.WatchedItemEntity
 
 @Database(
     entities = [
@@ -47,7 +45,6 @@ import dev.fonebrew.data.entity.WatchedItemEntity
         MessageEmbeddingEntity::class,
         LedgerEntryEntity::class,
         TaskEntity::class,
-        WatchedItemEntity::class,
         ReceiptEntity::class,
         BufferJournalEntryEntity::class,
         RecoverySnapshotEntity::class,
@@ -61,7 +58,7 @@ import dev.fonebrew.data.entity.WatchedItemEntity
         ThreadMarkerEntity::class,
         DelegationEventEntity::class,
     ],
-    version = 9,
+    version = 10,
     // Schema export is off in Phase 0 (no migrations yet). Turn on with a
     // room.schemaLocation KSP arg once the schema needs to be versioned. v4->v5
     // (loop-surface ledger columns, CORE_PHASES.md P3) rides the same
@@ -81,6 +78,9 @@ import dev.fonebrew.data.entity.WatchedItemEntity
     // prior bump; both tables are brand new (nothing to migrate data out of).
     // dev.fonebrew.domain.contracts.MigrationRunner is real, tested scaffolding for whichever future
     // bump needs an actual Migration — this bump still doesn't, same as v1->v8.
+    // v9->v10 (launch-line reunification): DROPS the Watchlist table — the free-tier Watch tab
+    // was pulled on the launch line (owner call, moving to Studio); the dev line had carried the
+    // base-era table forward untouched. Same destructive-migration ride as every prior bump.
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -90,7 +90,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun embeddingDao(): EmbeddingDao
     abstract fun ledgerDao(): LedgerDao
     abstract fun taskDao(): TaskDao
-    abstract fun watchDao(): WatchDao
     abstract fun receiptDao(): ReceiptDao
     abstract fun bufferJournalDao(): BufferJournalDao
     abstract fun recoverySnapshotDao(): RecoverySnapshotDao

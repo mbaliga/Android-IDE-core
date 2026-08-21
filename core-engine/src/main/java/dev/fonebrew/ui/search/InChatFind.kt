@@ -15,9 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.hyle.HyleField
-import dev.fonebrew.ui.theme.LocalHyleColors
+import dev.aarso.hyle.cells.HyleChip
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.theme.LocalHyleColors
 
 /**
  * S9's in-chat find bar: sits above the thread (continuity with the app-wide overlay — see

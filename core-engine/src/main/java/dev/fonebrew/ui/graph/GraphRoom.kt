@@ -59,12 +59,12 @@ import dev.fonebrew.domain.thread.ThreadGraph
 import dev.fonebrew.domain.thread.ThreadGraphNode
 import dev.fonebrew.domain.thread.ThreadMapLayout
 import dev.fonebrew.domain.thread.ThreadNodeKind
+import dev.aarso.hyle.cells.HyleButton
+import dev.aarso.hyle.cells.HyleChip
 import dev.aarso.hyle.cells.HyleRadialMenu
 import dev.aarso.hyle.cells.HyleRadialMenuItem
+import dev.aarso.hyle.theme.LocalHyleColors
 import dev.fonebrew.ui.ChatViewModel
-import dev.fonebrew.ui.hyle.HyleButton
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.theme.LocalHyleColors
 import kotlinx.coroutines.launch
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -384,7 +384,7 @@ private fun Legend(modifier: Modifier = Modifier) {
 }
 
 /** Shape (never colour alone — binding constraint 6) + colour per [ThreadNodeKind]. */
-private fun glyphFor(kind: ThreadNodeKind, colors: dev.fonebrew.ui.theme.HyleColors): DrawScope.() -> Unit = when (kind) {
+private fun glyphFor(kind: ThreadNodeKind, colors: dev.aarso.hyle.theme.HyleColors): DrawScope.() -> Unit = when (kind) {
     ThreadNodeKind.MESSAGE -> { { drawCircle(colors.textMid, radius = size.minDimension / 2f) } }
     ThreadNodeKind.FORK_ROOT -> {
         {

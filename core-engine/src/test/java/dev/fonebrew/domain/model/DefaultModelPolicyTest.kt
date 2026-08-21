@@ -62,4 +62,22 @@ class DefaultModelPolicyTest {
     fun emptySpecsResolveToNull() {
         assertNull(DefaultModelPolicy.resolveActive(emptyList(), null))
     }
+
+    @Test
+    fun aiCoreNanoIsPreferredOverGgufWhenNothingPersisted() {
+        val specs = listOf(
+            spec("local:a.gguf", Runtime.LOCAL_GGUF),
+            spec("aicore:gemini-nano", Runtime.AICORE_NANO),
+        )
+        assertEquals("aicore:gemini-nano", DefaultModelPolicy.resolveActive(specs, null)?.id)
+    }
+
+    @Test
+    fun persistedGgufChoiceIsKeptOverAiCoreNano() {
+        val specs = listOf(
+            spec("local:a.gguf", Runtime.LOCAL_GGUF),
+            spec("aicore:gemini-nano", Runtime.AICORE_NANO),
+        )
+        assertEquals("local:a.gguf", DefaultModelPolicy.resolveActive(specs, "local:a.gguf")?.id)
+    }
 }

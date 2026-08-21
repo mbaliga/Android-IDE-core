@@ -1,6 +1,5 @@
 package dev.fonebrew.ui.rooms
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -9,18 +8,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,282 +29,306 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.aarso.hyle.cells.HyleButton
+import androidx.compose.ui.platform.LocalContext
+import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleField
+import dev.aarso.hyle.theme.LocalHyleColors
 import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.domain.device.FitVerdict
 import dev.fonebrew.ui.ImagesViewModel
 import dev.fonebrew.ui.ModelsViewModel
-import dev.fonebrew.ui.hyle.HyleButton
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material3.HorizontalDivider
-import dev.fonebrew.FonebrewApp
-import dev.fonebrew.ui.hyle.HyleChip
-import dev.fonebrew.ui.hyle.HyleField
-import dev.fonebrew.ui.hyle.HyleTitle
-import dev.fonebrew.ui.theme.LocalHyleColors
-import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
-private enum class ModelsTab { CHAT, IMAGE, BYO }
-private enum class ModelSource { ON_DEVICE, CLOUD }
+// MERGE-NOTE (reunification, cluster E): the dev line's shared-catalog "Update" flow —
+// AppContainer.modelCatalogUpdater / SessionStore.modelCatalogSourceUrl, a confirm-before-
+// network dialog, and a status line ("contacting the source online…" / "updated (list dated
+// …)") — had its only UI trigger in the old single-screen ModelsRoom this file used to define
+// (tab row + on-device/cloud toggle + "Update" button). The launch line's redesign below
+// deliberately removed that room (owner ask: model cards render inline in SettingsRoom now, no
+// separate screen, no on-device/cloud re-pick since that choice is already made one level up —
+// see [ChatOnDeviceShelf]'s KDoc) and has no replacement affordance for refreshing the catalog
+// from its remote source. ModelCatalogUpdater/ModelCatalogStore/catalogLastUpdated are all still
+// intact and unused. Needs an owner decision on whether/where a "check for an updated model
+// list" control resurfaces (e.g. in SettingsRoom's Models tab header) — not reintroduced here
+// unilaterally, since it would mean redesigning chrome the launch line intentionally simplified.
 
 /**
- * The shelf beneath the thread (§5/§10): models as a tabbed coverflow — Chat,
- * Image, Bring-your-own. Each card is large and visually rich (gradient header +
- * big monogram, no logo), with the full download lifecycle inline.
+ * The on-device Chat shelf (§5/§10): Settings → Models → Text → On-device shows this directly —
+ * no intermediate Chat/Image/Bring-your-own tabs and no On-device/Cloud toggle, both of which
+ * would duplicate the choice the owner already made one level up. Each card is large and
+ * visually rich (gradient header + big monogram, no logo), with the full download lifecycle
+ * inline, then bring-your-own-GGUF, then what's already on this device.
+ *
+ * Renders directly inline in [LocalModels] now (owner ask: "the model cards are still hidden
+ * behind a button" — no extra tap). It used to need [SettingsRoom]'s hoisted `overlay` slot
+ * instead, because a [Coverflow]'s `HorizontalPager` measured inside a `verticalScroll` parent
+ * gets an infinite height constraint and crashes (PR #39). [Coverflow] now gives its own pager
+ * an explicit bounded height (see its KDoc), so that crash class no longer applies and this can
+ * render straight into [SettingsRoom]'s already-scrolling content — no dedicated full-screen
+ * host required. Plain content composable now: no `onClose`/back-button chrome, no own
+ * `fillMaxSize`/scroll — the single `verticalScroll` already belongs to [SettingsRoom]'s content
+ * column, and nesting another one (or a `weight(1f)` that needs a bounded parent) underneath it
+ * would be broken/redundant.
  */
 @Composable
-fun ModelsRoom(
+fun ChatOnDeviceShelf(
     downloads: DownloadCenter,
     onCustomUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onClose: (() -> Unit)? = null,
     modelsViewModel: ModelsViewModel = viewModel(factory = ModelsViewModel.Factory),
+) {
+    val downloaded by modelsViewModel.downloaded.collectAsState()
+    val active by downloads.active.collectAsState()
+    var customUrl by remember { mutableStateOf("") }
+
+    Column(modifier) {
+        DeviceFitLine()
+        Spacer(Modifier.height(12.dp))
+        Coverflow(modelsViewModel.catalog.size) { page ->
+            val m = modelsViewModel.catalog[page]
+            val fit = modelsViewModel.fit(m.sizeBytes)
+            CoverCard(
+                name = m.name,
+                spec = "${m.params} · ${m.quant} · %.1f GB".format(m.sizeBytes / 1_000_000_000.0),
+                fitVerdict = fit.verdict,
+                fitReason = fit.reason,
+                state = active[m.id],
+                downloaded = modelsViewModel.isDownloaded(m.fileName),
+                available = m.downloadUrl != null,
+                onDownload = { modelsViewModel.downloadCatalog(m) },
+                onPause = { downloads.pause(m.id) },
+                onResume = { downloads.retry(m.id) },
+                onCancel = { downloads.cancel(m.id) },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        BringYourOwnCard(
+            hint = "Point at any GGUF and it downloads to this device. Bigger files need " +
+                "more RAM to run; the fit check applies once it lands.",
+            label = "GGUF URL",
+            placeholder = "https://huggingface.co/…/file.gguf",
+            url = customUrl,
+            onUrlChange = { customUrl = it },
+            enabled = customUrl.endsWith(".gguf"),
+            onDownload = { onCustomUrl(customUrl); customUrl = "" },
+        )
+        if (downloaded.isNotEmpty()) {
+            OnThisDeviceHeading()
+            downloaded.forEach { local ->
+                LocalRow(
+                    local.name,
+                    local.sizeBytes,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                ) { modelsViewModel.delete(local) }
+            }
+        }
+    }
+}
+
+/** The on-device Image shelf — [ChatOnDeviceShelf]'s Stable Diffusion counterpart, same shape,
+ *  same "renders directly inline into [LocalModels] now" story (see that KDoc). */
+@Composable
+fun ImageOnDeviceShelf(
+    downloads: DownloadCenter,
+    onCustomUrl: (String) -> Unit,
+    modifier: Modifier = Modifier,
     imagesViewModel: ImagesViewModel = viewModel(factory = ImagesViewModel.Factory),
 ) {
-    if (onClose != null) BackHandler(onBack = onClose)
-    val downloaded by modelsViewModel.downloaded.collectAsState()
     val sdDownloaded by imagesViewModel.sdModels.collectAsState()
     val active by downloads.active.collectAsState()
     var customUrl by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(ModelsTab.CHAT) }
-    var source by remember { mutableStateOf(ModelSource.ON_DEVICE) }
-    val container = (LocalContext.current.applicationContext as FonebrewApp).container
-    val cloudProviders by container.providerStore.providers.collectAsState()
-    val scope = rememberCoroutineScope()
-    var updatingCatalog by remember { mutableStateOf(false) }
-    var catalogUpdateNote by remember { mutableStateOf<String?>(null) }
-    var confirmCatalogUpdate by remember { mutableStateOf(false) }
-    val catalogSourceUrl by container.sessionStore.modelCatalogSourceUrl.collectAsState()
 
-    fun runCatalogUpdate() {
-        scope.launch {
-            updatingCatalog = true
-            catalogUpdateNote = "contacting the source online…"
-            container.modelCatalogUpdater.update(catalogSourceUrl).fold(
-                {
-                    modelsViewModel.refreshCatalog()
-                    imagesViewModel.refreshCatalog()
-                    catalogUpdateNote = "updated (list dated ${modelsViewModel.catalogLastUpdated})"
-                },
-                { e -> catalogUpdateNote = "update failed: ${e.message}" },
-            )
-            updatingCatalog = false
-        }
-    }
-
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if (onClose != null) {
-            TextButton(onClick = onClose, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
-                Text("‹ Settings")
-            }
-        }
-        HyleTitle("Models")
-        val ramGb = "%.1f".format(modelsViewModel.device.totalRamBytes / 1_000_000_000.0)
-        Text(
-            "This device: $ramGb GB RAM · " +
-                (if (modelsViewModel.device.arm64) "arm64-v8a" else modelsViewModel.device.abis.joinToString()) +
-                "  ·  fit is a RAM safety check, not a speed promise.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-        ) {
-            Text(
-                "Model list: this app doesn't maintain its own — it's Nooz's shared catalog" +
-                    (modelsViewModel.catalogLastUpdated.ifBlank { null }?.let { " (dated $it)" } ?: "") + ".",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { confirmCatalogUpdate = true }, enabled = !updatingCatalog) {
-                Text(if (updatingCatalog) "Updating…" else "Update")
-            }
-        }
-        catalogUpdateNote?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
+    Column(modifier) {
+        DeviceFitLine()
         Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            HyleChip(tab == ModelsTab.CHAT, { tab = ModelsTab.CHAT }, "Chat")
-            HyleChip(tab == ModelsTab.IMAGE, { tab = ModelsTab.IMAGE }, "Image")
-            HyleChip(tab == ModelsTab.BYO, { tab = ModelsTab.BYO }, "Bring your own")
-        }
-        // Source filter (Chat tab): on-device vs watched-cloud (owner ask).
-        if (tab == ModelsTab.CHAT) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                HyleChip(source == ModelSource.ON_DEVICE, { source = ModelSource.ON_DEVICE }, "On-device")
-                HyleChip(source == ModelSource.CLOUD, { source = ModelSource.CLOUD }, "Cloud · watched")
-            }
+        Coverflow(imagesViewModel.sdCatalog.size) { page ->
+            val m = imagesViewModel.sdCatalog[page]
+            val id = "sd:${m.fileName}"
+            val fit = imagesViewModel.fit(m.sizeBytes)
+            CoverCard(
+                name = m.name,
+                spec = "${m.family} · %.1f GB · ${m.note}".format(m.sizeBytes / 1_000_000_000.0),
+                fitVerdict = fit.verdict,
+                fitReason = fit.reason,
+                state = active[id],
+                downloaded = sdDownloaded.any { it.name == m.fileName },
+                available = m.downloadUrl != null,
+                // Never coerce a null downloadUrl into a download call — SdCatalogModel's own
+                // honesty contract (see its KDoc): callers must gate on it being non-null.
+                onDownload = { m.downloadUrl?.let { url -> imagesViewModel.downloadSdModel(url) } },
+                onPause = { downloads.pause(id) },
+                onResume = { downloads.retry(id) },
+                onCancel = { downloads.cancel(id) },
+            )
         }
         Spacer(Modifier.height(16.dp))
-
-        when (tab) {
-            ModelsTab.CHAT -> if (source == ModelSource.CLOUD) {
-                CloudProvidersList(cloudProviders)
-            } else Coverflow(modelsViewModel.catalog.size) { page ->
-                val m = modelsViewModel.catalog[page]
-                val fit = modelsViewModel.fit(m.sizeBytes)
-                CoverCard(
-                    name = m.name,
-                    spec = "${m.params} · ${m.quant} · %.1f GB".format(m.sizeBytes / 1_000_000_000.0),
-                    fitVerdict = fit.verdict,
-                    fitReason = fit.reason,
-                    state = active[m.id],
-                    downloaded = modelsViewModel.isDownloaded(m.fileName),
-                    available = m.downloadUrl != null,
-                    onDownload = { modelsViewModel.downloadCatalog(m) },
-                    onPause = { downloads.pause(m.id) },
-                    onResume = { downloads.retry(m.id) },
-                    onCancel = { downloads.cancel(m.id) },
-                )
-            }
-            ModelsTab.IMAGE -> Coverflow(imagesViewModel.sdCatalog.size) { page ->
-                val m = imagesViewModel.sdCatalog[page]
-                val id = "sd:${m.fileName}"
-                val fit = imagesViewModel.fit(m.sizeBytes)
-                CoverCard(
-                    name = m.name,
-                    spec = "${m.family} · %.1f GB · ${m.note}".format(m.sizeBytes / 1_000_000_000.0),
-                    fitVerdict = fit.verdict,
-                    fitReason = fit.reason,
-                    state = active[id],
-                    downloaded = sdDownloaded.any { it.name == m.fileName },
-                    available = m.downloadUrl != null,
-                    onDownload = { m.downloadUrl?.let { imagesViewModel.downloadSdModel(it) } },
-                    onPause = { downloads.pause(id) },
-                    onResume = { downloads.retry(id) },
-                    onCancel = { downloads.cancel(id) },
-                )
-            }
-            ModelsTab.BYO -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item {
-                    Text(
-                        "Point at any GGUF and it downloads to this device. Bigger files " +
-                            "need more RAM to run; the fit check applies once it lands.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    HyleField(
-                        value = customUrl,
-                        onValueChange = { customUrl = it },
-                        label = "GGUF URL",
-                        placeholder = "https://huggingface.co/…/file.gguf",
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    )
-                    HyleButton(
-                        "Download from URL",
-                        onClick = { onCustomUrl(customUrl); customUrl = "" },
-                        enabled = customUrl.endsWith(".gguf"),
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                if (downloaded.isNotEmpty() || sdDownloaded.isNotEmpty()) {
-                    item {
-                        Text(
-                            "On this device",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-                        )
-                    }
-                    items(downloaded.size) { i ->
-                        val local = downloaded[i]
-                        LocalRow(local.name, local.sizeBytes) { modelsViewModel.delete(local) }
-                    }
-                    items(sdDownloaded.size) { i ->
-                        val local = sdDownloaded[i]
-                        LocalRow("${local.name} (image)", local.sizeBytes) { imagesViewModel.deleteSdModel(local) }
-                    }
-                }
+        BringYourOwnCard(
+            hint = "Point at a Stable Diffusion checkpoint (GGUF) and it downloads to this " +
+                "device. Bigger files need more RAM to run; the fit check applies once it lands.",
+            label = "Checkpoint URL",
+            placeholder = "https://huggingface.co/…/file.gguf",
+            url = customUrl,
+            onUrlChange = { customUrl = it },
+            enabled = customUrl.endsWith(".gguf"),
+            onDownload = { onCustomUrl(customUrl); customUrl = "" },
+        )
+        if (sdDownloaded.isNotEmpty()) {
+            OnThisDeviceHeading()
+            sdDownloaded.forEach { local ->
+                LocalRow(
+                    local.name,
+                    local.sizeBytes,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                ) { imagesViewModel.deleteSdModel(local) }
             }
         }
     }
-
-    // Explicit consent before any network reach (binding rules 1 & 2) — the model list is
-    // fetched only on this affordance, never automatically.
-    if (confirmCatalogUpdate) {
-        AlertDialog(
-            onDismissRequest = { confirmCatalogUpdate = false },
-            title = { Text("Go online to update?") },
-            text = {
-                Text(
-                    "This connects to the internet and fetches the latest model list from:\n\n" +
-                        "$catalogSourceUrl\n\n" +
-                        "Fonebrew is on-device by default; this is the only time it reaches out for this list.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { confirmCatalogUpdate = false; runCatalogUpdate() }) { Text("Allow") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmCatalogUpdate = false }) { Text("Cancel") }
-            },
-        )
-    }
 }
 
-/** The watched-cloud models the user has configured. Add/remove lives in Settings → Text. */
+/** "This device: N GB RAM · abi · fit disclaimer" — identical wording in both shelves. Reads
+ *  the device spec directly rather than through a viewmodel — [ImagesViewModel]'s own copy is
+ *  private, and it's the same physical device either way. */
 @Composable
-private fun CloudProvidersList(providers: List<dev.fonebrew.domain.cloud.CloudProvider>) {
+private fun DeviceFitLine() {
+    val device = dev.fonebrew.data.DeviceInfo.read(LocalContext.current)
+    val ramGb = "%.1f".format(device.totalRamBytes / 1_000_000_000.0)
+    Text(
+        "This device: $ramGb GB RAM · " +
+            (if (device.arm64) "arm64-v8a" else device.abis.joinToString()) +
+            "  ·  fit is a RAM safety check, not a speed promise.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 20.dp),
+    )
+}
+
+/**
+ * Bring-your-own — nested under On-device (owner ask), not a sibling tab of it. Restyled as a
+ * sibling card in [CoverCard]'s own visual family (owner ask #3: "has to be in the format of a
+ * card too, for the sake of consistency") — same `Card`/border/shape/elevation and the same
+ * gradient-header-plus-monogram structure, not a parallel hand-rolled look. There's no specific
+ * model to monogram, so the header glyph is a generic "+" — the same affordance the chat
+ * composer's own Gemini-style `+` already carries elsewhere in this app (CLAUDE.md: "bring
+ * something outside the preset list").
+ *
+ * A sibling card directly below [Coverflow], not one more page inside its pager: swiping the
+ * pager means "show me another candidate in the same choice," and bring-your-own isn't a
+ * candidate to compare — it's a different kind of action. Folding it into the pager would also
+ * force [PagerPositionIndicator]'s "N of M" counter into an awkward choice (count it as a
+ * "model" and lie, or special-case the last page). A plain sibling avoids both.
+ */
+@Composable
+private fun BringYourOwnCard(
+    hint: String,
+    label: String,
+    placeholder: String,
+    url: String,
+    onUrlChange: (String) -> Unit,
+    enabled: Boolean,
+    onDownload: () -> Unit,
+) {
     val c = LocalHyleColors.current
-    if (providers.isEmpty()) {
-        Text(
-            "No cloud providers yet. Add one in Settings → Text — each is a watched object: " +
-                "opt-in, isolated, and on-device stays the default.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        return
-    }
-    LazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-        items(providers.size) { i ->
-            val p = providers[i]
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(p.displayName, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                    Text("watched", style = MaterialTheme.typography.labelSmall, color = c.warning)
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        colors = CardDefaults.cardColors(containerColor = c.inset),
+        border = BorderStroke(1.dp, c.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(132.dp)
+                    .background(Brush.verticalGradient(listOf(c.violetDim, c.raised))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(c.violet),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("+", style = MaterialTheme.typography.headlineMedium, color = c.onViolet)
                 }
+            }
+            Column(Modifier.padding(16.dp)) {
+                Text("Bring your own", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    "${p.kind.label} · ${p.model}",
-                    style = MaterialTheme.typography.bodySmall,
+                    hint,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                HorizontalDivider(Modifier.padding(top = 8.dp), color = c.hairline)
+                Spacer(Modifier.height(14.dp))
+                HyleField(
+                    value = url,
+                    onValueChange = onUrlChange,
+                    label = label,
+                    placeholder = placeholder,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                HyleButton(
+                    "Download from URL",
+                    onClick = onDownload,
+                    enabled = enabled,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
             }
         }
     }
 }
 
-/** Horizontal coverflow: the focused card is full size; neighbours shrink and fade. */
+@Composable
+private fun OnThisDeviceHeading() {
+    Text(
+        "On this device",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+/** [Coverflow]'s pager height: bounded (not `fillMaxHeight`/`wrapContentHeight`, which would
+ *  just forward whatever the parent proposes), sized to comfortably clear [CoverCard]'s own
+ *  `heightIn(min = 380.dp)` with margin for a two-line name or a running/paused download row. */
+private val CoverflowHeight = 430.dp
+
+/** How much of a neighbour card peeks past the current page's edge (owner ask #2: the old
+ *  36.dp peek "reads as a single static card with no visible hint of more content"). */
+private val CoverflowPeek = 52.dp
+
+/**
+ * Horizontal coverflow: the focused card is full size; neighbours shrink and fade, and a
+ * dots-plus-count readout underneath makes the "there's more here, swipe" affordance explicit
+ * (owner ask #2) rather than relying solely on the peek to register.
+ *
+ * The `HorizontalPager` gets an explicit, fixed [CoverflowHeight] rather than
+ * `fillMaxHeight()`/`wrapContentHeight()` — both of those just relay whatever height the
+ * *parent* proposes, and here the parent is [SettingsRoom]'s own `verticalScroll` content
+ * column, which (being scrollable) proposes an *infinite* max height so it can measure its full
+ * intrinsic size. A lazy layout like `HorizontalPager` needs a bounded cross-axis constraint to
+ * lay out its pages and crashes on `Constraints.Infinity` (the PR #39 crash class this file used
+ * to dodge by routing to a full-screen overlay instead). `Modifier.height(fixedDp)` pins an
+ * exact, finite value regardless of what the parent offers, so the pager always measures with a
+ * real number — that's what makes it safe to render straight inside [LocalModels]' existing
+ * `verticalScroll` now, no separate overlay host required.
+ */
 @Composable
 private fun Coverflow(count: Int, card: @Composable (Int) -> Unit) {
     if (count == 0) {
@@ -320,28 +341,87 @@ private fun Coverflow(count: Int, card: @Composable (Int) -> Unit) {
         return
     }
     val state = rememberPagerState(pageCount = { count })
-    HorizontalPager(
-        state = state,
-        contentPadding = PaddingValues(horizontal = 36.dp),
-        pageSpacing = 12.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) { page ->
-        val offset = ((state.currentPage - page) + state.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
-        Box(
-            Modifier.graphicsLayer {
-                val s = lerp(0.86f, 1f, 1f - offset)
-                scaleX = s
-                scaleY = s
-                alpha = lerp(0.45f, 1f, 1f - offset)
-            },
-        ) {
-            card(page)
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = state,
+            contentPadding = PaddingValues(horizontal = CoverflowPeek),
+            pageSpacing = 16.dp,
+            modifier = Modifier.fillMaxWidth().height(CoverflowHeight),
+        ) { page ->
+            val offset = ((state.currentPage - page) + state.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
+            Box(
+                Modifier.graphicsLayer {
+                    // A much shallower fade floor than before (0.45f -> 0.68f) plus a
+                    // stronger, opaque border/shadow on the card itself (see CoverCard) — the
+                    // old combination of a near-background container colour and a deep alpha
+                    // fade was why neighbours were reported as invisible.
+                    val s = lerp(0.87f, 1f, 1f - offset)
+                    scaleX = s
+                    scaleY = s
+                    alpha = lerp(0.68f, 1f, 1f - offset)
+                },
+            ) {
+                card(page)
+            }
+        }
+        if (count > 1) {
+            Spacer(Modifier.height(10.dp))
+            PagerPositionIndicator(state, count, Modifier.padding(horizontal = 20.dp))
         }
     }
 }
 
-/** A large, visually rich model card: gradient header + big monogram, then details
- *  and the inline download lifecycle. */
+/** Explicit page-position readout below the pager (owner ask #2): dots for an at-a-glance
+ *  shape, plus a "N of M" count that stays legible and unambiguous no matter how large the
+ *  catalog grows (dots alone stop scaling past a handful of items, so past a dozen this drops
+ *  them and keeps just the text). */
+@Composable
+private fun PagerPositionIndicator(state: PagerState, count: Int, modifier: Modifier = Modifier) {
+    val c = LocalHyleColors.current
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (count <= 12) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                repeat(count) { i ->
+                    val active = i == state.currentPage
+                    Box(
+                        Modifier
+                            .size(if (active) 8.dp else 6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (active) c.violet else c.outline),
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(
+            "${state.currentPage + 1} of $count",
+            style = MaterialTheme.typography.labelSmall,
+            color = c.textMid,
+        )
+    }
+}
+
+/**
+ * A large, visually rich model card: gradient header + big monogram, then details with real
+ * typographic hierarchy (name → spec → a coloured fit-status badge, not cramped default `Text`
+ * stacking) and the inline download lifecycle.
+ *
+ * Container colour is [dev.aarso.hyle.theme.HyleColors.inset] rather than the M3
+ * `colorScheme.surfaceVariant` this used to read (owner ask #2's root-cause diagnosis:
+ * [dev.fonebrew.ui.theme.FonebrewTheme] maps `surfaceVariant` to the SAME `c.raised` token the
+ * surrounding page background derives from — `ink`/`raised` sit one hair-step apart, e.g.
+ * `0xFFF9F9F9`/`0xFFFFFFFF` in light mode — so a faded neighbour card's fill nearly vanished
+ * into the page behind it). `c.inset` ("inputs, scroll track") is a genuinely further step,
+ * `0xFFEEF0F4` in light mode, and is already used elsewhere for recessed surfaces, so this is
+ * an existing Hyle token, not an invented colour. The border moves from the low-alpha
+ * `c.hairline` (a ~12-14%-opacity "crisp OLED edge" tuned for full-opacity content) to the
+ * opaque `c.outline`, and the card now carries real elevation — both stay legible even at the
+ * pager's faded neighbour alpha, instead of fading toward invisible alongside the fill.
+ */
 @Composable
 private fun CoverCard(
     name: String,
@@ -350,6 +430,9 @@ private fun CoverCard(
     fitReason: String,
     state: DownloadCenter.State?,
     downloaded: Boolean,
+    // Never coerce a null downloadUrl into "available" — the catalog's own honesty rule
+    // (CatalogModel/SdCatalogModel's KDoc): a null mirror shows "not available", never a
+    // Download button that silently no-ops.
     available: Boolean,
     onDownload: () -> Unit,
     onPause: () -> Unit,
@@ -363,9 +446,10 @@ private fun CoverCard(
         FitVerdict.WONT_FIT -> c.error
     }
     Card(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 360.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, c.hairline),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 380.dp),
+        colors = CardDefaults.cardColors(containerColor = c.inset),
+        border = BorderStroke(1.dp, c.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
         Column {
             Box(
@@ -391,17 +475,33 @@ private fun CoverCard(
             }
             Column(Modifier.padding(16.dp)) {
                 Text(name, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                Spacer(Modifier.height(2.dp))
                 Text(spec, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
-                Text(fitReason, style = MaterialTheme.typography.labelMedium, color = fitColor)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
+                FitBadge(fitReason, fitColor)
+                Spacer(Modifier.height(16.dp))
                 DownloadAction(state, downloaded, available, fitVerdict, onDownload, onPause, onResume, onCancel)
             }
         }
     }
 }
 
-/** The shared download lifecycle: on-device / paused / failed / running / download. */
+/** The fit-verdict line as a coloured status pill rather than plain coloured text — a small
+ *  touch that reads as a deliberate status indicator instead of an afterthought caption. Uses
+ *  the same semantic colour [CoverCard] already computes; no new colours invented. */
+@Composable
+private fun FitBadge(text: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.16f))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = color)
+    }
+}
+
+/** The shared download lifecycle: on-device / not available / paused / failed / running / download. */
 @Composable
 private fun DownloadAction(
     state: DownloadCenter.State?,
@@ -432,7 +532,17 @@ private fun DownloadAction(
             }
         }
         state != null && state.failed -> Column {
-            Text("failed: ${progress?.error}", style = MaterialTheme.typography.labelSmall, color = c.error)
+            // Audit finding: the failed-download error is an arbitrary exception/HTTP message
+            // (unbounded length) rendered inside CoverCard's now-fixed-height pager page (see
+            // Coverflow's CoverflowHeight) — capped here so a long/wrapping message can't push
+            // the Retry/Dismiss row past the card's visible bounds.
+            Text(
+                "failed: ${progress?.error}",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.error,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             Row {
                 TextButton(onClick = onResume) { Text("Retry") }
                 TextButton(onClick = onCancel) { Text("Dismiss") }
@@ -461,14 +571,10 @@ private fun DownloadAction(
 }
 
 @Composable
-private fun LocalRow(name: String, size: Long, onDelete: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, LocalHyleColors.current.hairline),
-    ) {
+private fun LocalRow(name: String, size: Long, modifier: Modifier = Modifier, onDelete: () -> Unit) {
+    HyleCard(modifier = modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {

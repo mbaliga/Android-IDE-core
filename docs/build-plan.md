@@ -22,7 +22,7 @@ the work is effortless.*
 **Naming brief (owner decides).** The host-app name must read as a *computing environment /
 seat of capability*, not a single tool. Evoke **sovereignty over systems** — a place you
 build and command from. Avoid: the **trap** register (Chakravyuha owns it), the **mirror**
-register (Aarso owns it), and any **vehicle/charioteer** image ("AI drives, you ride" is the
+register (Fonebrew owns it), and any **vehicle/charioteer** image ("AI drives, you ride" is the
 deskilling claim we argue against). Direction: workshop / forge / seat-of-self-rule.
 
 **Module boundaries (set early, Sprint 0):**
@@ -206,7 +206,7 @@ green, headless boundary respected.
 
 ## G. Progress log (autonomous sessions append here)
 
-- **Sprint 0** — ✅ this doc committed; north-star + Workbench/Aarso naming split added to
+- **Sprint 0** — ✅ this doc committed; north-star + Workbench/Fonebrew naming split added to
   `CLAUDE.md` / `HANDOFF.md` / `docs/status.md`; bounded `domain/mirror/` seam landed
   (`MirrorLens`, `InertMirrorLens`, `Observation`, `Reflection`, `MirrorSeam`) — inert, no
   metric logic, JVM-tested (`MirrorSeamTest`). §5b/§5c untouched (Issue #2). [PR #5]
