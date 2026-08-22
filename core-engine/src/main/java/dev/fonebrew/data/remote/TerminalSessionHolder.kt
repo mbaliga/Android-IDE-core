@@ -33,11 +33,17 @@ import kotlinx.coroutines.launch
  * same relationship every desktop terminal has with its window.
  *
  * The composable keeps only view concerns (colors, layout, which hint to show); every state
- * transition — open/close/switch/reconnect/trust — lives here on the holder's own scope, so an
- * in-flight SSH connect also survives the user wandering off mid-handshake.
+ * transition — open/close/switch/reconnect/trust, and now the window size and command history —
+ * lives here on the holder's own scope, so an in-flight SSH connect also survives the user
+ * wandering off mid-handshake.
  *
- * Runtime behaviour (fork/exec pty, SSH) is owner-verified — no device or SSH host in the build
- * environment.
+ * "Both doors" is now genuinely all of them: `ui/remote/RemoteScreen` used to build a *third*
+ * full terminal of its own (its own `PtyChannel(24, 80)`, its own `ShellSession`, its own
+ * input — all per-mount `remember {}`, the exact shape this class exists to end). It routes here
+ * too.
+ *
+ * Runtime behaviour (fork/exec pty, SSH, TIOCSWINSZ) is owner-verified — no device or SSH host in
+ * the build environment.
  */
 class TerminalSessionHolder(
     private val filesDir: File,
@@ -47,6 +53,10 @@ class TerminalSessionHolder(
     companion object {
         const val PHONE = "phone"
         const val REMOTE = "remote"
+
+        /** How many past command lines ↑/↓ can walk back through. Bounded because this is held
+         *  for the life of the process and nothing prunes it otherwise. */
+        const val MAX_HISTORY = 200
     }
 
     // Main.immediate to match the rememberCoroutineScope() the facet used to run these on —
@@ -91,6 +101,44 @@ class TerminalSessionHolder(
     val input: StateFlow<String> = _input
     fun setInput(value: String) { _input.value = value }
 
+    /** Command history, oldest first. There was none at all — no up/down recall of any kind,
+     *  which on a phone (where retyping a long command is the expensive part) is the difference
+     *  between a usable shell and a novelty. It lives here rather than in the composable for the
+     *  same reason the draft does: navigating away must not erase it. */
+    private val _history = MutableStateFlow<List<String>>(emptyList())
+    val history: StateFlow<List<String>> = _history
+
+    /** Where ↑/↓ currently sit in [history]; `size` means "not recalling — showing the draft". */
+    private var historyCursor = 0
+    private var draftBeforeRecall: String? = null
+
+    /** ↑ — step back to an older command, stashing whatever was being typed so ↓ can return it. */
+    fun historyBack() {
+        val h = _history.value
+        if (h.isEmpty()) return
+        if (historyCursor >= h.size) draftBeforeRecall = _input.value
+        historyCursor = (historyCursor - 1).coerceAtLeast(0)
+        _input.value = h[historyCursor]
+    }
+
+    /** ↓ — step forward, past the newest entry back to the stashed draft. */
+    fun historyForward() {
+        val h = _history.value
+        if (historyCursor >= h.size) return
+        historyCursor += 1
+        _input.value = if (historyCursor >= h.size) draftBeforeRecall.orEmpty() else h[historyCursor]
+    }
+
+    private fun recordHistory(line: String) {
+        val entry = line.trim()
+        // Consecutive repeats are noise to walk back through, and a blank line isn't a command.
+        if (entry.isNotEmpty() && _history.value.lastOrNull() != entry) {
+            _history.update { (it + entry).takeLast(MAX_HISTORY) }
+        }
+        historyCursor = _history.value.size
+        draftBeforeRecall = null
+    }
+
     private fun onOutput(bytes: ByteArray) {
         pty.onOutput(String(bytes, Charsets.UTF_8))
         _screenVersion.update { it + 1 }
@@ -119,12 +167,23 @@ class TerminalSessionHolder(
         }
     }
 
+    /**
+     * Adopt a freshly opened shell and immediately tell it the window size the phone is actually
+     * rendering. sshj's `allocateDefaultPTY()` is a fixed 80×24 and a local pty is only ever the
+     * size it was forked at, so without this the first prompt paints against the wrong width —
+     * which is the whole clipped-lines failure, just for one frame's worth of output.
+     */
+    private fun adoptShell(session: ShellSession) {
+        _shell.value = session
+        scope.launch { runCatching { session.resize(pty.screen.rows, pty.screen.cols) } }
+    }
+
     private fun openPhone() {
         _connecting.value = true; _connectError.value = null
         scope.launch {
             runCatching {
                 PtyShellSession.open(filesDir, rows = pty.screen.rows, cols = pty.screen.cols) { chunk -> onOutput(chunk.bytes) }
-            }.onSuccess { _shell.value = it }.onFailure { _connectError.value = it.message ?: "couldn't open a shell" }
+            }.onSuccess { adoptShell(it) }.onFailure { _connectError.value = it.message ?: "couldn't open a shell" }
             _connecting.value = false
         }
     }
@@ -151,7 +210,7 @@ class TerminalSessionHolder(
                     ok
                 }
                 driver.shell { chunk -> onOutput(chunk.bytes) }
-            }.onSuccess { _shell.value = it }.onFailure { _connectError.value = it.message ?: "couldn't connect — is it trusted yet in Settings → Global?" }
+            }.onSuccess { adoptShell(it) }.onFailure { _connectError.value = it.message ?: "couldn't connect — is it trusted yet in Settings → Global?" }
             _connecting.value = false
         }
     }
@@ -199,9 +258,33 @@ class TerminalSessionHolder(
         }
     }
 
-    /** Send a line (Enter semantics — appends the newline itself). */
+    /** Send a line (Enter semantics — appends the newline itself), recording it for ↑ recall. */
     fun sendLine(line: String) {
+        recordHistory(line)
         scope.launch { runCatching { _shell.value?.send(line + "\n") } }
+    }
+
+    /**
+     * The rendered grid reported its real size — drive it into the screen model *and* the live
+     * shell (TIOCSWINSZ locally, SSH window-change remotely).
+     *
+     * Nothing ever called this before: the session was constructed 24×80 and stayed there, so on
+     * a phone showing roughly forty columns the right half of every line was cut off with no way
+     * to reach it — plain `ls -l` or `git status` output was destroyed. The plumbing to fix it
+     * (PtyShellSession.resize → NativePty.resize → ioctl, and sshj's changeWindowDimensions) was
+     * already complete and unused end to end.
+     *
+     * Idempotent, because the view re-reports on every layout pass and a redundant SIGWINCH makes
+     * a full-screen app repaint for nothing. Whether the shell honours the new size on a real
+     * phone is owner-verified — there is no device here.
+     */
+    fun resize(rows: Int, cols: Int) {
+        if (rows < 1 || cols < 1) return
+        if (rows == pty.screen.rows && cols == pty.screen.cols) return
+        pty.resize(rows, cols)
+        _screenVersion.update { it + 1 }
+        val s = _shell.value ?: return
+        scope.launch { runCatching { s.resize(rows, cols) } }
     }
 
     /** Send raw text/control bytes exactly as given (Ctrl-C = 0x03 etc.). */

@@ -154,6 +154,57 @@ class SearchQueryTest {
         assertEquals(3, hits.size)
     }
 
+    // ---- query-centred previews (QuerySnippet + FTS5 snippet()) ----
+
+    @Test fun `the result snippet is centred on the match, not on the start of the conversation`() {
+        // The old behaviour showed snippet_raw — text chosen at index time, before any query
+        // existed — so a hit deep in a conversation displayed a preview without the search term
+        // anywhere in it.
+        val lead = "Opening chatter with nothing to do with it. ".repeat(8)
+        val bodyRaw = lead + "The gradle build cache was invalidated by the annotation processor."
+        val db = SearchDriverFactory.createInMemory().database
+        index(db, listOf(row("c1", "unrelated title", bodyRaw, 0)))
+
+        val hit = SearchQuery.search(db, "gradle", NOW).single()
+        assertTrue(hit.doc.snippet, hit.doc.snippet.contains("gradle", ignoreCase = true))
+        assertTrue(hit.doc.snippet.length < bodyRaw.length)
+    }
+
+    @Test fun `centring the preview does not move a single result`() {
+        // The replacement happens after ranking, so ordering and scores must be untouched — this
+        // is the same assertion as the golden-ordering test, restated as the property that
+        // matters for this change.
+        val rows = listOf(
+            row("titled", "gradle build cache", "notes", 0),
+            row("content-only", "misc conversation", "gradle build cache discussion", 0),
+            row("stale", "gradle build cache", "old notes", 400),
+        )
+        val db = SearchDriverFactory.createInMemory().database
+        index(db, rows)
+        val docsDirect = rows.map { r ->
+            SearchDoc(r.convId, r.titleRaw, r.snippetRaw, r.bodyRaw, r.updatedAt, SearchKind.TEXT)
+        }
+        val viaSearchQuery = SearchQuery.search(db, "gradle build cache", NOW)
+        val direct = LexicalSearch.search(docsDirect, "gradle build cache", NOW)
+        assertEquals(direct.map { it.doc.id }, viaSearchQuery.map { it.doc.id })
+        assertEquals(direct.map { it.score }, viaSearchQuery.map { it.score })
+    }
+
+    @Test fun `a facet-only query keeps the index-time snippet`() {
+        // No lexical term to centre on; inventing a window would be worse than the projection.
+        val db = SearchDriverFactory.createInMemory().database
+        val projected = "the projected opening line"
+        index(
+            db,
+            listOf(
+                row("c1", "notes", "a body about gradle", 0)
+                    .copy(snippet = projected, snippetRaw = projected),
+            ),
+        )
+        val hit = SearchQuery.search(db, "turns:2", NOW).single()
+        assertEquals(projected, hit.doc.snippet)
+    }
+
     @Test fun `multilingual query matches the segmented multilingual body`() {
         val db = SearchDriverFactory.createInMemory().database
         index(db, listOf(row("hi", "नमस्ते दुनिया", "बातचीत", 0)))

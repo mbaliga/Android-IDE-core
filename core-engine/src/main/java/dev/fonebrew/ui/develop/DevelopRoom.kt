@@ -316,11 +316,23 @@ fun Hint(text: String) {
 /* ---------------------------------------------------------------- Devices */
 
 /**
+ * The one control path in [HardwareFacet] that needs no SSH host — named rather than written as a
+ * bare `3` because "does this mode need a host" is now a real branch in three places, and a magic
+ * number was how the host-less user got locked out of it in the first place.
+ */
+private const val MODE_USB = 3
+
+/**
  * Devices (agentic-ide #3): run on a Pi/Dell over SSH, or flash an Arduino plugged into that
  * host via `arduino-cli` (the v1 delegate-to-Pi path — the phone never touches the board), or
  * push firmware to an ESP over the network. Recipes run through [dev.fonebrew.data.DeviceRepo];
  * the host's raw output is shown verbatim (watched object). All owner-verified — no host/board
- * in CI. (Direct phone↔board over USB is the device-gated #4, not here.)
+ * in CI.
+ *
+ * The fourth path, direct phone↔board over USB (#4), lives here too — in [UsbFlashPanel], reached
+ * by the "This phone (USB)" mode. This comment used to say it was "not here", which was the same
+ * mistake the code made: the panel was mounted after an early return that fired whenever no SSH
+ * host was saved, so the only host-less path was unreachable for exactly the users who needed it.
  */
 @Composable
 private fun HardwareFacet(onOpenTerminal: () -> Unit) {
@@ -335,23 +347,28 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     // on-phone USB flash (CDC/Stk500/IntelHex). Device interaction is owner-verified on hardware.
     Text("Hardware", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Supported: Raspberry Pi (SSH) · Arduino AVR (via Pi or on-phone USB) · ESP32/8266 (OTA) · " +
-            "USB-flashable MCUs. Troubleshooting: no port → check the cable/OTG + driver (CH340/CP210x " +
-            "clones need a vendor driver); permission denied → re-trust the Pi in Settings; flash fails " +
-            "mid-way → it's flagged, re-run before power-cycling.",
+        "Supported: Raspberry Pi (SSH) · Arduino AVR — through a Pi running arduino-cli, or straight " +
+            "off this phone's USB port for a genuine Uno R3 · ESP32/8266 (OTA). Troubleshooting: no " +
+            "port → check the cable/OTG + driver (CH340/CP210x clones need a vendor driver this app " +
+            "doesn't ship); permission denied → re-trust the Pi in Settings; flash fails mid-way → " +
+            "it's flagged, re-run before power-cycling.",
     )
     Spacer(Modifier.height(8.dp))
 
-    if (hosts.isEmpty()) {
-        Hint(
-            "No SSH host yet. Add one in Settings → Global → your machines and connect once to " +
-                "trust it — then a Pi (or an Arduino plugged into it) shows up here. On-phone USB " +
-                "flash works without a host.",
-        )
-        return
+    // Audit (cluster F #1): this used to `return` right here whenever no SSH host was saved —
+    // after printing a hint that promised "on-phone USB flash works without a host". UsbFlashPanel
+    // is mounted below that return, so the one path that genuinely needs no host was the one path
+    // a host-less user could not reach. Only the three SSH-mediated modes need a host; the USB mode
+    // is now the default when there isn't one, and the SSH modes say what they're missing in place
+    // instead of taking the whole screen with them.
+    val hasHosts = hosts.isNotEmpty()
+    var selected by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(hosts) {
+        if (hosts.none { it.alias == selected }) selected = hosts.firstOrNull()?.alias
     }
-    var selected by remember { mutableStateOf(hosts.first().alias) }
-    var mode by remember { mutableStateOf(0) }
+    // Keyed on the boolean, not the list: the default mode is re-decided only when the host list
+    // crosses empty↔non-empty, so an ordinary host edit never yanks you out of the mode you're in.
+    var mode by remember(hasHosts) { mutableStateOf(if (hasHosts) 0 else MODE_USB) }
     var output by remember { mutableStateOf("") }
     var summary by remember { mutableStateOf<String?>(null) }
     var running by remember { mutableStateOf(false) }
@@ -380,39 +397,50 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             running = false
         }
     }
-    val host = hosts.first { it.alias == selected }
+    val host = hosts.firstOrNull { it.alias == selected }
     fun arduinoTarget(): dev.fonebrew.domain.device.DeployTarget.Arduino? = runCatching {
         dev.fonebrew.domain.device.DeployTarget.Arduino(
-            via = host,
+            via = host ?: error("no host selected"),
             fqbn = dev.fonebrew.domain.device.Fqbn(fqbn.trim()),
             port = dev.fonebrew.domain.device.SerialPort(port.trim()),
         )
     }.getOrElse { summary = "invalid FQBN/port: ${it.message}"; null }
 
     Text("Devices", style = MaterialTheme.typography.titleSmall)
-    Hint("Run on a Pi/Dell over SSH, or flash an Arduino plugged into that host. Output is shown verbatim.")
+    Hint(
+        "Run on a Pi/Dell over SSH, flash an Arduino plugged into that host, or flash one plugged " +
+            "straight into this phone. Output is shown verbatim.",
+    )
     Spacer(Modifier.height(8.dp))
-    Text("Host", style = MaterialTheme.typography.labelMedium)
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        hosts.forEach { h -> WireButton(h.alias, selected = h.alias == selected, onClick = { selected = h.alias }) }
+    if (hasHosts) {
+        Text("Host", style = MaterialTheme.typography.labelMedium)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            hosts.forEach { h -> WireButton(h.alias, selected = h.alias == selected, onClick = { selected = h.alias }) }
+        }
+        Spacer(Modifier.height(8.dp))
     }
-    Spacer(Modifier.height(8.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         WireButton("Raspberry Pi", selected = mode == 0, onClick = { mode = 0 })
         WireButton("Arduino (via Pi)", selected = mode == 1, onClick = { mode = 1 })
         WireButton("ESP-OTA", selected = mode == 2, onClick = { mode = 2 })
-        WireButton("This phone (USB)", selected = mode == 3, onClick = { mode = 3 })
+        WireButton("This phone (USB)", selected = mode == MODE_USB, onClick = { mode = MODE_USB })
     }
     Spacer(Modifier.height(6.dp))
     Hint(
-        if (mode == 3) {
+        if (mode == MODE_USB) {
             "⌂ on-device — flashes a board plugged into this phone. No network, no pairing."
         } else {
             "☁ watched — controls a paired host over SSH; credentials stay in the Keystore."
         },
     )
     Spacer(Modifier.height(8.dp))
-    when (mode) {
+    if (mode != MODE_USB && !hasHosts) {
+        Hint(
+            "That path runs over SSH and there's no host saved yet. Add one in Settings → Global → " +
+                "your machines and connect once to trust it — then a Pi (or an Arduino plugged into " +
+                "it) shows up here. \"This phone (USB)\" is the one that needs no host at all.",
+        )
+    } else when (mode) {
         0 -> {
             Hint(
                 "Running one-off shell commands on a paired host now lives in the Terminal tab, so " +
@@ -473,11 +501,23 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
 }
 
 /**
- * Direct-USB flashing (agentic-ide #4) — the device-gated panel. Lists attached USB boards and
- * flashes a host-built .hex via the tested STK500 over [dev.fonebrew.data.device.CdcUsbSerialLink].
- * Experimental + owner-verified: CDC boards only (Uno R3/Leonardo/Micro, ESP-CDC); CH340/CP210x
- * clones need a vendor driver (follow-up). Compilation is never on the phone — get the .hex from
- * the Arduino-via-Pi flow or a CI build.
+ * Direct-USB flashing (agentic-ide #4) — the on-phone panel. Lists attached USB devices, takes a
+ * `.hex` the user picks through SAF, has the flasher identify the board by its device signature,
+ * and only then writes it via the tested STK500v1 over
+ * [dev.fonebrew.data.device.CdcUsbSerialLink].
+ *
+ * The copy below is deliberately specific because the copy it replaces was not. That version said
+ * "CDC boards only (Uno R3/Leonardo/Micro, ESP-CDC)", which reads as a support list and is not one:
+ * a Leonardo/Micro is an ATmega32U4 that does enumerate as CDC and still cannot be flashed here,
+ * because its Caterina bootloader speaks AVR109 rather than STK500v1; an ESP speaks the esptool ROM
+ * protocol and never STK500 at all. Two independent things have to line up — the cable side (CDC)
+ * and the protocol side (STK500v1) — and
+ * [dev.fonebrew.domain.device.usb.AvrParts] is the table that holds both. This panel renders it
+ * rather than paraphrasing it, so the list cannot drift back into optimism.
+ *
+ * Compilation is never on the phone — the `.hex` comes from the Arduino-via-Pi flow or a CI build.
+ * Every claim about cables, resets and boards is owner-verified: there is no board, USB host or
+ * emulator in this build environment (rule 6).
  */
 @Composable
 private fun UsbFlashPanel() {
@@ -486,14 +526,77 @@ private fun UsbFlashPanel() {
     val flasher = remember { dev.fonebrew.data.device.UsbFlasher(ctx) }
     var boards by remember { mutableStateOf(flasher.attached()) }
     var selected by remember { mutableStateOf(boards.firstOrNull { it.cdc }?.device?.deviceName ?: boards.firstOrNull()?.device?.deviceName) }
+    // Defaults to the one board this path can actually flash, so the wrong-board preflight is armed
+    // by default instead of opt-in; "Not sure" turns it off, explicitly and visibly.
+    var expected by remember { mutableStateOf<dev.fonebrew.domain.device.usb.ArduinoBoard?>(dev.fonebrew.domain.device.usb.AvrParts.DEFAULT_BOARD) }
+    var hexUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var hexName by remember { mutableStateOf<String?>(null) }
     var hexPath by remember { mutableStateOf("") }
+    var showPathField by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<String?>(null) }
+    var mismatch by remember { mutableStateOf<dev.fonebrew.data.device.UsbFlasher.BoardMismatch?>(null) }
     var busy by remember { mutableStateOf(false) }
 
+    // The picker is the primary way in. This panel's only input used to be a typed absolute path
+    // read with java.io.File — and the app declares no storage permission in any manifest, so on
+    // minSdk 31 that could only ever reach its own sandbox: a .hex in /sdcard/Download, which is
+    // where one lands from a browser or a chat app, failed with EACCES shown as "can't read .hex".
+    // SAF grants exactly the one file the user chose, which is the right amount of access for a
+    // local-first app; a broad storage permission is not, and is deliberately still not requested.
+    // "*/*" because .hex has no registered MIME type — filtering on text/* hides it in some pickers.
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            hexUri = uri
+            hexName = hexDisplayName(ctx, uri)
+            hexPath = ""
+            progress = null
+            mismatch = null
+        }
+    }
+
+    fun runFlash(overrideBoardCheck: Boolean) {
+        val board = boards.firstOrNull { it.device.deviceName == selected }?.device ?: return
+        busy = true; progress = "requesting USB permission…"; mismatch = null
+        scope.launch {
+            try {
+                if (!flasher.requestPermission(board)) { progress = "USB permission denied"; return@launch }
+                val uri = hexUri
+                val hex = if (uri != null) {
+                    flasher.readHex(uri).getOrElse { progress = "can't read that .hex — ${it.message}"; return@launch }
+                } else {
+                    runCatching { java.io.File(hexPath.trim()).readText() }.getOrElse {
+                        progress = "can't read ${hexPath.trim()} — ${it.message}. Only files inside this " +
+                            "app's own storage are readable by path; use Choose .hex for anything else."
+                        return@launch
+                    }
+                }
+                flasher.flash(
+                    board,
+                    hex,
+                    expectedPart = expected?.part,
+                    allowBoardMismatch = overrideBoardCheck,
+                ) { progress = it }.onFailure { e ->
+                    // A wrong-board refusal is recoverable and gets its own confirm affordance; every
+                    // other failure is just a message. Nothing was written in either case.
+                    if (e is dev.fonebrew.data.device.UsbFlasher.BoardMismatch) mismatch = e
+                    progress = if (e is dev.fonebrew.data.device.UsbFlasher.BoardMismatch) e.message else "failed: ${e.message}"
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
     Text(
-        "Experimental · device-gated. Flashes a board plugged into the phone over USB-OTG. CDC " +
-            "boards only (Uno R3/Leonardo/Micro, ESP-CDC) — clone chips (CH340/CP210x) need a " +
-            "vendor driver (follow-up). The .hex comes from a host/CI build, not the phone.",
+        "Experimental · on-device. Flashes a board plugged into this phone over USB-OTG. Works today: " +
+            "a genuine Uno R3, or another optiboot ATmega328/168 board that enumerates as USB-CDC. " +
+            "Doesn't, and why: Micro / Leonardo / Pro Micro / LilyPad USB are ATmega32U4 and speak " +
+            "AVR109 after a 1200-baud touch, not STK500v1; the Mega 2560 speaks STK500v2; Pro Mini, " +
+            "the classic Nano and the FTDI-header LilyPads have no CDC USB of their own and need a " +
+            "CH340/CP210x/FTDI driver this app doesn't ship. The .hex comes from a host or CI build — " +
+            "nothing is compiled on the phone.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -510,25 +613,95 @@ private fun UsbFlashPanel() {
                 onClick = { selected = b.device.deviceName },
             )
         }
+        Spacer(Modifier.height(4.dp))
+        Hint("✓ = exposes a USB-CDC interface this app can open. That's the cable, not the protocol — the board still has to be identified before anything is written.")
     }
-    Spacer(Modifier.height(6.dp))
-    dev.aarso.hyle.cells.HyleField(hexPath, { hexPath = it }, label = ".hex file path on this phone", modifier = Modifier.fillMaxWidth())
-    Spacer(Modifier.height(6.dp))
-    WireButton(if (busy) "Flashing…" else "Flash over USB", enabled = !busy && selected != null && hexPath.isNotBlank(), onClick = {
-        val board = boards.firstOrNull { it.device.deviceName == selected }?.device ?: return@WireButton
-        busy = true; progress = "requesting USB permission…"
-        scope.launch {
-            try {
-                if (!flasher.requestPermission(board)) { progress = "USB permission denied"; return@launch }
-                val hex = runCatching { java.io.File(hexPath.trim()).readText() }.getOrElse { progress = "can't read .hex: ${it.message}"; return@launch }
-                flasher.flash(board, hex) { progress = it }.onFailure { progress = "failed: ${it.message}" }
-            } finally {
-                busy = false
-            }
+
+    Spacer(Modifier.height(10.dp))
+    Text("Which board is this .hex built for?", style = MaterialTheme.typography.labelMedium)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        dev.fonebrew.domain.device.usb.AvrParts.BOARDS.forEach { b ->
+            WireButton(
+                verdictMark(b.verdict) + " " + b.displayName,
+                selected = expected?.displayName == b.displayName,
+                onClick = { expected = b; mismatch = null },
+            )
         }
-    })
+        WireButton("Not sure — skip the board check", selected = expected == null, onClick = { expected = null; mismatch = null })
+    }
+    Spacer(Modifier.height(4.dp))
+    val chosen = expected
+    if (chosen == null) {
+        Hint(
+            "Without a target board the flasher still reads the device signature and refuses anything " +
+                "it can't identify or can't speak to — it just can't tell you you're holding the wrong " +
+                "one of two boards it does support.",
+        )
+    } else {
+        Hint(chosen.why)
+        if (chosen.verdict != dev.fonebrew.domain.device.usb.UsbFlashVerdict.SUPPORTED) {
+            Hint("Flashing this will stop at the identify step and write nothing. Left enabled in case the label is wrong and the board isn't what it says on the silkscreen.")
+        }
+    }
+
+    Spacer(Modifier.height(10.dp))
+    Text(".hex to flash", style = MaterialTheme.typography.labelMedium)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        WireButton(if (hexUri == null) "Choose .hex" else "Choose a different .hex", enabled = !busy, onClick = { picker.launch(arrayOf("*/*")) })
+        WireButton(if (showPathField) "Hide path entry" else "Type a path instead", selected = showPathField, onClick = { showPathField = !showPathField })
+    }
+    hexName?.let { Spacer(Modifier.height(4.dp)); Hint("Picked: $it") }
+    if (showPathField) {
+        Spacer(Modifier.height(6.dp))
+        dev.aarso.hyle.cells.HyleField(
+            hexPath,
+            { hexPath = it; if (it.isNotBlank()) { hexUri = null; hexName = null } },
+            label = "Absolute path (this app's storage only)",
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(4.dp))
+        Hint("Advanced fallback. This app holds no storage permission by design, so a path can only reach files inside its own storage — anything else needs the picker.")
+    }
+
+    Spacer(Modifier.height(8.dp))
+    WireButton(
+        if (busy) "Flashing…" else "Flash over USB",
+        enabled = !busy && selected != null && (hexUri != null || hexPath.isNotBlank()),
+        onClick = { runFlash(overrideBoardCheck = false) },
+    )
+    mismatch?.let { m ->
+        Spacer(Modifier.height(8.dp))
+        WireBox {
+            Text("Wrong board", style = MaterialTheme.typography.labelMedium)
+            Text(
+                "The board answered as a ${m.found.name}; this .hex is marked as being for a " +
+                    "${m.expected.name}. Nothing has been written — the signature is read before program " +
+                    "mode is entered. If the label is wrong and you know what's plugged in, flash it anyway.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            WireButton("Flash anyway — I know this board", enabled = !busy, onClick = { runFlash(overrideBoardCheck = true) })
+        }
+    }
     progress?.let { Spacer(Modifier.height(8.dp)); Text(it, style = MaterialTheme.typography.bodyMedium, color = if (it.startsWith("done")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
 }
+
+/** ✓ flashable from this phone · ⚠ right protocol, missing driver/adapter · ✗ protocol this app doesn't speak. */
+private fun verdictMark(verdict: dev.fonebrew.domain.device.usb.UsbFlashVerdict): String = when (verdict) {
+    dev.fonebrew.domain.device.usb.UsbFlashVerdict.SUPPORTED -> "✓"
+    dev.fonebrew.domain.device.usb.UsbFlashVerdict.NEEDS_ADAPTER -> "⚠"
+    dev.fonebrew.domain.device.usb.UsbFlashVerdict.WRONG_PROTOCOL -> "✗"
+}
+
+/** The picked document's own name, for the "Picked: …" line — a SAF uri's path is not showable. */
+private fun hexDisplayName(context: android.content.Context, uri: android.net.Uri): String? =
+    runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+        }
+    }.getOrNull() ?: uri.lastPathSegment
 
 private fun compileSummary(out: String): String {
     val r = dev.fonebrew.domain.device.ArduinoCli.parseCompile(out)

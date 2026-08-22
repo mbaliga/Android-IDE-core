@@ -1,6 +1,7 @@
 package dev.fonebrew.ui.search
 
 import dev.fonebrew.domain.format.LocaleFormat
+import dev.fonebrew.domain.search.LexicalSearch
 import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.MatchedIn
 import dev.fonebrew.domain.search.SearchHit
@@ -19,8 +20,10 @@ import java.util.Locale
 object SearchResultsPresenter {
 
     /** One rendered result row. [titleHighlights]/[snippetHighlights] are character ranges into
-     *  [title]/[snippet] respectively — whichever [matchedIn] didn't hit gets an empty list,
-     *  since [SearchHit.highlights] only ever indexes the one field it actually matched in. */
+     *  [title]/[snippet] respectively. Title ranges come straight from [SearchHit.highlights]
+     *  (which index the title exactly when [matchedIn] is [MatchedIn.TITLE]); snippet ranges are
+     *  recomputed against [snippet] itself — see [present]'s `queryText` for why they can't be
+     *  taken from the hit. */
     data class ResultRow(
         val convId: String,
         val title: String,
@@ -32,19 +35,44 @@ object SearchResultsPresenter {
         val explanation: MatchExplanation?,
     )
 
-    fun present(hits: List<SearchHit>, nowMillis: Long, zone: ZoneId, locale: Locale): List<ResultRow> =
-        hits.map { hit ->
+    /**
+     * @param queryText the plain lexical text of the query (facet/regex syntax stripped —
+     *   `QueryCompiler.lexicalText`). Supplied so snippet highlights can be computed against the
+     *   snippet **as drawn**. [SearchHit.highlights] can't serve that: for a content match they
+     *   index `snippet + " " + body` (see [dev.fonebrew.domain.search.LexicalSearch.search]),
+     *   which is not the string this row renders — ranges past the snippet's end were silently
+     *   dropped, and ranges straddling its end highlighted the wrong characters. Now that
+     *   [dev.fonebrew.data.search.SearchQuery] replaces the snippet with a query-centred window,
+     *   recomputing is also the only way the highlight lands on the term that window exists to
+     *   show. Defaults to blank, which keeps the old (hit-supplied) behaviour for any caller that
+     *   has no query text to give.
+     */
+    fun present(
+        hits: List<SearchHit>,
+        nowMillis: Long,
+        zone: ZoneId,
+        locale: Locale,
+        queryText: String = "",
+    ): List<ResultRow> {
+        val terms = LexicalSearch.tokenizeQuery(queryText)
+        return hits.map { hit ->
+            val snippet = hit.doc.snippet.ifBlank { hit.doc.body.take(SNIPPET_FALLBACK_CHARS) }
             ResultRow(
                 convId = hit.doc.id,
                 title = hit.doc.title,
-                snippet = hit.doc.snippet.ifBlank { hit.doc.body.take(SNIPPET_FALLBACK_CHARS) },
+                snippet = snippet,
                 relativeTime = LocaleFormat.relativeOrAbsolute(hit.doc.lastActivityMillis, nowMillis, zone, locale),
                 matchedIn = hit.matchedIn,
                 titleHighlights = if (hit.matchedIn == MatchedIn.TITLE) hit.highlights else emptyList(),
-                snippetHighlights = if (hit.matchedIn == MatchedIn.CONTENT) hit.highlights else emptyList(),
+                snippetHighlights = when {
+                    terms.isNotEmpty() -> LexicalSearch.findMatches(snippet, terms)
+                    hit.matchedIn == MatchedIn.CONTENT -> hit.highlights
+                    else -> emptyList()
+                },
                 explanation = hit.explanation,
             )
         }
+    }
 
     private const val SNIPPET_FALLBACK_CHARS = 160
 }

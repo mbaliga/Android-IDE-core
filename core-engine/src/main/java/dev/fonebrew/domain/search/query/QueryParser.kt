@@ -189,7 +189,12 @@ private fun scanWordOrFacet(input: String, start: Int, tokens: MutableList<Token
     return i
 }
 
-private const val IGNORE_CASE_MARKER = " i"
+// The regex token carries its /i flag through the flat token list by suffixing the pattern
+// with NUL + "i" (NUL can't appear in a typed query, so it can never collide with real
+// pattern text). Written as the \u0000 ESCAPE, never as a literal NUL byte: a raw NUL here
+// makes `file` report this .kt as "data", and grep/rg then skip it silently unless -a is
+// passed — which is exactly how two audits missed this file entirely. Keep the escape.
+private const val IGNORE_CASE_MARKER = "\u0000i"
 private fun encodeRegex(pattern: String, ignoreCase: Boolean) = if (ignoreCase) pattern + IGNORE_CASE_MARKER else pattern
 private fun decodeRegexPattern(encoded: String) = encoded.removeSuffix(IGNORE_CASE_MARKER)
 private fun decodeRegexIgnoreCase(encoded: String) = encoded.endsWith(IGNORE_CASE_MARKER)
@@ -264,7 +269,16 @@ private class Parser(
                 advance()
                 QueryNode.Regex(decodeRegexPattern(t.text), decodeRegexIgnoreCase(t.text))
             }
-            Token.Kind.SEMANTIC -> { advance(); QueryNode.Semantic(t.text) }
+            // `?term` still parses to a Semantic node — QueryCompiler degrades it to a plain
+            // prefix term so the query keeps running (hard rule 1) — but the user is told out
+            // loud that the semantic half didn't happen. Diagnostic.SemanticUnavailable and its
+            // UI copy both already existed; nothing emitted it, so `?foo` silently ran as a
+            // lexical search and looked like semantic search working.
+            Token.Kind.SEMANTIC -> {
+                advance()
+                diagnostics.add(Diagnostic.SemanticUnavailable(t.text))
+                QueryNode.Semantic(t.text)
+            }
             Token.Kind.FACET -> { advance(); parseFacetBody(t.text, t.start) }
             Token.Kind.WORD -> {
                 advance()
@@ -311,7 +325,12 @@ private class Parser(
             if (!validDate) diagnostics.add(Diagnostic.InvalidDate(field, value))
         }
 
-        if (!isBacked(field, value)) {
+        // unbackedReason, not isBacked: isBacked answers "does a real predicate exist" (and must
+        // keep saying yes for is:archived, or -is:archived would stop excluding anything the day
+        // archiving is wired up), while this diagnostic is about "can this return anything
+        // today". is:archived was the one facet that fell through the gap — real predicate, no
+        // data, no explanation, silent zero.
+        if (unbackedReason(field, value) != null) {
             diagnostics.add(Diagnostic.UnindexedFacet(field, value))
         }
         return QueryNode.Facet(field, op, value)

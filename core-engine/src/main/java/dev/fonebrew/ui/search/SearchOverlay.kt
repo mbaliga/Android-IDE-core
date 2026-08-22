@@ -43,6 +43,8 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +55,9 @@ import androidx.compose.ui.window.DialogProperties
 import dev.fonebrew.domain.search.ExplainField
 import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.query.Diagnostic
+import dev.fonebrew.domain.search.query.unbackedReason
+import dev.fonebrew.ui.components.SlashCommand
+import dev.fonebrew.ui.components.SlashCommandPopup
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleChip
 import dev.aarso.hyle.cells.HyleField
@@ -90,6 +95,15 @@ fun SearchEntryPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
  * Follows the existing Participants/Me full-screen-dialog precedent
  * ([androidx.compose.ui.window.Dialog] with `usePlatformDefaultWidth = false` + a fill-size
  * [Surface]) rather than inventing a new overlay pattern.
+ *
+ * ### The syntax help is concealed, not removed (owner ask)
+ * You always arrive here with an empty box, and the empty box used to answer with a wall of
+ * help: an "N conversations indexed" banner, then a hard-coded six-row operator cheat-sheet,
+ * with a full example query (`gradle is:starred "exact phrase" /regex/`) baked into the
+ * placeholder for good measure. The grammar is strong and worth teaching — so it moved behind
+ * the quiet `?` at the field's trailing edge ([OperatorLegend], collapsed by default) and into
+ * the autocomplete rows, which teach the same vocabulary at the moment it's useful. What's left
+ * standing in the empty state is what's actually personal: recent and saved searches.
  */
 @Composable
 fun SearchOverlay(
@@ -103,6 +117,14 @@ fun SearchOverlay(
     val c = LocalHyleColors.current
     val state by viewModel.uiState.collectAsState()
     var saveDialogOpen by remember { mutableStateOf(false) }
+    // Both exits are wrapped so the ViewModel sees the two moments a search is actually
+    // committed — a result opened, or the overlay closed on a query that found something. That
+    // is what fills `search_history` (and therefore the Recent list) without logging keystrokes.
+    val dismiss: () -> Unit = { viewModel.onOverlayClosed(); onDismiss() }
+    val openConversation: (String, String) -> Unit = { convId, findText ->
+        viewModel.onResultOpened(convId)
+        onOpenConversation(convId, findText)
+    }
     // Scoped hardware-keyboard shortcuts (§11.1's reachable-pre-M5 subset, WP13): Esc closes,
     // Ctrl+S saves the current query, Ctrl+Enter opens the top result. Kept local to this
     // Dialog's own composition (a separate Android window from SpatialRoot's), and — unlike
@@ -111,7 +133,7 @@ fun SearchOverlay(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = dismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier
                 .fillMaxSize()
@@ -120,12 +142,12 @@ fun SearchOverlay(
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
-                        event.key == Key.Escape -> { onDismiss(); true }
+                        event.key == Key.Escape -> { dismiss(); true }
                         event.isCtrlPressed && event.key == Key.S && !state.isZeroState -> {
                             saveDialogOpen = true; true
                         }
                         event.isCtrlPressed && event.key == Key.Enter -> {
-                            state.rows.firstOrNull()?.let { onOpenConversation(it.convId, state.findText) }
+                            state.rows.firstOrNull()?.let { openConversation(it.convId, state.findText) }
                             true
                         }
                         else -> false
@@ -140,7 +162,7 @@ fun SearchOverlay(
                         Modifier
                             .padding(end = 20.dp)
                             .size(32.dp)
-                            .clickable(onClick = onDismiss),
+                            .clickable(onClick = dismiss),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text("✕", style = MaterialTheme.typography.titleMedium, color = c.textMid)
@@ -148,18 +170,46 @@ fun SearchOverlay(
                 }
 
                 Column(Modifier.padding(horizontal = 20.dp)) {
-                    DesktopHyleField(
-                        value = state.queryText,
-                        onValueChange = viewModel::onQueryChange,
-                        placeholder = "gradle is:starred \"exact phrase\" /regex/",
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DesktopHyleField(
+                            value = state.queryText,
+                            onValueChange = viewModel::onQueryChange,
+                            // Plain, not a syntax demo. The operators are one tap away at the
+                            // trailing edge, and autocomplete offers them while you type.
+                            placeholder = "Search conversations",
+                            modifier = Modifier.weight(1f),
+                        )
+                        OperatorsToggle(
+                            expanded = state.operatorsExpanded,
+                            onToggle = viewModel::toggleOperators,
+                        )
+                    }
+                    if (state.operatorsExpanded) OperatorLegend()
+                    if (state.suggestions.isNotEmpty()) {
+                        // Reuses the composer's completion popup rather than inventing a second
+                        // one: SlashCommand is (name, description, action), which is exactly a
+                        // suggestion row — insertion happens in the ViewModel, not in the list.
+                        SlashCommandPopup(
+                            commands = state.suggestions.map { suggestion ->
+                                SlashCommand(suggestion.label, suggestion.detail) {
+                                    viewModel.applySuggestion(suggestion)
+                                }
+                            },
+                            onPick = { cmd -> cmd.run() },
+                        )
+                    }
                     if (state.chips.isNotEmpty()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            state.chips.forEach { chip -> HyleChip(true, {}, chip.text) }
+                            // Tapping a chip removes that node from the query. These looked like
+                            // removable filter chips from day one but shipped with `onClick = {}`.
+                            // The ✕ is display-only — chip.text stays the canonical, reparseable
+                            // query fragment.
+                            state.chips.forEachIndexed { index, chip ->
+                                HyleChip(true, { viewModel.removeChip(index) }, chip.text + "  ✕")
+                            }
                         }
                     }
                     if (state.hasLossyDisjunction) {
@@ -179,21 +229,34 @@ fun SearchOverlay(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
+                    // Not errors — these filters work, they just measure something coarser than
+                    // their name suggests, so they're said quietly rather than in the error colour.
+                    state.facetCaveats.forEach { caveat ->
+                        Text(
+                            caveat,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = c.textMid,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
 
                 when {
-                    state.isZeroState -> ZeroState(
-                        state = state,
-                        onApplySaved = viewModel::applySavedSearch,
-                        onDeleteSaved = viewModel::deleteSavedSearch,
-                    )
-                    state.indexing -> CenteredMessage("Indexing your conversations…") {
+                    // Indexing is tested FIRST. It used to sit after isZeroState, and since the
+                    // overlay always opens blank, the very first thing a new user saw was the
+                    // empty state announcing "0 conversations indexed" — the spinner below was
+                    // unreachable until they typed something.
+                    state.indexing -> CenteredMessage(indexingMessage(state.indexedCount)) {
                         CircularProgressIndicator(color = c.violet, modifier = Modifier.size(28.dp))
                     }
-                    state.isNoResults -> CenteredMessage(
-                        "No results for “${state.queryText}”. Try a shorter query or removing a facet.",
+                    state.isZeroState -> ZeroState(
+                        state = state,
+                        onApplyQuery = viewModel::applySavedSearch,
+                        onDeleteSaved = viewModel::deleteSavedSearch,
+                        onClearRecent = viewModel::clearRecentSearches,
                     )
-                    else -> ResultsList(state, viewModel::toggleExplain, onOpenConversation)
+                    state.isNoResults -> NoResults(state = state, onDropFacets = viewModel::dropFacets)
+                    else -> ResultsList(state, viewModel::toggleExplain, openConversation)
                 }
 
                 if (!state.isZeroState) {
@@ -216,20 +279,103 @@ fun SearchOverlay(
     }
 }
 
+/** The whole of the operator help's standing presence: one glyph at the field's trailing edge,
+ *  violet while open. Everything the old always-on cheat-sheet said now lives behind this. */
+@Composable
+private fun OperatorsToggle(expanded: Boolean, onToggle: () -> Unit) {
+    val c = LocalHyleColors.current
+    Box(
+        Modifier
+            .padding(start = 4.dp)
+            .size(32.dp)
+            .clickable(onClick = onToggle)
+            .semantics { contentDescription = if (expanded) "Hide search operators" else "Show search operators" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("?", style = MaterialTheme.typography.titleMedium, color = if (expanded) c.violet else c.textMid)
+    }
+}
+
+/** The operator reference, shown only when [OperatorsToggle] is on. Same six lines it always
+ *  was — the change is that you have to ask for them. */
+@Composable
+private fun OperatorLegend() {
+    val c = LocalHyleColors.current
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        listOf(
+            "\"exact phrase\"" to "match text verbatim",
+            "term1 OR term2" to "either term",
+            "-term" to "exclude a term",
+            "is:starred  has:image  project:name" to "filter by facet",
+            "before:2026-01-01  after:-7d" to "filter by date",
+            "/pattern/" to "regex over matched conversations",
+        ).forEach { (op, desc) ->
+            Row(Modifier.padding(vertical = 3.dp)) {
+                Text(op, style = MaterialTheme.typography.labelMedium, color = c.violet)
+                Spacer(Modifier.width(8.dp))
+                Text(desc, style = MaterialTheme.typography.labelMedium, color = c.textMid)
+            }
+        }
+    }
+}
+
+/**
+ * The empty state. Personal content only: what you searched before, and what you saved. The
+ * index-status line appears only on a genuine first run — while indexing is actually running the
+ * `when` above shows the spinner instead, so this can never be the permanent banner it was.
+ */
 @Composable
 private fun ZeroState(
     state: SearchPresenter.UiState,
-    onApplySaved: (String) -> Unit,
+    /** Puts a stored query back in the box — shared by Recent and Saved, which differ only in
+     *  where the text came from. */
+    onApplyQuery: (String) -> Unit,
     onDeleteSaved: (String) -> Unit,
+    onClearRecent: () -> Unit,
 ) {
     val c = LocalHyleColors.current
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text(
-            "${state.indexedCount} conversation" + (if (state.indexedCount == 1L) "" else "s") + " indexed",
-            style = MaterialTheme.typography.labelMedium,
-            color = c.textMid,
-        )
-        Spacer(Modifier.height(16.dp))
+        if (state.showIndexStatus) {
+            Text(
+                "Nothing indexed yet — conversations become searchable as you have them.",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.textMid,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        if (state.recentSearches.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Recent",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = c.textHigh,
+                    modifier = Modifier.weight(1f),
+                )
+                // Local-first app: search history is sensitive, so clearing it is one tap away
+                // and actually deletes the rows.
+                Text(
+                    "Clear",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.violet,
+                    modifier = Modifier.clickable(onClick = onClearRecent),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            state.recentSearches.forEach { query ->
+                Text(
+                    query,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.textMid,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = { onApplyQuery(query) })
+                        .padding(vertical = 8.dp),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         if (state.savedSearches.isNotEmpty()) {
             Text("Saved searches", style = MaterialTheme.typography.titleSmall, color = c.textHigh)
             Spacer(Modifier.height(8.dp))
@@ -237,7 +383,7 @@ private fun ZeroState(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(onClick = { onApplySaved(saved.query) })
+                        .clickable(onClick = { onApplyQuery(saved.query) })
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -259,23 +405,54 @@ private fun ZeroState(
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
         }
-        Text("Operators", style = MaterialTheme.typography.titleSmall, color = c.textHigh)
-        Spacer(Modifier.height(8.dp))
-        listOf(
-            "\"exact phrase\"" to "match text verbatim",
-            "term1 OR term2" to "either term",
-            "-term" to "exclude a term",
-            "is:starred  has:image  project:name" to "filter by facet",
-            "before:2026-01-01  after:-7d" to "filter by date",
-            "/pattern/" to "regex over matched conversations",
-        ).forEach { (op, desc) ->
-            Row(Modifier.padding(vertical = 3.dp)) {
-                Text(op, style = MaterialTheme.typography.labelMedium, color = c.violet)
-                Spacer(Modifier.width(8.dp))
-                Text(desc, style = MaterialTheme.typography.labelMedium, color = c.textMid)
-            }
+    }
+}
+
+/**
+ * No results, with a way forward instead of a shrug. This used to be a single line — "try a
+ * shorter query or removing a facet" — that named the fix without offering it.
+ *
+ * TODO(owner decision): the natural next offer here is "search the rest of this device instead".
+ *  It is deliberately NOT built. The app has no device-wide search at all today (only
+ *  single-file SAF pickers), and adding one means `Intent.ACTION_OPEN_DOCUMENT_TREE`, a
+ *  *persisted* tree URI permission, and a walked/indexed copy of whatever that tree contains —
+ *  a real change to this app's privacy surface, on a phone, in a local-first app whose first
+ *  binding rule is about not reaching where it wasn't invited. That is the owner's call to make,
+ *  not this layer's to sneak in behind a helpful-looking button.
+ */
+@Composable
+private fun NoResults(state: SearchPresenter.UiState, onDropFacets: () -> Unit) {
+    val c = LocalHyleColors.current
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            "No results for “${state.queryText}”.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = c.textMid,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.height(12.dp))
+        if (state.hasFacets) {
+            Text(
+                "The filters may be narrowing it to nothing.",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.textMid,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(12.dp))
+            HyleButton("Search without filters", onClick = onDropFacets, secondary = true)
+        } else {
+            Text(
+                "Search covers the titles and message text of your ${countPhrase(state.indexedCount)} " +
+                    "on this device. It doesn't look at files stored elsewhere on your phone.",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.textMid,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
     }
 }
@@ -406,6 +583,13 @@ private fun SaveSearchDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     )
 }
 
+private fun countPhrase(count: Long): String =
+    "$count conversation" + if (count == 1L) "" else "s"
+
+private fun indexingMessage(indexedCount: Long): String =
+    if (indexedCount > 0L) "Indexing your conversations… ${countPhrase(indexedCount)} so far."
+    else "Indexing your conversations…"
+
 private fun highlighted(text: String, ranges: List<IntRange>, color: androidx.compose.ui.graphics.Color) =
     buildAnnotatedString {
         append(text)
@@ -418,7 +602,11 @@ private fun highlighted(text: String, ranges: List<IntRange>, color: androidx.co
 
 private fun diagnosticMessage(d: Diagnostic): String = when (d) {
     is Diagnostic.UnknownField -> "Unknown field \"${d.typed}\"" + (d.suggestion?.let { " — did you mean $it:?" } ?: "")
-    is Diagnostic.UnindexedFacet -> "${d.field.name.lowercase()}: isn't indexed yet"
+    // Says which pair, and why. "isn't indexed yet" was the only reason available before, and it
+    // is the wrong reason for is:archived — that column exists and is indexed, nothing ever
+    // writes it. See dev.fonebrew.domain.search.query.unbackedReason.
+    is Diagnostic.UnindexedFacet ->
+        "${d.field.key}:${d.value} " + (unbackedReason(d.field, d.value) ?: "isn't indexed yet")
     is Diagnostic.UnterminatedQuote -> "Unterminated quote — treated as closed at the end"
     is Diagnostic.UnterminatedRegex -> "Unterminated /regex/ — treated as a plain term"
     is Diagnostic.InvalidDate -> "\"${d.raw}\" isn't a date this app understands"

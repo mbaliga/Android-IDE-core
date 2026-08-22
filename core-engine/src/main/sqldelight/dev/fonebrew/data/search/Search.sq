@@ -182,6 +182,54 @@ SELECT * FROM saved_search ORDER BY pinned DESC, sort_key ASC, created_at DESC;
 deleteSavedSearch:
 DELETE FROM saved_search WHERE id = ?;
 
+-- Recent searches. `search_history` has existed since the M0–M3 search commit and had ZERO
+-- queries against it — the table was schema without a feature, so the overlay's empty state had
+-- nothing personal to show and fell back to a wall of operator syntax instead. These four are
+-- what make it a surface.
+--
+-- Dedupe is by exact query text and happens on write (delete-then-insert inside one
+-- transaction, see SearchViewModel), not by GROUP BY on read: one row per distinct query keeps
+-- `opened_conv_id` meaning "what this search led to *last* time" instead of an arbitrary pick
+-- among duplicates.
+--
+-- Trimming compares `at` rather than rowid: both work, and `at` needs no assumption about
+-- SQLDelight resolving SQLite's implicit rowid column. A tie on `at` keeps one extra row, which
+-- is harmless for a local recency list.
+insertSearchHistory:
+INSERT INTO search_history(at, query, result_count, opened_conv_id)
+VALUES (?, ?, ?, ?);
+
+deleteSearchHistoryFor:
+DELETE FROM search_history WHERE query = ?;
+
+selectRecentSearches:
+SELECT query, at, result_count, opened_conv_id
+FROM search_history
+ORDER BY at DESC
+LIMIT :limit;
+
+trimSearchHistory:
+DELETE FROM search_history
+WHERE at NOT IN (SELECT at FROM search_history ORDER BY at DESC LIMIT :keep);
+
+-- Local-first, and search history is sensitive: "clear" must actually delete, not hide.
+clearSearchHistory:
+DELETE FROM search_history;
+
+-- The value vocabulary for autocomplete (QuerySuggestions.IndexedValues) — what `project:` and
+-- `model:` can actually complete to, read from the index rather than from a hardcoded list, so a
+-- completion can never offer a value that matches nothing. model_ids is the comma-joined column
+-- (see conv_facets); splitting it back into individual ids is the caller's job, since SQLite has
+-- no string-split and a recursive CTE for this would be far more machinery than one Kotlin
+-- `split(',')`.
+selectDistinctProjects:
+SELECT DISTINCT project_id FROM conv_facets
+WHERE project_id IS NOT NULL AND project_id != ''
+ORDER BY project_id;
+
+selectDistinctModelIds:
+SELECT DISTINCT model_ids FROM conv_facets WHERE model_ids != '';
+
 -- Candidate generation (§5.1): bm25 column weights (10,4,1) are FTS5's per-query ranking
 -- weights for title/snippet/body — deliberately NOT the same as LexicalSearch's 2x/1x final
 -- weights (WP7 re-scores).
@@ -210,6 +258,22 @@ LIMIT :limit;
 -- JOIN: a projection whose facets row is somehow missing must still be findable by text — a
 -- missing facets row means "no facet data", not "not a conversation". FacetEvaluator gets
 -- defaults for those columns; see SearchQuery.toSubject.
+--
+-- Ranking here is query-aware (bm25 below) but the row a user actually READS was not: every
+-- result showed snippet_raw, the first 220 characters of the first assistant turn, picked at
+-- index time before any query existed — so a hit deep in a conversation displayed a preview
+-- that didn't contain the search term. That is fixed in Kotlin, not here:
+-- dev.fonebrew.domain.search.QuerySnippet centres a window of body_raw (returned by this
+-- query) on the first matched term.
+--
+-- A THIRD SQLDelight-analyzer limitation, found the only way these ever are — by compiling.
+-- FTS5's own snippet() auxiliary function would be the natural way to do this in SQL, and it
+-- works against real SQLite; the 2.1.0 analyzer rejects it outright ("Unknown function
+-- snippet" at generateFullDebugSearchDatabaseInterface) even though it resolves bm25() in the
+-- ORDER BY two lines down. Do not re-add it without compiling: passing tests against a raw
+-- sqlite3 connection prove nothing about the generator. The cost of its absence is small and
+-- named in QuerySnippet's KDoc — only matches unreachable by a raw substring scan of body_raw
+-- (NFKC folding, length-changing lowercase) fall back to the index-time snippet.
 searchCandidatesWithFacets:
 SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at,
        f.starred, f.archived, f.project_id, f.model_ids,

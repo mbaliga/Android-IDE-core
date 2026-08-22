@@ -13,6 +13,11 @@ package dev.fonebrew.domain.search.query
  * `is:`/`has:` are split per-value: `starred`/`archived`/`orphan` and `image`/`code` are real
  * (backed by `SessionStore`/`ConversationsStore`/`SearchProjector`); `unread`/`failed` and
  * `attachment`/`artifact`/`error` are not.
+ *
+ * Two more honesty seams live here rather than in the UI, so they're testable: [unbackedReason]
+ * says why a given pair can't return anything *today* — which is a strictly wider question than
+ * [isBacked], and catches `is:archived` — and [facetCaveat] says what a working-but-coarser-
+ * than-its-name facet is actually measuring.
  */
 enum class Field(val key: String) {
     IN("in"),
@@ -45,10 +50,22 @@ enum class Field(val key: String) {
     }
 }
 
-private val BACKED_IS_VALUES = setOf("starred", "archived", "orphan")
-private val BACKED_HAS_VALUES = setOf("image", "code")
+/** `is:` values with a real column and a real predicate behind them. */
+val BACKED_IS_VALUES = setOf("starred", "archived", "orphan")
 
-/** Whether this exact (field, value) pair compiles to a real filter today. See [Field]'s KDoc. */
+/** `has:` values that match real data — see [facetCaveat] for how coarse `code` really is. */
+val BACKED_HAS_VALUES = setOf("image", "code")
+
+/**
+ * Whether this exact (field, value) pair compiles to a real filter today. See [Field]'s KDoc.
+ *
+ * This is the **evaluation** gate ([FacetEvaluator] returns an honest `false` for anything not
+ * backed), which is why `archived` is in [BACKED_IS_VALUES] even though nothing writes that
+ * column yet: the predicate itself is correct, and dropping it would silently turn
+ * `-is:archived` from "exclude archived conversations" into "no constraint at all" — a wrong
+ * answer the day archiving gets wired up. "Can this ever return anything *today*" is a different
+ * question, and it is [unbackedReason]'s.
+ */
 fun isBacked(field: Field, value: String): Boolean = when (field) {
     Field.IS -> value.lowercase() in BACKED_IS_VALUES
     Field.HAS -> value.lowercase() in BACKED_HAS_VALUES
@@ -57,4 +74,49 @@ fun isBacked(field: Field, value: String): Boolean = when (field) {
     Field.TURNS, Field.BRANCH, Field.COST,
     -> true
     Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG, Field.LOOP -> false
+}
+
+/**
+ * Why this exact (field, value) pair **cannot return anything today** — the sentence the UI puts
+ * after the facet in a [Diagnostic.UnindexedFacet] line, and the reason [QueryParser] emits that
+ * diagnostic at all. `null` when the facet can genuinely match.
+ *
+ * Two different kinds of "no" collapse to one diagnostic here, deliberately, because the user's
+ * situation is the same (this filter will return an empty set) while the *reason* is not:
+ *  - **Not indexed** — `tool:`/`tag:`/`file:`…: no column, no domain concept behind it.
+ *  - **Indexed but never written** — `is:archived`: `conv_facets.archived` exists,
+ *    [SearchProjector][dev.fonebrew.data.search.SearchProjector] fills it, and [FacetEvaluator]
+ *    reads it correctly, but the only thing that could ever set it — `SessionStore.toggleArchived`
+ *    — has **zero call sites** in the app, so the column is `0` for every conversation. This was
+ *    the one dead facet that produced no diagnostic at all: [isBacked] says yes (rightly — the
+ *    predicate works), so the parser stayed quiet and the user got a silent, unexplained zero.
+ *
+ * Saying "isn't indexed yet" for the second case would send someone hunting an indexing bug that
+ * doesn't exist, which is why the reasons are separate strings rather than one generic line.
+ */
+fun unbackedReason(field: Field, value: String): String? = when {
+    field == Field.IS && value.lowercase() == "archived" ->
+        "matches nothing — no surface in this build archives a conversation yet"
+    isBacked(field, value) -> null
+    field == Field.IS || field == Field.HAS -> "isn't a value this build records"
+    else -> "isn't indexed yet"
+}
+
+/**
+ * What a **backed** facet actually measures, when its name promises more than the data delivers.
+ * Shown quietly next to the query (not as an error — these filters do work), because a filter
+ * that silently means something narrower than its name is exactly the kind of hidden influence
+ * this app exists not to have.
+ *
+ * `null` for every facet whose name and data agree.
+ */
+fun facetCaveat(field: Field, value: String): String? = when {
+    // SearchProjector fills turn_count from Conversations.Summary.nodeCount — every message node
+    // in the subtree, user and assistant alike (and every branch's nodes), not exchanges.
+    field == Field.TURNS -> "turns: counts every message node — user and assistant, across branches"
+    // SearchProjector: hasCode = bodyRaw.contains("```"). Not a parser: a real fenced block and a
+    // stray ``` in prose are indistinguishable to it.
+    field == Field.HAS && value.lowercase() == "code" ->
+        "has:code means the text contains a ``` fence — it isn't a parsed code block"
+    else -> null
 }

@@ -12,16 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,9 +76,16 @@ private const val REMOTE = TerminalSessionHolder.REMOTE
  * theme. Button/accent colours come from [darkHyleColors] seeded with the user's own accent
  * pick, so a custom accent still shows up here — just always via the dark ramp. The input row
  * is Hyle's [HyleTerminalField] (owner ask, 2026-08-21: the terminal's field lives in the
- * design system, not app-local). The grid caps at roughly half the screen because this facet
- * renders inside DevelopRoom's outer `verticalScroll` Column — an unbounded scrollable child
- * there would crash on measure.
+ * design system, not app-local).
+ *
+ * **The grid gets a fixed height, not a `heightIn` range.** It has to stay bounded because this
+ * facet renders inside DevelopRoom's outer `verticalScroll` Column (an unbounded scrollable
+ * child there crashes on measure) — but it also can't be allowed to wrap its content, now that
+ * [dev.fonebrew.ui.remote.TerminalView] derives the pty's row count from the box it is given. A
+ * wrap-content box would size to the grid that the row count produced, which would then produce
+ * a smaller row count, which would shrink the box again: a terminal that walks itself down to
+ * the minimum. A fixed height breaks that loop — the box is the input to the measurement, never
+ * the output.
  */
 @Composable
 fun TerminalFacet() {
@@ -107,6 +111,7 @@ fun TerminalFacet() {
     val closedByUser by term.closedByUser.collectAsState()
     val pendingTrust by term.pendingTrust.collectAsState()
     val input by term.input.collectAsState()
+    val history by term.history.collectAsState()
 
     // Auto-connect on entering the terminal, and again whenever the target changes — no "Open
     // shell" gate button. The holder no-ops when a session is already live (the common case now
@@ -130,11 +135,35 @@ fun TerminalFacet() {
         }
     }
     val slashMatches = matchSlashCommands(input, slashCommands)
+    // The one command the input *is*, if any — as opposed to the several it is a prefix of.
+    val exactSlash = remember(input, slashCommands) {
+        slashCommands.firstOrNull { it.name.equals(input.trim(), ignoreCase = true) }
+    }
 
-    // Roughly half the screen, floored at the old 320dp max — see the class doc for why this
-    // stays a bounded heightIn rather than a true fillMaxSize/weight.
+    /**
+     * What Enter and Send both do. An exactly-typed slash command runs; anything else goes to the
+     * shell as a line.
+     *
+     * Send used to be gated on `!input.startsWith("/")`, which meant no absolute path could ever
+     * be run: `/system/bin/ls` or `/data/local/tmp/foo` greyed the button out, and
+     * [matchSlashCommands] returned nothing for them either, so no palette appeared — a dead,
+     * unexplained button. On Android, where PATH is not guaranteed, an absolute path is exactly
+     * what a user reaches for. The gate is now "does this input actually *match* a command",
+     * which leaves `/system/bin/ls` sendable and additionally lets `/clear` + Enter work instead
+     * of forcing a tap on the palette.
+     */
+    fun submit() {
+        val line = input
+        if (line.isEmpty()) return
+        term.setInput("")
+        if (exactSlash != null) exactSlash.run() else term.sendLine(line)
+    }
+
+    // Roughly half the screen, floored at the old 320dp bound — a FIXED height, deliberately;
+    // see the class doc for the shrink-loop a wrap-content box would set up now that the grid
+    // measures itself.
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val gridMaxHeight = remember(screenHeightDp) { (screenHeightDp * 0.55f).dp.coerceAtLeast(320.dp) }
+    val gridHeight = remember(screenHeightDp) { (screenHeightDp * 0.55f).dp.coerceAtLeast(320.dp) }
 
     // Full-bleed dark terminal panel behind the ENTIRE tab — mode toggle, hints, grid, input,
     // buttons — not just the grid itself, so Terminal reads as one cohesive dark surface instead
@@ -189,21 +218,47 @@ fun TerminalFacet() {
                 Spacer(Modifier.height(8.dp))
 
                 if (shell != null) {
-                    key(screenVersion) {
-                        dev.fonebrew.ui.remote.TerminalView(
-                            screen = term.pty.screen,
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = gridMaxHeight)
-                                .verticalScroll(rememberScrollState()),
+                    // No `key(screenVersion)` any more: re-keying rebuilt the whole subtree on
+                    // every chunk of output, which would throw the scroll position away each
+                    // time. The version is a parameter now, and the view owns its own scrolling.
+                    dev.fonebrew.ui.remote.TerminalView(
+                        screen = term.pty.screen,
+                        version = screenVersion,
+                        onGridMeasured = term::resize,
+                        modifier = Modifier.fillMaxWidth().height(gridHeight),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    // ↑/↓ sit next to the field rather than in the action row below because
+                    // that's where a thumb already is, and because history recall has to work
+                    // with a soft keyboard — there is no hardware arrow key to fall back on.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        HyleTerminalField(
+                            value = input,
+                            onValueChange = term::setInput,
+                            colors = termColors,
+                            modifier = Modifier.weight(1f),
+                            placeholder = "input — Enter to send, / for commands",
+                            fg = TerminalFg,
+                            onSubmit = { submit() },
+                        )
+                        TerminalActionButton(
+                            "↑",
+                            compact = true,
+                            enabled = history.isNotEmpty(),
+                            colors = termColors,
+                            onClick = { term.historyBack() },
+                        )
+                        TerminalActionButton(
+                            "↓",
+                            compact = true,
+                            enabled = history.isNotEmpty(),
+                            colors = termColors,
+                            onClick = { term.historyForward() },
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    HyleTerminalField(
-                        value = input,
-                        onValueChange = term::setInput,
-                        colors = termColors,
-                        placeholder = "input — Enter to send, / for commands",
-                        fg = TerminalFg,
-                    )
                     if (slashMatches.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
                         SlashCommandPopup(slashMatches) { cmd -> cmd.run(); term.setInput("") }
@@ -212,14 +267,13 @@ fun TerminalFacet() {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TerminalActionButton(
                             "Send",
-                            enabled = input.isNotEmpty() && !input.startsWith("/"),
+                            // Enabled unless the input is a partial command the palette is
+                            // offering to complete — see submit()'s doc for the absolute-path
+                            // bug this replaces.
+                            enabled = input.isNotEmpty() && (slashMatches.isEmpty() || exactSlash != null),
                             selected = true,
                             colors = termColors,
-                            onClick = {
-                                val line = input
-                                term.setInput("")
-                                term.sendLine(line)
-                            },
+                            onClick = { submit() },
                         )
                         if (showCtrlC) {
                             TerminalActionButton("Ctrl-C", colors = termColors, onClick = { term.sendRaw(3.toChar().toString()) })
@@ -283,6 +337,9 @@ private fun TerminalActionButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     selected: Boolean = false,
+    /** Narrower side padding for the single-glyph buttons (↑/↓) that share a row with the input
+     *  field — at the full 16dp they'd eat the field's width for no legibility gain. */
+    compact: Boolean = false,
 ) {
     val haptics = rememberHyleHaptics()
     val shape = RoundedCornerShape(6.dp)
@@ -300,7 +357,7 @@ private fun TerminalActionButton(
             .background(fill, shape)
             .border(1.dp, borderColor, shape)
             .clickable(enabled = enabled, onClick = { haptics.tap(); onClick() })
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = if (compact) 10.dp else 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(

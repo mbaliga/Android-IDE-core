@@ -17,25 +17,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.aarso.hyle.cells.HyleFocusLens
 import dev.aarso.hyle.cells.HyleLensActions
 import dev.aarso.hyle.cells.HyleLensHeading
+import dev.aarso.hyle.component.HyleTerminalField
+import dev.aarso.hyle.theme.DefaultAccent
+import dev.aarso.hyle.theme.darkHyleColors
+import dev.aarso.hyle.theme.parseHexColor
 import dev.fonebrew.FonebrewApp
-import dev.fonebrew.domain.remote.ExecChunk
+import dev.fonebrew.data.remote.TerminalSessionHolder
 import dev.fonebrew.domain.remote.ExecRequest
 import dev.fonebrew.domain.remote.Identity
 import dev.fonebrew.domain.remote.RemoteHost
@@ -54,6 +56,19 @@ import kotlinx.coroutines.launch
  * run a command, and read the remote's raw output verbatim — it is a watched object, never our
  * paraphrase (THE LAW). Boxy/wireframe; the design system reskins later. Runtime is
  * owner-verified (no SSH server in CI).
+ *
+ * **This screen no longer builds a terminal of its own.** It used to: its own
+ * `PtyChannel(24, 80)`, its own [dev.fonebrew.domain.remote.ShellSession], its own screen
+ * version, its own input draft and its own Send/Ctrl-C/Close — every one of them per-mount
+ * `remember {}`, disposed on navigation. That is exactly the shape
+ * [dev.fonebrew.data.remote.TerminalSessionHolder] was written to end, so the owner's report of
+ * "two terminals" was in fact three. The Terminal section below drives THE one session on the
+ * app container; opening a host's terminal here is the same live shell Chat and Develop show,
+ * with the same scrollback.
+ *
+ * The one-shot **Run a command** box keeps its own [RemoteSessionDriver]: that is a different
+ * thing from a terminal — a single exec against a host you are administering, with its output
+ * captured whole — and folding it into the interactive session would conflate them.
  */
 @Composable
 fun RemoteScreen(onClose: () -> Unit) {
@@ -74,16 +89,32 @@ fun RemoteScreen(onClose: () -> Unit) {
     var pendingTrust by remember { mutableStateOf<Trust?>(null) }
     var trustGate by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
 
-    // Interactive shell (Sprint 2 terminal made real): output flows reader-thread → channel →
-    // main, where a VtParser folds it into a ScreenBuffer the UI renders.
-    val pty = remember { dev.fonebrew.domain.remote.term.PtyChannel(rows = 24, cols = 80) }
-    val shellOut = remember { kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED) }
-    var shell by remember { mutableStateOf<dev.fonebrew.domain.remote.ShellSession?>(null) }
-    var screenVersion by remember { mutableStateOf(0) }
-    var shellInput by remember { mutableStateOf("") }
+    // THE terminal session — shared with Chat and Develop, owned by the app container.
+    val term = container.terminalSession
+    val termMode by term.mode.collectAsState()
+    val termAlias by term.remoteAlias.collectAsState()
+    val termShell by term.shell.collectAsState()
+    val termVersion by term.screenVersion.collectAsState()
+    val termConnecting by term.connecting.collectAsState()
+    val termError by term.connectError.collectAsState()
+    val termClosed by term.closedByUser.collectAsState()
+    val termTrust by term.pendingTrust.collectAsState()
+    val termInput by term.input.collectAsState()
+    val termHistory by term.history.collectAsState()
+    val accentHex by container.sessionStore.accentColor.collectAsState()
+    // The terminal panel is pinned dark whatever the app's theme is (same rule as the Terminal
+    // facet), so its chrome comes off the dark ramp seeded with the user's own accent.
+    val termColors = remember(accentHex) { darkHyleColors(parseHexColor(accentHex) ?: DefaultAccent) }
+    // Fixed, not wrap-content: TerminalView derives the pty's row count from the box it is
+    // handed, so a box that sized itself to its content would shrink the grid on every pass.
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val gridHeight = remember(screenHeightDp) { (screenHeightDp * 0.5f).dp.coerceAtLeast(280.dp) }
 
-    LaunchedEffect(pty) {
-        for (bytes in shellOut) { pty.onOutput(String(bytes)); screenVersion++ }
+    fun sendTerminalLine() {
+        val line = termInput
+        if (line.isEmpty()) return
+        term.setInput("")
+        term.sendLine(line)
     }
 
     fun connect(host: RemoteHost, identity: Identity) {
@@ -165,6 +196,12 @@ fun RemoteScreen(onClose: () -> Unit) {
                         }
                         connect(host, identity)
                     })
+                    // Points THE shared session at this host — it does its own connect (and its
+                    // own trust gate, answered below), independent of the exec driver above.
+                    WireButton("Terminal", onClick = {
+                        term.switchTo(TerminalSessionHolder.REMOTE, host.alias)
+                        term.ensureOpen()
+                    })
                     WireButton("Forget", onClick = { store.remove(host.alias) })
                 }
             }
@@ -190,37 +227,73 @@ fun RemoteScreen(onClose: () -> Unit) {
             }
         }
 
-        // Interactive shell — a real terminal (PTY → VtParser → ScreenBuffer).
-        if (phase is SessionState.Ready || phase is SessionState.Running) {
-            Spacer(Modifier.height(12.dp))
-            Text("Interactive shell", style = MaterialTheme.typography.titleMedium)
-            if (shell == null) {
-                WireButton("Open shell", onClick = {
-                    scope.launch {
-                        runCatching {
-                            driver?.shell { chunk -> shellOut.trySend(chunk.bytes) }
-                        }.onSuccess { shell = it }.onFailure { error = it.message }
+        // The terminal — THE one session, not a second copy of one. Always shown (it isn't gated
+        // on the exec driver's phase, because it doesn't use the exec driver), so this screen can
+        // say honestly which machine the app's shell is currently sitting on.
+        Spacer(Modifier.height(12.dp))
+        Text("Terminal", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "The same terminal as Chat and Develop — one session, one scrollback. " +
+                (
+                    if (termMode == TerminalSessionHolder.PHONE) {
+                        "Currently on this phone."
+                    } else {
+                        "Currently on ${termAlias ?: "a remote host"}."
                     }
-                })
-            } else {
-                // The rendered screen — keyed on screenVersion so each VT update recomposes.
-                key(screenVersion) {
-                    TerminalView(screen = pty.screen, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
-                }
+                    ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        Spacer(Modifier.height(8.dp))
+        when {
+            termShell != null -> {
+                // Scrollback, both scroll axes and the real grid size all come from TerminalView
+                // itself, so Remote gets them by construction rather than by duplication.
+                TerminalView(
+                    screen = term.pty.screen,
+                    version = termVersion,
+                    onGridMeasured = term::resize,
+                    modifier = Modifier.fillMaxWidth().height(gridHeight),
+                )
                 Spacer(Modifier.height(8.dp))
-                WireField("input (sent with Enter)", shellInput, { shellInput = it })
+                // Was a WireField labelled "input (sent with Enter)" that had no IME action at
+                // all, so Enter did nothing — the same defect as the Terminal tab's field, in a
+                // second place. HyleTerminalField's onSubmit is what makes the label true.
+                HyleTerminalField(
+                    value = termInput,
+                    onValueChange = term::setInput,
+                    colors = termColors,
+                    placeholder = "input — Enter to send",
+                    fg = TerminalFg,
+                    onSubmit = { sendTerminalLine() },
+                )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WireButton("Send", onClick = {
-                        val line = shellInput; shellInput = ""
-                        scope.launch { runCatching { shell?.send(line + "\n") }.onFailure { error = it.message } }
-                    })
-                    WireButton("Ctrl-C", onClick = { scope.launch { shell?.send(3.toChar().toString()) } })
-                    WireButton("Close shell", onClick = {
-                        scope.launch { runCatching { shell?.close() }; shell = null }
-                    })
+                    WireButton("Send", onClick = { sendTerminalLine() }, enabled = termInput.isNotEmpty())
+                    WireButton("↑", onClick = { term.historyBack() }, enabled = termHistory.isNotEmpty())
+                    WireButton("↓", onClick = { term.historyForward() }, enabled = termHistory.isNotEmpty())
+                    WireButton("Ctrl-C", onClick = { term.sendRaw(3.toChar().toString()) })
+                    WireButton("Close shell", onClick = { term.userCloseShell() })
                 }
             }
+            termConnecting -> Text(
+                if (termMode == TerminalSessionHolder.PHONE) "opening…" else "connecting to ${termAlias ?: "host"}…",
+                color = MaterialTheme.colorScheme.outline,
+            )
+            termClosed -> {
+                Text("Session closed.", color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(8.dp))
+                WireButton("Reconnect", onClick = { term.reconnect() })
+            }
+            termError != null -> {
+                Text("Couldn't connect: $termError", color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(8.dp))
+                WireButton("Retry", onClick = { term.reconnect() })
+            }
+            else -> WireButton("Open terminal on this phone", onClick = {
+                term.switchTo(TerminalSessionHolder.PHONE)
+                term.ensureOpen()
+            })
         }
     }
 
@@ -230,6 +303,16 @@ fun RemoteScreen(onClose: () -> Unit) {
             verdict = verdict,
             onAccept = { trustGate?.complete(true) },
             onReject = { trustGate?.complete(false) },
+        )
+    }
+    // The shared session runs its own connect, so it has its own trust gate — and it has to be
+    // answerable from here, or tapping "Terminal" on a host that isn't vetted yet would suspend
+    // forever with the prompt on a screen the user isn't looking at.
+    termTrust?.let { verdict ->
+        TrustDialog(
+            verdict = verdict,
+            onAccept = { term.resolveTrust(true) },
+            onReject = { term.resolveTrust(false) },
         )
     }
 }

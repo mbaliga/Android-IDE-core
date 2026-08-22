@@ -70,4 +70,39 @@ class SearchResultsPresenterTest {
     @Test fun `empty hits present to an empty list`() {
         assertTrue(SearchResultsPresenter.present(emptyList(), now, zone, locale).isEmpty())
     }
+
+    // ---- highlights over the text actually drawn (see present's queryText) ----
+
+    @Test fun `snippet highlights index the snippet the row draws`() {
+        // SearchHit.highlights index `snippet + " " + body`, which is not the string this row
+        // renders: the second "gradle" (in the body half) produced a range past the snippet's
+        // end, which the drawing code silently dropped — and once SearchQuery replaces the
+        // snippet with a query-centred window, hit-supplied ranges stop lining up entirely.
+        val d = doc("a", "misc", "the gradle cache", "a much longer body that also mentions gradle")
+        val hits = LexicalSearch.search(listOf(d), "gradle", now, explain = true)
+        val row = SearchResultsPresenter.present(hits, now, zone, locale, queryText = "gradle").single()
+        val range = row.snippetHighlights.single()
+        assertEquals("gradle", row.snippet.substring(range.first, range.last + 1))
+    }
+
+    @Test fun `a term absent from the snippet highlights nothing rather than something wrong`() {
+        val d = doc("a", "misc", "lead-in with no hit", "the body mentions gradle much later on")
+        val hits = LexicalSearch.search(listOf(d), "gradle", now, explain = true)
+        val row = SearchResultsPresenter.present(hits, now, zone, locale, queryText = "gradle").single()
+        assertTrue(row.snippetHighlights.isEmpty())
+    }
+
+    @Test fun `title highlights still come from the hit`() {
+        val hits = LexicalSearch.search(listOf(doc("a", "gradle build", "misc", "misc")), "gradle", now, explain = true)
+        val row = SearchResultsPresenter.present(hits, now, zone, locale, queryText = "gradle").single()
+        val range = row.titleHighlights.single()
+        assertEquals("gradle", row.title.substring(range.first, range.last + 1))
+    }
+
+    @Test fun `every term in a multi-word query is highlighted`() {
+        val d = doc("a", "misc", "gradle build cache notes", "gradle build cache notes")
+        val hits = LexicalSearch.search(listOf(d), "gradle cache", now, explain = true)
+        val row = SearchResultsPresenter.present(hits, now, zone, locale, queryText = "gradle cache").single()
+        assertEquals(2, row.snippetHighlights.size)
+    }
 }

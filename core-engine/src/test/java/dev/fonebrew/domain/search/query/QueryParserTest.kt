@@ -158,6 +158,42 @@ class QueryParserTest {
         assertFalse(parse("is:unread").diagnostics.filterIsInstance<Diagnostic.UnindexedFacet>().isEmpty())
     }
 
+    @Test fun `is archived is flagged even though its predicate is real`() {
+        // The one facet that used to fall through the honesty net: isBacked says yes (the column
+        // and the predicate exist and are correct), nothing ever writes the column, so the user
+        // got a silent zero with no explanation. The diagnostic now comes from unbackedReason.
+        val diag = parse("is:archived").diagnostics.filterIsInstance<Diagnostic.UnindexedFacet>().single()
+        assertEquals(Field.IS, diag.field)
+        assertEquals("archived", diag.value)
+    }
+
+    @Test fun `is archived still evaluates - the diagnostic does not disable the filter`() {
+        // Flagging it must not turn -is:archived into "no constraint": that would be a wrong
+        // answer the day an archive action exists. See FacetEvaluatorTest for the semantics.
+        assertEquals(QueryNode.Facet(Field.IS, Op.EQ, "archived"), parse("is:archived").root)
+        assertTrue(isBacked(Field.IS, "archived"))
+    }
+
+    @Test fun `semantic search reports that it is unavailable`() {
+        // Diagnostic.SemanticUnavailable and its UI copy both existed from the start; nothing
+        // emitted it, so `?foo` silently degraded to a plain lexical search and looked like
+        // semantic search working.
+        val diag = parse("?migrations").diagnostics.filterIsInstance<Diagnostic.SemanticUnavailable>().single()
+        assertEquals("migrations", diag.text)
+    }
+
+    @Test fun `a quoted semantic phrase reports the whole phrase`() {
+        assertEquals(
+            "gradle build cache",
+            parse("?\"gradle build cache\"").diagnostics
+                .filterIsInstance<Diagnostic.SemanticUnavailable>().single().text,
+        )
+    }
+
+    @Test fun `a query with no semantic operator reports nothing about semantics`() {
+        assertTrue(parse("gradle is:starred").diagnostics.filterIsInstance<Diagnostic.SemanticUnavailable>().isEmpty())
+    }
+
     @Test fun `unterminated quote is treated as closed at end of input`() {
         val q = parse("\"build cache")
         assertEquals(QueryNode.Phrase("build cache"), q.root)

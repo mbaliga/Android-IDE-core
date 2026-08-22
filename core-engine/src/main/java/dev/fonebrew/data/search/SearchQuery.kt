@@ -1,6 +1,7 @@
 package dev.fonebrew.data.search
 
 import dev.fonebrew.domain.search.LexicalSearch
+import dev.fonebrew.domain.search.QuerySnippet
 import dev.fonebrew.domain.search.SearchDoc
 import dev.fonebrew.domain.search.SearchHit
 import dev.fonebrew.domain.search.SearchKind
@@ -14,7 +15,8 @@ import java.time.ZoneId
 
 /**
  * The full retrieval pipeline (Doc `FONEBREW_SEARCH_SPEC.md` §5): parse → FTS5 candidate
- * generation → facet filter → regex filter → [LexicalSearch] re-scoring.
+ * generation → facet filter → regex filter → [LexicalSearch] re-scoring → query-centred
+ * previews ([QuerySnippet], display only, applied after ranking so it cannot move a result).
  *
  * [LexicalSearch] is never modified or replaced (the spec's hard rule) — FTS5 is purely a
  * *candidate generator* here, never a second ranker, and the facet/regex stages only ever
@@ -49,8 +51,15 @@ object SearchQuery {
     /** Results returned to the caller after re-scoring. */
     const val DEFAULT_RESULT_LIMIT = 50
 
-    /** One candidate row: display text plus everything the facet predicate needs. */
-    private class Candidate(val doc: SearchDoc, val subject: FacetSubject)
+    /** One candidate row: display text, everything the facet predicate needs, and — on the FTS
+     *  path only — FTS5's own `snippet()` output for this row (see [ftsSnippet]). */
+    private class Candidate(
+        val doc: SearchDoc,
+        val subject: FacetSubject,
+        /** FTS5 `snippet()` over the indexed body column, or `null` on the facet-only path (no
+         *  `MATCH`, so no snippet to take). Feeds [QuerySnippet.centered]'s fallback. */
+        val ftsSnippet: String? = null,
+    )
 
     fun search(
         database: SearchDatabase,
@@ -91,7 +100,33 @@ object SearchQuery {
                 SearchHit(doc = c.doc, score = 0.0, matchedIn = dev.fonebrew.domain.search.MatchedIn.CONTENT, highlights = emptyList())
             }
         }
-        return LexicalSearch.search(surviving.map { it.doc }, lexicalText, nowMillis, explain = true).take(resultLimit)
+        val ranked = LexicalSearch.search(surviving.map { it.doc }, lexicalText, nowMillis, explain = true)
+            .take(resultLimit)
+
+        // Query-centred previews, applied AFTER ranking on purpose: LexicalSearch scores the
+        // untouched projection (title + snippet_raw + body_raw), so ordering and scores are
+        // byte-for-byte what they were before this existed — SearchQueryTest's golden-ordering
+        // case still pins that. Only the text the user reads changes.
+        //
+        // Consequence, handled downstream: SearchHit.highlights index the *original*
+        // `snippet + " " + body`, so they no longer line up with this replaced snippet.
+        // SearchResultsPresenter recomputes snippet highlights over whatever text it is actually
+        // about to draw, which is also what fixes the pre-existing mismatch (those ranges never
+        // lined up with the snippet-only string the row rendered).
+        val terms = LexicalSearch.tokenizeQuery(lexicalText)
+        val ftsSnippets = surviving.associate { it.doc.id to it.ftsSnippet }
+        return ranked.map { hit ->
+            hit.copy(
+                doc = hit.doc.copy(
+                    snippet = QuerySnippet.centered(
+                        bodyRaw = hit.doc.body,
+                        projected = hit.doc.snippet,
+                        ftsSnippet = ftsSnippets[hit.doc.id],
+                        queryTerms = terms,
+                    ),
+                ),
+            )
+        }
     }
 
     private fun candidates(database: SearchDatabase, parsed: ParsedQuery): List<Candidate> {
@@ -124,6 +159,12 @@ object SearchQuery {
                         row.turn_count, row.branch_count, row.has_image, row.has_code,
                         row.cost_minor, row.updated_at,
                     ),
+                    // Always null: FTS5's snippet() is unavailable to us (the SQLDelight 2.1.0
+                    // analyzer rejects the function — see Search.sq's note on this query), so
+                    // QuerySnippet resolves from body_raw and falls back to the index-time
+                    // snippet. The parameter stays because the fallback IS implemented and
+                    // tested; it just has no producer until the analyzer grows one.
+                    ftsSnippet = null,
                 )
             }
         }
