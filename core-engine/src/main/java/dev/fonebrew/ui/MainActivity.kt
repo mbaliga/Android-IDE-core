@@ -15,6 +15,7 @@ import dev.fonebrew.data.Intake
 import dev.fonebrew.ui.theme.FonebrewCrashRecoveryStyle
 import dev.fonebrew.ui.theme.FonebrewTheme
 import dev.fonebrew.ui.theme.ThemeMode
+import dev.fonebrew.ui.theme.resolveDark
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,8 +39,11 @@ class MainActivity : ComponentActivity() {
             val mode = runCatching { ThemeMode.valueOf(modeStr) }.getOrDefault(ThemeMode.DARK)
             val accent = parseHexColor(accentStr) ?: DefaultAccent
             val gradient = gradientStr.takeIf { it.isNotBlank() }?.let { parseHexColor(it) }
+            // Resolved once here (not re-derived inside the splash) so the splash's asset
+            // pair can never disagree with the theme FonebrewTheme itself lands on.
+            val dark = mode.resolveDark()
             FonebrewTheme(mode = mode, accent = accent, texture = texture, gradient = gradient) {
-                AppRoot()
+                AppRoot(dark = dark)
             }
             // Reached only if the theme + AppRoot composed without throwing → clear the crash flag
             // so the next launch is normal. A composition crash skips this, keeping the flag set.

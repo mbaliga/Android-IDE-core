@@ -19,6 +19,17 @@ import androidx.compose.ui.graphics.lerp
 /** Owner-chosen theme mode. SYSTEM follows the OS dark/light setting. */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** The dark/light resolution [FonebrewTheme] uses internally, exposed so a call site
+ *  that needs the boolean before/alongside composing the themed tree — the splash
+ *  screen picks its asset pair from this — doesn't restate the when-branch and risk
+ *  drifting from it. */
+@Composable
+fun ThemeMode.resolveDark(): Boolean = when (this) {
+    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
+}
+
 /** M3 scheme built FROM the resolved [HyleColors], so MaterialTheme.colorScheme.*
  *  usages switch in lock-step with the raw Aeon palette. */
 private fun schemeFrom(c: HyleColors, dark: Boolean) = if (dark) {
@@ -55,11 +66,7 @@ fun FonebrewTheme(
     gradient: Color? = null,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (mode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-    }
+    val dark = mode.resolveDark()
     val aeon = if (dark) darkHyleColors(accent) else lightHyleColors(accent)
     CompositionLocalProvider(LocalHyleColors provides aeon) {
         MaterialTheme(
