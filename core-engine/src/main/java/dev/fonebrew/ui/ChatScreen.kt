@@ -105,11 +105,12 @@ import dev.fonebrew.domain.tree.Conversations
 import dev.fonebrew.domain.tree.PathView
 import dev.fonebrew.domain.tree.Sources
 import dev.fonebrew.flavor.InvocationFeatures
+import dev.aarso.hyle.cells.HeaderGlyph
+import dev.aarso.hyle.cells.HyleBottomTabBar
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleChip
 import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.cells.HyleNavChip
-import dev.aarso.hyle.cells.HyleSlashTabBar
+import dev.aarso.hyle.cells.HyleHeaderButton
 import dev.aarso.hyle.cells.HyleTabSpec
 import dev.aarso.hyle.cells.FileImage
 import dev.aarso.hyle.cells.HyleFocusLens
@@ -321,7 +322,7 @@ fun ChatScreen(
         listOf(
             SlashCommand("/chat", "Switch to Chat") { chatTab = ChatTab.CHAT },
             SlashCommand("/terminal", "Switch to Terminal") { chatTab = ChatTab.TERMINAL },
-            SlashCommand("/tasks", "Switch to Tasks") { chatTab = ChatTab.TASKS },
+            SlashCommand("/tasks", "Switch to Background Tasks") { chatTab = ChatTab.TASKS },
             SlashCommand("/participants", "Manage council participants") { showParticipants = true },
             SlashCommand("/models", "Switch model") { showModelSheet = true },
             SlashCommand("/image", "Generate an image") { viewModel.setComposerMode(ComposerMode.IMAGE) },
@@ -440,13 +441,14 @@ fun ChatScreen(
                 state = state,
                 onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
                 onTitleClick = { showParticipants = true },
+                onOpenChats = onOpenChats,
+                onOpenSettings = onOpenSettings,
             )
             if (tabBarPosition != "BOTTOM") {
                 ChatTabBar(
                     tab = chatTab,
+                    position = tabBarPosition,
                     onSelect = { chatTab = it },
-                    onOpenChats = onOpenChats,
-                    onOpenSettings = onOpenSettings,
                 )
             }
             when (chatTab) {
@@ -916,9 +918,8 @@ fun ChatScreen(
             if (tabBarPosition == "BOTTOM") {
                 ChatTabBar(
                     tab = chatTab,
+                    position = tabBarPosition,
                     onSelect = { chatTab = it },
-                    onOpenChats = onOpenChats,
-                    onOpenSettings = onOpenSettings,
                 )
             }
         }
@@ -1206,18 +1207,22 @@ fun ChatScreen(
 }
 
 /**
- * The one piece of chrome the home room keeps: the conversation title (quiet, left, WhatsApp-
- * style tappable to open [dev.fonebrew.ui.rooms.ParticipantsScreen] — group info + the
+ * The home room's persistent chrome: leading "back to Chats" / trailing Settings corner buttons
+ * (per the owner's reference mockup, 2026-08-27) flanking the conversation title (quiet, centred,
+ * WhatsApp-style tappable to open [dev.fonebrew.ui.rooms.ParticipantsScreen] — group info + the
  * interaction-mode chooser live behind the header now, not a separate composer-row of chips) and
- * the status indicator (right). "‹ Chats"/"⚙" no longer live here — they're a permanent part of
- * [ChatTabBar]'s leading/trailing slots now, so this header doesn't double them up regardless of
- * whether that bar docks top or bottom.
+ * the status indicator. "‹ Chats"/"⚙" used to be a permanent part of [ChatTabBar], travelling
+ * with it to wherever [tabBarPosition] docked the Chat/Terminal/Background-Tasks switcher — the
+ * owner's mockup keeps them pinned to the header at all times instead, so they moved here
+ * (2026-08-27) and [ChatTabBar] is tabs-only now.
  */
 @Composable
 private fun HomeHeader(
     state: ChatUiState,
     onBadgeTap: () -> Unit,
     onTitleClick: () -> Unit,
+    onOpenChats: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val c = LocalHyleColors.current
     Row(
@@ -1225,6 +1230,12 @@ private fun HomeHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        HyleHeaderButton(
+            glyph = HeaderGlyph.ROOM_LEFT,
+            onClick = onOpenChats,
+            contentDescription = "Open chats",
+            slantLeft = false,
+        )
         // Current conversation title (truncated) — tap opens participants/group info, same as
         // tapping a WhatsApp chat's header.
         Text(
@@ -1240,64 +1251,64 @@ private fun HomeHeader(
         // fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings, this
         // slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
         HeaderIndicator(state)
+        HyleHeaderButton(
+            glyph = HeaderGlyph.SETTINGS,
+            onClick = onOpenSettings,
+            contentDescription = "Open settings",
+            slantLeft = true,
+        )
     }
 }
 
 /**
- * The Chat/Terminal/Tasks switcher — three windows onto the same underlying capability, not a
- * Chat-vs-something-else split (§ owner spec). Styled as [HyleSlashTabBar] (the owner's reference: a
- * leading slot, then tabs threaded by a literal "/", no per-tab fill) rather than [HyleTabBar]'s
- * heavier filled-chip register — this switches VIEWS of one conversation, not top-level rooms.
- * "All chats" sits in the leading slot in place of the reference's generic overflow icon (owner
- * ask); Settings trails. Lives here rather than split into [HomeHeader] so the whole row moves
- * as one unit with the tab-bar-position setting (top or bottom of the screen).
+ * The Chat/Terminal/Background-Tasks switcher — three windows onto the same underlying
+ * capability, not a Chat-vs-something-else split (§ owner spec). Docked as [HyleBottomTabBar]
+ * (the owner's reference mockup, 2026-08-27: a floating dark bar, icon above label, corners
+ * rounded toward the open edge) rather than the old [dev.aarso.hyle.cells.HyleSlashTabBar]'s
+ * flat inline register — the fresh mockup asks this switcher to read as an unambiguous tab bar
+ * in its own right. The "‹ Chats"/"⚙" shortcuts that used to flank these tabs moved to
+ * [HomeHeader] (2026-08-27): the owner's mockup keeps them pinned to the header at all times
+ * rather than travelling with this switcher to the bottom of the screen. [position] threads the
+ * tab-bar-position setting through so the dock's rounded corners always face the open edge it's
+ * anchored against, per [HyleBottomTabBar]'s own contract.
  */
 @Composable
 private fun ChatTabBar(
     tab: ChatTab,
+    position: String,
     onSelect: (ChatTab) -> Unit,
-    onOpenChats: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        HyleSlashTabBar(
-            tabs = listOf(
-                HyleTabSpec("Chat") { tint ->
-                    val w = size.width; val h = size.height
-                    val sw = w * 0.09f
-                    drawLine(tint, Offset(w * 0.16f, h * 0.34f), Offset(w * 0.84f, h * 0.34f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.16f, h * 0.52f), Offset(w * 0.68f, h * 0.52f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.16f, h * 0.70f), Offset(w * 0.50f, h * 0.70f), strokeWidth = sw)
-                },
-                HyleTabSpec("Terminal") { tint ->
-                    val w = size.width; val h = size.height
-                    val sw = w * 0.10f
-                    drawLine(tint, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.18f, h * 0.68f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
-                    drawLine(tint, Offset(w * 0.50f, h * 0.70f), Offset(w * 0.82f, h * 0.70f), strokeWidth = sw)
-                },
-                // The job table: dotted rows, each dot a task, each bar its lane.
-                HyleTabSpec("Tasks") { tint ->
-                    val w = size.width; val h = size.height
-                    val sw = w * 0.09f
-                    drawCircle(tint, radius = sw * 0.55f, center = Offset(w * 0.20f, h * 0.36f))
-                    drawLine(tint, Offset(w * 0.34f, h * 0.36f), Offset(w * 0.82f, h * 0.36f), strokeWidth = sw)
-                    drawCircle(tint, radius = sw * 0.55f, center = Offset(w * 0.20f, h * 0.66f))
-                    drawLine(tint, Offset(w * 0.34f, h * 0.66f), Offset(w * 0.64f, h * 0.66f), strokeWidth = sw)
-                },
-            ),
-            selected = tab.ordinal,
-            onSelect = { onSelect(ChatTab.entries[it]) },
-            leading = {
-                HyleNavChip(label = "‹ Chats", onClick = onOpenChats, slantLeft = false, contentDescription = "Open chats")
+    HyleBottomTabBar(
+        tabs = listOf(
+            HyleTabSpec("Chat") { tint ->
+                val w = size.width; val h = size.height
+                val sw = w * 0.09f
+                drawLine(tint, Offset(w * 0.16f, h * 0.34f), Offset(w * 0.84f, h * 0.34f), strokeWidth = sw)
+                drawLine(tint, Offset(w * 0.16f, h * 0.52f), Offset(w * 0.68f, h * 0.52f), strokeWidth = sw)
+                drawLine(tint, Offset(w * 0.16f, h * 0.70f), Offset(w * 0.50f, h * 0.70f), strokeWidth = sw)
             },
-        )
-        HyleNavChip(label = "⚙", onClick = onOpenSettings, slantLeft = true, contentDescription = "Open settings")
-    }
+            HyleTabSpec("Terminal") { tint ->
+                val w = size.width; val h = size.height
+                val sw = w * 0.10f
+                drawLine(tint, Offset(w * 0.18f, h * 0.32f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
+                drawLine(tint, Offset(w * 0.18f, h * 0.68f), Offset(w * 0.42f, h * 0.5f), strokeWidth = sw)
+                drawLine(tint, Offset(w * 0.50f, h * 0.70f), Offset(w * 0.82f, h * 0.70f), strokeWidth = sw)
+            },
+            // The job table: dotted rows, each dot a task, each bar its lane.
+            HyleTabSpec("Background Tasks") { tint ->
+                val w = size.width; val h = size.height
+                val sw = w * 0.09f
+                drawCircle(tint, radius = sw * 0.55f, center = Offset(w * 0.20f, h * 0.36f))
+                drawLine(tint, Offset(w * 0.34f, h * 0.36f), Offset(w * 0.82f, h * 0.36f), strokeWidth = sw)
+                drawCircle(tint, radius = sw * 0.55f, center = Offset(w * 0.20f, h * 0.66f))
+                drawLine(tint, Offset(w * 0.34f, h * 0.66f), Offset(w * 0.64f, h * 0.66f), strokeWidth = sw)
+            },
+        ),
+        selected = tab.ordinal,
+        onSelect = { onSelect(ChatTab.entries[it]) },
+        position = position,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**
