@@ -153,6 +153,16 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   ~2026-06-30 to 2026-08 every run died in 3–6s with no runner assigned — exhausted Actions
   minutes / spending limit on the private repo, fixed at the account level, never by re-running.
   If that 3–6s-death signature ever returns, it's billing again — see `docs/STATE.md` §9.)*
+  **Second infra false-negative (found + fixed 2026-08-27):** a red `build-test` whose log shows
+  the Gradle step itself passing (`BUILD SUCCESSFUL`, real test/license tasks all green) but the
+  job still fails afterward, at "Upload test reports" — `actions/upload-artifact@v4` erroring
+  `"Failed to CreateArtifact: Artifact storage quota has been hit."` — is the account-level
+  Actions *artifact storage* quota, not a code regression (distinct from the Actions-*minutes*
+  exhaustion above; same false-negative shape). That upload is diagnostic only (test reports for
+  debugging a failure), not part of the gate's pass/fail contract, so it now carries
+  `continue-on-error: true` in `.github/workflows/ci.yml`. If red CI ever shows a passing Gradle
+  step again, check the job log for this exact quota message before assuming a real regression —
+  and don't remove `continue-on-error` from that step to "clean it up."
 
 ## Environment honesty
 The container compiles everything but has **no device, emulator, board, or SSH host**. All
