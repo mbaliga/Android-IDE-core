@@ -42,6 +42,12 @@ fun AuditFacet(onRunPrompt: (String) -> Unit) {
     )
     Spacer(Modifier.height(8.dp))
 
+    // The one exception to "Run fires a chat prompt": this panel runs a real command on a real
+    // target (this phone / an SSH host / your CI), through the Execution Contract + Authority
+    // engine — see [RunPanel]'s own doc comment for why it lives here rather than a fifth tab.
+    RunPanel()
+    Spacer(Modifier.height(16.dp))
+
     val counts = AuditChecklist.summary(checks)
     Text(
         "${counts.total} checks · ✓${counts.passed} ✗${counts.failed} " +
