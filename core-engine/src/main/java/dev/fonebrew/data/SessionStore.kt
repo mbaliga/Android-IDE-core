@@ -29,6 +29,11 @@ class SessionStore(context: Context) {
     private val _onboardingDone = MutableStateFlow(prefs.getBoolean(KEY_ONBOARDED, false))
     val onboardingDone: StateFlow<Boolean> = _onboardingDone.asStateFlow()
 
+    // Gates the one-time LoopCatalog seed (LoopCatalogSeeder) -- deliberately "seeded, ever" not
+    // "list is empty": a user who deletes every seeded loop must not get them silently repopulated.
+    private val _loopCatalogSeeded = MutableStateFlow(prefs.getBoolean(KEY_LOOP_CATALOG_SEEDED, false))
+    val loopCatalogSeeded: StateFlow<Boolean> = _loopCatalogSeeded.asStateFlow()
+
     private val _instrumentsExpanded = MutableStateFlow(prefs.getBoolean(KEY_INSTRUMENTS, false))
     val instrumentsExpanded: StateFlow<Boolean> = _instrumentsExpanded.asStateFlow()
 
@@ -170,6 +175,11 @@ class SessionStore(context: Context) {
         _onboardingDone.value = true
     }
 
+    fun setLoopCatalogSeeded() {
+        prefs.edit().putBoolean(KEY_LOOP_CATALOG_SEEDED, true).apply()
+        _loopCatalogSeeded.value = true
+    }
+
     fun setInstrumentsExpanded(expanded: Boolean) {
         prefs.edit().putBoolean(KEY_INSTRUMENTS, expanded).apply()
         _instrumentsExpanded.value = expanded
@@ -213,8 +223,7 @@ class SessionStore(context: Context) {
 
     /** [position] "TOP"/"BOTTOM", or null to clear the override and fall back to the universal default. */
     fun setRoomTabBarPosition(roomId: String, position: String?) {
-        val next = _roomTabBarPosition.value.toMutableMap()
-        if (position == null) next.remove(roomId) else next[roomId] = position
+        val next = dev.fonebrew.domain.RoomTabBarPosition.set(_roomTabBarPosition.value, roomId, position)
         prefs.edit().putStringSet(
             KEY_ROOM_TAB_BAR_POSITION,
             next.entries.map { "${it.key}${it.value}" }.toSet(),
@@ -223,7 +232,8 @@ class SessionStore(context: Context) {
     }
 
     /** The effective position for [roomId]: its own override if set, else the universal default. */
-    fun tabBarPositionFor(roomId: String): String = _roomTabBarPosition.value[roomId] ?: _tabBarPosition.value
+    fun tabBarPositionFor(roomId: String): String =
+        dev.fonebrew.domain.RoomTabBarPosition.effective(_roomTabBarPosition.value, roomId, _tabBarPosition.value)
 
     private fun loadRoomTabBarPosition(): Map<String, String> =
         prefs.getStringSet(KEY_ROOM_TAB_BAR_POSITION, emptySet()).orEmpty()
@@ -373,6 +383,7 @@ class SessionStore(context: Context) {
         private const val KEY_LEAF = "activeLeafId"
         private const val KEY_MODEL = "activeModelId"
         private const val KEY_ONBOARDED = "onboardingDone"
+        private const val KEY_LOOP_CATALOG_SEEDED = "loopCatalogSeeded"
         private const val KEY_INSTRUMENTS = "instrumentsExpanded"
         private const val KEY_ENTROPY = "entropyColoring"
         private const val KEY_TERMINAL_CTRL_C = "terminalCtrlCButton"

@@ -245,6 +245,18 @@ class AppContainer(context: Context) {
     /** Saved Loops (visual-editor definitions as BPMN + lifecycle envelope). */
     val loopStore: dev.fonebrew.data.LoopStore = dev.fonebrew.data.LoopStore(context)
 
+    // One-time seed of the curated Loop patterns (LoopCatalog: MoA, self-consistency, reflexion,
+    // debate) so a fresh install's Loops list isn't empty. Gated by SessionStore's persisted
+    // flag, not list emptiness -- see LoopCatalogSeeder's KDoc. Same synchronous SharedPreferences
+    // path every other store already takes in this constructor; nothing here is suspend/blocking.
+    init {
+        dev.fonebrew.domain.loop.LoopCatalogSeeder.seedIfNeeded(
+            alreadySeeded = sessionStore.loopCatalogSeeded.value,
+            markSeeded = { sessionStore.setLoopCatalogSeeded() },
+            save = { loopStore.save(it) },
+        )
+    }
+
     /** Connected Git hosts (watched) + their Keystore-encrypted tokens, and the
      *  thin REST transport that talks only to the user's host. */
     val gitHostStore: dev.fonebrew.data.GitHostStore = dev.fonebrew.data.GitHostStore(context)
