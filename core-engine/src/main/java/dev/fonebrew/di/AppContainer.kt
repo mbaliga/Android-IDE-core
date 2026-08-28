@@ -101,13 +101,31 @@ class AppContainer(context: Context) {
             producer = dev.fonebrew.contracts.common.ProducerRef(name = "core-engine", version = "1.0.0"),
         )
 
+    /** The one root-of-authority [dev.fonebrew.contracts.authority.Principal] this app has --
+     *  every grant [dev.fonebrew.ui.develop.RunFacet] issues is scoped to this id. Seeded once,
+     *  in-memory (matches [grantStore]/[principalStore] themselves -- no persistence need yet,
+     *  same "no consumer wired in yet" pattern this file used before something needed it). */
+    val localUserPrincipal: dev.fonebrew.contracts.authority.Principal = dev.fonebrew.contracts.authority.Principal(
+        principalId = "user.local",
+        kind = dev.fonebrew.contracts.authority.PrincipalKind.USER,
+        displayName = "You",
+        parentPrincipalId = null,
+        status = dev.fonebrew.contracts.authority.PrincipalStatus.ACTIVE,
+        createdAtUtc = java.time.Instant.now(),
+    ).also { principalStore.add(it) }
+
     /** WP-4: reference (non-Keystore) secret-handle broker -- see that class's own doc comment
      *  for why a real Keystore-backed implementation is owner-verified, not built here. */
     val secretHandleBroker: dev.fonebrew.domain.authority.InMemorySecretHandleBroker =
         dev.fonebrew.domain.authority.InMemorySecretHandleBroker(emptyMap())
 
-    /** WP-4: the LOCAL_ANDROID ExecutionProvider. No consumer wired in yet -- see that class's
-     *  own doc comment on W^X and the "process supervisor semantics JVM-mocked" scope note. */
+    /** WP-4/WP-5: the LOCAL_ANDROID/SSH_HOST/CI ExecutionProviders. Consumed by
+     *  [runSessionDriver] below (Develop -> Run facet) -- the "no consumer wired in yet" note
+     *  this line used to carry is resolved; see that driver's own doc comment for the full path
+     *  (authority check -> provider -> receipt). [localExecutionProvider] is the one true
+     *  singleton (stateless besides its own run bookkeeping); SSH/CI providers are per-target by
+     *  construction (a distinct host each), so [runSessionDriver] builds those itself rather than
+     *  this file baking in one host. */
     val localExecutionProvider: dev.fonebrew.domain.execution.LocalProcessExecutionProvider =
         dev.fonebrew.domain.execution.LocalProcessExecutionProvider()
 
@@ -280,6 +298,25 @@ class AppContainer(context: Context) {
     val remoteHostStore: dev.fonebrew.data.RemoteHostStore = dev.fonebrew.data.RemoteHostStore(context)
     fun newSshTransport(): dev.fonebrew.domain.remote.RemoteTransport =
         dev.fonebrew.data.remote.SshjTransport(secretProvider = { remoteHostStore.secret(it) })
+
+    /** Develop -> Run: the panel that lets a user run their own product's commands/tests from
+     *  the phone, through the Execution Contract + Authority engine, against whichever real
+     *  provider the target resolves to (this phone / a saved SSH host / a connected Git host's
+     *  CI). See [dev.fonebrew.data.execution.RunSessionDriver]'s own doc comment. */
+    val runSessionDriver: dev.fonebrew.data.execution.RunSessionDriver by lazy {
+        dev.fonebrew.data.execution.RunSessionDriver(
+            authorityEngine = authorityEngine,
+            principalId = localUserPrincipal.principalId,
+            grantStore = grantStore,
+            receiptStore = receiptStore,
+            localProvider = localExecutionProvider,
+            remoteHostStore = remoteHostStore,
+            newSshTransport = ::newSshTransport,
+            gitHostStore = gitHostStore,
+            gitTransport = gitTransport,
+            producer = dev.fonebrew.contracts.common.ProducerRef(name = "core-engine", version = "1.0.0"),
+        )
+    }
 
     /** THE terminal session — one per process, shared by both terminal doors (Chat's Terminal
      *  tab and Develop's Terminal tab; see [dev.fonebrew.data.remote.TerminalSessionHolder]'s
