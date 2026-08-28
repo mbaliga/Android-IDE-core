@@ -245,6 +245,9 @@ fun LoopRoom(onClose: () -> Unit) {
     var showLoad by remember { mutableStateOf(false) }
     var showDistill by remember { mutableStateOf(false) }
     var syncNote by remember { mutableStateOf<String?>(null) }
+    var showExportPackage by remember { mutableStateOf(false) }
+    var showImportPackage by remember { mutableStateOf(false) }
+    var packageNote by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
     val colors = LocalHyleColors.current
@@ -371,6 +374,8 @@ fun LoopRoom(onClose: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showLoad = true }) { Text("Loops") }
                         TextButton(onClick = { showDistill = true }, enabled = runnable.isNotEmpty()) { Text("Distill…") }
+                        TextButton(onClick = { showImportPackage = true }) { Text("Import…") }
+                        TextButton(onClick = { showExportPackage = true }, enabled = nodes.isNotEmpty()) { Text("Export…") }
                         TextButton(onClick = { showSave = true }, enabled = objective.isNotBlank()) { Text("Save") }
                         if (running) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -388,6 +393,24 @@ fun LoopRoom(onClose: () -> Unit) {
                 savedNote?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 12.dp))
                 }
+                packageNote?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 12.dp))
+                }
+                // Import provenance (mirrors the distillation banner below): an imported package's
+                // identity travels in the start event's ext map — the same carrier distillation
+                // already uses — so it survives edit/re-save without a second storage mechanism.
+                nodes.firstOrNull { it.kind == BpmnNodeKind.START_EVENT }?.provenanceExt
+                    ?.takeIf { it.containsKey("importedLoopId") }
+                    ?.let { prov ->
+                        Text(
+                            "Imported from “${prov["importedLoopId"]}” v${prov["importedSemanticVersion"]} " +
+                                "(${prov["importedSignatureState"]?.lowercase()?.replace('_', ' ')}) " +
+                                "on ${prov["importedOn"]}.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
                 // Provenance surfacing (docs/design/loop-distillation.md step 5): a distilled
                 // loop's start-event carries who/what/when in its ext map, preserved end to end
                 // by LoopNode.provenanceExt — shown here so influence stays visible, never a
@@ -696,6 +719,35 @@ fun LoopRoom(onClose: () -> Unit) {
                 store.save(loop)
                 loadLoop(loop)
                 showDistill = false
+            },
+        )
+    }
+
+    if (showExportPackage) {
+        val exportGraph = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
+        val suggestedId = loopId ?: ("loop-" + loopName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "untitled" })
+        ExportLoopPackageDialog(
+            graph = exportGraph, objective = objective, suggestedLoopId = suggestedId,
+            onDismiss = { showExportPackage = false },
+            onExported = { fileName -> packageNote = "Exported “$fileName”"; showExportPackage = false },
+        )
+    }
+
+    if (showImportPackage) {
+        ImportLoopPackageDialog(
+            localModels = runnable,
+            onDismiss = { showImportPackage = false },
+            onImported = { graph, importedObjective, provenanceExt ->
+                nodes.clear(); nodes.addAll(fromBpmnNodes(graph))
+                edges.clear(); edges.addAll(fromBpmnEdges(graph))
+                // Merge import provenance into the start event, same carrier distillation uses.
+                val startIdx = nodes.indexOfFirst { it.kind == BpmnNodeKind.START_EVENT }
+                if (startIdx >= 0) nodes[startIdx] = nodes[startIdx].copy(provenanceExt = nodes[startIdx].provenanceExt + provenanceExt)
+                objective = importedObjective
+                loopId = null // a fresh local draft — Save mints this device's own id, per LOOP_IMPORT_ACTIVATION_CONTRACT.md §8 (installed vs. locally edited are distinct)
+                loopName = graph.name.ifBlank { "Imported loop" }
+                packageNote = "Imported “${provenanceExt["importedLoopId"]}” — review and Save to keep it."
+                showImportPackage = false
             },
         )
     }
