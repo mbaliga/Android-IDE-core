@@ -523,6 +523,39 @@ private fun GeneralSettings(
             }
         }
     }
+
+    // Per-room override, one row per room that reads roomTabBarPosition (Chat/ChatsRoom/
+    // TreeRoom/DevelopRoom/SettingsRoom/ProductRoomFree) -- "Default" clears the override
+    // (setRoomTabBarPosition(id, null)) and falls back to the universal choice above.
+    run {
+        val roomOverrides by session.roomTabBarPosition.collectAsState()
+        val rooms = listOf(
+            "chat" to "Chat",
+            "chats" to "Chats",
+            "tree" to "Tree",
+            "develop" to "Develop",
+            "settings" to "Settings",
+            "project" to "Project",
+        )
+        rooms.forEach { (roomId, label) ->
+            val current = roomOverrides[roomId]
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(72.dp),
+                )
+                listOf(null to "Default", "TOP" to "Top", "BOTTOM" to "Bottom").forEach { (value, chipLabel) ->
+                    HyleChip(current == value, { session.setRoomTabBarPosition(roomId, value) }, chipLabel)
+                }
+            }
+        }
+    }
     HorizontalDivider()
 
     Text("Terminal Ctrl-C button", style = MaterialTheme.typography.titleMedium)

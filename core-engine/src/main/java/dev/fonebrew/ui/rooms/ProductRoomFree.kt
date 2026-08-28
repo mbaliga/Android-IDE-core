@@ -46,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -79,7 +81,30 @@ fun ProductRoomFree(
 ) {
     BackHandler(onBack = onClose)
     val c = LocalHyleColors.current
+    val container = (LocalContext.current.applicationContext as FonebrewApp).container
     var tab by remember { mutableStateOf(0) }
+
+    // Same per-room override as Chat/Chats/Tree/Develop/Settings (Settings → Global → Tab bar
+    // position): a room-specific choice wins over the universal default when set.
+    val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
+    val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
+    val tabBarPosition = roomTabBarOverrides["project"] ?: universalTabBarPosition
+
+    // "To-do" plus whatever the paid Studio layer contributes; any Studio tab gets a neutral
+    // glyph so this room never needs to know Studio's icon set (same shape as DevelopTabs).
+    val tabSpecs = listOf(
+        dev.aarso.hyle.cells.HyleTabSpec("To-do") { tint -> todoTabGlyph(tint) },
+    ) + extraTabs.map { (label, _) -> dev.aarso.hyle.cells.HyleTabSpec(label) { tint -> genericTabGlyph(tint) } }
+
+    val tabBarBlock: @Composable () -> Unit = {
+        dev.aarso.hyle.cells.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
+    }
+    val contentBlock: @Composable () -> Unit = {
+        when {
+            tab == 0 -> TodoTab()
+            else -> extraTabs[tab - 1].second()
+        }
+    }
 
     Column(
         Modifier
@@ -96,11 +121,43 @@ fun ProductRoomFree(
             HyleButton("‹ Back", onClick = onClose)
         }
         HyleTitle("Product")
-        when {
-            tab == 0 -> TodoTab()
-            else -> extraTabs[tab - 1].second()
+        if (tabBarPosition == "BOTTOM") {
+            Box(Modifier.weight(1f)) { contentBlock() }
+            tabBarBlock()
+        } else {
+            tabBarBlock()
+            Box(Modifier.weight(1f)) { contentBlock() }
         }
     }
+}
+
+/** To-do: a checklist line with one checked box — [SettingsRoom]'s TabGlyph line-drawn style. */
+private fun DrawScope.todoTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    listOf(h * 0.30f, h * 0.50f, h * 0.70f).forEach { y ->
+        drawLine(tint, Offset(w * 0.40f, y), Offset(w * 0.90f, y), strokeWidth = sw)
+    }
+    val check = Path().apply {
+        moveTo(w * 0.10f, h * 0.30f)
+        lineTo(w * 0.20f, h * 0.40f)
+        lineTo(w * 0.34f, h * 0.20f)
+    }
+    drawPath(check, tint, style = Stroke(width = sw))
+}
+
+/** Neutral placeholder glyph for any Studio-contributed tab (this room doesn't know its icon). */
+private fun DrawScope.genericTabGlyph(tint: Color) {
+    val w = size.width; val h = size.height
+    val sw = w * 0.09f
+    val diamond = Path().apply {
+        moveTo(w * 0.5f, h * 0.10f)
+        lineTo(w * 0.90f, h * 0.5f)
+        lineTo(w * 0.5f, h * 0.90f)
+        lineTo(w * 0.10f, h * 0.5f)
+        close()
+    }
+    drawPath(diamond, tint, style = Stroke(width = sw))
 }
 
 /**
