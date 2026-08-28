@@ -437,13 +437,8 @@ fun ChatScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
         ) {
-            HomeHeader(
-                state = state,
-                onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
-                onTitleClick = { showParticipants = true },
-                onOpenChats = onOpenChats,
-                onOpenSettings = onOpenSettings,
-            )
+            // TOP file tabs sit outside the room chrome and merge into its upper edge. The
+            // header follows inside the room, matching the traditional and immersive references.
             if (tabBarPosition != "BOTTOM") {
                 ChatTabBar(
                     tab = chatTab,
@@ -451,6 +446,13 @@ fun ChatScreen(
                     onSelect = { chatTab = it },
                 )
             }
+            HomeHeader(
+                state = state,
+                onBadgeTap = { if (!state.isGenerating) showModelSheet = true },
+                onTitleClick = { showParticipants = true },
+                onOpenChats = onOpenChats,
+                onOpenSettings = onOpenSettings,
+            )
             when (chatTab) {
                 ChatTab.TERMINAL -> Column(
                     modifier = Modifier.weight(1f).fillMaxWidth()
@@ -1262,15 +1264,12 @@ private fun HomeHeader(
 
 /**
  * The Chat/Terminal/Background-Tasks switcher — three windows onto the same underlying
- * capability, not a Chat-vs-something-else split (§ owner spec). Docked as [HyleBottomTabBar]
- * (the owner's reference mockup, 2026-08-27: a floating dark bar, icon above label, corners
- * rounded toward the open edge) rather than the old [dev.aarso.hyle.cells.HyleSlashTabBar]'s
- * flat inline register — the fresh mockup asks this switcher to read as an unambiguous tab bar
- * in its own right. The "‹ Chats"/"⚙" shortcuts that used to flank these tabs moved to
- * [HomeHeader] (2026-08-27): the owner's mockup keeps them pinned to the header at all times
- * rather than travelling with this switcher to the bottom of the screen. [position] threads the
- * tab-bar-position setting through so the dock's rounded corners always face the open edge it's
- * anchored against, per [HyleBottomTabBar]'s own contract.
+ * capability, not a Chat-vs-something-else split (§ owner spec). [HyleBottomTabBar] is the Hyle
+ * file-tab control: the selected tab is cut from the room's own material and merges into its edge;
+ * inactive tabs stay on the black app ground behind slash seams. TOP mirrors the order to place
+ * Chat at the upper-right; BOTTOM places it at the lower-left. Its responsive label ladder retains
+ * the selected label before falling back to icons under IME/narrow constraints. The "‹ Chats"/"⚙"
+ * shortcuts remain in [HomeHeader], inside the traditional room chrome.
  */
 @Composable
 private fun ChatTabBar(
