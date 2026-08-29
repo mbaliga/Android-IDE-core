@@ -1,0 +1,45 @@
+A computing environment for working with AI models on your own phone, built so you
+can see what is happening rather than trust that something sensible is.
+
+On device is the default, not a mode you have to find. Open the app with no
+account, no sign-in and no network connection, and it works.
+
+WHAT IT REFUSES TO DO
+• No telemetry, no analytics, no crash reporting. Nothing phones home, ever. There
+  are no such dependencies in the build.
+• No hidden cloud fallback. If a request would leave your device, you chose that,
+  for that request.
+• Every cloud provider is visibly marked in the interface as a watched object, so
+  you always know which turns went out and which stayed home.
+• Your API keys are encrypted at rest with the Android Keystore and are sent only
+  to the provider they belong to. They are never logged.
+
+MODELS THAT ARE YOURS
+• Run open models locally. Bring your own GGUF file, or download from the source
+  you choose.
+• Generation uses each model's own chat template, read from the file's metadata,
+  rather than a guessed one.
+• Per-token probability and entropy are surfaced from the first token, so you can
+  see where a model was confident and where it was guessing.
+• Optional cloud providers, with your own key: Anthropic, Gemini, and any
+  OpenAI-compatible endpoint. Provider-generic, with no vendor wired in specially.
+
+A CONVERSATION YOU CAN NAVIGATE
+• Every conversation is a tree, not a scroll. Branch from any turn, restore any
+  earlier point, and switch models mid-thread without losing the thread.
+• A council: several participants in one conversation, each with its own name,
+  instructions, model and memory, answering side by side.
+• The interaction model is fixed once a chat starts. Changing it branches, with a
+  summary, so a conversation never quietly becomes a different one.
+
+BUILD THINGS, NOT JUST CHAT
+• An agent that reads a repository, proposes a change set, and shows it to you as
+  reviewable hunks. Nothing is committed until you approve it.
+• A loop editor: a free-form graph you draw, with a model per node. Loops save as
+  standard BPMN 2.0, so they are readable outside this app.
+• Full-text search across everything you have done, on device.
+• Image generation, locally.
+
+Fonebrew is a tool that argues for a position: that the phone can be a primary
+computing device, and that legibility is worth more than convenience. Where the two
+conflict, it picks legibility.
