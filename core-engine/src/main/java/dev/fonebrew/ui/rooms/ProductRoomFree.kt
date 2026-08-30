@@ -78,10 +78,22 @@ import kotlinx.coroutines.launch
 fun ProductRoomFree(
     onClose: () -> Unit,
     extraTabs: List<Pair<String, @Composable () -> Unit>> = emptyList(),
+    /** A search hit's task id (dev.fonebrew.ui.search.SearchOverlay's "open" action) — the
+     *  To-do tab scrolls to and briefly highlights this row the moment it's on-screen. `null`
+     *  for every non-search entry, so this is additive over the existing tab-bar/spatial-nav
+     *  path. */
+    highlightTaskId: String? = null,
+    /** Called once the scroll-to-target has actually run (or immediately, if there was nothing
+     *  to scroll to) — the caller's cue to clear its own `highlightTaskId` so re-opening this
+     *  room later, without a new search hit, doesn't replay the same scroll+highlight. Mirrors
+     *  [dev.fonebrew.ui.loops.LoopRoom]'s `onInitialLoopConsumed`. */
+    onHighlightConsumed: () -> Unit = {},
 ) {
     BackHandler(onBack = onClose)
     val c = LocalHyleColors.current
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
+    // Defaults to index 0 (To-do) regardless — which is exactly the tab a task hit needs open,
+    // so highlightTaskId needs no special-cased tab selection here, only inside TodoTab itself.
     var tab by remember { mutableStateOf(0) }
 
     // Same per-room override as Chat/Chats/Tree/Develop/Settings (Settings → Global → Tab bar
@@ -101,7 +113,7 @@ fun ProductRoomFree(
     }
     val contentBlock: @Composable () -> Unit = {
         when {
-            tab == 0 -> TodoTab()
+            tab == 0 -> TodoTab(highlightTaskId = highlightTaskId, onHighlightConsumed = onHighlightConsumed)
             else -> extraTabs[tab - 1].second()
         }
     }
@@ -168,7 +180,7 @@ private fun DrawScope.genericTabGlyph(tint: Color) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TodoTab() {
+private fun TodoTab(highlightTaskId: String? = null, onHighlightConsumed: () -> Unit = {}) {
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val store = container.taskStore
     val tasks by store.tasks.collectAsState(initial = emptyList())
@@ -176,15 +188,48 @@ private fun TodoTab() {
     val snackbarHost = remember { SnackbarHostState() }
     var doneExpanded by remember { mutableStateOf(false) }
     var composerText by remember { mutableStateOf("") }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     val active = tasks.filter { it.state != TaskState.DONE }.sortedBy { it.orderKey }
     val done = tasks.filter { it.state == TaskState.DONE }.sortedByDescending { it.doneAt }
+
+    // A highlighted task's own state can start it collapsed into Done — expand it the moment
+    // `tasks` confirms that's where it lives, so the scroll-to below has a real row to land on.
+    // (A search hit for a done task is exactly the case this section exists to reach — a
+    // completed task is still findable, and now openable.)
+    LaunchedEffect(highlightTaskId, done) {
+        if (highlightTaskId != null && done.any { it.id == highlightTaskId }) doneExpanded = true
+    }
 
     // Optimistic order for the active list while a drag is in flight — the store's own
     // Flow is the source of truth once the drag commits.
     var dragOrder by remember { mutableStateOf<List<TaskEntity>?>(null) }
     LaunchedEffect(active.map { it.id }) { dragOrder = null }
     val displayActive = dragOrder ?: active
+
+    // Scrolls to a search hit's row once it's actually laid out: item indices below depend on
+    // displayActive's size and whether the done section is expanded, both computed above, so this
+    // re-runs (harmlessly — animateScrollToItem on an already-visible index is a no-op-ish scroll)
+    // whenever either changes, not just once on first composition.
+    LaunchedEffect(highlightTaskId, displayActive, done, doneExpanded) {
+        val target = highlightTaskId ?: return@LaunchedEffect
+        val activeIndex = displayActive.indexOfFirst { it.id == target }
+        val index = when {
+            activeIndex >= 0 -> activeIndex
+            doneExpanded -> {
+                val doneIndex = done.indexOfFirst { it.id == target }
+                if (doneIndex < 0) return@LaunchedEffect
+                displayActive.size + 1 + doneIndex // +1 skips the "Done (N)" header row
+            }
+            else -> return@LaunchedEffect
+        }
+        listState.animateScrollToItem(index)
+        // The scroll actually ran — safe to tell the caller this id is handled. Consuming here
+        // (not from TaskRow's own fade, which runs on a fixed timer regardless of whether this
+        // effect ever found the row) is what stops a later reopen of this room, with no new
+        // search hit, from replaying the same scroll — see onHighlightConsumed's KDoc.
+        onHighlightConsumed()
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -225,10 +270,11 @@ private fun TodoTab() {
                 )
             }
 
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 items(displayActive, key = { it.id }) { task ->
                     TaskRow(
                         task = task,
+                        highlighted = task.id == highlightTaskId,
                         onToggle = {
                             scope.launch {
                                 store.toggleDone(task)
@@ -283,7 +329,11 @@ private fun TodoTab() {
                     }
                     if (doneExpanded) {
                         items(done, key = { it.id }) { task ->
-                            TaskRow(task = task, onToggle = { scope.launch { store.toggleDone(task) } })
+                            TaskRow(
+                                task = task,
+                                highlighted = task.id == highlightTaskId,
+                                onToggle = { scope.launch { store.toggleDone(task) } },
+                            )
                             HorizontalDivider(color = LocalHyleColors.current.hairline)
                         }
                     }
@@ -298,6 +348,11 @@ private fun TodoTab() {
 private fun TaskRow(
     task: TaskEntity,
     onToggle: () -> Unit,
+    /** True for exactly the row a search hit opened this room onto — see [ProductRoomFree]'s
+     *  `highlightTaskId`. Fades out on its own after [HIGHLIGHT_MILLIS] rather than staying lit
+     *  forever, the same "arrived here, now it's just a normal row" behaviour S9 continuity gives
+     *  a chat's find-in-conversation highlight. */
+    highlighted: Boolean = false,
     onDragStart: () -> Unit = {},
     onDragMove: (Int) -> Unit = {},
     onDragEnd: () -> Unit = {},
@@ -307,6 +362,22 @@ private fun TaskRow(
             if (value != SwipeToDismissBoxValue.Settled) onToggle()
             false // the row's own state (not swipe offset) reflects done-ness; snap back
         },
+    )
+    // Keyed on task.id alone, not on the live `highlighted` value: the caller consumes
+    // highlightTaskId (clearing it) the moment the scroll-to above runs, which would otherwise
+    // flip `highlighted` back to false mid-animation and cut the fade short before it's visible.
+    // Reading `highlighted` once, at the moment this row's coroutine launches, is what makes the
+    // full show-then-fade sequence independent of that immediate consumption.
+    var showHighlight by remember(task.id) { mutableStateOf(false) }
+    LaunchedEffect(task.id) {
+        if (!highlighted) return@LaunchedEffect
+        showHighlight = true
+        kotlinx.coroutines.delay(HIGHLIGHT_MILLIS)
+        showHighlight = false
+    }
+    val rowBackground by animateColorAsState(
+        if (showHighlight) LocalHyleColors.current.violetDim else LocalHyleColors.current.ink,
+        label = "task-row-highlight",
     )
     SwipeToDismissBox(
         state = dismissState,
@@ -321,7 +392,7 @@ private fun TaskRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(LocalHyleColors.current.ink)
+                .background(rowBackground)
                 .zIndex(if (rowOffsetIndex != 0) 1f else 0f)
                 .pointerInput(task.id) {
                     var accumulated = 0f
@@ -379,6 +450,9 @@ private fun TaskRow(
         }
     }
 }
+
+/** How long a search-hit row's highlight tint stays lit before fading back to normal. */
+private const val HIGHLIGHT_MILLIS = 2_000L
 
 /** Outline circle → filled violet + strike, ~300ms (§8.1). Hand-drawn (no icon-font
  *  dependency) to match this codebase's zero-extra-asset stance (see `MonogramTile`). */

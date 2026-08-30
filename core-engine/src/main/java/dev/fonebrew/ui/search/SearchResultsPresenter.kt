@@ -5,6 +5,7 @@ import dev.fonebrew.domain.search.LexicalSearch
 import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.MatchedIn
 import dev.fonebrew.domain.search.SearchHit
+import dev.fonebrew.domain.search.SearchKind
 import java.time.ZoneId
 import java.util.Locale
 
@@ -25,6 +26,11 @@ object SearchResultsPresenter {
      *  recomputed against [snippet] itself — see [present]'s `queryText` for why they can't be
      *  taken from the hit. */
     data class ResultRow(
+        /** The opened record's id — a conversation's root id for [SearchKind.TEXT]/[IMAGE]/
+         *  [MIXED] (the field's original, narrower meaning), a loop id for [SearchKind.LOOP],
+         *  a task id for [SearchKind.TASK]. Kept as `convId` rather than renamed: it is also the
+         *  `LazyColumn` item key and the argument to [dev.fonebrew.ui.search.SearchViewModel]'s
+         *  `toggleExplain`/`onResultOpened`, and none of those care which kind of id it is. */
         val convId: String,
         val title: String,
         val snippet: String,
@@ -33,6 +39,10 @@ object SearchResultsPresenter {
         val titleHighlights: List<IntRange>,
         val snippetHighlights: List<IntRange>,
         val explanation: MatchExplanation?,
+        /** What [convId] actually identifies — see its own KDoc. Lets the overlay open a hit the
+         *  right way: a conversation into chat, a loop into LoopRoom, a task into the Project
+         *  room ([dev.fonebrew.ui.search.SearchOverlay]'s `onOpenLoop`/`onOpenTask`). */
+        val kind: SearchKind = SearchKind.TEXT,
     )
 
     /**
@@ -70,6 +80,7 @@ object SearchResultsPresenter {
                     else -> emptyList()
                 },
                 explanation = hit.explanation,
+                kind = hit.doc.kind,
             )
         }
     }

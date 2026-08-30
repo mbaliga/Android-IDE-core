@@ -246,6 +246,12 @@ fun SpatialRoot() {
     // S9 continuity: text handed from an opened search result to that chat's find bar, held
     // here because the overlay is torn down the moment the conversation opens.
     var pendingFind by remember { mutableStateOf<String?>(null) }
+    // Same continuity shape as pendingFind, for the two non-conversation result kinds a search
+    // hit can now open: a loop id LoopRoom loads once it settles into view, and a task id
+    // ProductRoomFree's To-do tab scrolls to and highlights. Each is consumed (set back to null)
+    // by the room that used it, exactly like ChatScreen consumes pendingFind.
+    var pendingLoopId by remember { mutableStateOf<String?>(null) }
+    var pendingTaskId by remember { mutableStateOf<String?>(null) }
     // Global hardware-keyboard shortcut (§11.1, WP13's reachable subset): Ctrl+K opens/closes
     // search from anywhere. Deliberately the ONLY key this root intercepts — everything else is
     // left unconsumed so it still reaches whatever text field has focus (the chat composer, a
@@ -375,7 +381,19 @@ fun SpatialRoot() {
             ) {
                 // S6 seam: the paid Studio installs the real Project room; the open core
                 // shows the free To-do floor. Core never references ProjectRoom directly.
-                (ProjectRoomSlot.content ?: { onClose -> ProductRoomFree(onClose) })(
+                // A task-hit's highlight only ever reaches the free floor's own fallback —
+                // ProjectRoomSlot's installed-content signature is fixed at (onClose) -> Unit
+                // (a Studio-repo contract this repo doesn't own), so a Studio-installed room
+                // simply doesn't get pendingTaskId; it keeps whatever navigation it has of its own.
+                (
+                    ProjectRoomSlot.content ?: { onClose ->
+                        ProductRoomFree(
+                            onClose,
+                            highlightTaskId = pendingTaskId,
+                            onHighlightConsumed = { pendingTaskId = null },
+                        )
+                    }
+                )(
                     { controller.closeAll() },
                 )
             }
@@ -507,7 +525,11 @@ fun SpatialRoot() {
                     }
                     .spatialPinch(controller),
             ) {
-                dev.fonebrew.ui.loops.LoopRoom(onClose = { controller.closeAll() })
+                dev.fonebrew.ui.loops.LoopRoom(
+                    onClose = { controller.closeAll() },
+                    initialLoopId = pendingLoopId,
+                    onInitialLoopConsumed = { pendingLoopId = null },
+                )
             }
         }
 
@@ -550,6 +572,16 @@ fun SpatialRoot() {
                     pendingFind = findText.takeIf { it.isNotBlank() }
                     searchOpen = false
                     controller.closeAll()
+                },
+                onOpenLoop = { loopId ->
+                    pendingLoopId = loopId
+                    searchOpen = false
+                    controller.open(SpatialTarget.LOOPS)
+                },
+                onOpenTask = { taskId ->
+                    pendingTaskId = taskId
+                    searchOpen = false
+                    controller.open(SpatialTarget.PROJECT)
                 },
                 onDismiss = { searchOpen = false },
             )

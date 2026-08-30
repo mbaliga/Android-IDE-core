@@ -54,6 +54,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.fonebrew.domain.search.ExplainField
 import dev.fonebrew.domain.search.MatchExplanation
+import dev.fonebrew.domain.search.SearchKind
 import dev.fonebrew.domain.search.query.Diagnostic
 import dev.fonebrew.domain.search.query.unbackedReason
 import dev.fonebrew.ui.components.SlashCommand
@@ -110,8 +111,17 @@ fun SearchOverlay(
     viewModel: SearchViewModel,
     /** Called with the conversation to open and the plain text to hand to that chat's find bar
      *  (S9 continuity) — facet syntax stripped, so opening a result for `gradle is:starred`
-     *  looks for `gradle` inside the conversation, not the facet. */
+     *  looks for `gradle` inside the conversation, not the facet. Only ever called for a
+     *  [SearchKind.TEXT]/[SearchKind.IMAGE]/[SearchKind.MIXED] hit — see [onOpenLoop]/[onOpenTask]
+     *  for the other two result kinds. */
     onOpenConversation: (convId: String, findText: String) -> Unit,
+    /** Called with a loop hit's id — the caller's job is opening LoopRoom onto that loop
+     *  (`dev.fonebrew.ui.loops.LoopRoom`'s `initialLoopId`). */
+    onOpenLoop: (loopId: String) -> Unit = {},
+    /** Called with a task hit's id — the caller's job is opening the Project room's To-do floor
+     *  scrolled to and highlighting that task (`dev.fonebrew.ui.rooms.ProductRoomFree`'s
+     *  `highlightTaskId`). */
+    onOpenTask: (taskId: String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val c = LocalHyleColors.current
@@ -121,9 +131,16 @@ fun SearchOverlay(
     // committed — a result opened, or the overlay closed on a query that found something. That
     // is what fills `search_history` (and therefore the Recent list) without logging keystrokes.
     val dismiss: () -> Unit = { viewModel.onOverlayClosed(); onDismiss() }
-    val openConversation: (String, String) -> Unit = { convId, findText ->
-        viewModel.onResultOpened(convId)
-        onOpenConversation(convId, findText)
+    // One dispatch point for "a result row was tapped (or Ctrl+Enter'd)" — the ViewModel is told
+    // regardless of kind (search_history's "what did this search lead to" doesn't care which
+    // corpus the opened id belongs to), then the matching typed callback fires.
+    val openResult: (SearchResultsPresenter.ResultRow) -> Unit = { row ->
+        viewModel.onResultOpened(row.convId)
+        when (row.kind) {
+            SearchKind.LOOP -> onOpenLoop(row.convId)
+            SearchKind.TASK -> onOpenTask(row.convId)
+            SearchKind.TEXT, SearchKind.IMAGE, SearchKind.MIXED -> onOpenConversation(row.convId, state.findText)
+        }
     }
     // Scoped hardware-keyboard shortcuts (§11.1's reachable-pre-M5 subset, WP13): Esc closes,
     // Ctrl+S saves the current query, Ctrl+Enter opens the top result. Kept local to this
@@ -147,7 +164,7 @@ fun SearchOverlay(
                             saveDialogOpen = true; true
                         }
                         event.isCtrlPressed && event.key == Key.Enter -> {
-                            state.rows.firstOrNull()?.let { openConversation(it.convId, state.findText) }
+                            state.rows.firstOrNull()?.let(openResult)
                             true
                         }
                         else -> false
@@ -256,7 +273,7 @@ fun SearchOverlay(
                         onClearRecent = viewModel::clearRecentSearches,
                     )
                     state.isNoResults -> NoResults(state = state, onDropFacets = viewModel::dropFacets)
-                    else -> ResultsList(state, viewModel::toggleExplain, openConversation)
+                    else -> ResultsList(state, viewModel::toggleExplain, openResult)
                 }
 
                 if (!state.isZeroState) {
@@ -474,7 +491,7 @@ private fun CenteredMessage(text: String, icon: (@Composable () -> Unit)? = null
 private fun ResultsList(
     state: SearchPresenter.UiState,
     onToggleExplain: (String) -> Unit,
-    onOpenConversation: (convId: String, findText: String) -> Unit,
+    onOpenResult: (SearchResultsPresenter.ResultRow) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -484,7 +501,7 @@ private fun ResultsList(
             ResultRowView(
                 row = row,
                 expanded = state.expandedResultId == row.convId,
-                onOpen = { onOpenConversation(row.convId, state.findText) },
+                onOpen = { onOpenResult(row) },
                 onToggleExplain = { onToggleExplain(row.convId) },
             )
             HorizontalDivider(color = LocalHyleColors.current.hairline)
@@ -504,6 +521,17 @@ private fun ResultRowView(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // Legibility over convenience (this app's own design thesis, CLAUDE.md's north
+            // star): a mixed result list must say out loud which corpus a hit came from, not
+            // leave someone to discover it only once the row opens somewhere unexpected.
+            kindLabel(row.kind)?.let { label ->
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.violet,
+                    modifier = Modifier.padding(end = 6.dp),
+                )
+            }
             Text(
                 text = highlighted(row.title, row.titleHighlights, c.violet),
                 style = MaterialTheme.typography.titleSmall,
@@ -581,6 +609,14 @@ private fun SaveSearchDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
         confirmButton = { HyleButton("Save", onClick = { onSave(name) }) },
         dismissButton = { HyleButton("Cancel", onClick = onDismiss, secondary = true) },
     )
+}
+
+/** `null` for the conversation kinds — a bare title is what every result looked like before
+ *  loop:/task: existed, so the label only appears for the two kinds that are new. */
+private fun kindLabel(kind: SearchKind): String? = when (kind) {
+    SearchKind.LOOP -> "LOOP"
+    SearchKind.TASK -> "TASK"
+    SearchKind.TEXT, SearchKind.IMAGE, SearchKind.MIXED -> null
 }
 
 private fun countPhrase(count: Long): String =

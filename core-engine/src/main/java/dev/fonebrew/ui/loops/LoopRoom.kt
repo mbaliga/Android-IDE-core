@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -194,7 +195,16 @@ private fun fromBpmnEdges(g: BpmnGraph): List<LoopEdge> =
  * Generation/run is owner-verified — no model in CI.
  */
 @Composable
-fun LoopRoom(onClose: () -> Unit) {
+fun LoopRoom(
+    onClose: () -> Unit,
+    /** A search hit's loop id (dev.fonebrew.ui.search.SearchOverlay's "open" action) — loaded
+     *  into the builder the moment this loop's saved definition is available, then consumed via
+     *  [onInitialLoopConsumed] so re-entering this room later (without a pending id) never
+     *  re-loads it over whatever the user is now editing. `null` for every non-search entry
+     *  (the tab-bar/spatial-nav path), which is why this whole feature is additive. */
+    initialLoopId: String? = null,
+    onInitialLoopConsumed: () -> Unit = {},
+) {
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val runnable = remember { container.modelRegistry.allSpecs().filter { container.engineProvider.isRunnable(it) } }
     val density = LocalDensity.current.density
@@ -259,6 +269,18 @@ fun LoopRoom(onClose: () -> Unit) {
                 edges.clear(); edges.addAll(fromBpmnEdges(g))
                 loopId = loop.id; loopName = loop.name; savedNote = "Loaded “${loop.name}”"
             }
+        }
+    }
+    // A search hit's loop id arrives before LoopStore's SharedPreferences-backed load necessarily
+    // has (both start on composition), so this waits for savedLoops to actually contain it rather
+    // than looking it up once and giving up. Runs again only if initialLoopId itself changes —
+    // the id is consumed (set back to null upstream) the instant it loads, so this never re-fires
+    // on every unrelated savedLoops recomposition (a save elsewhere, a run completing).
+    LaunchedEffect(initialLoopId, savedLoops) {
+        val target = initialLoopId ?: return@LaunchedEffect
+        savedLoops.firstOrNull { it.id == target }?.let { loop ->
+            loadLoop(loop)
+            onInitialLoopConsumed()
         }
     }
     fun nodeById(id: String) = nodes.firstOrNull { it.id == id }
