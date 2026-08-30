@@ -72,6 +72,8 @@ import dev.fonebrew.domain.loop.LoopBudget
 import dev.fonebrew.domain.loop.LoopParams
 import dev.fonebrew.domain.loop.LoopState
 import dev.fonebrew.domain.loop.RecordingGatewayPolicy
+import dev.fonebrew.domain.loop.authoring.TouchConnectionGrammar
+import dev.fonebrew.domain.loop.authoring.WireDragGesture
 import dev.fonebrew.domain.model.ModelSpec
 import dev.fonebrew.domain.thread.DelegationKind
 import dev.fonebrew.inference.EngineGenerator
@@ -297,14 +299,21 @@ fun LoopRoom(
         if (edges.any { it.from == from && it.to == to }) return
         edges.add(LoopEdge(from, to, label))
     }
+    // The one place a source+destination pair becomes either a direct edge or a label prompt --
+    // a gateway source needs a branch label (approve/refine/else) before the edge exists,
+    // everything else doesn't. Both the tap flow (onTapNode) and drag-a-wire (LoopCanvas's
+    // port-drag, via WireDragGesture.release) end here, so there's exactly one edge-creation
+    // path for the two gestures to share, not a second one for the new gesture.
+    fun connectNodes(from: String, to: String) {
+        if (from == to) return
+        if (nodeById(from)?.let { it.kind.name.contains("GATEWAY") } == true) pendingEdge = from to to
+        else addEdge(from, to)
+    }
     fun onTapNode(id: String) {
         val from = connectingFrom
         if (from != null) {
             connectingFrom = null
-            if (from != id) {
-                if (nodeById(from)?.let { it.kind.name.contains("GATEWAY") } == true) pendingEdge = from to id
-                else addEdge(from, id)
-            }
+            connectNodes(from, id)
         } else if (nodeById(id)?.let { !isEvent(it.kind) } == true) {
             configNodeId = id
         }
@@ -476,6 +485,7 @@ fun LoopRoom(
                             accentEdge = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             onMove = ::moveNode,
                             onTapNode = ::onTapNode,
+                            onConnect = ::connectNodes,
                             onLongPressNode = { menuNodeId = it },
                             onAddAt = { o -> if (connectingFrom != null) connectingFrom = null else addAt = o },
                         )
@@ -786,6 +796,10 @@ private fun LoopCanvas(
     accentEdge: Color,
     onMove: (id: String, xPx: Float, yPx: Float) -> Unit,
     onTapNode: (id: String) -> Unit,
+    // Drag-a-wire's completion callback -- reuses LoopRoom's connectNodes, the exact function
+    // onTapNode's own connect branch calls, so there is one edge-creation path behind both
+    // gestures (see WireDragGesture's KDoc; LOOP_PHONE_AUTHORING_SPEC.md §7 FB-RAT-PHN-003).
+    onConnect: (from: String, to: String) -> Unit,
     onLongPressNode: (id: String) -> Unit,
     onAddAt: (Offset) -> Unit,
 ) {
@@ -796,8 +810,17 @@ private fun LoopCanvas(
     val hwPx = with(density) { nodeWidthDp.toPx() } / 2f
     val hhPx = with(density) { nodeHeightDp.toPx() } / 2f
     val startRPx = with(density) { 24.dp.toPx() }
+    // Drag-a-wire's port hotspot radius: how close a drag's touch-down must land to a node's
+    // right-edge center (WireDragGesture.isPortStart) to start a wire instead of moving the
+    // node. Bigger than the arrow glyph itself so the port is findable without a visible target.
+    val portHitRadiusPx = with(density) { 22.dp.toPx() }
     fun cx(n: LoopNode) = n.xPx + if (isEvent(n.kind)) startRPx else hwPx
     fun cy(n: LoopNode) = n.yPx + if (isEvent(n.kind)) startRPx else hhPx
+    // Drag-a-wire's live state: which node it started from, and the pointer's current position
+    // in the same canvas-pixel coordinate space as cx()/cy() -- null whenever no wire is being
+    // dragged. Lives here (not per-node) because the preview line overlay below, drawn once for
+    // the whole canvas, needs it regardless of which node's pointerInput is updating it.
+    var wireDrag by remember { mutableStateOf<Pair<String, Offset>?>(null) }
 
     Box(
         Modifier.fillMaxSize().background(bgColor)
@@ -854,6 +877,11 @@ private fun LoopCanvas(
             key(node.id) {
                 var dxPx by remember(node.id) { mutableFloatStateOf(0f) }
                 var dyPx by remember(node.id) { mutableFloatStateOf(0f) }
+                // Set the moment a drag's touch-down lands on this node's port (isPortStart);
+                // decides, for the rest of THIS gesture, whether onDrag/onDragEnd move the node
+                // (existing behaviour, untouched when false) or drag a wire (new, when true).
+                var portDragActive by remember(node.id) { mutableStateOf(false) }
+                var connectionDraft by remember(node.id) { mutableStateOf<TouchConnectionGrammar.ConnectionDraft?>(null) }
                 Box(
                     Modifier
                         .absoluteOffset { IntOffset((node.xPx + dxPx).roundToInt(), (node.yPx + dyPx).roundToInt()) }
@@ -861,9 +889,48 @@ private fun LoopCanvas(
                             detectTapGestures(onTap = { onTapNode(node.id) }, onLongPress = { onLongPressNode(node.id) })
                         }
                         .pointerInput(node.id) {
+                            // Same box's own rendered size, per kind -- matches the cx()/cy()
+                            // approximation above so the port hotspot lines up with where the
+                            // preview line and edges actually anchor.
+                            val boxWPx = if (isEvent(node.kind)) startRPx * 2f else hwPx * 2f
+                            val boxHPx = if (isEvent(node.kind)) startRPx * 2f else hhPx * 2f
                             detectDragGestures(
-                                onDragEnd = { onMove(node.id, node.xPx + dxPx, node.yPx + dyPx); dxPx = 0f; dyPx = 0f },
-                                onDrag = { _, d -> dxPx += d.x; dyPx += d.y },
+                                onDragStart = { local ->
+                                    portDragActive = WireDragGesture.isPortStart(local.x, local.y, boxWPx, boxHPx, portHitRadiusPx)
+                                    if (portDragActive) {
+                                        connectionDraft = WireDragGesture.begin(node.id)
+                                        wireDrag = node.id to Offset(node.xPx + local.x, node.yPx + local.y)
+                                    }
+                                },
+                                onDragCancel = {
+                                    wireDrag = null; connectionDraft = null; portDragActive = false
+                                    dxPx = 0f; dyPx = 0f
+                                },
+                                onDragEnd = {
+                                    if (portDragActive) {
+                                        val pointer = wireDrag?.second
+                                        val targetId = pointer?.let { p ->
+                                            WireDragGesture.hitTest(
+                                                p.x, p.y,
+                                                nodes.filter { it.id != node.id }.map {
+                                                    WireDragGesture.NodeHitTarget(it.id, cx(it), cy(it), if (isEvent(it.kind)) startRPx else hwPx)
+                                                },
+                                            )
+                                        }
+                                        // release on empty (targetId null) or back on the source
+                                        // itself both come back Cancelled -- see WireDragGesture.
+                                        val outcome = connectionDraft?.let { WireDragGesture.release(it, targetId) }
+                                        if (outcome is WireDragGesture.Outcome.Connect) onConnect(outcome.from, outcome.to)
+                                        wireDrag = null; connectionDraft = null
+                                    } else {
+                                        onMove(node.id, node.xPx + dxPx, node.yPx + dyPx)
+                                    }
+                                    dxPx = 0f; dyPx = 0f; portDragActive = false
+                                },
+                                onDrag = { _, d ->
+                                    if (portDragActive) wireDrag = wireDrag?.let { (id, p) -> id to (p + d) }
+                                    else { dxPx += d.x; dyPx += d.y }
+                                },
                             )
                         },
                 ) {
@@ -875,7 +942,51 @@ private fun LoopCanvas(
                             GatewayDiamond(node.label, st)
                         else -> TaskCard(node, nodeWidthDp, st)
                     }
+                    // Port affordance: a small filled dot at the right-edge center, roughly
+                    // where isPortStart's hotspot is centered -- makes "drag from here to wire
+                    // it up" discoverable rather than an invisible hitbox (gesture parity's
+                    // additive-sugar rule still needs the sugar to be findable).
+                    Box(
+                        Modifier.align(Alignment.CenterEnd).size(10.dp)
+                            .background(edgeColor, CircleShape),
+                    )
                 }
+            }
+        }
+
+        // Live wire-drag preview (LOOP_PHONE_AUTHORING_SPEC.md §7, FB-RAT-PHN-003): dashed, with
+        // its own arrowhead, plus a floating label naming the hover target (or "release to
+        // cancel") -- shape and text carry the "not committed yet" distinction, never a color
+        // hue alone (CORE_PHASES.md §1.4).
+        wireDrag?.let { (fromId, pointer) ->
+            val from = nodes.find { it.id == fromId }
+            if (from != null) {
+                val hoverId = WireDragGesture.hitTest(
+                    pointer.x, pointer.y,
+                    nodes.filter { it.id != fromId }.map {
+                        WireDragGesture.NodeHitTarget(it.id, cx(it), cy(it), if (isEvent(it.kind)) startRPx else hwPx)
+                    },
+                )
+                val previewColor = if (hoverId != null) accentEdge else edgeColor
+                Canvas(Modifier.fillMaxSize()) {
+                    val stroke = 2.dp.toPx()
+                    val fx = cx(from); val fy = cy(from)
+                    drawLine(
+                        previewColor, Offset(fx, fy), pointer, stroke, StrokeCap.Round,
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(14f, 10f)),
+                    )
+                    val angle = atan2((pointer.y - fy).toDouble(), (pointer.x - fx).toDouble())
+                    val aLen = 10.dp.toPx().toDouble(); val aAngle = 0.4
+                    drawLine(previewColor, pointer, Offset((pointer.x - aLen * cos(angle - aAngle)).toFloat(), (pointer.y - aLen * sin(angle - aAngle)).toFloat()), stroke, StrokeCap.Round)
+                    drawLine(previewColor, pointer, Offset((pointer.x - aLen * cos(angle + aAngle)).toFloat(), (pointer.y - aLen * sin(angle + aAngle)).toFloat()), stroke, StrokeCap.Round)
+                }
+                Text(
+                    hoverId?.let { id -> "connect to “${nodes.find { it.id == id }?.label}”" } ?: "release to cancel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = previewColor,
+                    modifier = Modifier.absoluteOffset { IntOffset(pointer.x.roundToInt(), (pointer.y - 28f).roundToInt()) }
+                        .background(bgColor).padding(horizontal = 3.dp),
+                )
             }
         }
     }
