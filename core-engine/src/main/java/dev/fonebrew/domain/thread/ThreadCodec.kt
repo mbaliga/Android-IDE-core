@@ -120,7 +120,7 @@ object ThreadCodec {
     // -------------------------------------------------------------------------------------
 
     private val THREAD_GRAPH_KNOWN_KEYS = setOf("schemaVersion", "generatedAtUtc", "nodes", "edges")
-    private val THREAD_GRAPH_NODE_KNOWN_KEYS = setOf("id", "kind", "rootId", "parentId", "at", "label")
+    private val THREAD_GRAPH_NODE_KNOWN_KEYS = setOf("id", "kind", "rootId", "parentId", "at", "label", "outcome", "confidence")
     private val THREAD_GRAPH_EDGE_KNOWN_KEYS = setOf("from", "to", "kind")
 
     fun encodeThreadGraph(graph: ThreadGraph): JSONObject {
@@ -148,6 +148,8 @@ object ThreadCodec {
         node.parentId?.let { put("parentId", it) }
         put("at", node.at.toString())
         node.label?.let { put("label", it) }
+        node.outcome?.let { put("outcome", it.name) }
+        node.confidence?.let { put("confidence", it) }
     }
 
     private fun decodeThreadGraphNode(json: JSONObject): ThreadGraphNode = ThreadGraphNode(
@@ -157,6 +159,8 @@ object ThreadCodec {
         parentId = json.optStringOrNull("parentId"),
         at = Instant.parse(json.getString("at")),
         label = json.optStringOrNull("label"),
+        outcome = json.optStringOrNull("outcome")?.let(DelegationOutcome::valueOf),
+        confidence = if (json.has("confidence") && !json.isNull("confidence")) json.getDouble("confidence") else null,
     )
 
     private fun encodeThreadGraphEdge(edge: ThreadGraphEdge): JSONObject = JSONObject().apply {

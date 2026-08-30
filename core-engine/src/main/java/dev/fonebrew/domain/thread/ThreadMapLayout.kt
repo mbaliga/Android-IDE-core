@@ -93,9 +93,11 @@ object ThreadMapLayout {
         val fallbackRow = (row.values.maxOrNull() ?: -1) + 1
         graph.nodes.map { it.id }.filter { it !in row }.sorted().forEach { row[it] = fallbackRow }
 
-        // ---- Markers/delegations ride beside the turn they describe: their anchor's row (or 0) ----
+        // ---- Markers/decisions/delegations ride beside the turn they describe: their anchor's
+        // row (or 0) — none of these carry a REPLY edge, so without this override the Kahn pass
+        // above would leave every one of them stacked at row 0 regardless of its real anchor.
         for (node in graph.nodes) {
-            if (node.kind == ThreadNodeKind.MARKER || node.kind == ThreadNodeKind.DELEGATION) {
+            if (node.kind == ThreadNodeKind.MARKER || node.kind == ThreadNodeKind.DECISION || node.kind == ThreadNodeKind.DELEGATION) {
                 row[node.id] = node.parentId?.let { row[it] } ?: 0
             }
         }

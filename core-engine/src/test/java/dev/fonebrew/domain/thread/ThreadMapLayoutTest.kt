@@ -105,6 +105,32 @@ class ThreadMapLayoutTest {
         assertEquals(0, layout.positions.getValue("mk-1").row)
     }
 
+    @Test fun `a DECISION node takes its anchor's row, same as a marker (2026-08-29 audit gap 1)`() {
+        // Without the DECISION branch in the marker/delegation row-override, this would default
+        // to row 0 via the Kahn pass (a DECISION carries no REPLY edge, so its indegree is
+        // always 0) regardless of how deep "a" actually sits.
+        val decision = ThreadGraphNode(id = "dec-1", kind = ThreadNodeKind.DECISION, rootId = "root-1", parentId = "a", at = Instant.ofEpochMilli(205L))
+        val graph = ThreadGraph(
+            generatedAtUtc = now,
+            nodes = listOf(msg("root-1", "root-1", null, 100L), msg("a", "root-1", "root-1", 200L), decision),
+            edges = listOf(ThreadGraphEdge("root-1", "a", ThreadEdgeKind.REPLY), ThreadGraphEdge("dec-1", "a", ThreadEdgeKind.DECISION_ANCHOR)),
+        )
+        val layout = ThreadMapLayout.compute(graph)
+        assertEquals(layout.positions.getValue("a").row, layout.positions.getValue("dec-1").row)
+    }
+
+    @Test fun `a RUN_ROOT with no lineage edge starts its own top-level column, like an ordinary root`() {
+        val runRoot = ThreadGraphNode(id = "run-1", kind = ThreadNodeKind.RUN_ROOT, rootId = "run-1", parentId = null, at = Instant.ofEpochMilli(300L))
+        val graph = ThreadGraph(
+            generatedAtUtc = now,
+            nodes = listOf(msg("root-1", "root-1", null, 100L), runRoot),
+        )
+        val layout = ThreadMapLayout.compute(graph)
+        assertEquals(2, layout.columnCount)
+        assertEquals(0, layout.positions.getValue("run-1").row)
+        assertTrue(layout.positions.getValue("run-1").column != layout.positions.getValue("root-1").column)
+    }
+
     @Test fun `layout is deterministic across repeated calls on the same graph`() {
         val graph = ThreadGraph(
             generatedAtUtc = now,

@@ -101,4 +101,112 @@ class ThreadGraphJsonTest {
         assertTrue(obj.has("edges"))
         assertEquals("1.0.0", obj.getString("schemaVersion"))
     }
+
+    // Verbatim copy of fixtures/thread/valid/thread-graph-decision-and-run-root-valid.json (2026-08-29 audit, gaps 1+3).
+    private val threadGraphDecisionAndRunRootValidJson = """
+        {
+          "schemaVersion": "1.1.0",
+          "generatedAtUtc": "2026-08-29T00:00:00Z",
+          "nodes": [
+            { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": null, "at": "2026-08-09T10:00:00Z", "label": null },
+            { "id": "01J8Z00000000000000MSG42", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:05:00Z", "label": null },
+            { "id": "01J9D0000000000000DEC01", "kind": "DECISION", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z00000000000000MSG42", "at": "2026-08-10T09:14:31Z", "label": "Use SQLDelight for FTS5" },
+            { "id": "01J9R0000000000000RUN01", "kind": "RUN_ROOT", "rootId": "01J9R0000000000000RUN01", "parentId": null, "at": "2026-08-11T08:00:00Z", "label": "Refine the search ranking prompt" }
+          ],
+          "edges": [
+            { "from": "01J8Z0000000000000000RT1", "to": "01J8Z00000000000000MSG42", "kind": "REPLY" },
+            { "from": "01J9D0000000000000DEC01", "to": "01J8Z00000000000000MSG42", "kind": "DECISION_ANCHOR" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the decision-and-run-root fixture decodes with the new 1_1_0 node kinds`() {
+        val decoded = ThreadGraphJson.fromJsonString(threadGraphDecisionAndRunRootValidJson)
+        assertEquals(4, decoded.nodes.size)
+        assertEquals(ThreadNodeKind.DECISION, decoded.nodes.single { it.id == "01J9D0000000000000DEC01" }.kind)
+        assertEquals(ThreadNodeKind.RUN_ROOT, decoded.nodes.single { it.id == "01J9R0000000000000RUN01" }.kind)
+        assertTrue(ThreadGraphEdge("01J9D0000000000000DEC01", "01J8Z00000000000000MSG42", ThreadEdgeKind.DECISION_ANCHOR) in decoded.edges)
+
+        val roundTripped = ThreadGraphJson.fromJsonString(ThreadGraphJson.toJsonString(decoded))
+        assertEquals(decoded, roundTripped)
+    }
+
+    // Verbatim copy of fixtures/thread/valid/thread-graph-delegation-outcome-and-confidence-valid.json (2026-08-29 audit, gaps 2+4).
+    private val threadGraphOutcomeAndConfidenceValidJson = """
+        {
+          "schemaVersion": "1.1.0",
+          "generatedAtUtc": "2026-08-29T00:00:00Z",
+          "nodes": [
+            { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": null, "at": "2026-08-09T10:00:00Z", "label": null },
+            { "id": "01J8Z00000000000000MSG42", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:05:00Z", "label": null, "confidence": 0.82 },
+            { "id": "01J9D0000000000000000DG1", "kind": "DELEGATION", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z00000000000000MSG42", "at": "2026-08-10T09:25:00Z", "label": "MODEL_PICK_BRANCH", "outcome": "KEPT" }
+          ],
+          "edges": [
+            { "from": "01J8Z0000000000000000RT1", "to": "01J8Z00000000000000MSG42", "kind": "REPLY" },
+            { "from": "01J9D0000000000000000DG1", "to": "01J8Z00000000000000MSG42", "kind": "DELEGATION_ANCHOR" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the outcome-and-confidence fixture decodes with both new optional node fields`() {
+        val decoded = ThreadGraphJson.fromJsonString(threadGraphOutcomeAndConfidenceValidJson)
+        assertEquals(0.82, decoded.nodes.single { it.id == "01J8Z00000000000000MSG42" }.confidence!!, 1e-9)
+        assertEquals(DelegationOutcome.KEPT, decoded.nodes.single { it.id == "01J9D0000000000000000DG1" }.outcome)
+        // Every other node's outcome/confidence stays absent — never fabricated for a kind that
+        // doesn't carry one.
+        assertTrue(decoded.nodes.filter { it.kind != ThreadNodeKind.DELEGATION }.all { it.outcome == null })
+
+        val roundTripped = ThreadGraphJson.fromJsonString(ThreadGraphJson.toJsonString(decoded))
+        assertEquals(decoded, roundTripped)
+    }
+
+    // Verbatim copy of fixtures/thread/invalid/thread-graph-bad-outcome-value.invalid.json
+    private val threadGraphBadOutcomeValueJson = """
+        {
+          "schemaVersion": "1.1.0",
+          "generatedAtUtc": "2026-08-29T00:00:00Z",
+          "nodes": [
+            { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:00:00Z" },
+            { "id": "01J9D0000000000000000DG1", "kind": "DELEGATION", "rootId": "01J8Z0000000000000000RT1", "at": "2026-08-10T09:25:00Z", "outcome": "MAYBE" }
+          ],
+          "edges": [],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the invalid bad-outcome-value fixture is rejected by decode, not silently accepted`() {
+        try {
+            ThreadGraphJson.fromJsonString(threadGraphBadOutcomeValueJson)
+            org.junit.Assert.fail("expected IllegalArgumentException for an unrecognized DelegationOutcome value")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("MAYBE"))
+        }
+    }
+
+    // Verbatim copy of fixtures/thread/invalid/thread-graph-confidence-out-of-range.invalid.json
+    private val threadGraphConfidenceOutOfRangeJson = """
+        {
+          "schemaVersion": "1.1.0",
+          "generatedAtUtc": "2026-08-29T00:00:00Z",
+          "nodes": [
+            { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:00:00Z" },
+            { "id": "01J8Z00000000000000MSG42", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:05:00Z", "confidence": 1.5 }
+          ],
+          "edges": [
+            { "from": "01J8Z0000000000000000RT1", "to": "01J8Z00000000000000MSG42", "kind": "REPLY" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the invalid out-of-range confidence fixture is rejected by decode, not silently accepted`() {
+        try {
+            ThreadGraphJson.fromJsonString(threadGraphConfidenceOutOfRangeJson)
+            org.junit.Assert.fail("expected IllegalArgumentException for confidence outside [0,1]")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("confidence"))
+        }
+    }
 }

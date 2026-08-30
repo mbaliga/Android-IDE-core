@@ -3,6 +3,7 @@ package dev.fonebrew.domain.thread
 import dev.fonebrew.domain.contracts.IdGenerator
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -195,6 +196,28 @@ class ThreadCodecTest {
         val decoded = ThreadCodec.decodeThreadGraph(ThreadCodec.encodeThreadGraph(original))
         assertEquals(emptyList<ThreadGraphNode>(), decoded.nodes)
         assertEquals(emptyList<ThreadGraphEdge>(), decoded.edges)
+    }
+
+    @Test fun `a DELEGATION node's outcome and a MESSAGE node's confidence round-trip (2026-08-29 audit)`() {
+        val original = ThreadGraph(
+            generatedAtUtc = Instant.parse("2026-08-12T00:00:00Z"),
+            nodes = listOf(
+                ThreadGraphNode(id = "msg-1", kind = ThreadNodeKind.MESSAGE, rootId = "msg-1", at = Instant.parse("2026-08-09T10:00:00Z"), confidence = 0.42),
+                ThreadGraphNode(id = "dg-1", kind = ThreadNodeKind.DELEGATION, rootId = "msg-1", at = Instant.parse("2026-08-10T09:25:00Z"), outcome = DelegationOutcome.KEPT),
+            ),
+        )
+        val decoded = ThreadCodec.decodeThreadGraph(ThreadCodec.encodeThreadGraph(original))
+        assertEquals(original, decoded)
+        assertEquals(0.42, decoded.nodes.single { it.id == "msg-1" }.confidence!!, 1e-9)
+        assertEquals(DelegationOutcome.KEPT, decoded.nodes.single { it.id == "dg-1" }.outcome)
+    }
+
+    @Test fun `encode omits outcome and confidence entirely when absent, never a null placeholder`() {
+        val original = ThreadGraphNode(id = "msg-1", kind = ThreadNodeKind.MESSAGE, rootId = "msg-1", at = Instant.parse("2026-08-09T10:00:00Z"))
+        val encoded = ThreadCodec.encodeThreadGraph(ThreadGraph(generatedAtUtc = Instant.parse("2026-08-12T00:00:00Z"), nodes = listOf(original)))
+        val nodeJson = encoded.getJSONArray("nodes").getJSONObject(0)
+        assertFalse(nodeJson.has("outcome"))
+        assertFalse(nodeJson.has("confidence"))
     }
 
     // ---- Fixture parsing (REAL fixtures/thread/valid/ content, embedded verbatim) -----------

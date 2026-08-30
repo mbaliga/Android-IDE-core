@@ -2,6 +2,10 @@ package dev.fonebrew.domain.thread
 
 import dev.fonebrew.domain.MessageNode
 import dev.fonebrew.domain.Role
+import dev.fonebrew.domain.curation.BookmarkKind
+import dev.fonebrew.domain.curation.MessageBookmark
+import dev.fonebrew.domain.curation.MessageRef
+import dev.fonebrew.domain.loop.RunLog
 import dev.fonebrew.domain.tree.MessageTree
 import dev.fonebrew.domain.tree.TreeFork
 import org.junit.Assert.assertEquals
@@ -172,6 +176,137 @@ class ThreadGraphProjectorTest {
         val delegation = DelegationEvent(id = "dg-1", at = 260L, kind = DelegationKind.AUTO_DEFAULT, rootId = null)
         val graph = ThreadGraphProjector.project(tree, emptyList(), listOf(delegation), Instant.parse("2026-08-12T00:00:00Z"))
         assertTrue(graph.nodes.none { it.id == "dg-1" })
+    }
+
+    @Test fun `a DelegationEvent's outcome is carried onto its DELEGATION node`() {
+        // 2026-08-29 audit gap 2: "outcomes not projected."
+        val tree = MessageTree(listOf(node("root-1", null, 100L), node("msg-42", "root-1", 200L)))
+        val delegation = DelegationEvent(
+            id = "dg-1", at = 260L, kind = DelegationKind.MODEL_PICK_BRANCH,
+            rootId = "root-1", anchorMsgId = "msg-42", outcome = DelegationOutcome.REVERTED,
+        )
+        val graph = ThreadGraphProjector.project(tree, emptyList(), listOf(delegation), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(DelegationOutcome.REVERTED, graph.nodes.single { it.id == "dg-1" }.outcome)
+    }
+
+    @Test fun `a still-PENDING delegation carries PENDING onto its node, not a null`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L)))
+        val delegation = DelegationEvent(id = "dg-1", at = 260L, kind = DelegationKind.AUTO_DEFAULT, rootId = "root-1")
+        val graph = ThreadGraphProjector.project(tree, emptyList(), listOf(delegation), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(DelegationOutcome.PENDING, graph.nodes.single { it.id == "dg-1" }.outcome)
+    }
+
+    // ---- run roots (2026-08-29 audit gap 3, "develop work invisible") -------------------------
+
+    @Test fun `a tree root tagged with RunLog TAG_RUN becomes a RUN_ROOT node, with no lineage edge`() {
+        val tree = MessageTree(listOf(
+            node("root-1", null, 100L),
+            node(
+                "run-root-1", null, 200L,
+                metadata = mapOf(RunLog.TAG_RUN to "run-abc", RunLog.TAG_LOOP to "loop-1"),
+            ),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+
+        val runRoot = graph.nodes.single { it.id == "run-root-1" }
+        assertEquals(ThreadNodeKind.RUN_ROOT, runRoot.kind)
+        assertNull(runRoot.parentId)
+        assertEquals("run-root-1", runRoot.rootId)
+        assertTrue(graph.edges.none { it.to == "run-root-1" || it.from == "run-root-1" })
+    }
+
+    @Test fun `a RUN_ROOT's label previews the objective content already on the node`() {
+        val objective = "Refine the search ranking prompt for edge cases"
+        val tree = MessageTree(listOf(
+            MessageNode(
+                id = "run-root-1", parentId = null, role = Role.USER, content = objective, createdAt = 100L,
+                metadata = mapOf(RunLog.TAG_RUN to "run-abc"),
+            ),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(objective, graph.nodes.single().label)
+    }
+
+    @Test fun `a non-root node tagged with TAG_RUN stays a plain MESSAGE, only the root gets RUN_ROOT`() {
+        val tree = MessageTree(listOf(
+            node("run-root-1", null, 100L, metadata = mapOf(RunLog.TAG_RUN to "run-abc")),
+            node("step-1", "run-root-1", 110L, metadata = mapOf(RunLog.TAG_RUN to "run-abc", RunLog.TAG_ROLE to "proposal")),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(ThreadNodeKind.MESSAGE, graph.nodes.single { it.id == "step-1" }.kind)
+        assertTrue(ThreadGraphEdge("run-root-1", "step-1", ThreadEdgeKind.REPLY) in graph.edges)
+    }
+
+    // ---- decisions (2026-08-29 audit gap 1, "decisions invisible") -----------------------------
+
+    @Test fun `a DECISION bookmark becomes a DECISION node with a DECISION_ANCHOR edge`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L), node("msg-42", "root-1", 200L)))
+        val bookmark = MessageBookmark(
+            id = "bm-1", ref = MessageRef("msg-42"), kind = BookmarkKind.DECISION,
+            label = "Use SQLDelight for FTS5", at = 250L,
+        )
+        val graph = ThreadGraphProjector.project(
+            tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"), bookmarks = listOf(bookmark),
+        )
+
+        val decisionNode = graph.nodes.single { it.id == "bm-1" }
+        assertEquals(ThreadNodeKind.DECISION, decisionNode.kind)
+        assertEquals("msg-42", decisionNode.parentId)
+        assertEquals("root-1", decisionNode.rootId)
+        assertEquals("Use SQLDelight for FTS5", decisionNode.label)
+        assertTrue(ThreadGraphEdge("bm-1", "msg-42", ThreadEdgeKind.DECISION_ANCHOR) in graph.edges)
+    }
+
+    @Test fun `a non-DECISION bookmark is never projected as a graph node`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L), node("msg-42", "root-1", 200L)))
+        val bookmark = MessageBookmark(id = "bm-1", ref = MessageRef("msg-42"), kind = BookmarkKind.REFERENCE, at = 250L)
+        val graph = ThreadGraphProjector.project(
+            tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"), bookmarks = listOf(bookmark),
+        )
+        assertTrue(graph.nodes.none { it.id == "bm-1" })
+    }
+
+    @Test fun `a decision anchored to a message outside this snapshot is honestly omitted`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L)))
+        val bookmark = MessageBookmark(id = "bm-1", ref = MessageRef("does-not-exist"), kind = BookmarkKind.DECISION, at = 250L)
+        val graph = ThreadGraphProjector.project(
+            tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"), bookmarks = listOf(bookmark),
+        )
+        assertTrue(graph.nodes.none { it.id == "bm-1" })
+    }
+
+    @Test fun `bookmarks default to empty so every existing 4-arg call site still compiles and behaves the same`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L)))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(1, graph.nodes.size)
+    }
+
+    // ---- message confidence (2026-08-29 audit gap 4, "influence not edge-wise") ----------------
+
+    @Test fun `a MESSAGE node reads a valid confidence tag from its metadata`() {
+        val tree = MessageTree(listOf(
+            node("root-1", null, 100L),
+            node("msg-42", "root-1", 200L, metadata = mapOf(MessageConfidence.METADATA_KEY to "0.73")),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(0.73, graph.nodes.single { it.id == "msg-42" }.confidence!!, 1e-9)
+    }
+
+    @Test fun `a MESSAGE node with no confidence tag stays null, never a fabricated default`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L)))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertNull(graph.nodes.single().confidence)
+    }
+
+    @Test fun `an unparsable or out-of-range confidence tag is dropped, not left to crash the projection`() {
+        val tree = MessageTree(listOf(
+            node("root-1", null, 100L),
+            node("bad-1", "root-1", 200L, metadata = mapOf(MessageConfidence.METADATA_KEY to "not-a-number")),
+            node("bad-2", "root-1", 210L, metadata = mapOf(MessageConfidence.METADATA_KEY to "1.5")),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertNull(graph.nodes.single { it.id == "bad-1" }.confidence)
+        assertNull(graph.nodes.single { it.id == "bad-2" }.confidence)
     }
 
     // ---- structural invariants -----------------------------------------------------------------
