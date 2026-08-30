@@ -1,8 +1,10 @@
 package dev.fonebrew.data.search
 
 import dev.fonebrew.data.LedgerStore
+import dev.fonebrew.data.LoopStore
 import dev.fonebrew.data.MessageTreeRepository
 import dev.fonebrew.data.SessionStore
+import dev.fonebrew.data.TaskStore
 import dev.fonebrew.data.ThreadMarkerStore
 import dev.fonebrew.domain.ledger.LedgerEntry
 import dev.fonebrew.domain.search.SearchHit
@@ -14,6 +16,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
@@ -42,6 +45,10 @@ class SearchRepository(
      *  `chapter_count`/`compaction_count` facet columns — the same [ThreadMarkerStore]
      *  [dev.fonebrew.ui.ChatViewModel] already reads for [dev.fonebrew.domain.thread.ThreadChains]. */
     private val threadMarkerStore: ThreadMarkerStore,
+    /** Source of the `loop:` corpus (LoopSearchProjector) — see [keepIndexFresh]. */
+    private val loopStore: LoopStore,
+    /** Source of the `task:` corpus (TaskSearchProjector) — see [keepIndexFresh]. */
+    private val taskStore: TaskStore,
     private val database: SearchDatabase,
 ) {
 
@@ -54,6 +61,10 @@ class SearchRepository(
         val markersByRoot = threadMarkerStore.markers.first().groupBy { it.rootId }
         val rows = SearchProjector.project(tree, starred, archived, projects, ledgerByConversation, markersByRoot)
         SearchIndexer.reindex(database, rows, nowMillis)
+        // LoopStore/TaskStore need no chunked backfill (see SearchIndexer's KDoc on syncLoops/
+        // syncTasks) — sync() alone already backfills an empty index in one pass.
+        SearchIndexer.syncLoops(database, LoopSearchProjector.project(loopStore.loops.value), nowMillis)
+        SearchIndexer.syncTasks(database, TaskSearchProjector.project(taskStore.tasks.first()), nowMillis)
     }
 
     /**
@@ -86,7 +97,7 @@ class SearchRepository(
         // kotlinx.coroutines' typed `combine` tops out at 5 flows; nested rather than switching to
         // the untyped vararg form (which would trade this file's compile-time column safety for a
         // same-shape `Array<Any?>` cast) to fold in the 6th (thread markers, WP6).
-        combine(
+        val convRows = combine(
             combine(
                 treeRepository.observeTree(),
                 sessionStore.bookmarkedRoots,
@@ -101,10 +112,22 @@ class SearchRepository(
                 inputs.ledger.groupBy { it.chatId }, markers.groupBy { it.rootId },
             )
         }
+        // LoopStore/TaskStore each project independently of the conversation tree, so their own
+        // flows stay separate rather than folded into the combine above — a loop edit re-projects
+        // only loops, never re-walks the (potentially much larger) conversation tree.
+        val loopRows = loopStore.loops.map(LoopSearchProjector::project)
+        val taskRows = taskStore.tasks.map(TaskSearchProjector::project)
+
+        combine(convRows, loopRows, taskRows) { conv, loop, task -> Triple(conv, loop, task) }
             .debounce(DEBOUNCE_MS)
-            .collect { rows ->
-                val result = SearchIndexer.sync(database, rows, nowMillis())
-                if (!result.isNoOp) onIndexed(database.searchQueries.countProjections().executeAsOne())
+            .collect { (conv, loop, task) ->
+                val now = nowMillis()
+                val convResult = SearchIndexer.sync(database, conv, now)
+                val loopResult = SearchIndexer.syncLoops(database, loop, now)
+                val taskResult = SearchIndexer.syncTasks(database, task, now)
+                if (!convResult.isNoOp || !loopResult.isNoOp || !taskResult.isNoOp) {
+                    onIndexed(database.searchQueries.countProjections().executeAsOne())
+                }
             }
 
         error("keepIndexFresh collects forever; reaching here means the source flow completed")

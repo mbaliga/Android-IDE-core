@@ -155,6 +155,74 @@ object SearchIndexer {
             chapter_count == row.chapterCount &&
             compaction_count == row.compactionCount
 
+    // ============ loop / task incremental sync ============
+    //
+    // No chunked/resumable `reindexLoops`/`reindexTasks` counterpart to [reindex]: LoopStore and
+    // TaskStore are already fully in-memory/reactive (a SharedPreferences-backed StateFlow and a
+    // Room Flow respectively), so producing their whole projection is cheap — nothing like the
+    // "walk a potentially large append-only message tree" cost [reindex]'s chunking exists for.
+    // [sync]'s own "syncing an unchanged corpus writes nothing" / "backfills an entirely empty
+    // index" behaviour already covers cold-start for a small corpus, so these two are exactly
+    // [sync] again, over a different projection/table pair.
+
+    /** What one loop-sync pass changed — same shape as [SyncResult]. */
+    data class LoopSyncResult(val updated: Int, val removed: Int) {
+        val isNoOp: Boolean get() = updated == 0 && removed == 0
+    }
+
+    fun syncLoops(database: SearchDatabase, rows: List<LoopSearchProjector.Row>, nowMillis: Long): LoopSyncResult {
+        val stamps = database.searchQueries.selectLoopIndexStamps().executeAsList().associateBy { it.loop_id }
+        val incomingIds = rows.mapTo(HashSet()) { it.loopId }
+
+        val changed = rows.filter { row -> stamps[row.loopId]?.let { !it.matches(row) } ?: true }
+        val removed = stamps.keys.filterNot { it in incomingIds }
+        if (changed.isEmpty() && removed.isEmpty()) return LoopSyncResult(0, 0)
+
+        database.transaction {
+            changed.forEach { row ->
+                database.searchQueries.upsertLoopProjection(
+                    loop_id = row.loopId, title = row.title, body = row.body,
+                    title_raw = row.titleRaw, body_raw = row.bodyRaw, state = row.state,
+                    updated_at = row.updatedAt, created_at = row.createdAt, projection_version = row.projectionVersion,
+                )
+            }
+            removed.forEach { database.searchQueries.deleteLoopProjection(it) }
+        }
+        return LoopSyncResult(changed.size, removed.size)
+    }
+
+    private fun SelectLoopIndexStamps.matches(row: LoopSearchProjector.Row): Boolean =
+        updated_at == row.updatedAt && projection_version == row.projectionVersion && state == row.state
+
+    /** What one task-sync pass changed — same shape as [SyncResult]. */
+    data class TaskSyncResult(val updated: Int, val removed: Int) {
+        val isNoOp: Boolean get() = updated == 0 && removed == 0
+    }
+
+    fun syncTasks(database: SearchDatabase, rows: List<TaskSearchProjector.Row>, nowMillis: Long): TaskSyncResult {
+        val stamps = database.searchQueries.selectTaskIndexStamps().executeAsList().associateBy { it.task_id }
+        val incomingIds = rows.mapTo(HashSet()) { it.taskId }
+
+        val changed = rows.filter { row -> stamps[row.taskId]?.let { !it.matches(row) } ?: true }
+        val removed = stamps.keys.filterNot { it in incomingIds }
+        if (changed.isEmpty() && removed.isEmpty()) return TaskSyncResult(0, 0)
+
+        database.transaction {
+            changed.forEach { row ->
+                database.searchQueries.upsertTaskProjection(
+                    task_id = row.taskId, title = row.title, body = row.body,
+                    title_raw = row.titleRaw, body_raw = row.bodyRaw, state = row.state,
+                    updated_at = row.updatedAt, created_at = row.createdAt, projection_version = row.projectionVersion,
+                )
+            }
+            removed.forEach { database.searchQueries.deleteTaskProjection(it) }
+        }
+        return TaskSyncResult(changed.size, removed.size)
+    }
+
+    private fun SelectTaskIndexStamps.matches(row: TaskSearchProjector.Row): Boolean =
+        updated_at == row.updatedAt && projection_version == row.projectionVersion && state == row.state
+
     private fun writeRow(database: SearchDatabase, row: SearchProjector.Row) {
         database.searchQueries.upsertProjection(
             conv_id = row.convId,

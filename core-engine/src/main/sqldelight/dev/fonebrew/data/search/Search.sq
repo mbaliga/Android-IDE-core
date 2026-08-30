@@ -1,7 +1,9 @@
 -- Search index substrate (FONEBREW_SEARCH_SPEC.md §4), trimmed to what's actually backed by
 -- data in this repo today (see the build plan's "facet data reality check" — tool:/file:/
--- build:/loop:/room:/tag:/lang:/has:attachment|artifact|error/is:unread|failed are deferred
--- until those domain concepts exist; adding their columns now would be dead weight).
+-- build:/room:/tag:/lang:/has:attachment|artifact|error/is:unread|failed are deferred until
+-- those domain concepts exist; adding their columns now would be dead weight). loop:/task: WERE
+-- on that deferred list — they are not anymore: loop_projection/task_projection below back them
+-- with real LoopStore/TaskStore data (see dev.fonebrew.domain.search.query.Field's KDoc).
 --
 -- Two SQL toolchains now coexist in :core-engine: Room owns the append-only message tree
 -- (AppDatabase), SQLDelight owns this FTS5 index — Room has no @Fts5, only @Fts3/@Fts4 (AOSP's
@@ -310,3 +312,150 @@ ON CONFLICT(id) DO UPDATE SET
   tokenizer_version = excluded.tokenizer_version,
   schema_version = excluded.schema_version,
   updated_at = excluded.updated_at;
+
+-- ============ loop / task projections (loop:/task: — see Field.kt) ============
+--
+-- Deliberately SEPARATE FTS5 tables from conv_fts, not more rows in it. FTS5's bm25() draws its
+-- IDF-style term weighting from the *whole* virtual table's corpus statistics (document count,
+-- average field length), so mixing loop/task rows into conv_fts's own corpus would silently
+-- shift every conversation's bm25 score the moment a loop or task was indexed — the ordering a
+-- conversation-only search returns would no longer be "byte-for-byte what it was before loops
+-- were indexed" (the standing guarantee SearchQueryTest's golden-ordering case pins). A separate
+-- table per record kind keeps conv_fts's corpus, and therefore its scores, untouched by design,
+-- at the cost of running one MATCH per kind instead of one MATCH total — worth it here since a
+-- query only ever targets one kind at a time (bare text stays conversation-only; loop:/task:
+-- switch retrieval to that kind — see dev.fonebrew.data.search.SearchQuery.candidates).
+--
+-- No separate `_facets` table for either (contrast conv_projection/conv_facets): loop/task have
+-- exactly one filterable, oft-changing-independent-of-text attribute each (state), so it rides
+-- in the projection table itself rather than earning its own join.
+CREATE TABLE loop_projection (
+  loop_id            TEXT PRIMARY KEY,
+  title              TEXT NOT NULL,   -- segmented (Segmenter): the loop's name
+  body               TEXT NOT NULL,   -- segmented: BPMN graph name + every node's label/
+                                       -- instructions/role, space-joined (LoopSearchProjector)
+  title_raw          TEXT NOT NULL,
+  body_raw           TEXT NOT NULL,
+  state              TEXT NOT NULL,   -- LoopState name (UNUSED/RUNNING/RETIRED) — what a
+                                       -- loop:<value> facet value matches against, case-insensitive
+  updated_at         INTEGER NOT NULL,
+  created_at         INTEGER NOT NULL,
+  projection_version INTEGER NOT NULL
+);
+CREATE INDEX idx_loop_proj_updated ON loop_projection(updated_at DESC);
+
+CREATE VIRTUAL TABLE loop_fts USING fts5(
+  title, body,
+  content       = 'loop_projection',
+  content_rowid = 'rowid',
+  tokenize      = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+  prefix        = '2 3',
+  detail        = 'full',
+  columnsize    = 1
+);
+-- loop_fts's AI/AD/AU external-content sync triggers, and task_fts's below, are raw SQL issued
+-- from SearchDriverFactory, not declared here — same SQLDelight 2.1.0 analyzer ClassCastException
+-- on an explicit-column-list INSERT into an FTS5 virtual table that conv_fts's own triggers
+-- worked around (see this file's header comment on conv_fts). Same reasoning, same fix.
+
+CREATE TABLE task_projection (
+  task_id            TEXT PRIMARY KEY,
+  title              TEXT NOT NULL,   -- segmented: the task's title
+  body               TEXT NOT NULL,   -- segmented: the task's notes (TaskSearchProjector)
+  title_raw          TEXT NOT NULL,
+  body_raw           TEXT NOT NULL,
+  state              TEXT NOT NULL,   -- TaskState name (TODO/DOING/BLOCKED/DONE) — what a
+                                       -- task:<value> facet value matches against, case-insensitive
+  updated_at         INTEGER NOT NULL,
+  created_at         INTEGER NOT NULL,
+  projection_version INTEGER NOT NULL
+);
+CREATE INDEX idx_task_proj_updated ON task_projection(updated_at DESC);
+
+CREATE VIRTUAL TABLE task_fts USING fts5(
+  title, body,
+  content       = 'task_projection',
+  content_rowid = 'rowid',
+  tokenize      = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+  prefix        = '2 3',
+  detail        = 'full',
+  columnsize    = 1
+);
+
+upsertLoopProjection:
+INSERT INTO loop_projection(loop_id, title, body, title_raw, body_raw, state, updated_at, created_at, projection_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(loop_id) DO UPDATE SET
+  title = excluded.title,
+  body = excluded.body,
+  title_raw = excluded.title_raw,
+  body_raw = excluded.body_raw,
+  state = excluded.state,
+  updated_at = excluded.updated_at,
+  created_at = excluded.created_at,
+  projection_version = excluded.projection_version;
+
+deleteLoopProjection:
+DELETE FROM loop_projection WHERE loop_id = ?;
+
+countLoopProjections:
+SELECT count(*) FROM loop_projection;
+
+-- Incremental-sync stamps (mirrors selectIndexStamps' role for conv_projection) — enough of every
+-- indexed loop row to decide whether SearchIndexer.syncLoops needs to re-upsert it.
+selectLoopIndexStamps:
+SELECT loop_id, updated_at, projection_version, state FROM loop_projection;
+
+-- Candidate generation for a loop:-scoped query. Only two ranked columns (no snippet tier), so
+-- the bm25 weights are title/body, not conv_fts's title/snippet/body triple.
+searchLoopCandidates:
+SELECT p.loop_id, p.title_raw, p.body_raw, p.state, p.updated_at
+FROM loop_fts
+JOIN loop_projection p ON p.rowid = loop_fts.rowid
+WHERE loop_fts MATCH :ftsQuery
+ORDER BY bm25(loop_fts, 10.0, 1.0)
+LIMIT :limit;
+
+-- The facet-only path for a loop:-scoped query (e.g. bare `loop:` or `loop:unused` with no other
+-- text) — same "most recent N, filtered after" shape as selectRecentWithFacets.
+selectRecentLoops:
+SELECT loop_id, title_raw, body_raw, state, updated_at
+FROM loop_projection
+ORDER BY updated_at DESC
+LIMIT :limit;
+
+upsertTaskProjection:
+INSERT INTO task_projection(task_id, title, body, title_raw, body_raw, state, updated_at, created_at, projection_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(task_id) DO UPDATE SET
+  title = excluded.title,
+  body = excluded.body,
+  title_raw = excluded.title_raw,
+  body_raw = excluded.body_raw,
+  state = excluded.state,
+  updated_at = excluded.updated_at,
+  created_at = excluded.created_at,
+  projection_version = excluded.projection_version;
+
+deleteTaskProjection:
+DELETE FROM task_projection WHERE task_id = ?;
+
+countTaskProjections:
+SELECT count(*) FROM task_projection;
+
+selectTaskIndexStamps:
+SELECT task_id, updated_at, projection_version, state FROM task_projection;
+
+searchTaskCandidates:
+SELECT p.task_id, p.title_raw, p.body_raw, p.state, p.updated_at
+FROM task_fts
+JOIN task_projection p ON p.rowid = task_fts.rowid
+WHERE task_fts MATCH :ftsQuery
+ORDER BY bm25(task_fts, 10.0, 1.0)
+LIMIT :limit;
+
+selectRecentTasks:
+SELECT task_id, title_raw, body_raw, state, updated_at
+FROM task_projection
+ORDER BY updated_at DESC
+LIMIT :limit;

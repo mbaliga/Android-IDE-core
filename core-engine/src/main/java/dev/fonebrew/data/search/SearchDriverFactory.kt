@@ -44,6 +44,7 @@ object SearchDriverFactory {
         // without this line).
         driver.execute(identifier = null, sql = "PRAGMA foreign_keys = ON", parameters = 0, binders = null)
         ensureFacetColumns(driver)
+        ensureLoopTaskTables(driver)
         installSyncTriggers(driver)
         return SearchDatabaseHandle(SearchDatabase(driver), driver)
     }
@@ -101,6 +102,58 @@ object SearchDriverFactory {
     }
 
     /**
+     * Creates `loop_projection`/`loop_fts`/`task_projection`/`task_fts` on a database file that
+     * predates the loop:/task: search facets, idempotently — the exact same gap [ensureFacetColumns]
+     * closes for `conv_facets`' WP6 columns, one level up: [SearchDatabase.Schema.create] (the
+     * whole `CREATE TABLE`/`CREATE VIRTUAL TABLE` set in `Search.sq`) only ever runs the first time
+     * a database *file* is opened, and this schema has no `.sqm`-versioned migration wired up (see
+     * [installSyncTriggers]'s KDoc for why — the exact same analyzer limitation would hit a
+     * migration file this close to `conv_fts`). Without this, a database created by a build that
+     * predates loop/task search would open with these four objects simply missing, and the first
+     * `upsertLoopProjection`/`searchLoopCandidates` call would throw "no such table" at runtime.
+     *
+     * `IF NOT EXISTS` on every statement makes this safe to call unconditionally on every open —
+     * a fresh [createInMemory] database (where `Schema.create` already made these) is a no-op
+     * here, same idiom [installSyncTriggers] already relies on for its own triggers. The DDL
+     * mirrors `Search.sq`'s `CREATE TABLE`/`CREATE VIRTUAL TABLE` text exactly; if either table's
+     * shape changes there, mirror the change here too.
+     */
+    private fun ensureLoopTaskTables(driver: SqlDriver) {
+        listOf(
+            """
+            CREATE TABLE IF NOT EXISTS loop_projection (
+              loop_id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL,
+              title_raw TEXT NOT NULL, body_raw TEXT NOT NULL, state TEXT NOT NULL,
+              updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL, projection_version INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS idx_loop_proj_updated ON loop_projection(updated_at DESC)",
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS loop_fts USING fts5(
+              title, body, content = 'loop_projection', content_rowid = 'rowid',
+              tokenize = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+              prefix = '2 3', detail = 'full', columnsize = 1
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE IF NOT EXISTS task_projection (
+              task_id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL,
+              title_raw TEXT NOT NULL, body_raw TEXT NOT NULL, state TEXT NOT NULL,
+              updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL, projection_version INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS idx_task_proj_updated ON task_projection(updated_at DESC)",
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS task_fts USING fts5(
+              title, body, content = 'task_projection', content_rowid = 'rowid',
+              tokenize = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+              prefix = '2 3', detail = 'full', columnsize = 1
+            )
+            """.trimIndent(),
+        ).forEach { sql -> driver.execute(identifier = null, sql = sql, parameters = 0, binders = null) }
+    }
+
+    /**
      * Creates the three FTS5 external-content sync triggers (Doc §4;
      * https://sqlite.org/fts5.html#external_content_tables) as raw SQL, executed directly
      * against [driver] rather than declared in `Search.sq`.
@@ -130,6 +183,40 @@ object SearchDriverFactory {
             CREATE TRIGGER IF NOT EXISTS conv_projection_au AFTER UPDATE ON conv_projection BEGIN
               INSERT INTO conv_fts(conv_fts, rowid, title, snippet, body) VALUES('delete', old.rowid, old.title, old.snippet, old.body);
               INSERT INTO conv_fts(rowid, title, snippet, body) VALUES (new.rowid, new.title, new.snippet, new.body);
+            END
+            """.trimIndent(),
+            // loop_fts / task_fts: the same three-trigger shape as conv_fts above, over their own
+            // two-column (title, body) projections — no `snippet` column to carry through.
+            """
+            CREATE TRIGGER IF NOT EXISTS loop_projection_ai AFTER INSERT ON loop_projection BEGIN
+              INSERT INTO loop_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body);
+            END
+            """.trimIndent(),
+            """
+            CREATE TRIGGER IF NOT EXISTS loop_projection_ad AFTER DELETE ON loop_projection BEGIN
+              INSERT INTO loop_fts(loop_fts, rowid, title, body) VALUES('delete', old.rowid, old.title, old.body);
+            END
+            """.trimIndent(),
+            """
+            CREATE TRIGGER IF NOT EXISTS loop_projection_au AFTER UPDATE ON loop_projection BEGIN
+              INSERT INTO loop_fts(loop_fts, rowid, title, body) VALUES('delete', old.rowid, old.title, old.body);
+              INSERT INTO loop_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body);
+            END
+            """.trimIndent(),
+            """
+            CREATE TRIGGER IF NOT EXISTS task_projection_ai AFTER INSERT ON task_projection BEGIN
+              INSERT INTO task_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body);
+            END
+            """.trimIndent(),
+            """
+            CREATE TRIGGER IF NOT EXISTS task_projection_ad AFTER DELETE ON task_projection BEGIN
+              INSERT INTO task_fts(task_fts, rowid, title, body) VALUES('delete', old.rowid, old.title, old.body);
+            END
+            """.trimIndent(),
+            """
+            CREATE TRIGGER IF NOT EXISTS task_projection_au AFTER UPDATE ON task_projection BEGIN
+              INSERT INTO task_fts(task_fts, rowid, title, body) VALUES('delete', old.rowid, old.title, old.body);
+              INSERT INTO task_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body);
             END
             """.trimIndent(),
         ).forEach { sql -> driver.execute(identifier = null, sql = sql, parameters = 0, binders = null) }

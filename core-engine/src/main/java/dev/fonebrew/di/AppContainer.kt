@@ -381,5 +381,7 @@ class AppContainer(context: Context) {
     val searchDatabaseHandle: dev.fonebrew.data.search.SearchDatabaseHandle =
         dev.fonebrew.data.search.SearchDriverFactory.create(context)
     val searchRepository: dev.fonebrew.data.search.SearchRepository =
-        dev.fonebrew.data.search.SearchRepository(repository, sessionStore, ledgerStore, threadMarkerStore, searchDatabaseHandle.database)
+        dev.fonebrew.data.search.SearchRepository(
+            repository, sessionStore, ledgerStore, threadMarkerStore, loopStore, taskStore, searchDatabaseHandle.database,
+        )
 }
