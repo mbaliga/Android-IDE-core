@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://android-ide-core.dev.fonebrew/schemas/thread/thread-graph.schema.json",
-  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadGraph is a forward pointer to THREAD_TOPOLOGY_PLAN.md WP9's 'pure ThreadGraph/ThreadGraphProjector (plain-snapshot inputs; extraction-ready)' — fixed here, WP0-first, per that plan's own 'contracts first' Definition of Ready, exactly as schemas/workspace/*.schema.json fixed shapes for WP-3's later implementation. No WP9 code exists yet (out of this session's scope, THREAD_TOPOLOGY_PLAN.md 'strict order' work-package list) — this schema has no consumer wired in yet, same 'no consumer wired in yet' pattern AppContainer.kt's own comments use throughout. Binding constraint 3 (Issue #2) applies in advance: a future ThreadGraphProjector reads Room stores, never dev.fonebrew.domain.mirror.AarsoEventLog — this schema's `nodes`/`edges` are a plain structural snapshot, carrying no drift/idiolect interpretation.",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadGraph is a forward pointer to THREAD_TOPOLOGY_PLAN.md WP9's 'pure ThreadGraph/ThreadGraphProjector (plain-snapshot inputs; extraction-ready)' — fixed here, WP0-first, per that plan's own 'contracts first' Definition of Ready, exactly as schemas/workspace/*.schema.json fixed shapes for WP-3's later implementation. Binding constraint 3 (Issue #2) applies in advance: ThreadGraphProjector reads Room stores, never dev.fonebrew.domain.mirror.AarsoEventLog — this schema's `nodes`/`edges` are a plain structural snapshot, carrying no drift/idiolect interpretation. 1.1.0 (2026-08-29 audit): added the DECISION node kind (a curation MessageBookmark(kind=DECISION), not just ThreadMarker) + DECISION_ANCHOR edge kind; the RUN_ROOT node kind (a loop-run's detached-subtree root, identified by the RunLog/GraphRunLog `loopRunId` tag already written into the tree — never a new store); node.outcome (DELEGATION's DelegationOutcomes.correlate verdict, already computed, previously dropped on the floor before the graph); node.confidence (an optional 0..1 per-message aggregate over InferenceEngine's per-token entropy, captured only at generation time — never backfilled for an older message that never captured it).",
   "title": "ThreadGraph",
   "description": "A snapshot of the conversation topology as a graph: messages, fork/spawn roots, markers, and delegations as nodes; replies/forks/spawns/lineage/anchors as edges. Carried as a ContractEnvelope<ThreadGraph> payload (FB-RAT-COM-011).",
   "type": "object",
@@ -44,13 +44,25 @@
         "id": { "type": "string", "minLength": 1, "description": "The underlying object's own id (a MessageNode.id, ThreadMarker.id, or DelegationEvent.id) — a ThreadGraph node never mints a new identity, it references one that already exists (FB-RAT-COM-002)." },
         "kind": {
           "type": "string",
-          "enum": ["MESSAGE", "FORK_ROOT", "SPAWN_ROOT", "MARKER", "DELEGATION"],
-          "description": "MESSAGE for an ordinary tree node; FORK_ROOT/SPAWN_ROOT for a conversation root that carries `lineage.kind` insert-time metadata (THREAD_TOPOLOGY_PLAN.md Data model); MARKER for a ThreadMarker; DELEGATION for a DelegationEvent."
+          "enum": ["MESSAGE", "FORK_ROOT", "SPAWN_ROOT", "RUN_ROOT", "MARKER", "DECISION", "DELEGATION"],
+          "description": "MESSAGE for an ordinary tree node; FORK_ROOT/SPAWN_ROOT for a conversation root that carries `lineage.kind` insert-time metadata (THREAD_TOPOLOGY_PLAN.md Data model); RUN_ROOT for a loop run's detached-subtree root (a tree root tagged with RunLog/GraphRunLog's `loopRunId` metadata — 1.1.0); MARKER for a ThreadMarker; DECISION for a curation MessageBookmark with kind=DECISION (1.1.0 — distinct from MARKER: a decision is a curation-domain fact, not a ThreadMarker row); DELEGATION for a DelegationEvent."
         },
-        "rootId": { "type": "string", "minLength": 1, "description": "The conversation root this node belongs to (for a FORK_ROOT/SPAWN_ROOT node, its own id)." },
-        "parentId": { "type": ["string", "null"], "default": null, "description": "The node this one is directly attached to in the graph (a message's parent node id, a marker's anchor node id, a fork/spawn root's source node id). Null for a conversation root with no parent." },
+        "rootId": { "type": "string", "minLength": 1, "description": "The conversation root this node belongs to (for a FORK_ROOT/SPAWN_ROOT/RUN_ROOT node, its own id)." },
+        "parentId": { "type": ["string", "null"], "default": null, "description": "The node this one is directly attached to in the graph (a message's parent node id, a marker's or decision's anchor node id, a fork/spawn root's source node id). Null for a conversation root with no parent (including a RUN_ROOT — a loop run is a wholly new detached subtree, not forked/spawned from anywhere)." },
         "at": { "type": "string", "format": "date-time", "description": "UTC instant of the underlying fact (message creation, marker placement, delegation creation) — FB-RAT-COM-004." },
-        "label": { "type": ["string", "null"], "default": null, "description": "Optional short display label (a chapter name, a delegation kind), for a renderer that wants one without a second lookup." }
+        "label": { "type": ["string", "null"], "default": null, "description": "Optional short display label (a chapter name, a delegation kind), for a renderer that wants one without a second lookup." },
+        "outcome": {
+          "oneOf": [{ "$ref": "#/$defs/DelegationOutcome" }, { "type": "null" }],
+          "default": null,
+          "description": "1.1.0. DELEGATION only: the DelegationEvent's current DelegationOutcomes.correlate verdict (PENDING/KEPT/REVERTED), carried onto the node so the graph itself shows it. Null for every other kind — never fabricated. Tracked descriptively only, per owner decision 2 / binding constraint 3."
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "default": null,
+          "description": "1.1.0. MESSAGE only, and only when captured at generation time: a 0..1 aggregate over this turn's per-token entropy (InferenceEngine.supportsLogprobs). Null when the engine reported no entropy (a cloud turn, the Echo engine) or the message predates this field — never backfilled, never guessed."
+        }
       },
       "additionalProperties": true
     },
@@ -62,11 +74,16 @@
         "to": { "type": "string", "minLength": 1 },
         "kind": {
           "type": "string",
-          "enum": ["REPLY", "FORK", "SPAWN", "LINEAGE", "MARKER_ANCHOR", "DELEGATION_ANCHOR"],
-          "description": "REPLY: ordinary parent->child message edge. FORK/SPAWN: a conversation root's edge back to its source node (THREAD_TOPOLOGY_PLAN.md's ForkLineage-style provenance, TreeFork.copySubtree/SpawnBridge — WP2). LINEAGE: a broader lineage-source pointer (a LINEAGE_SRC marker's edge). MARKER_ANCHOR/DELEGATION_ANCHOR: a marker or delegation's edge to the message it anchors to."
+          "enum": ["REPLY", "FORK", "SPAWN", "LINEAGE", "MARKER_ANCHOR", "DECISION_ANCHOR", "DELEGATION_ANCHOR"],
+          "description": "REPLY: ordinary parent->child message edge. FORK/SPAWN: a conversation root's edge back to its source node (THREAD_TOPOLOGY_PLAN.md's ForkLineage-style provenance, TreeFork.copySubtree/SpawnBridge — WP2). LINEAGE: a broader lineage-source pointer (a LINEAGE_SRC marker's edge). MARKER_ANCHOR/DECISION_ANCHOR/DELEGATION_ANCHOR: a marker, decision, or delegation's edge to the message it anchors to (DECISION_ANCHOR added 1.1.0, alongside the DECISION node kind)."
         }
       },
       "additionalProperties": true
+    },
+    "DelegationOutcome": {
+      "type": "string",
+      "enum": ["PENDING", "KEPT", "REVERTED"],
+      "description": "Same three-value set as schemas/thread/thread-event.schema.json's own DelegationOutcome def (duplicated here, not $ref'd across files, matching this corpus's existing per-file $defs convention)."
     }
   }
 }

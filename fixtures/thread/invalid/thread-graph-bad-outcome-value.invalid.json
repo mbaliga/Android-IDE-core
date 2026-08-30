@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.1.0",
+  "generatedAtUtc": "2026-08-29T00:00:00Z",
+  "nodes": [
+    { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:00:00Z" },
+    { "id": "01J9D0000000000000000DG1", "kind": "DELEGATION", "rootId": "01J8Z0000000000000000RT1", "at": "2026-08-10T09:25:00Z", "outcome": "MAYBE" }
+  ],
+  "edges": [],
+  "unknownFields": {}
+}
