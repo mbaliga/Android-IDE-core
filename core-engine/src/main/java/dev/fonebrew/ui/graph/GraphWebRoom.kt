@@ -135,6 +135,9 @@ private fun GraphWebView(graph: ThreadGraph, modifier: Modifier = Modifier) {
             put("warning", colors.warning.toWebHex())
             put("success", colors.success.toWebHex())
             put("violet", colors.violet.toWebHex())
+            // 2026-08-29 audit: RUN_ROOT (error) + DECISION (textHigh) node fills.
+            put("error", colors.error.toWebHex())
+            put("textHigh", colors.textHigh.toWebHex())
         }.toString()
     }
     var pageLoaded by remember { mutableStateOf(false) }

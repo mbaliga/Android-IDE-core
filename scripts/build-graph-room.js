@@ -87,9 +87,12 @@ const CSP =
 // Node kind -> a distinct built-in G6 node type (shape, never colour-only per binding
 // constraint 6 / WCAG 1.4.1) + a distinct fill, mirroring GraphRoom.kt's own glyphFor mapping
 // so the native and deep-web views read as the same visual language:
-//   MESSAGE -> circle, FORK_ROOT -> triangle, SPAWN_ROOT -> rect, MARKER -> diamond,
-//   DELEGATION -> star (all five are registered G6 built-in node types in this vendored build —
-//   verified against the bundle's own extension registry, not guessed).
+//   MESSAGE -> circle, FORK_ROOT -> triangle, SPAWN_ROOT -> rect, RUN_ROOT -> hexagon,
+//   MARKER -> diamond, DECISION -> ellipse, DELEGATION -> star (all seven are registered G6
+//   built-in node types in this vendored build — verified against the bundle's own extension
+//   registry, not guessed; 'donut' was considered for DECISION and rejected — it draws its ring
+//   from a `donuts` segment-data array (a chart node, not a plain-fill primitive) and renders
+//   nothing without one).
 // Edge kind -> stroke colour + a distinct dash pattern (solid/dashed/dotted), same dual-channel
 // rule applied to edges.
 //
@@ -112,31 +115,47 @@ const BOOTSTRAP = `
   'use strict';
 
   // Fallback only (see this script's own comment above) — the exact dev.fonebrew.ui.theme.Color.kt
-  // hex constants: TextMid, Cyan, Warning, Success, Violet.
+  // hex constants: TextMid, Cyan, Warning, Success, Violet, ErrorRed, TextHigh.
   var DEFAULT_THEME = {
     textMid: '#9ca3af',
     cyan: '#08fed5',
     warning: '#f78819',
     success: '#3ab700',
     violet: '#8e7bff',
+    error: '#ee322c',
+    textHigh: '#ecedef',
   };
 
   // Human vocabulary for a raw ThreadNodeKind token, mirroring GraphRoom.kt's own kindLabel() —
   // the native room's precedent for how a node kind is surfaced to a user, never the bare enum.
+  // RUN_ROOT/DECISION added 2026-08-29 audit (gaps 1+3).
   var KIND_LABEL = {
     MESSAGE: 'Turn',
     FORK_ROOT: 'Fork',
     SPAWN_ROOT: 'Spawn',
+    RUN_ROOT: 'Loop run',
     MARKER: 'Marker',
+    DECISION: 'Decision',
     DELEGATION: 'Delegation',
   };
+
+  // Outcome vocabulary for a DELEGATION node's 'outcome' field (2026-08-29 audit gap 2) —
+  // mirrors GraphRoom.kt's own outcomeLabel().
+  var OUTCOME_LABEL = { PENDING: 'Pending', KEPT: 'Kept', REVERTED: 'Reverted' };
 
   function shapeFor(kind) {
     switch (kind) {
       case 'MESSAGE': return 'circle';
       case 'FORK_ROOT': return 'triangle';
       case 'SPAWN_ROOT': return 'rect';
+      case 'RUN_ROOT': return 'hexagon';
       case 'MARKER': return 'diamond';
+      // 'ellipse' (not 'donut'): this vendored build's donut node draws its ring from a
+      // donuts segment-data array (a pie/donut-CHART node, not a plain-fill primitive) — with
+      // none supplied it renders nothing. 'ellipse' is a real fill primitive whose own default
+      // style (size 45x35) is already non-square, so it reads as visually distinct from
+      // 'circle' (MESSAGE) with zero extra config needed.
+      case 'DECISION': return 'ellipse';
       case 'DELEGATION': return 'star';
       default: return 'circle';
     }
@@ -146,7 +165,9 @@ const BOOTSTRAP = `
       case 'MESSAGE': return theme.textMid;
       case 'FORK_ROOT': return theme.cyan;
       case 'SPAWN_ROOT': return theme.warning;
+      case 'RUN_ROOT': return theme.error;
       case 'MARKER': return theme.success;
+      case 'DECISION': return theme.textHigh;
       case 'DELEGATION': return theme.violet;
       default: return theme.textMid;
     }
@@ -158,17 +179,24 @@ const BOOTSTRAP = `
       case 'SPAWN': return { stroke: theme.cyan, lineDash: null };
       case 'LINEAGE': return { stroke: theme.violet, lineDash: [4, 3] };
       case 'MARKER_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
+      case 'DECISION_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
       case 'DELEGATION_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
       default: return { stroke: theme.textMid, lineDash: null };
     }
   }
 
   // A blank/missing label used to render the raw enum token (e.g. "FORK_ROOT") straight onto the
-  // canvas — GraphRoom.kt's own kindLabel() is the native precedent this mirrors.
+  // canvas — GraphRoom.kt's own kindLabel() is the native precedent this mirrors. A DELEGATION's
+  // resolved outcome (2026-08-29 audit gap 2) is appended as a textual suffix — the WCAG-safe
+  // "shape/label channel, never hue alone" this kind's fixed 'star' shape can't carry on its own
+  // (the shape identifies the KIND; the label is what's left to carry the VALUE).
   function labelFor(n) {
     var raw = n.label;
-    if (raw && String(raw).trim().length > 0) return raw;
-    return KIND_LABEL[n.kind] || n.kind;
+    var base = (raw && String(raw).trim().length > 0) ? raw : (KIND_LABEL[n.kind] || n.kind);
+    if (n.kind === 'DELEGATION' && n.outcome && OUTCOME_LABEL[n.outcome]) {
+      return base + ' · ' + OUTCOME_LABEL[n.outcome];
+    }
+    return base;
   }
 
   // ThreadGraph (schemas/thread/thread-graph.schema.json) -> G6 GraphData. Every style value is
@@ -177,7 +205,13 @@ const BOOTSTRAP = `
   // it — easier to reason about, and easier for this file's own JVM asset test to have nothing
   // load-bearing to assert about G6's mapping-callback API surface.
   function toGraphData(g, theme) {
-    const nodes = (g.nodes || []).map(function (n) {
+    const nodesRaw = g.nodes || [];
+    // 2026-08-29 audit gap 4: id -> raw node, so a REPLY edge below can read its TARGET
+    // message's confidence without a second pass over g.nodes per edge.
+    const byId = {};
+    nodesRaw.forEach(function (n) { byId[n.id] = n; });
+
+    const nodes = nodesRaw.map(function (n) {
       return {
         id: n.id,
         type: shapeFor(n.kind),
@@ -192,16 +226,28 @@ const BOOTSTRAP = `
           labelFill: '#e6e6e6',
           labelPlacement: 'bottom',
         },
-        data: { kind: n.kind, at: n.at },
+        data: { kind: n.kind, at: n.at, label: n.label, outcome: n.outcome, confidence: n.confidence },
       };
     });
     const edges = (g.edges || []).map(function (e, i) {
       const st = edgeStyleFor(e.kind, theme);
+      // Confidence-weighted line width/opacity (2026-08-29 audit gap 4) — absent (undefined,
+      // not a fabricated 0) when the target never captured one, leaving the edge exactly as
+      // before. The raw number is also carried in data.confidence for the click inspector below
+      // — never a line-weight/opacity-only channel per binding constraint 6.
+      const targetConfidence = e.kind === 'REPLY' ? (byId[e.to] || {}).confidence : null;
+      const lineWidth = (typeof targetConfidence === 'number')
+        ? 1.5 * (0.7 + 1.8 * targetConfidence)
+        : 1.5;
+      const strokeOpacity = (typeof targetConfidence === 'number')
+        ? (0.5 + 0.5 * targetConfidence)
+        : 1;
       return {
         id: 'e' + i,
         source: e.from,
         target: e.to,
-        style: { stroke: st.stroke, lineDash: st.lineDash, lineWidth: 1.5 },
+        style: { stroke: st.stroke, lineDash: st.lineDash, lineWidth: lineWidth, strokeOpacity: strokeOpacity },
+        data: { kind: e.kind, confidence: targetConfidence },
       };
     });
     return { nodes: nodes, edges: edges };
@@ -219,12 +265,14 @@ const BOOTSTRAP = `
   function renderLegend(theme) {
     var el = document.getElementById('graph-room-legend');
     if (!el) return;
-    var order = ['MESSAGE', 'FORK_ROOT', 'SPAWN_ROOT', 'MARKER', 'DELEGATION'];
+    var order = ['MESSAGE', 'FORK_ROOT', 'SPAWN_ROOT', 'RUN_ROOT', 'MARKER', 'DECISION', 'DELEGATION'];
     var shapeCss = {
       MESSAGE: 'border-radius:50%;',
       FORK_ROOT: 'border-radius:2px;transform:rotate(45deg);',
       SPAWN_ROOT: 'border-radius:2px;',
+      RUN_ROOT: 'border-radius:2px;',
       MARKER: 'border-radius:2px;transform:rotate(45deg);',
+      DECISION: 'border-radius:50%; width:11px; height:7px;',
       DELEGATION: 'border-radius:50%;',
     };
     el.innerHTML = order.map(function (kind) {
@@ -234,6 +282,25 @@ const BOOTSTRAP = `
       return '<span style="display:inline-flex;align-items:center;margin-right:10px;">' +
         swatch + (KIND_LABEL[kind] || kind) + '</span>';
     }).join('');
+  }
+
+  // Filled by every load() call — the node-click inspector reads its data straight from here
+  // (the exact ThreadGraph JSON this page already parsed) rather than depending on any G6
+  // internal node-data-lookup API, so this stays correct even if a future vendor bump changes
+  // that internal shape.
+  var lastGraphNodesById = {};
+
+  function renderInspector(node) {
+    var el = document.getElementById('graph-room-inspector');
+    if (!el) return;
+    if (!node) { el.hidden = true; el.textContent = ''; return; }
+    var lines = [(KIND_LABEL[node.kind] || node.kind)];
+    if (node.label) lines.push(String(node.label));
+    if (node.outcome && OUTCOME_LABEL[node.outcome]) lines.push('Outcome: ' + OUTCOME_LABEL[node.outcome]);
+    if (typeof node.confidence === 'number') lines.push('Confidence: ' + Math.round(node.confidence * 100) + '%');
+    if (node.at) lines.push(String(node.at));
+    el.textContent = lines.join('\\n');
+    el.hidden = false;
   }
 
   var graph = null;
@@ -254,6 +321,18 @@ const BOOTSTRAP = `
       layout: { type: 'force', preventOverlap: true },
       behaviors: ['drag-canvas', 'zoom-canvas', 'click-select'],
     });
+    // 2026-08-29 audit gap 4's node inspector: 'node:click' is a real graph-level event this
+    // vendored build's own click-select behavior and Tooltip plugin both key off internally
+    // (evt.target.id is their own pattern for "which element was clicked", not a guess) — attached
+    // once, here, never re-attached per load() (ensureGraph() itself is already a create-once
+    // guard). try/catch: a node inspector that fails to render must never break panning/zooming.
+    graph.on('node:click', function (evt) {
+      try {
+        var id = evt && evt.target && evt.target.id;
+        renderInspector(id ? lastGraphNodesById[id] : null);
+      } catch (err) { /* inspector is best-effort; the graph itself must keep working */ }
+    });
+    graph.on('canvas:click', function () { renderInspector(null); });
     return graph;
   }
 
@@ -270,6 +349,8 @@ const BOOTSTRAP = `
               warning: pushed.warning || DEFAULT_THEME.warning,
               success: pushed.success || DEFAULT_THEME.success,
               violet: pushed.violet || DEFAULT_THEME.violet,
+              error: pushed.error || DEFAULT_THEME.error,
+              textHigh: pushed.textHigh || DEFAULT_THEME.textHigh,
             };
           } catch (themeErr) {
             theme = DEFAULT_THEME;
@@ -277,6 +358,9 @@ const BOOTSTRAP = `
         }
         renderLegend(theme);
         var parsed = JSON.parse(jsonText);
+        lastGraphNodesById = {};
+        (parsed.nodes || []).forEach(function (n) { lastGraphNodesById[n.id] = n; });
+        renderInspector(null); // a fresh load invalidates whatever was selected before
         var data = toGraphData(parsed, theme);
         var g = ensureGraph();
         g.setData(data);
@@ -326,6 +410,12 @@ const html = `<!doctype html>
     background: rgba(0, 0, 0, .45); padding: 4px 8px; border-radius: 6px; pointer-events: none;
     max-width: calc(100vw - 16px); display: flex; flex-wrap: wrap;
   }
+  #graph-room-inspector {
+    position: fixed; right: 8px; top: 8px; z-index: 10;
+    font: 11px/1.5 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif; color: #e6e6e6;
+    background: rgba(0, 0, 0, .6); padding: 6px 10px; border-radius: 6px; pointer-events: none;
+    max-width: min(60vw, 260px); white-space: pre-line;
+  }
 </style>
 </head>
 <body>
@@ -335,6 +425,11 @@ const html = `<!doctype html>
      drifts from the same fillFor()/KIND_LABEL maps the nodes themselves draw from. -->
 <div id="graph-room-legend"></div>
 <div id="graph-room-status">waiting for data&hellip;</div>
+<!-- The node inspector (2026-08-29 audit gap 4): GraphRoom.kt's own NodeDetailsDialog is the
+     native precedent — a tap always surfaces the raw kind/label/outcome/confidence as TEXT, never
+     leaving a line-weight/opacity/shape cue as the only way to read a value. Empty/hidden until
+     the bootstrap's node:click handler below fills it. -->
+<div id="graph-room-inspector" hidden></div>
 <!-- BEGIN VENDORED G6 (third_party/g6/g6.min.js, verbatim + prepended MIT header) -->
 <script>
 ${vendored}

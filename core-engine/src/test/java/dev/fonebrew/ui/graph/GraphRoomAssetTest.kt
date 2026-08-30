@@ -167,14 +167,44 @@ class GraphRoomAssetTest {
     @Test fun `node kind maps to a distinct built-in shape per kind, never colour alone`() {
         // WCAG 1.4.1 / binding constraint 6, mirrored on the web surface: each ThreadNodeKind
         // (dev.fonebrew.domain.thread.ThreadNodeKind) must map to its own G6 built-in node type
-        // string, not just a colour swap.
-        val shapes = listOf("'circle'", "'triangle'", "'rect'", "'diamond'", "'star'")
+        // string, not just a colour swap. RUN_ROOT/DECISION added 2026-08-29 audit (gaps 1+3).
+        // DECISION uses 'ellipse', not 'donut': this vendored build's donut node draws its ring
+        // from a donuts segment-data array and renders nothing without one — a chart node, not a
+        // plain-fill primitive; 'ellipse' is, and its own default style is already non-square.
+        val shapes = listOf("'circle'", "'triangle'", "'rect'", "'diamond'", "'star'", "'hexagon'", "'ellipse'")
         shapes.forEach { assertTrue("bootstrap never assigns node type $it", html.contains(it)) }
         assertTrue("MESSAGE not mapped", html.contains("case 'MESSAGE': return 'circle';"))
         assertTrue("FORK_ROOT not mapped", html.contains("case 'FORK_ROOT': return 'triangle';"))
         assertTrue("SPAWN_ROOT not mapped", html.contains("case 'SPAWN_ROOT': return 'rect';"))
+        assertTrue("RUN_ROOT not mapped", html.contains("case 'RUN_ROOT': return 'hexagon';"))
         assertTrue("MARKER not mapped", html.contains("case 'MARKER': return 'diamond';"))
+        assertTrue("DECISION not mapped", html.contains("case 'DECISION': return 'ellipse';"))
         assertTrue("DELEGATION not mapped", html.contains("case 'DELEGATION': return 'star';"))
+    }
+
+    @Test fun `a DELEGATION node's outcome is carried as label text, never colour alone`() {
+        // 2026-08-29 audit gap 2: DELEGATION's shape is fixed ('star', asserted above) to
+        // identify the KIND — outcome (PENDING/KEPT/REVERTED) needs its own, separate WCAG-safe
+        // channel, which this bootstrap carries as an appended label suffix.
+        assertTrue("no OUTCOME_LABEL map", html.contains("OUTCOME_LABEL"))
+        assertTrue("outcome never appended to the DELEGATION label", html.contains("n.kind === 'DELEGATION' && n.outcome"))
+    }
+
+    @Test fun `a REPLY edge's line weight varies with the target message's confidence, never alone`() {
+        // 2026-08-29 audit gap 4: line-weight/opacity is the always-visible channel, but binding
+        // constraint 6 forbids it standing alone — the node inspector (asserted below) is the
+        // paired text channel carrying the same number.
+        assertTrue("no confidence-driven lineWidth", html.contains("targetConfidence"))
+        assertTrue("no confidence-driven strokeOpacity", html.contains("strokeOpacity"))
+    }
+
+    @Test fun `a node click renders its kind, outcome, and confidence as inspector text`() {
+        // 2026-08-29 audit gap 4's "value also visible on the node inspector" — GraphRoom.kt's
+        // NodeDetailsDialog is the native precedent; this is this surface's own equivalent.
+        assertTrue("no graph-room-inspector element", html.contains("id=\"graph-room-inspector\""))
+        assertTrue("no node:click wiring", html.contains("'node:click'"))
+        assertTrue("inspector never renders confidence as text", html.contains("node.confidence"))
+        assertTrue("inspector never renders outcome as text", html.contains("node.outcome"))
     }
 
     @Test fun `no drag-element behavior is enabled`() {
