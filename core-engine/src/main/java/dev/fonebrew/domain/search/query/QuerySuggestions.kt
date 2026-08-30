@@ -128,10 +128,14 @@ object QuerySuggestions {
             Field.IN, Field.PROJECT -> values.projects
             Field.MODEL -> values.models
             Field.BEFORE, Field.AFTER, Field.DURING -> DATE_VALUES
+            // LoopState/TaskState names, lowercased — the closed vocabulary loop:/task: values
+            // actually compare against (FacetEvaluator.matchesFacet), same idea as IS/HAS above.
+            Field.LOOP -> LOOP_STATE_VALUES
+            Field.TASK -> TASK_STATE_VALUES
             // Numeric fields have no enumerable value set, and the unbacked fields deliberately
             // offer nothing rather than completing into a guaranteed empty result.
             Field.TURNS, Field.BRANCH, Field.COST,
-            Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG, Field.LOOP,
+            Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG,
             -> emptyList()
         }
         return candidates.asSequence()
@@ -167,7 +171,15 @@ object QuerySuggestions {
         Field.BEFORE -> "last active before a date"
         Field.AFTER -> "last active after a date"
         Field.DURING -> "last active on a date"
-        Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG, Field.LOOP ->
+        Field.LOOP -> "a loop's name or instructions"
+        Field.TASK -> "a task's title or notes"
+        Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG ->
             "recognized, not indexed yet"
     }
+
+    /** [dev.fonebrew.domain.loop.LoopState] names, lowercased — see [valueSuggestions]. */
+    private val LOOP_STATE_VALUES = listOf("unused", "running", "retired")
+
+    /** [dev.fonebrew.domain.tasks.TaskState] names, lowercased — see [valueSuggestions]. */
+    private val TASK_STATE_VALUES = listOf("todo", "doing", "blocked", "done")
 }

@@ -7,12 +7,22 @@ package dev.fonebrew.domain.search.query
  * to a real filter or degrades to [dev.fonebrew.domain.search.query.Diagnostic.UnindexedFacet]
  * ("this filter isn't indexed yet", an honest zero — never a silent no-op).
  *
- * Per the build plan's facet-data reality check: `tool:`/`file:`/`build:`/`loop:`/`room:`/
- * `tag:`/`lang:` assume domain concepts (tool-call capture, file/build linkage, tags, language
- * detection) that don't exist anywhere in this codebase, so they're always not-yet-indexed.
- * `is:`/`has:` are split per-value: `starred`/`archived`/`orphan` and `image`/`code` are real
- * (backed by `SessionStore`/`ConversationsStore`/`SearchProjector`); `unread`/`failed` and
+ * Per the build plan's facet-data reality check: `tool:`/`file:`/`build:`/`room:`/`tag:`/`lang:`
+ * assume domain concepts (tool-call capture, file/build linkage, tags, language detection) that
+ * don't exist anywhere in this codebase, so they're always not-yet-indexed. `is:`/`has:` are
+ * split per-value: `starred`/`archived`/`orphan` and `image`/`code` are real (backed by
+ * `SessionStore`/`ConversationsStore`/`SearchProjector`); `unread`/`failed` and
  * `attachment`/`artifact`/`error` are not.
+ *
+ * `loop:`/`task:` are the two exceptions to that reality check, not more of it: they select
+ * which non-conversation corpus a query runs against, backed by real
+ * [dev.fonebrew.data.LoopStore]/[dev.fonebrew.data.TaskStore] data
+ * ([dev.fonebrew.data.search.LoopSearchProjector]/[dev.fonebrew.data.search.TaskSearchProjector]).
+ * A bare `loop:`/`task:` matches any record of that kind; a value (`loop:unused`, `task:done`)
+ * additionally requires that record's `LoopState`/`TaskState` name to match, case-insensitively —
+ * see [dev.fonebrew.domain.search.query.FacetEvaluator.matchesFacet]. Presence of one of these
+ * facets is also what switches [dev.fonebrew.data.search.SearchQuery]'s retrieval away from
+ * conversations, so `loop:` and bare text together search loop text, not conversation text.
  *
  * Two more honesty seams live here rather than in the UI, so they're testable: [unbackedReason]
  * says why a given pair can't return anything *today* — which is a strictly wider question than
@@ -38,6 +48,7 @@ enum class Field(val key: String) {
     DURING("during"),
     LANG("lang"),
     LOOP("loop"),
+    TASK("task"),
     ;
 
     companion object {
@@ -72,8 +83,9 @@ fun isBacked(field: Field, value: String): Boolean = when (field) {
     Field.IN, Field.PROJECT, Field.MODEL,
     Field.BEFORE, Field.AFTER, Field.DURING,
     Field.TURNS, Field.BRANCH, Field.COST,
+    Field.LOOP, Field.TASK,
     -> true
-    Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG, Field.LOOP -> false
+    Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG -> false
 }
 
 /**

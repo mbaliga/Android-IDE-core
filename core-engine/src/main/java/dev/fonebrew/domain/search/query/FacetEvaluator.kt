@@ -1,23 +1,39 @@
 package dev.fonebrew.domain.search.query
 
+import dev.fonebrew.domain.search.SearchKind
 import java.time.ZoneId
 
 /**
- * Everything about one indexed conversation that a facet can be asked about — the
- * `conv_facets` row plus the `updated_at` the date facets compare against, lifted out of the
- * data layer so the actual decision logic stays pure and JVM-testable.
+ * Everything about one indexed record that a facet can be asked about — the `conv_facets` row
+ * plus the `updated_at` the date facets compare against, lifted out of the data layer so the
+ * actual decision logic stays pure and JVM-testable.
+ *
+ * Every field through [updatedAtMillis] is conversation-shaped and defaulted for the two record
+ * kinds that aren't conversations at all: [recordKind]/[stateValue] are what a loop or task
+ * candidate actually carries (see [dev.fonebrew.data.search.LoopSearchProjector]/
+ * [dev.fonebrew.data.search.TaskSearchProjector]) — a loop or task subject leaves every
+ * conversation-only field at its default, so `is:starred loop:` correctly matches nothing (a
+ * loop is never starred) rather than something undefined.
  */
 data class FacetSubject(
-    val starred: Boolean,
-    val archived: Boolean,
-    val projectId: String?,
-    val modelIds: List<String>,
-    val turnCount: Long,
-    val branchCount: Long,
-    val hasImage: Boolean,
-    val hasCode: Boolean,
-    val costMinor: Long,
+    val starred: Boolean = false,
+    val archived: Boolean = false,
+    val projectId: String? = null,
+    val modelIds: List<String> = emptyList(),
+    val turnCount: Long = 0L,
+    val branchCount: Long = 0L,
+    val hasImage: Boolean = false,
+    val hasCode: Boolean = false,
+    val costMinor: Long = 0L,
     val updatedAtMillis: Long,
+    /** Which kind of record this is — [SearchKind.TEXT] (the default) for every existing
+     *  conversation candidate, [SearchKind.LOOP]/[SearchKind.TASK] for the two new corpora. This
+     *  is what `loop:`/`task:` actually test — see [matchesFacet]. */
+    val recordKind: SearchKind = SearchKind.TEXT,
+    /** `LoopState`/`TaskState` name (e.g. "UNUSED", "DONE") for a loop/task subject; `null` for
+     *  a conversation, which has no such state. What a `loop:<value>`/`task:<value>` facet value
+     *  compares against, case-insensitively. */
+    val stateValue: String? = null,
 )
 
 /**
@@ -128,7 +144,17 @@ object FacetEvaluator {
             Field.TURNS -> compareNumeric(subject.turnCount, facet.op, value)
             Field.BRANCH -> compareNumeric(subject.branchCount, facet.op, value)
             Field.COST -> compareNumeric(subject.costMinor, facet.op, value)
-            Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG, Field.LOOP -> false
+            // A bare `loop:`/`task:` selects the kind alone; a value additionally requires the
+            // LoopState/TaskState name to match. Retrieval (SearchQuery.candidates) only ever
+            // hands this evaluator loop-kind subjects for a loop:-scoped query (and likewise for
+            // task:), so the recordKind check here is a second, cheap confirmation, not the
+            // primary filter — but it is what makes `loop:` correctly reject every conversation
+            // subject on the (unusual) path where a facet is OR'd across kinds.
+            Field.LOOP -> subject.recordKind == SearchKind.LOOP &&
+                (value.isBlank() || subject.stateValue.equals(value, ignoreCase = true))
+            Field.TASK -> subject.recordKind == SearchKind.TASK &&
+                (value.isBlank() || subject.stateValue.equals(value, ignoreCase = true))
+            Field.TAG, Field.ROOM, Field.FILE, Field.TOOL, Field.BUILD, Field.LANG -> false
         }
     }
 

@@ -13,7 +13,12 @@ package dev.fonebrew.domain.search
  * The matching/ranking lives in [LexicalSearch]; this file is only the shapes.
  */
 
-/** What kind of conversation a [SearchDoc] projects — mirrors the Conversations filter tabs. */
+/**
+ * What kind of record a [SearchDoc] projects. [TEXT]/[IMAGE]/[MIXED] are conversation flavors —
+ * they mirror the Conversations filter tabs, which is all this enum covered until [LOOP]/[TASK]
+ * joined it: those two are not conversations at all, they're the other two corpora
+ * `loop:`/`task:` search (see [dev.fonebrew.domain.search.query.Field.LOOP]/[Field.TASK]).
+ */
 enum class SearchKind {
     /** A text-only conversation. */
     TEXT,
@@ -23,6 +28,12 @@ enum class SearchKind {
 
     /** A conversation that mixes text turns and generated images. */
     MIXED,
+
+    /** A loop definition — [dev.fonebrew.data.search.LoopSearchProjector]. */
+    LOOP,
+
+    /** A task — [dev.fonebrew.data.search.TaskSearchProjector]. */
+    TASK,
 }
 
 /**

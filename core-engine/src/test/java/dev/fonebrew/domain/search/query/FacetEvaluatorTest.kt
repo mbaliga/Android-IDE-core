@@ -1,5 +1,6 @@
 package dev.fonebrew.domain.search.query
 
+import dev.fonebrew.domain.search.SearchKind
 import java.time.ZoneId
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -24,7 +25,12 @@ class FacetEvaluatorTest {
         hasCode: Boolean = false,
         costMinor: Long = 0,
         updatedAtMillis: Long = now,
-    ) = FacetSubject(starred, archived, projectId, modelIds, turnCount, branchCount, hasImage, hasCode, costMinor, updatedAtMillis)
+        recordKind: SearchKind = SearchKind.TEXT,
+        stateValue: String? = null,
+    ) = FacetSubject(
+        starred, archived, projectId, modelIds, turnCount, branchCount, hasImage, hasCode, costMinor,
+        updatedAtMillis, recordKind, stateValue,
+    )
 
     private fun matches(query: String, subject: FacetSubject) =
         FacetEvaluator.matches(subject, QueryParser.parse(query, now, zone).root, now, zone)
@@ -57,6 +63,41 @@ class FacetEvaluatorTest {
         assertFalse(matches("tool:bash", subject(starred = true)))
         assertFalse(matches("is:unread", subject()))
         assertFalse(matches("has:artifact", subject()))
+    }
+
+    // ---- loop: / task: (record-kind facets) ----
+
+    @Test fun `bare loop matches only a loop-kind subject`() {
+        assertTrue(matches("loop:", subject(recordKind = SearchKind.LOOP, stateValue = "UNUSED")))
+        assertFalse(matches("loop:", subject(recordKind = SearchKind.TEXT)))
+        assertFalse(matches("loop:", subject(recordKind = SearchKind.TASK, stateValue = "TODO")))
+    }
+
+    @Test fun `loop with a value also requires the LoopState name to match, case-insensitively`() {
+        assertTrue(matches("loop:unused", subject(recordKind = SearchKind.LOOP, stateValue = "UNUSED")))
+        assertTrue(matches("loop:UNUSED", subject(recordKind = SearchKind.LOOP, stateValue = "unused")))
+        assertFalse(matches("loop:unused", subject(recordKind = SearchKind.LOOP, stateValue = "RETIRED")))
+    }
+
+    @Test fun `bare task matches only a task-kind subject`() {
+        assertTrue(matches("task:", subject(recordKind = SearchKind.TASK, stateValue = "TODO")))
+        assertFalse(matches("task:", subject(recordKind = SearchKind.TEXT)))
+        assertFalse(matches("task:", subject(recordKind = SearchKind.LOOP, stateValue = "UNUSED")))
+    }
+
+    @Test fun `task with a value also requires the TaskState name to match`() {
+        assertTrue(matches("task:done", subject(recordKind = SearchKind.TASK, stateValue = "DONE")))
+        assertFalse(matches("task:done", subject(recordKind = SearchKind.TASK, stateValue = "TODO")))
+        // Right value, wrong kind: a loop can never satisfy task:done even by coincidence of text.
+        assertFalse(matches("task:done", subject(recordKind = SearchKind.LOOP, stateValue = "DONE")))
+    }
+
+    @Test fun `loop and task are both real predicates, never unbacked`() {
+        assertTrue(isBacked(Field.LOOP, ""))
+        assertTrue(isBacked(Field.LOOP, "unused"))
+        assertTrue(isBacked(Field.TASK, "done"))
+        assertTrue(unbackedReason(Field.LOOP, "unused") == null)
+        assertTrue(unbackedReason(Field.TASK, "done") == null)
     }
 
     // ---- project / model ----

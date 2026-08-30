@@ -7,6 +7,7 @@ import dev.fonebrew.domain.search.SearchHit
 import dev.fonebrew.domain.search.SearchKind
 import dev.fonebrew.domain.search.query.FacetEvaluator
 import dev.fonebrew.domain.search.query.FacetSubject
+import dev.fonebrew.domain.search.query.Field
 import dev.fonebrew.domain.search.query.ParsedQuery
 import dev.fonebrew.domain.search.query.QueryCompiler
 import dev.fonebrew.domain.search.query.QueryNode
@@ -129,7 +130,25 @@ object SearchQuery {
         }
     }
 
+    /**
+     * Chooses which corpus to retrieve from, then delegates. A non-negated `loop:`/`task:`
+     * anywhere in the tree switches retrieval to that corpus instead of conversations — see
+     * [hasActiveTypeFacet]. Neither present is the entire pre-existing behaviour, unchanged:
+     * every conversation-only test (golden-ordering included) never types `loop:`/`task:`, so it
+     * exercises exactly the [conversationCandidates] path this function used to be.
+     */
     private fun candidates(database: SearchDatabase, parsed: ParsedQuery): List<Candidate> {
+        val wantsLoops = hasActiveTypeFacet(parsed.root, Field.LOOP)
+        val wantsTasks = hasActiveTypeFacet(parsed.root, Field.TASK)
+        return when {
+            wantsLoops && !wantsTasks -> loopCandidates(database, parsed)
+            wantsTasks && !wantsLoops -> taskCandidates(database, parsed)
+            wantsLoops && wantsTasks -> loopCandidates(database, parsed) + taskCandidates(database, parsed)
+            else -> conversationCandidates(database, parsed)
+        }
+    }
+
+    private fun conversationCandidates(database: SearchDatabase, parsed: ParsedQuery): List<Candidate> {
         // Recompiled from the tree with prefixBareTerms=true rather than reusing
         // parsed.ftsExpression: as-you-type search needs `gradl` to already find `gradle`
         // (see QueryCompiler.compileFts's KDoc), while ParsedQuery.ftsExpression stays a
@@ -168,6 +187,71 @@ object SearchQuery {
                 )
             }
         }
+    }
+
+    /**
+     * A loop:-scoped query: same "MATCH if there's lexical text, else most-recent" shape as
+     * [conversationCandidates], over `loop_fts`/`loop_projection` instead of `conv_fts`/
+     * `conv_projection`. `loop:`'s own value (if any) is a facet, not a retrieval-time filter —
+     * it is evaluated afterward, generically, by [FacetEvaluator] over every candidate's
+     * [FacetSubject.stateValue] — so this always fetches every loop the text (or recency) would
+     * find, then lets the shared facet stage narrow by state.
+     */
+    private fun loopCandidates(database: SearchDatabase, parsed: ParsedQuery): List<Candidate> {
+        val fts = QueryCompiler.compileFts(parsed.root, prefixBareTerms = true)
+        val rows = if (fts == null) {
+            database.searchQueries.selectRecentLoops(CANDIDATE_LIMIT).executeAsList()
+                .map { LoopRow(it.loop_id, it.title_raw, it.body_raw, it.state, it.updated_at) }
+        } else {
+            database.searchQueries.searchLoopCandidates(fts, CANDIDATE_LIMIT).executeAsList()
+                .map { LoopRow(it.loop_id, it.title_raw, it.body_raw, it.state, it.updated_at) }
+        }
+        return rows.map { row ->
+            Candidate(
+                doc = SearchDoc(row.id, row.titleRaw, "", row.bodyRaw, row.updatedAt, SearchKind.LOOP),
+                subject = FacetSubject(updatedAtMillis = row.updatedAt, recordKind = SearchKind.LOOP, stateValue = row.state),
+            )
+        }
+    }
+
+    /** The task:-scoped counterpart to [loopCandidates] — see its KDoc for the shared shape. */
+    private fun taskCandidates(database: SearchDatabase, parsed: ParsedQuery): List<Candidate> {
+        val fts = QueryCompiler.compileFts(parsed.root, prefixBareTerms = true)
+        val rows = if (fts == null) {
+            database.searchQueries.selectRecentTasks(CANDIDATE_LIMIT).executeAsList()
+                .map { TaskRow(it.task_id, it.title_raw, it.body_raw, it.state, it.updated_at) }
+        } else {
+            database.searchQueries.searchTaskCandidates(fts, CANDIDATE_LIMIT).executeAsList()
+                .map { TaskRow(it.task_id, it.title_raw, it.body_raw, it.state, it.updated_at) }
+        }
+        return rows.map { row ->
+            Candidate(
+                doc = SearchDoc(row.id, row.titleRaw, "", row.bodyRaw, row.updatedAt, SearchKind.TASK),
+                subject = FacetSubject(updatedAtMillis = row.updatedAt, recordKind = SearchKind.TASK, stateValue = row.state),
+            )
+        }
+    }
+
+    /** The two loop/task SQLDelight query shapes ([searchLoopCandidates]/[selectRecentLoops] and
+     *  their task counterparts) return distinctly-named generated row types even though their
+     *  columns line up — folded into one shape here so [loopCandidates]/[taskCandidates] map
+     *  either into it without duplicating the `Candidate`-building code per source query. */
+    private data class LoopRow(val id: String, val titleRaw: String, val bodyRaw: String, val state: String, val updatedAt: Long)
+    private data class TaskRow(val id: String, val titleRaw: String, val bodyRaw: String, val state: String, val updatedAt: Long)
+
+    /**
+     * Whether the tree contains a non-negated [field] facet anywhere — what switches
+     * [candidates]'s retrieval to that corpus. Negated (`-loop:`) doesn't select a type scope:
+     * there is no "everything that is not a loop" corpus to retrieve from, only "conversations"
+     * to fall back to, which is what happens when this returns `false` for a query that only
+     * ever negates the facet.
+     */
+    private fun hasActiveTypeFacet(node: QueryNode?, field: Field): Boolean = when (node) {
+        null -> false
+        is QueryNode.Facet -> node.field == field
+        is QueryNode.And -> node.children.any { hasActiveTypeFacet(it, field) }
+        is QueryNode.Or -> node.children.any { hasActiveTypeFacet(it, field) }
+        else -> false
     }
 
     /** LEFT JOIN nulls (a projection with no facets row) become "no facet data" defaults, so the
