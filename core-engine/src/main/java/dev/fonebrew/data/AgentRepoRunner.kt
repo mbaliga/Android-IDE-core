@@ -83,6 +83,17 @@ class AgentRepoRunner(
      * Commit the change set. Prefers **one squashed commit** via the Git tree API; if that fails
      * (e.g. a host that doesn't expose Git Data), falls back to per-file Contents-API commits.
      * Returns the commit id(s).
+     *
+     * **2026-08-29 audit note (thread-graph gap 3, scoped out honestly):** the returned commit
+     * id(s) are handed back to the caller (`DevelopRoom`'s own review sheet) and end there — never
+     * written to [ReceiptStore], [MessageNode.metadata], or any other queryable store keyed to a
+     * tree node. Unlike a loop run (`RunLog`/`GraphRunLog` already tag a tree root with
+     * `loopRunId` — see `ThreadGraphProjector`'s `RUN_ROOT` kind), an agentic-IDE commit today has
+     * **no persistent, queryable anchor** back into the message tree — projecting one onto the
+     * thread graph would mean inventing storage that doesn't exist, which THREAD_TOPOLOGY_PLAN.md's
+     * "no fabrication" rule forbids. Left out of that fix on purpose; wiring commit ids into a real
+     * store (this file, `ReceiptStore`, or a dedicated one) is a prerequisite, not something a
+     * projector can retrofit.
      */
     suspend fun commit(changeSet: ChangeSet, message: String): Result<List<String>> = runCatching {
         val (host, token) = hostAndToken() ?: error("no Git host connected")
