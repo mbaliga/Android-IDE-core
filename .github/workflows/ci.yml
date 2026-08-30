@@ -24,14 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Native llama.cpp / stable-diffusion.cpp sources for assembleFullDebug.
+          # Native llama.cpp / stable-diffusion.cpp sources for assembleFullDebug, plus the
+          # hyle-design-system and shared-libraries includeBuild submodules. The latter two are
+          # private repos, so actions/checkout's default GITHUB_TOKEN (scoped to this repo only)
+          # can't clone them as submodules — auth with a fine-grained PAT instead (Contents:Read
+          # on Android-IDE-core + Hyle-Design-System + Shared-Libraries-asoc), stored as the
+          # CORE_SUBMODULE_TOKEN secret. Same fallback pattern Android-IDE-Studio's checkout uses.
           submodules: recursive
+          token: ${{ secrets.CORE_SUBMODULE_TOKEN || github.token }}
 
       - name: Submodule pointers resolve to real content
         # §7 FIX — the check that would have caught a silent-unbuildable carve. Every
         # push: fail loudly if any submodule pointer is uninitialized/dangling, and assert
-        # the includeBuild'd Hyle + the native sources actually landed. Cheap; runs before
-        # the SDK setup so a bad pointer fails fast.
+        # the includeBuild'd Hyle + shared-libraries + the native sources actually landed.
+        # Cheap; runs before the SDK setup so a bad pointer fails fast.
         run: |
           git submodule status --recursive || true
           if git submodule status --recursive | grep -qE '^-'; then
@@ -39,6 +45,8 @@ jobs:
           fi
           test -f hyle-design-system/settings.gradle.kts \
             || { echo "::error::hyle-design-system submodule is empty — includeBuild would fail"; exit 1; }
+          test -f shared-libraries/settings.gradle.kts \
+            || { echo "::error::shared-libraries submodule is empty — includeBuild would fail"; exit 1; }
           test -f core-engine/src/main/cpp/llama.cpp/CMakeLists.txt \
             || { echo "::error::llama.cpp submodule is empty — native build would fail"; exit 1; }
           test -f sdengine/src/main/cpp/stable-diffusion.cpp/CMakeLists.txt \
@@ -128,6 +136,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ secrets.CORE_SUBMODULE_TOKEN || github.token }}
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

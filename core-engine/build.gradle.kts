@@ -161,8 +161,13 @@ dependencies {
     // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts);
     // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
     implementation("dev.aarso:hyle:0.2.0")
-    // Shared crash-recovery utility (same submodule, separate coordinate).
-    implementation("dev.aarso:crash-recovery:1.0.0")
+    // Shared crash-recovery utility — single-sourced from mbaliga/Shared-Libraries-asoc (its
+    // own submodule, ./shared-libraries; see settings.gradle.kts for why this coordinate needs
+    // an explicit dependencySubstitution now that hyle-design-system also carries a tombstone
+    // at the same `dev.aarso:crash-recovery` coordinate). 1.5.0 folds forward the fix that
+    // makes "Continue" actually relaunch the app, plus the non-destructive quarantine/salvage
+    // reset (see that repo's crash-recovery/build.gradle.kts changelog comment).
+    implementation("dev.aarso:crash-recovery:1.5.0")
     // On-device Gemini Nano via Android's AICore system service — an experimental preview SDK
     // (0.0.1-exp01) that only runs on a narrow device set (Pixel 8+/9 class, a Galaxy S24
     // subset); AiCoreEngine/AiCoreAvailability gate and fail closed everywhere else.
