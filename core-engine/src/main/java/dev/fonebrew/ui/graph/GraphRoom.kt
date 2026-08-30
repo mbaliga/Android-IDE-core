@@ -299,16 +299,27 @@ fun GraphRoom(
 /** Where "Open" lands for [node] — the node itself for a real tree node, its anchor for a marker
  *  or delegation, or nothing for an unanchored marker (never fabricated). */
 private fun openTargetId(node: ThreadGraphNode): String? = when (node.kind) {
-    ThreadNodeKind.MESSAGE, ThreadNodeKind.FORK_ROOT, ThreadNodeKind.SPAWN_ROOT -> node.id
-    ThreadNodeKind.MARKER, ThreadNodeKind.DELEGATION -> node.parentId
+    ThreadNodeKind.MESSAGE, ThreadNodeKind.FORK_ROOT, ThreadNodeKind.SPAWN_ROOT, ThreadNodeKind.RUN_ROOT -> node.id
+    ThreadNodeKind.MARKER, ThreadNodeKind.DECISION, ThreadNodeKind.DELEGATION -> node.parentId
 }
 
 private fun kindLabel(kind: ThreadNodeKind): String = when (kind) {
     ThreadNodeKind.MESSAGE -> "Turn"
     ThreadNodeKind.FORK_ROOT -> "Fork"
     ThreadNodeKind.SPAWN_ROOT -> "Spawn"
+    ThreadNodeKind.RUN_ROOT -> "Loop run"
     ThreadNodeKind.MARKER -> "Marker"
+    ThreadNodeKind.DECISION -> "Decision"
     ThreadNodeKind.DELEGATION -> "Delegation"
+}
+
+/** Outcome text is the WCAG-safe channel for a [ThreadGraphNode.outcome] (binding constraint 6 —
+ *  never colour-only): shown in [NodeDetailsDialog] and appended to the label the deep G6 view
+ *  draws, never left as a colour swap alone. */
+private fun outcomeLabel(outcome: dev.fonebrew.domain.thread.DelegationOutcome): String = when (outcome) {
+    dev.fonebrew.domain.thread.DelegationOutcome.PENDING -> "Pending"
+    dev.fonebrew.domain.thread.DelegationOutcome.KEPT -> "Kept"
+    dev.fonebrew.domain.thread.DelegationOutcome.REVERTED -> "Reverted"
 }
 
 @Composable
@@ -320,6 +331,14 @@ private fun NodeDetailsDialog(node: ThreadGraphNode, onOpen: (() -> Unit)?, onDi
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(node.label?.takeIf { it.isNotBlank() } ?: "(no label)", style = MaterialTheme.typography.bodyMedium)
                 Text(node.at.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Node inspector text channel (2026-08-29 audit, gaps 2+4) — never only a shape/
+                // colour cue: the outcome/confidence value itself is always readable here.
+                node.outcome?.let {
+                    Text("Outcome: ${outcomeLabel(it)}", style = MaterialTheme.typography.labelSmall)
+                }
+                node.confidence?.let {
+                    Text("Confidence: ${(it * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall)
+                }
             }
         },
         confirmButton = {
@@ -398,6 +417,19 @@ private fun glyphFor(kind: ThreadNodeKind, colors: dev.aarso.hyle.theme.HyleColo
         }
     }
     ThreadNodeKind.SPAWN_ROOT -> { { drawRect(colors.warning, size = size) } }
+    ThreadNodeKind.RUN_ROOT -> {
+        // A hexagon — distinct from every other filled shape here (circle/triangle/rect/diamond/
+        // star/cross), matching this kind's own 'hexagon' G6 built-in type on the deep view.
+        {
+            val w = size.width; val h = size.height
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.25f, 0f); lineTo(w * 0.75f, 0f); lineTo(w, h / 2f)
+                lineTo(w * 0.75f, h); lineTo(w * 0.25f, h); lineTo(0f, h / 2f)
+                close()
+            }
+            drawPath(path, colors.error)
+        }
+    }
     ThreadNodeKind.MARKER -> {
         {
             val path = androidx.compose.ui.graphics.Path().apply {
@@ -410,11 +442,64 @@ private fun glyphFor(kind: ThreadNodeKind, colors: dev.aarso.hyle.theme.HyleColo
             drawPath(path, colors.success)
         }
     }
+    ThreadNodeKind.DECISION -> {
+        // A 5-point star — distinct from MARKER's diamond and DELEGATION's cross. The deep G6
+        // view uses its own 'ellipse' built-in for this kind instead (see build-graph-room.js's
+        // own comment) — the two surfaces don't share one shape vocabulary 1:1, only "each kind
+        // gets its own distinct shape" as the rule both independently satisfy.
+        {
+            val cx = size.width / 2f; val cy = size.height / 2f
+            val outerR = size.minDimension / 2f; val innerR = outerR * 0.42f
+            val path = androidx.compose.ui.graphics.Path()
+            for (i in 0 until 10) {
+                val angle = (Math.PI / 5 * i - Math.PI / 2).toFloat()
+                val r = if (i % 2 == 0) outerR else innerR
+                val x = cx + r * cos(angle); val y = cy + r * sin(angle)
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            path.close()
+            drawPath(path, colors.textHigh)
+        }
+    }
     ThreadNodeKind.DELEGATION -> {
         {
             val t = size.minDimension * 0.28f
             drawRect(colors.violet, topLeft = Offset(0f, size.height / 2f - t / 2f), size = androidx.compose.ui.geometry.Size(size.width, t))
             drawRect(colors.violet, topLeft = Offset(size.width / 2f - t / 2f, 0f), size = androidx.compose.ui.geometry.Size(t, size.height))
+        }
+    }
+}
+
+/**
+ * A small, shape-only badge drawn at a DELEGATION glyph's corner for its
+ * [dev.fonebrew.domain.thread.DelegationOutcome] (2026-08-29 audit, gap 2) — a second,
+ * non-colour-alone channel alongside the outcome TEXT [NodeDetailsDialog] always shows (binding
+ * constraint 6 / WCAG 1.4.1: never colour-only). Neutral [colors.textHigh] on purpose — the
+ * differentiator is the badge's SHAPE (hollow ring / filled dot / filled triangle — three
+ * genuinely different glyphs), not a colour swap on one shape.
+ */
+private fun outcomeBadge(
+    outcome: dev.fonebrew.domain.thread.DelegationOutcome,
+    colors: dev.aarso.hyle.theme.HyleColors,
+): DrawScope.() -> Unit = {
+    val r = size.minDimension * 0.16f
+    val center = Offset(size.width - r * 1.1f, r * 1.1f)
+    when (outcome) {
+        dev.fonebrew.domain.thread.DelegationOutcome.PENDING ->
+            drawCircle(
+                colors.textHigh, radius = r, center = center,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.35f),
+            )
+        dev.fonebrew.domain.thread.DelegationOutcome.KEPT ->
+            drawCircle(colors.textHigh, radius = r, center = center)
+        dev.fonebrew.domain.thread.DelegationOutcome.REVERTED -> {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(center.x, center.y - r)
+                lineTo(center.x + r, center.y + r)
+                lineTo(center.x - r, center.y + r)
+                close()
+            }
+            drawPath(path, colors.textHigh)
         }
     }
 }
@@ -450,6 +535,11 @@ private fun ThreadMapCanvas(
 
     val contentWidthPx = paddingPx * 2 + colSpacingPx * (layout.columnCount - 1).coerceAtLeast(0)
     val contentHeightPx = paddingPx * 2 + rowSpacingPx * (layout.rowCount - 1).coerceAtLeast(0)
+    // 2026-08-29 audit gap 4: looked up per REPLY edge below, for the confidence-weighted stroke —
+    // the message-level number itself is only ever readable via a tap (NodeDetailsDialog); this
+    // is the always-visible line-weight/opacity channel binding constraint 6 also requires never
+    // stand alone (paired with that text, never colour-only or opacity-only by itself).
+    val nodesById = remember(graph) { graph.nodes.associateBy { it.id } }
 
     Box(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
@@ -492,7 +582,7 @@ private fun ThreadMapCanvas(
                         ThreadEdgeKind.FORK -> colors.cyan.copy(alpha = 0.7f)
                         ThreadEdgeKind.SPAWN -> colors.warning.copy(alpha = 0.7f)
                         ThreadEdgeKind.LINEAGE -> colors.violet.copy(alpha = 0.5f)
-                        ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR -> colors.hairline
+                        ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR -> colors.hairline
                     }
                     // Fixed per audit (binding constraint 6 / WCAG 1.4.1): colour was the ONLY
                     // channel distinguishing edge kinds (FORK and SPAWN were indistinguishable —
@@ -503,19 +593,26 @@ private fun ThreadMapCanvas(
                         ThreadEdgeKind.REPLY, ThreadEdgeKind.FORK -> null
                         ThreadEdgeKind.SPAWN -> PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))
                         ThreadEdgeKind.LINEAGE -> PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
-                        ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR ->
+                        ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR ->
                             PathEffect.dashPathEffect(floatArrayOf(1.dp.toPx(), 3.dp.toPx()))
                     }
                     // A second, non-colour, non-dash channel for FORK vs SPAWN specifically (both
                     // solid otherwise): SPAWN draws fractionally thicker, same distinction the
                     // node glyphs already carry via shape (triangle vs rect).
-                    val stroke = if (edge.kind == ThreadEdgeKind.SPAWN) 2.2.dp.toPx() else 1.5.dp.toPx()
-                    drawLine(edgeColor, from, to, stroke, androidx.compose.ui.graphics.StrokeCap.Round, pathEffect = pathEffect)
+                    val baseStroke = if (edge.kind == ThreadEdgeKind.SPAWN) 2.2.dp.toPx() else 1.5.dp.toPx()
+                    // 2026-08-29 audit gap 4: a REPLY edge into a MESSAGE that captured a
+                    // confidence draws thicker + more opaque as that confidence rises — absent
+                    // (this turn's engine reported no entropy, or it predates the field) leaves the
+                    // edge exactly as before, never a fabricated middle value.
+                    val confidence = if (edge.kind == ThreadEdgeKind.REPLY) nodesById[edge.to]?.confidence else null
+                    val stroke = confidence?.let { (baseStroke * (0.7f + 1.8f * it.toFloat())) } ?: baseStroke
+                    val finalEdgeColor = confidence?.let { edgeColor.copy(alpha = edgeColor.alpha * (0.5f + 0.5f * it.toFloat())) } ?: edgeColor
+                    drawLine(finalEdgeColor, from, to, stroke, androidx.compose.ui.graphics.StrokeCap.Round, pathEffect = pathEffect)
                     if (edge.kind == ThreadEdgeKind.REPLY || edge.kind == ThreadEdgeKind.FORK || edge.kind == ThreadEdgeKind.SPAWN) {
                         val angle = atan2((to.y - from.y).toDouble(), (to.x - from.x).toDouble())
                         val aLen = 8.dp.toPx().toDouble(); val aAngle = 0.4
-                        drawLine(edgeColor, to, Offset((to.x - aLen * cos(angle - aAngle)).toFloat(), (to.y - aLen * sin(angle - aAngle)).toFloat()), stroke)
-                        drawLine(edgeColor, to, Offset((to.x - aLen * cos(angle + aAngle)).toFloat(), (to.y - aLen * sin(angle + aAngle)).toFloat()), stroke)
+                        drawLine(finalEdgeColor, to, Offset((to.x - aLen * cos(angle - aAngle)).toFloat(), (to.y - aLen * sin(angle - aAngle)).toFloat()), stroke)
+                        drawLine(finalEdgeColor, to, Offset((to.x - aLen * cos(angle + aAngle)).toFloat(), (to.y - aLen * sin(angle + aAngle)).toFloat()), stroke)
                     }
                 }
             }
@@ -542,7 +639,12 @@ private fun ThreadMapCanvas(
                             contentDescription = "${kindLabel(node.kind)}: ${node.label?.takeIf { it.isNotBlank() } ?: "(no label)"}"
                         },
                 ) {
-                    Canvas(Modifier.fillMaxSize().padding(6.dp)) { glyphFor(node.kind, colors)(this) }
+                    Canvas(Modifier.fillMaxSize().padding(6.dp)) {
+                        glyphFor(node.kind, colors)(this)
+                        if (node.kind == ThreadNodeKind.DELEGATION) {
+                            node.outcome?.let { outcomeBadge(it, colors)(this) }
+                        }
+                    }
                 }
             }
         }
