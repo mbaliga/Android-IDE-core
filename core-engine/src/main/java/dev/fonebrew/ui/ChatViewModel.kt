@@ -988,13 +988,22 @@ class ChatViewModel(
                 if (searchSources.isNotEmpty()) put(Conversations.SOURCES_KEY, Sources.encode(searchSources))
                 if (cloudEngine?.wasPaused == true) put(Conversations.SEARCH_PAUSED_KEY, "true")
             }
+            // 2026-08-29 audit gap 4 ("influence not edge-wise"): the only point this turn's
+            // per-token entropy still exists is this in-memory `tokens` list — captured here, at
+            // persist time, or never (see dev.fonebrew.domain.thread.MessageConfidence's own KDoc
+            // for why mean-entropy and why "now or never"). Absent (no key at all), not a fake 0,
+            // on a cloud turn or the Echo engine — neither ever reports entropy.
+            val confidence = dev.fonebrew.domain.thread.MessageConfidence.fromEntropies(tokens.map { it.entropy })
+            val confidenceMeta = confidence?.let {
+                mapOf(dev.fonebrew.domain.thread.MessageConfidence.METADATA_KEY to it.toString())
+            } ?: emptyMap()
             val assistantNode = Nodes.child(
                 parent = userNode,
                 role = Role.ASSISTANT,
                 content = assistantText,
                 now = System.currentTimeMillis(),
                 modelId = spec.id,
-                metadata = (if (stopRequested) mapOf("stopped" to "true") else emptyMap()) + costMeta + searchMeta,
+                metadata = (if (stopRequested) mapOf("stopped" to "true") else emptyMap()) + costMeta + searchMeta + confidenceMeta,
                 idGen = { assistantId }, // so the KV snapshot is keyed to this node
             )
             repository.insert(assistantNode)
@@ -2298,6 +2307,10 @@ class ChatViewModel(
             markers = threadMarkerStore.markers.first(),
             delegations = delegationStore.delegations.first(),
             generatedAtUtc = java.time.Instant.now(),
+            // 2026-08-29 audit gap 1 ("decisions invisible"): the projector's own KDoc names this
+            // exact call as the one that needs the real list — curationStore.bookmarks is already
+            // a constructor dependency of this ViewModel (toggleMessageBookmark/bookmarksFor above).
+            bookmarks = curationStore.bookmarks.first(),
         )
 
     /** Live mirror of [dev.fonebrew.data.SessionStore.observerEnabled] (owner decision 5) — GraphRoom's
