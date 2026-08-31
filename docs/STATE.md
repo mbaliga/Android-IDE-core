@@ -1,9 +1,9 @@
 # Aarso / Workbench — Project State, Roadmap & End Goal
 
 > Single source of truth: what's **done**, what's **pending**, and the **end goal**. Written
-> 2026-06-28. Companion to `CLAUDE.md` (build rules),  (revenue), and
-> `docs/design/*` (per-surface specs). When in doubt, this file is the map; the others are the
-> territory.
+> 2026-06-28. Companion to `CLAUDE.md` (build rules) and `docs/design/*` (per-surface specs).
+> When in doubt, this file is the map; the others are the territory. Business/monetization
+> planning is tracked privately, not in this repo.
 
 ---
 
