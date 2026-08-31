@@ -151,7 +151,7 @@ dependencies {
     // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
     implementation("dev.aarso:hyle:0.2.0")
     // Shared crash-recovery utility (same submodule, separate coordinate).
-    implementation("dev.aarso:crash-recovery:1.0.0")
+    implementation("dev.aarso:crash-recovery:1.3.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
