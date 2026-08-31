@@ -187,11 +187,21 @@ jobs:
           free -h; df -h "$TARGET"
       - name: Assemble sideload APK (native)
         run: ./gradlew --no-daemon :app:assembleFullDebug
+      - name: APK exists at the expected path (gating)
+        # Path correctness stays a hard failure — a wrong output path must red the
+        # canary loudly. Split out from the upload step so the upload itself can be
+        # continue-on-error without masking a path regression.
+        run: |
+          ls app/build/outputs/apk/full/debug/*.apk \
+            || { echo "::error::no APK at app/build/outputs/apk/full/debug/ — output path regressed"; exit 1; }
       - name: Upload sideload APK (download this to install on a device)
-        # The installable artifact: `full` flavor + debug build → app-full-debug.apk
-        # (appId dev.fonebrew.full). Appears under "Artifacts" on the Actions run summary
-        # page. `error` on no-files so a wrong output path fails loudly instead of
-        # silently producing an empty artifact.
+        # Convenience artifact only — apk-dist is the real delivery channel. The
+        # account-level "Artifact storage quota has been hit" failure (canary run
+        # 33343574733, 2026-08-31: the ~130MB APK exceeded remaining quota while the
+        # tiny test reports fit) must not red a canary whose actual signal — the
+        # native compile — passed; same false-negative class as the test-reports
+        # upload in build-test, see CLAUDE.md's CI caveat.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: aarso-full-debug-apk

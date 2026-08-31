@@ -162,7 +162,13 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   debugging a failure), not part of the gate's pass/fail contract, so it now carries
   `continue-on-error: true` in `.github/workflows/ci.yml`. If red CI ever shows a passing Gradle
   step again, check the job log for this exact quota message before assuming a real regression —
-  and don't remove `continue-on-error` from that step to "clean it up."
+  and don't remove `continue-on-error` from that step to "clean it up." *(Recurred 2026-08-31 on
+  `native-assemble`'s APK upload — the ~130MB artifact exceeds remaining quota even when small
+  uploads fit. Same treatment: the upload is convenience-only, `apk-dist` is the real delivery
+  channel, so it carries `continue-on-error` behind a separate hard-failing path-exists guard.
+  Also fixed then: both native jobs' swapfile is now sized to real free disk — newer ubuntu-latest
+  images broke the old fixed `fallocate -l 12G` with ENOSPC at setup. The canary's actual signal
+  is healthy: the full native cross-compile went green in CI that day, ~14 min with swap.)*
 
 ## Environment honesty
 The container compiles everything but has **no device, emulator, board, or SSH host**. All
