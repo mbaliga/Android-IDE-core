@@ -158,11 +158,33 @@ jobs:
         # timeout) instead of the runner being killed mid-build. Ephemeral runner —
         # nothing to undo. If the build still OOMs, move this job to a larger runner.
         run: |
-          sudo fallocate -l 12G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=12288
-          sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
-          free -h
+          # Size the swapfile to the space that actually exists: newer ubuntu-latest
+          # images no longer guarantee 12G free on /mnt, and the old fixed
+          # `fallocate -l 12G` died with ENOSPC before the build even started
+          # (canary run 33337477090, 2026-08-30 — swap step failed at ~50s, the
+          # assemble never ran). Pick whichever of /mnt and / has more room, leave
+          # 4 GiB headroom for the build, cap at 12 GiB, and continue WITHOUT extra
+          # swap (warning, not failure) when nothing useful fits — a swapless
+          # attempt that OOMs later tells us more than a job that dies at setup.
+          TARGET=/mnt
+          AVAIL_MNT=$(df --output=avail -k /mnt 2>/dev/null | tail -1 || echo 0)
+          AVAIL_ROOT=$(df --output=avail -k / | tail -1)
+          if [ "${AVAIL_ROOT:-0}" -gt "${AVAIL_MNT:-0}" ]; then TARGET=/; fi
+          AVAIL_K=$(df --output=avail -k "$TARGET" | tail -1)
+          WANT_K=$(( AVAIL_K - 4*1024*1024 ))
+          MAX_K=$(( 12*1024*1024 ))
+          [ "$WANT_K" -gt "$MAX_K" ] && WANT_K=$MAX_K
+          if [ "$WANT_K" -lt $(( 2*1024*1024 )) ]; then
+            echo "::warning::only ${AVAIL_K}K free on $TARGET — continuing without extra swap"
+            free -h; df -h; exit 0
+          fi
+          SWAPFILE="${TARGET%/}/swapfile"
+          sudo fallocate -l "${WANT_K}K" "$SWAPFILE" \
+            || sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count=$(( WANT_K / 1024 ))
+          sudo chmod 600 "$SWAPFILE"
+          sudo mkswap "$SWAPFILE"
+          sudo swapon "$SWAPFILE"
+          free -h; df -h "$TARGET"
       - name: Assemble sideload APK (native)
         run: ./gradlew --no-daemon :app:assembleFullDebug
       - name: Upload sideload APK (download this to install on a device)

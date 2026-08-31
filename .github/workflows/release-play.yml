@@ -110,12 +110,29 @@ jobs:
           echo "keystore decoded ($(stat -c%s "$RUNNER_TEMP/fonebrew-upload.keystore") bytes)"
 
       - name: Add swap space (native cross-compile is memory-heavy)
+        # Sized to real free space, not a fixed 12G: newer ubuntu-latest images broke
+        # the fixed allocation with ENOSPC before the build started (see ci.yml's
+        # native-assemble swap step, same fix, canary run 33337477090 2026-08-30).
         run: |
-          sudo fallocate -l 12G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=12288
-          sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
-          free -h
+          TARGET=/mnt
+          AVAIL_MNT=$(df --output=avail -k /mnt 2>/dev/null | tail -1 || echo 0)
+          AVAIL_ROOT=$(df --output=avail -k / | tail -1)
+          if [ "${AVAIL_ROOT:-0}" -gt "${AVAIL_MNT:-0}" ]; then TARGET=/; fi
+          AVAIL_K=$(df --output=avail -k "$TARGET" | tail -1)
+          WANT_K=$(( AVAIL_K - 4*1024*1024 ))
+          MAX_K=$(( 12*1024*1024 ))
+          [ "$WANT_K" -gt "$MAX_K" ] && WANT_K=$MAX_K
+          if [ "$WANT_K" -lt $(( 2*1024*1024 )) ]; then
+            echo "::warning::only ${AVAIL_K}K free on $TARGET — continuing without extra swap"
+            free -h; df -h; exit 0
+          fi
+          SWAPFILE="${TARGET%/}/swapfile"
+          sudo fallocate -l "${WANT_K}K" "$SWAPFILE" \
+            || sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count=$(( WANT_K / 1024 ))
+          sudo chmod 600 "$SWAPFILE"
+          sudo mkswap "$SWAPFILE"
+          sudo swapon "$SWAPFILE"
+          free -h; df -h "$TARGET"
 
       - name: Unit-test gate (both flavors) + license
         run: ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :app:checkLicense
