@@ -29,7 +29,7 @@ Fonebrew/Aarso's spine is one append-only, git-like message tree. The owner want
 | Spawn payload | **`domain/bridge/SummaryBridge.kt` — fully built, zero callers** (+ unmounted `SummaryNodeCard` in `ui/components/InspectComponents.kt:204`) |
 | Capture importance | **Full compaction stack, tested, no caller**: `CompactionDirective` (F0–F3), `CompactionContract.resolve` (precedence: user directive > −2 tombstone > max floors), `CompactionEngine.run` + byte-comparing `CompactionVerifier`, `Verdict` (±1/±2), `MessageBookmark` (kinds incl. DECISION), `Version`/`VersionSpines`, `GhostBranch` |
 | Export/share | `domain/sync/TreeArchive` (open format), `GitBackup` union-sync, `DataExport` |
-| Instruments | `ContextCheck`, `TokenStats`, live `InstrumentsStrip`; **unmounted**: `ContextAssembly`/`BudgetMeter` (included/cut attribution — the Claude-panel analogue), `TokenInspector` heatmap, `InputOutputCard`, `ScopeInspector`, `BudgetRingView` |
+| Instruments | `ContextCheck`, `TokenStats`, live `InstrumentsStrip`; ~~**unmounted**~~ **[mounted since WP7 — `ChatScreen.kt`'s Instruments panel + `MeScreen.kt`; this row is stale, kept for history]**: `ContextAssembly`/`BudgetMeter` (included/cut attribution — the Claude-panel analogue), `TokenInspector` heatmap, `InputOutputCard`, `ScopeInspector`, `BudgetRingView` |
 | Event capture | `domain/mirror/AarsoEventLog` (JSONL, inert `AarsoCaptureSettings.OFF`, **write-only contract**); `LedgerStore` (per-turn), `ReceiptStore` (unconsumed) |
 | Graph editor precedent | `ui/loops/LoopRoom.kt` `LoopCanvas` (dot grid, node Boxes + drag/tap/long-press) — lacks pan/zoom/layout |
 | Gesture-fan menu | Hyle `cells/HyleRadialMenu` (anchored at gesture point, 2–5 items); `HyleHaptics` (needs arm-tick/detent additions) |

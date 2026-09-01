@@ -123,7 +123,13 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   (several tests use an em-dash), failing with `InvalidPathException: Malformed input`.
 - Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.aarso.full`, default) /
   **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.aarso`).
-- Gate: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest` (keep green). Hyle's own
+- Gate: `./gradlew :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest
+  :core-engine:checkLicense` (keep green — this is exactly what CI runs, `.github/workflows/
+  ci.yml:91`; not the pre-de-fork `:app:test*` tasks this line used to name — test + license
+  tasks moved from `:app` to `:core-engine` in the de-fork, `:app` is now a thin shell with no
+  test sources of its own to scan). For the current test/failure counts, don't trust a number
+  frozen in this file — it goes stale the moment the suite grows; **`HANDOFF_STATE.md` is the
+  live baseline** the next session should reproduce and keep green. Hyle's own
   `:hyle:test` now runs in the Hyle repo's CI; core consumes Hyle via the includeBuild'd submodule
   (`git submodule update --init --recursive` first, so the composite build resolves `dev.aarso:hyle`).
 - `./gradlew :app:assembleFullDebug` → sideload APK (slow native cross-compile).

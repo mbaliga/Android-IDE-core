@@ -84,6 +84,68 @@ class TaskStore(private val dao: TaskDao) {
         dao.update(task.copy(orderKey = TaskOrdering.keyBetween(before, after), updatedAt = now))
     }
 
+    /** Waterfall span writer (Studio's Waterfall lens, journey J8 — `docs/P5_INVENTORY.md` §2
+     *  names this exact method as the missing writer that lens was blocked on; `TaskEntity`
+     *  already carried [TaskEntity.startAt]/[TaskEntity.endAt] as dormant, Studio-set columns).
+     *  Either bound may be cleared independently by passing `null` — a task with only [startAt]
+     *  renders open-ended, one with neither renders in the Waterfall's "unscheduled" rail — but
+     *  when both are present [startAt] must not be after [endAt]. */
+    suspend fun setSpan(
+        task: TaskEntity,
+        startAt: Long?,
+        endAt: Long?,
+        now: Long = System.currentTimeMillis(),
+    ) {
+        if (startAt != null && endAt != null) {
+            require(startAt <= endAt) {
+                "task span start ($startAt) must be on or before its end ($endAt)"
+            }
+        }
+        dao.update(task.copy(startAt = startAt, endAt = endAt, updatedAt = now))
+    }
+
+    /** Waterfall dependency-edge writer (same follow-up as [setSpan]). Replaces [task]'s whole
+     *  [TaskEntity.dependsOn] set in one write. Validated against the store's current rows
+     *  *before* anything is persisted — reject-the-whole-write, not a partial apply:
+     *  - every id in [dependsOn] must name a task that actually exists;
+     *  - [task] may not depend on itself;
+     *  - the edge may not close a **cycle** — starting from each proposed target and following
+     *    the *existing* `dependsOn` edges of other tasks must never lead back to [task.id]. A
+     *    cycle would give the Waterfall lens's DAG-only layout ([dev.fonebrew.domain.tasks]'s
+     *    consumers, e.g. Studio's `TaskWaterfall.order`) no legal topological order to draw, so
+     *    it is rejected here rather than left for a lens to fail on later.
+     *
+     *  Any violation throws [IllegalArgumentException] with a message naming exactly what was
+     *  wrong (which id, which rule) — never a silent partial write.
+     */
+    suspend fun setDependsOn(
+        task: TaskEntity,
+        dependsOn: List<String>,
+        now: Long = System.currentTimeMillis(),
+    ) {
+        require(task.id !in dependsOn) { "task '${task.id}' cannot depend on itself" }
+
+        val byId = dao.getAll().associateBy { it.id }
+        for (id in dependsOn) {
+            require(id in byId) { "dependency target '$id' does not exist" }
+        }
+
+        // Would following `dependsOn` edges (as they exist today) from `from` ever reach
+        // task.id? If any proposed target does, adding task.id -> target closes a cycle.
+        fun leadsBackToTask(from: String, visited: MutableSet<String> = mutableSetOf()): Boolean {
+            if (from == task.id) return true
+            if (!visited.add(from)) return false
+            return byId[from]?.dependsOn.orEmpty().any { leadsBackToTask(it, visited) }
+        }
+        for (id in dependsOn) {
+            require(!leadsBackToTask(id)) {
+                "setting '${task.id}' to depend on '$id' would create a dependency cycle"
+            }
+        }
+
+        dao.update(task.copy(dependsOn = dependsOn, updatedAt = now))
+    }
+
     suspend fun delete(task: TaskEntity) = dao.delete(task)
 
     /** Paid-layer seed insert (task templates, audit/incident promotion, §5.3/§8.4) —

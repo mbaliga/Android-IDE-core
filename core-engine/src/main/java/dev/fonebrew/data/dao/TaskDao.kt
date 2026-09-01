@@ -29,6 +29,11 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY orderKey ASC, createdAt ASC")
     fun observeAll(): Flow<List<TaskEntity>>
 
+    /** A one-shot, unordered snapshot of every row — [TaskStore.setDependsOn] needs the whole
+     *  graph in hand (existence + cycle checks) before it writes, not a live [Flow]. */
+    @Query("SELECT * FROM tasks")
+    suspend fun getAll(): List<TaskEntity>
+
     @Query("SELECT MAX(orderKey) FROM tasks")
     suspend fun maxOrderKey(): Double?
 }
