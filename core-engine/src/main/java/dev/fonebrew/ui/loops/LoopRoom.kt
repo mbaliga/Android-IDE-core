@@ -72,10 +72,16 @@ import dev.fonebrew.domain.loop.LoopBudget
 import dev.fonebrew.domain.loop.LoopParams
 import dev.fonebrew.domain.loop.LoopState
 import dev.fonebrew.domain.loop.RecordingGatewayPolicy
+import dev.fonebrew.domain.loop.authoring.DraftLifecycleMachine
+import dev.fonebrew.domain.loop.authoring.DraftLifecycleState
+import dev.fonebrew.domain.loop.authoring.DraftEditJournal
+import dev.fonebrew.domain.loop.authoring.RunViewAction
+import dev.fonebrew.domain.loop.authoring.RunViewStateClass
 import dev.fonebrew.domain.loop.authoring.TouchConnectionGrammar
 import dev.fonebrew.domain.loop.authoring.WireDragGesture
 import dev.fonebrew.domain.model.ModelSpec
 import dev.fonebrew.domain.thread.DelegationKind
+import dev.fonebrew.contracts.loops.SideEffectClass
 import dev.fonebrew.inference.EngineGenerator
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleCard
@@ -84,6 +90,7 @@ import dev.aarso.hyle.cells.HyleDropdownField
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.atan2
@@ -152,6 +159,32 @@ private fun loopStateLabel(s: LoopState) = when (s) {
 
 private fun isEvent(kind: BpmnNodeKind) =
     kind == BpmnNodeKind.START_EVENT || kind == BpmnNodeKind.END_EVENT
+
+/** `LOOP_PHONE_AUTHORING_SPEC.md` §3, `FB-RAT-PHN-001` — Intent/Stage/Graph as the top-level
+ *  segmented views; Node Sheet and Run stay contextual sheet/dialog surfaces, not a fourth/fifth
+ *  tab (unchanged from today — [configNodeId]/[showRunSheet] already work that way). Stage is
+ *  the default per §3.2 ("the primary phone editing view"). */
+private enum class LoopEditorView { INTENT, STAGE, GRAPH }
+
+/** Reserved [dev.fonebrew.data.LoopStore] id for the §13 autosave slot — deliberately distinct
+ *  from any real (user-named) [Loop.id] so it never collides with, and is always filtered out of,
+ *  the Loops list ([LoadLoopDialog]). Two reserved ext keys smuggle the objective text and the
+ *  original (real) loop id through the same BPMN `ext` carrier provenance already uses, onto the
+ *  start event only, and are stripped back out the moment a draft is restored — see
+ *  [dev.fonebrew.ui.loops] `writeAutosave`/`restoreFromAutosave` in [LoopRoom]. */
+private const val AUTOSAVE_LOOP_ID = "__draft_autosave__"
+private const val EXT_AUTOSAVE_OBJECTIVE = "__autosaveObjective"
+private const val EXT_AUTOSAVE_ORIGINAL_LOOP_ID = "__autosaveOriginalLoopId"
+private val AUTOSAVE_RESERVED_EXT_KEYS = setOf(EXT_AUTOSAVE_OBJECTIVE, EXT_AUTOSAVE_ORIGINAL_LOOP_ID)
+
+/** §3.4 Node Sheet depth — fields the underlying node model can carry honestly (as free-form
+ *  `ext`, exactly like distillation/import provenance already does) but that this editor has no
+ *  NAMED [LoopNode] field for. Round-trips through both [BpmnArchive] (arbitrary attributes on
+ *  the `<aarso:meta>` extension element) and [dev.fonebrew.domain.loop.LoopPackageCodec] (copies
+ *  the whole `ext` map). Everything the spec asks for beyond these three — typed ports, a JSON
+ *  Schema editor, verification/compensation — has no honest carrier in this node model yet; that
+ *  gap is recorded, not faked (see [NodeConfigDialog]'s KDoc). */
+private val NODE_SHEET_EXT_KEYS = setOf("sideEffectClass", "timeoutSeconds", "maxRetries")
 
 /** Editor graph → BPMN (positions + per-node prompt/model travel in extension elements). */
 private val NAMED_EXT_KEYS = setOf("systemPrompt", "model", "role")
@@ -261,6 +294,29 @@ fun LoopRoom(
     var showImportPackage by remember { mutableStateOf(false) }
     var packageNote by remember { mutableStateOf<String?>(null) }
 
+    // §3 five-view IA: Intent | Stage | Graph, Stage default (§3.2).
+    var view by remember { mutableStateOf(LoopEditorView.STAGE) }
+    // §3.2 stage-editing verbs: a blocked reorder/insert names why, rather than failing silently.
+    var stageActionNote by remember { mutableStateOf<String?>(null) }
+    var stageDeleteTargetId by remember { mutableStateOf<String?>(null) }
+    // §3.4 full-screen editing for a >200-char field: "objective" or a node id (its system prompt).
+    var fullScreenEditTarget by remember { mutableStateOf<String?>(null) }
+    // §9 FB-RAT-PHN-008: an edit initiated while a run is active forks the draft first — see
+    // forkDraftForEditing/guardEdit below. Cleared whenever a fresh run starts.
+    var forkedThisRun by remember { mutableStateOf(false) }
+    var runForkNote by remember { mutableStateOf<String?>(null) }
+    // §13 persistence/interruption/recovery — mounts DraftLifecycleMachine + DraftEditJournal for
+    // real (not a no-op decoration): every edit is journaled, then autosaved (debounced) to the
+    // real, process-death-surviving LoopStore, and a prior autosave is offered back explicitly on
+    // reopen — never silently restored, never silently discarded (this lane's own instruction,
+    // read as a deliberate refinement of §13's literal "MUST be restored" for a surface where an
+    // unannounced silent restore would be exactly the kind of invisible influence this app's
+    // legibility thesis exists to avoid).
+    var draftLifecycle by remember { mutableStateOf<DraftLifecycleState>(DraftLifecycleState.DraftClean) }
+    val draftJournal = remember { DraftEditJournal() }
+    var pendingRecovery by remember { mutableStateOf<Loop?>(null) }
+    var autosaveArmed by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
     val colors = LocalHyleColors.current
 
@@ -285,17 +341,45 @@ fun LoopRoom(
             onInitialLoopConsumed()
         }
     }
+    // §13: on (re)entering this room, offer any left-over autosave back explicitly — once, so
+    // dismissing it (Restore or Discard) doesn't re-prompt on every later recomposition.
+    LaunchedEffect(Unit) {
+        store.get(AUTOSAVE_LOOP_ID)?.let { pendingRecovery = it }
+    }
     fun nodeById(id: String) = nodes.firstOrNull { it.id == id }
+
+    // ── §9 FB-RAT-PHN-008: fork before mutating an active run's draft ──────────────────────
+    // "Editing the graph while a run is active MUST fork into a new draft revision without
+    // mutating the active execution." [startRun] already snapshots its own immutable BpmnGraph
+    // before the coroutine starts, so an in-place edit here can never reach back into a run
+    // already under way — but leaving that as an implementation accident would not be the
+    // EXPLICIT fork the spec calls for. This makes it explicit and legible: the first mutation
+    // during a run detaches the on-screen draft from whatever [Loop.id] it came from (so a later
+    // Save mints a fresh loop rather than silently overwriting the one that's running), and says
+    // so, once, via [runForkNote].
+    fun forkDraftForEditing() {
+        if (forkedThisRun) return
+        if (loopId != null) { loopId = null; loopName = "$loopName (fork)" }
+        forkedThisRun = true
+        runForkNote = "Editing forked into a new, unsaved draft — the run in progress is unaffected (FB-RAT-PHN-008)."
+    }
+    fun guardEdit() {
+        if (StagePresenter.shouldForkBeforeEdit(running)) forkDraftForEditing()
+    }
+
     fun moveNode(id: String, x: Float, y: Float) {
+        guardEdit()
         val i = nodes.indexOfFirst { it.id == id }
         if (i >= 0) nodes[i] = nodes[i].copy(xPx = x, yPx = y)
     }
     fun deleteNode(id: String) {
+        guardEdit()
         nodes.removeAll { it.id == id }
         edges.removeAll { it.from == id || it.to == id }
     }
     fun addEdge(from: String, to: String, label: String? = null) {
         if (from == to) return
+        guardEdit()
         if (edges.any { it.from == from && it.to == to }) return
         edges.add(LoopEdge(from, to, label))
     }
@@ -319,6 +403,125 @@ fun LoopRoom(
         }
     }
 
+    fun currentGraph() = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
+
+    // ── §3.2 Stage View editing verbs ───────────────────────────────────────────────────────
+    // All route their actual edge/node rewiring through StagePresenter's pure functions (never
+    // re-derived here) and, for connections, through the SAME connectNodes/addEdge path every
+    // other gesture already shares.
+
+    /** "Add stage": appends a new Task after the current narrative's last stage, connecting it
+     *  in — so Stage View's "+" always grows a runnable sequence, not a disconnected node. */
+    fun addStageAtEnd() {
+        guardEdit()
+        val narrativeBefore = StagePresenter.linearize(currentGraph())
+        val lastCardId = narrativeBefore.items.lastOrNull { it is StagePresenter.StageNarrativeItem.Card }
+            ?.let { (it as StagePresenter.StageNarrativeItem.Card).row.nodeId }
+        val anchor = lastCardId?.let(::nodeById)
+        val xPx = (anchor?.xPx ?: (nodes.maxOfOrNull { it.xPx } ?: (40f * density))) + 180f * density
+        val yPx = anchor?.yPx ?: (150f * density)
+        val id = "n-${UUID.randomUUID().toString().take(6)}"
+        nodes.add(LoopNode(id, BpmnNodeKind.TASK, "Task", xPx = xPx, yPx = yPx))
+        if (lastCardId != null) connectNodes(lastCardId, id)
+        configNodeId = id
+    }
+
+    /** "Insert before/after": splices a new Task adjacent to [anchorId], where the edge on that
+     *  side is single and unambiguous (§3.2's own "where semantics allow" qualifier) — a blocked
+     *  attempt names why via [stageActionNote] rather than silently doing nothing. */
+    fun insertStage(anchorId: String, position: StagePresenter.InsertPosition) {
+        guardEdit()
+        val newId = "n-${UUID.randomUUID().toString().take(6)}"
+        val outcome = StagePresenter.insertAdjacent(currentGraph(), anchorId, position, newId)
+        val newEdges = outcome.edges
+        if (newEdges == null) { stageActionNote = outcome.blockedReason; return }
+        val anchor = nodeById(anchorId)
+        val dx = if (position == StagePresenter.InsertPosition.AFTER) 90f * density else -90f * density
+        nodes.add(LoopNode(newId, BpmnNodeKind.TASK, "Task", xPx = (anchor?.xPx ?: 40f * density) + dx, yPx = (anchor?.yPx ?: 150f * density) + 50f * density))
+        edges.clear(); edges.addAll(newEdges.map { LoopEdge(it.sourceId, it.targetId, it.name) })
+        stageActionNote = null
+        configNodeId = newId
+    }
+
+    /** "Reorder adjacent": swaps [nodeId] with its single neighbor in [direction] (+1 later, -1
+     *  earlier); blocked (branchy topology) names why instead of guessing. */
+    fun reorderStage(nodeId: String, direction: Int) {
+        guardEdit()
+        val outcome = StagePresenter.reorderAdjacent(currentGraph(), nodeId, direction)
+        val newEdges = outcome.edges
+        if (newEdges == null) { stageActionNote = outcome.blockedReason; return }
+        edges.clear(); edges.addAll(newEdges.map { LoopEdge(it.sourceId, it.targetId, it.name) })
+        stageActionNote = null
+    }
+
+    /** "Duplicate": a standalone copy near the original — intentionally not auto-wired in, since
+     *  guessing where a copy belongs in the narrative would be exactly the kind of silent
+     *  decision this surface avoids; Connect wires it in explicitly. */
+    fun duplicateStage(nodeId: String) {
+        guardEdit()
+        val src = nodeById(nodeId) ?: return
+        val newId = "n-${UUID.randomUUID().toString().take(6)}"
+        nodes.add(src.copy(id = newId, label = "${src.label} copy", xPx = src.xPx + 40f * density, yPx = src.yPx + 40f * density))
+    }
+
+    // ── §13 persistence, interruption, and recovery ─────────────────────────────────────────
+
+    /** Debounced autosave target: the live draft, serialised exactly like a real Save, plus two
+     *  reserved-key ext fields on the start event carrying [objective] and the real [loopId] (if
+     *  any) through the one BPMN `ext` carrier this editor already has — see [AUTOSAVE_LOOP_ID].
+     *  An empty draft clears any stale autosave rather than persisting a blank one. */
+    fun writeAutosave() {
+        if (nodes.isEmpty()) { store.delete(AUTOSAVE_LOOP_ID); return }
+        val graph = currentGraph()
+        val startIdx = graph.nodes.indexOfFirst { it.kind == BpmnNodeKind.START_EVENT }
+        val stamped = if (startIdx >= 0) {
+            val s = graph.nodes[startIdx]
+            val extra = buildMap {
+                put(EXT_AUTOSAVE_OBJECTIVE, objective)
+                loopId?.let { put(EXT_AUTOSAVE_ORIGINAL_LOOP_ID, it) }
+            }
+            graph.nodes.toMutableList().also { it[startIdx] = s.copy(ext = s.ext + extra) }
+        } else graph.nodes
+        val now = System.currentTimeMillis()
+        store.save(
+            Loop(
+                id = AUTOSAVE_LOOP_ID, name = loopName, bpmnXml = BpmnArchive.write(graph.copy(nodes = stamped)),
+                state = LoopState.UNUSED, createdAt = now, updatedAt = now,
+            ),
+        )
+    }
+
+    /** Explicit recovery only — never a silent restore, never a silent discard (this lane's own
+     *  refinement of §13's literal wording; see the state-var block above for why). */
+    fun restoreFromAutosave(autosave: Loop) {
+        val xml = autosave.bpmnXml ?: return
+        val g = runCatching { BpmnArchive.read(xml) }.getOrNull() ?: return
+        val startExt = g.nodes.firstOrNull { it.kind == BpmnNodeKind.START_EVENT }?.ext.orEmpty()
+        nodes.clear(); nodes.addAll(fromBpmnNodes(g).map { it.copy(provenanceExt = it.provenanceExt - AUTOSAVE_RESERVED_EXT_KEYS) })
+        edges.clear(); edges.addAll(fromBpmnEdges(g))
+        objective = startExt[EXT_AUTOSAVE_OBJECTIVE] ?: objective
+        loopId = startExt[EXT_AUTOSAVE_ORIGINAL_LOOP_ID]
+        loopName = autosave.name.ifBlank { loopName }
+        savedNote = "Restored an unsaved draft from before."
+        pendingRecovery = null
+    }
+
+    // §13's `DRAFT_CLEAN --Edit--> DIRTY_JOURNALED --AcceptEdit--> DRAFT_CLEAN` table, mounted
+    // for real: every edit is journaled immediately (never deferred to an eventual commit), then
+    // — debounced, so this isn't a write per keystroke — actually written to the real,
+    // process-death-surviving [LoopStore] autosave slot, which is treated as the "accept" event.
+    // Skips entirely while an unresolved recovery prompt is showing, and skips the very first
+    // firing (the just-opened/just-loaded pristine draft is not itself an "edit").
+    LaunchedEffect(nodes.toList(), edges.toList(), objective) {
+        if (!autosaveArmed) { autosaveArmed = true; return@LaunchedEffect }
+        if (pendingRecovery != null) return@LaunchedEffect
+        draftLifecycle = (DraftLifecycleMachine.apply(draftLifecycle, DraftLifecycleMachine.Event.Edit) as? DraftLifecycleMachine.Result.Advanced)?.state ?: draftLifecycle
+        draftJournal.append(idempotencyKey = UUID.randomUUID().toString(), fieldPath = "objective", newValueJson = objective)
+        delay(400)
+        writeAutosave()
+        draftLifecycle = (DraftLifecycleMachine.apply(draftLifecycle, DraftLifecycleMachine.Event.AcceptEdit) as? DraftLifecycleMachine.Result.Advanced)?.state ?: draftLifecycle
+    }
+
     /** Starts the run (CORE_PHASES.md P3): streams each [GraphStep] into [liveSteps] via
      *  `onStep`, then — win, budget-stopped, or cancelled alike — tree-logs the run
      *  ([GraphRunLog]) and writes its ledger rows ([GraphRunLedger]), tagged `surface = "loop"`
@@ -330,6 +533,7 @@ fun LoopRoom(
     fun startRun(params: Map<String, String>, budget: LoopBudget?) {
         running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
         liveSteps = emptyList(); runBudget = budget; loggedNote = null
+        forkedThisRun = false; runForkNote = null // §9: a fresh run gets its own fork-once gate
         runJob = scope.launch {
             val jobId = container.backgroundJobs.start(loopName.ifBlank { "Loop" }, "loop")
             runCatching {
@@ -371,6 +575,11 @@ fun LoopRoom(
                         val entries = GraphRunLedger.toEntries(
                             result = result, treeNodes = treeNodes, loopId = loopId, runId = runId,
                             projectId = null, timestampMillis = System.currentTimeMillis(),
+                            // Cost epic, last mile: price a loop-run's cloud steps through the
+                            // same PricingBook a chat turn uses, keyed by each step's real
+                            // engine tokenizer id (not the raw ModelSpec.id GraphStep carries).
+                            pricingBook = container.pricingStore.book.value,
+                            resolveTokenizerId = { id -> runnable.firstOrNull { it.id == id }?.tokenizerId },
                         )
                         entries.forEach { container.ledgerStore.append(it) }
                         loggedNote = "Logged ${result.steps.size} step(s) to Tree · run $runId"
@@ -411,7 +620,15 @@ fun LoopRoom(
                         if (running) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
-                            TextButton(onClick = { runJob?.cancel() }) { Text("Stop") }
+                            // §9 FB-RAT-PHN-008: an explicit fork affordance during a run, mounted
+                            // over RunViewActionGuard.canForkFromReceipt (always legal). Editing
+                            // without tapping this first still forks automatically — see guardEdit.
+                            if (!forkedThisRun) {
+                                TextButton(onClick = { forkDraftForEditing() }) { Text("Edit as new draft") }
+                            }
+                            if (RunViewAction.CANCEL in StagePresenter.legalRunActions(RunViewStateClass.Running)) {
+                                TextButton(onClick = { runJob?.cancel() }) { Text("Stop") }
+                            }
                         }
                         HyleButton(
                             "Run…",
@@ -457,6 +674,31 @@ fun LoopRoom(
                             modifier = Modifier.padding(horizontal = 12.dp),
                         )
                     }
+                // §13: an unresolved autosave from before — explicit Restore/Discard, never a
+                // silent choice either way.
+                pendingRecovery?.let { rec ->
+                    HyleCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                        Text("An unsaved draft was left from before this room last closed.", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                            HyleButton("Restore", onClick = { restoreFromAutosave(rec) })
+                            TextButton(onClick = { store.delete(AUTOSAVE_LOOP_ID); pendingRecovery = null }) { Text("Discard") }
+                        }
+                    }
+                }
+                runForkNote?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = colors.violet, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
+                }
+                stageActionNote?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = colors.violet, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
+                }
+
+                // §3 five-view IA: Intent | Stage | Graph. Node Sheet ([configNodeId]) and Run
+                // ([showRunSheet]) stay contextual sheets/dialogs, unchanged — not a 4th/5th tab.
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    HyleChip(view == LoopEditorView.INTENT, { view = LoopEditorView.INTENT }, "Intent")
+                    HyleChip(view == LoopEditorView.STAGE, { view = LoopEditorView.STAGE }, "Stage")
+                    HyleChip(view == LoopEditorView.GRAPH, { view = LoopEditorView.GRAPH }, "Graph")
+                }
                 HorizontalDivider()
 
                 if (runnable.isEmpty()) {
@@ -474,7 +716,7 @@ fun LoopRoom(
                         graphResult != null -> ranNodeIds.associateWith { NodeStatus.DONE }
                         else -> emptyMap()
                     }
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if (view == LoopEditorView.GRAPH) Box(Modifier.weight(1f).fillMaxWidth()) {
                         LoopCanvas(
                             nodes = nodes,
                             edges = edges,
@@ -509,6 +751,7 @@ fun LoopRoom(
                         // tree, or `anchor` wouldn't line up with the canvas underneath it.
                         addAt?.let { at ->
                             fun addNode(kind: BpmnNodeKind) {
+                                guardEdit()
                                 val id = "n-${UUID.randomUUID().toString().take(6)}"
                                 val label = when (kind) {
                                     BpmnNodeKind.END_EVENT -> "End"
@@ -586,6 +829,37 @@ fun LoopRoom(
                                 },
                             )
                         }
+                    } else if (view == LoopEditorView.STAGE) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            val stageNarrative = StagePresenter.linearize(currentGraph(), runnable)
+                            StageView(
+                                narrative = stageNarrative,
+                                onTapNode = ::onTapNode,
+                                onJumpToGraph = { view = LoopEditorView.GRAPH },
+                                onAddStage = ::addStageAtEnd,
+                                onInsertBefore = { insertStage(it, StagePresenter.InsertPosition.BEFORE) },
+                                onInsertAfter = { insertStage(it, StagePresenter.InsertPosition.AFTER) },
+                                onDuplicate = ::duplicateStage,
+                                // §7's tap connection grammar lives on the Graph canvas — Connect
+                                // from Stage View switches there with the source pre-armed.
+                                onConnectFrom = { id -> connectingFrom = id; view = LoopEditorView.GRAPH },
+                                onReorder = { id, dir -> reorderStage(id, dir) },
+                                onRequestDelete = { stageDeleteTargetId = it },
+                            )
+                        }
+                    } else {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            val graph = currentGraph()
+                            IntentView(
+                                objective = objective,
+                                onObjectiveChange = { objective = it },
+                                onExpandObjective = { fullScreenEditTarget = "objective" },
+                                inputParams = LoopParams.scan(graph, objective),
+                                validation = StagePresenter.validationSummary(graph, objective),
+                                envelope = StagePresenter.authorityEnvelope(graph, runnable),
+                                lastRunBudget = runBudget,
+                            )
+                        }
                     }
 
                     Column(
@@ -593,6 +867,9 @@ fun LoopRoom(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         HyleField(objective, { objective = it }, label = "Objective", mandatory = true, singleLine = false, modifier = Modifier.fillMaxWidth())
+                        if (objective.length > 200) {
+                            HyleButton("Expand ↗", onClick = { fullScreenEditTarget = "objective" })
+                        }
                     }
                 }
 
@@ -676,13 +953,27 @@ fun LoopRoom(
     // ── Per-node config (tap a task/gateway) ──────────────────────────────────
     configNodeId?.let { id ->
         val node = nodeById(id) ?: return@let
+        // §3.4 "ports and connections shown read-only" — this editor's node model has no typed
+        // ports, so its honest equivalent is the node's real incoming/outgoing edges.
+        val connections = buildList {
+            edges.filter { it.to == id }.forEach { e -> add("← ${nodeById(e.from)?.label ?: e.from}${e.label?.let { " ($it)" } ?: ""}") }
+            edges.filter { it.from == id }.forEach { e -> add("→ ${nodeById(e.to)?.label ?: e.to}${e.label?.let { " ($it)" } ?: ""}") }
+        }
         NodeConfigDialog(
             node = node,
             runnable = runnable,
+            connections = connections,
             onDismiss = { configNodeId = null },
-            onSave = { newName, newPrompt, newModel ->
+            onExpandPrompt = { fullScreenEditTarget = id },
+            onSave = { newName, newPrompt, newModel, extraExt ->
+                guardEdit()
                 val i = nodes.indexOfFirst { it.id == id }
-                if (i >= 0) nodes[i] = nodes[i].copy(label = newName.ifBlank { nodes[i].label }, systemPrompt = newPrompt, modelId = newModel)
+                if (i >= 0) {
+                    nodes[i] = nodes[i].copy(
+                        label = newName.ifBlank { nodes[i].label }, systemPrompt = newPrompt, modelId = newModel,
+                        provenanceExt = nodes[i].provenanceExt.filterKeys { it !in NODE_SHEET_EXT_KEYS } + extraExt,
+                    )
+                }
                 configNodeId = null
             },
             // Desktop-class kit §3: the HyleContextMenu parity path's two items call the exact
@@ -692,6 +983,34 @@ fun LoopRoom(
             onConnect = { configNodeId = null; connectingFrom = id },
             onDelete = { configNodeId = null; deleteNode(id) },
         )
+    }
+
+    // §3.2 delete-with-impact-preview, from Stage View's overflow menu.
+    stageDeleteTargetId?.let { id ->
+        val impact = StagePresenter.deleteImpact(currentGraph(), id)
+        StageDeleteImpactDialog(
+            impact = impact,
+            onDismiss = { stageDeleteTargetId = null },
+            onConfirm = { deleteNode(id); stageDeleteTargetId = null },
+        )
+    }
+
+    // §3.4 full-screen editing for a >200-char field — "objective" or a node id (its prompt).
+    fullScreenEditTarget?.let { target ->
+        if (target == "objective") {
+            FullScreenTextEditDialog("Objective", objective, { objective = it }, onDone = { fullScreenEditTarget = null })
+        } else {
+            val node = nodeById(target)
+            if (node != null) {
+                FullScreenTextEditDialog(
+                    "Instructions — ${node.label}", node.systemPrompt,
+                    { p -> guardEdit(); val i = nodes.indexOfFirst { it.id == target }; if (i >= 0) nodes[i] = nodes[i].copy(systemPrompt = p) },
+                    onDone = { fullScreenEditTarget = null },
+                )
+            } else {
+                fullScreenEditTarget = null
+            }
+        }
     }
 
     if (showSave) {
@@ -710,6 +1029,9 @@ fun LoopRoom(
                         createdAt = existing?.createdAt ?: now, updatedAt = now, lastRunAt = existing?.lastRunAt,
                     ),
                 )
+                // §13: a real named Save supersedes the autosave slot — otherwise the next open
+                // would offer to "recover" content that's already safely saved.
+                store.delete(AUTOSAVE_LOOP_ID)
                 loopId = id; loopName = name; savedNote = "Saved “$name” (BPMN)"; showSave = false
             },
         )
@@ -717,7 +1039,9 @@ fun LoopRoom(
 
     if (showLoad) {
         LoadLoopDialog(
-            loops = savedLoops,
+            // §13's autosave slot is a reserved recovery carrier, not a loop the user picked —
+            // it is never shown here (the recovery banner above is its only surface).
+            loops = savedLoops.filterNot { it.id == AUTOSAVE_LOOP_ID },
             onDismiss = { showLoad = false },
             onDelete = { store.delete(it) },
             onDuplicate = { store.duplicate(it) },
@@ -1175,8 +1499,13 @@ private fun EdgeLabelDialog(onDismiss: () -> Unit, onPick: (String?) -> Unit) {
 private fun NodeConfigDialog(
     node: LoopNode,
     runnable: List<ModelSpec>,
+    /** §3.4 "ports and connections shown read-only" — pre-formatted "← X (label)"/"→ Y (label)"
+     *  strings; this editor's node model has real edges, not typed ports (named follow-up: no
+     *  JSON Schema editor exists here yet either — the class-level scope note explains why). */
+    connections: List<String>,
     onDismiss: () -> Unit,
-    onSave: (name: String, prompt: String, modelId: String?) -> Unit,
+    onExpandPrompt: () -> Unit,
+    onSave: (name: String, prompt: String, modelId: String?, extraExt: Map<String, String>) -> Unit,
     // Desktop-class kit §3 parity path: same two operations as the long-press radial node menu
     // (minus Edit — this dialog IS the edit surface already open). See [loopNodeMenuItems].
     onConnect: () -> Unit,
@@ -1185,13 +1514,20 @@ private fun NodeConfigDialog(
     var n by remember { mutableStateOf(node.label) }
     var p by remember { mutableStateOf(node.systemPrompt) }
     var model by remember { mutableStateOf(node.modelId) }
+    var sideEffect by remember { mutableStateOf(node.provenanceExt["sideEffectClass"]) }
+    var timeoutSeconds by remember { mutableStateOf(node.provenanceExt["timeoutSeconds"].orEmpty()) }
+    var maxRetries by remember { mutableStateOf(node.provenanceExt["maxRetries"].orEmpty()) }
     var showActions by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val isTask = !isEvent(node.kind) && !node.kind.name.contains("GATEWAY")
     val options = listOf("Default model") + runnable.map { (if (it.isOnDevice) "⌂ " else "☁ ") + it.displayName }
+    val sideEffectOptions = listOf("Not declared") + SideEffectClass.entries.map { it.name }
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.padding(16.dp).fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Edit ${node.label}", style = MaterialTheme.typography.titleMedium)
                     Box {
@@ -1216,9 +1552,19 @@ private fun NodeConfigDialog(
                         )
                     }
                 }
+                // Destructive/publish-authority stages keep their risk badge visible regardless
+                // of anything else here (§4) — glyph + label, never a color-only cue.
+                if (sideEffect == SideEffectClass.DESTRUCTIVE.name) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⚠ Destructive", style = MaterialTheme.typography.labelMedium, color = LocalHyleColors.current.violet)
+                    }
+                }
                 HyleField(n, { n = it }, label = "Name", modifier = Modifier.fillMaxWidth())
                 if (isTask) {
                     HyleField(p, { p = it }, label = "Instructions (system prompt)", singleLine = false, modifier = Modifier.fillMaxWidth())
+                    if (p.length > 200) {
+                        HyleButton("Expand ↗", onClick = onExpandPrompt)
+                    }
                     HyleDropdownField(
                         value = model?.let { id -> runnable.firstOrNull { it.id == id }?.let { (if (it.isOnDevice) "⌂ " else "☁ ") + it.displayName } } ?: "Default model",
                         options = options,
@@ -1226,11 +1572,39 @@ private fun NodeConfigDialog(
                         label = "Model",
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    // §3.4's node contract fields this node model CAN carry honestly, as ext —
+                    // see NODE_SHEET_EXT_KEYS. Everything else §3.4 lists (typed ports, a JSON
+                    // Schema editor, verification, compensation) has no honest carrier here yet.
+                    HyleDropdownField(
+                        value = sideEffect ?: "Not declared",
+                        options = sideEffectOptions,
+                        onSelect = { idx -> sideEffect = if (idx == 0) null else sideEffectOptions[idx] },
+                        label = "Side-effect class",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HyleField(timeoutSeconds, { timeoutSeconds = it.filter(Char::isDigit) }, label = "Timeout (s)", modifier = Modifier.weight(1f))
+                        HyleField(maxRetries, { maxRetries = it.filter(Char::isDigit) }, label = "Max retries", modifier = Modifier.weight(1f))
+                    }
+                }
+                if (connections.isNotEmpty()) {
+                    Text("Connections", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp))
+                    for (c in connections) Text(c, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     Spacer(Modifier.width(8.dp))
-                    HyleButton("Done", onClick = { onSave(n, p, model) })
+                    HyleButton(
+                        "Done",
+                        onClick = {
+                            val extraExt = buildMap {
+                                sideEffect?.let { put("sideEffectClass", it) }
+                                if (timeoutSeconds.isNotBlank()) put("timeoutSeconds", timeoutSeconds)
+                                if (maxRetries.isNotBlank()) put("maxRetries", maxRetries)
+                            }
+                            onSave(n, p, model, extraExt)
+                        },
+                    )
                 }
             }
         }
