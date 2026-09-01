@@ -25,16 +25,30 @@ package dev.fonebrew.data.search
  * fired after the process died) is a harmless overwrite with identical values, not a duplicate
  * or a thrown constraint violation.
  *
- * ### Projection-version bump = fresh rebuild, not silent staleness
- * If `index_state.projection_version` doesn't match [SearchProjector.PROJECTION_VERSION],
- * [reindex] restarts from row 0 rather than resuming — every row gets re-upserted under the new
- * projection logic. Nothing is deleted first; upserts are self-healing (every conv_id present in
- * [rows] gets overwritten with current data either way).
+ * ### Projection- or tokenizer-version bump = fresh rebuild, not silent staleness
+ * If `index_state.projection_version` doesn't match [SearchProjector.PROJECTION_VERSION], **or**
+ * `index_state.tokenizer_version` doesn't match [TOKENIZER_VERSION], [reindex] restarts from row
+ * 0 rather than resuming — every row gets re-upserted under the new projection/tokenization
+ * logic. Nothing is deleted first; upserts are self-healing (every conv_id present in [rows] gets
+ * overwritten with current data either way). [rows] itself must already carry the *new* logic's
+ * output (callers always recompute it fresh — see [SearchRepository.reindexAll]) — this class
+ * only decides whether to write it, never re-derives it.
  */
 object SearchIndexer {
 
     const val DEFAULT_CHUNK_SIZE = 300
-    const val TOKENIZER_VERSION = 1L
+
+    /** Bumped when the *tokenization* of indexed text changes shape, independent of
+     *  [SearchProjector.PROJECTION_VERSION] (which tracks the [SearchProjector.Row] shape
+     *  itself). 2: English stemming ([dev.fonebrew.domain.search.Stemmer]) was added to the
+     *  title/snippet/body text every row carries — a device holding an index built before this
+     *  change has un-stemmed `conv_fts`/`conv_projection` content, so [reindex] now treats a
+     *  stale [tokenizer_version][SelectIndexState.tokenizer_version] the same way it already
+     *  treats a stale `projection_version`: as a signal to reprocess every row from scratch,
+     *  not resume. Before this bump, `tokenizer_version` was written into `index_state` on
+     *  every write but never actually *read* anywhere — a designed hook with nothing plugged
+     *  into it. */
+    const val TOKENIZER_VERSION = 2L
     const val SCHEMA_VERSION = 1L
 
     data class Progress(val processed: Int, val total: Int)
@@ -56,7 +70,9 @@ object SearchIndexer {
         isCancelled: () -> Boolean = { false },
     ) {
         val state = database.searchQueries.selectIndexState().executeAsOneOrNull()
-        val needsFreshRebuild = state == null || state.projection_version != SearchProjector.PROJECTION_VERSION
+        val needsFreshRebuild = state == null ||
+            state.projection_version != SearchProjector.PROJECTION_VERSION ||
+            state.tokenizer_version != TOKENIZER_VERSION
         var processed = if (needsFreshRebuild) 0 else state!!.last_indexed_rowid.toInt().coerceIn(0, rows.size)
 
         if (processed >= rows.size) {

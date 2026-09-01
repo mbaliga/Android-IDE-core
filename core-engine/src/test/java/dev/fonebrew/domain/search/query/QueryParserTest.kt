@@ -25,7 +25,10 @@ class QueryParserTest {
     @Test fun `single term parses and compiles to a quoted prefix fts match`() {
         val q = parse("gradle")
         assertEquals(QueryNode.Term("gradle", false), q.root)
-        assertEquals("\"gradle\"", q.ftsExpression)
+        // The AST keeps the literal typed text ("gradle") — only the compiled fts expression is
+        // stemmed, matching what the indexer now stores for the same word (Stemmer's "gradle" ->
+        // "gradl", see StemmerTest).
+        assertEquals("\"gradl\"", q.ftsExpression)
     }
 
     @Test fun `juxtaposed terms are an implicit AND`() {
@@ -70,7 +73,10 @@ class QueryParserTest {
     @Test fun `quoted phrase is a Phrase node and an fts phrase match`() {
         val q = parse("\"build cache\"")
         assertEquals(QueryNode.Phrase("build cache"), q.root)
-        assertEquals("\"build cache\"", q.ftsExpression)
+        // Phrase words are stemmed word-by-word before quoting ("cache" -> "cach"; "build" is
+        // already its own stem) so a stemmed phrase still matches the stemmed index — see
+        // QueryCompiler.compileFts's "Stemming (symmetric with the indexer)" KDoc.
+        assertEquals("\"build cach\"", q.ftsExpression)
     }
 
     @Test fun `regex literal parses with the trailing i flag`() {
@@ -302,12 +308,37 @@ class QueryParserTest {
         val q = parse("is:starred gradle has:image cache")
         assertFalse(q.ftsExpression!!.contains("starred"))
         assertFalse(q.ftsExpression!!.contains("image"))
-        assertTrue(q.ftsExpression!!.contains("gradle"))
-        assertTrue(q.ftsExpression!!.contains("cache"))
+        // Stemmed, not the literal typed spelling — "gradle" -> "gradl", "cache" -> "cach".
+        assertTrue(q.ftsExpression!!.contains("gradl"))
+        assertTrue(q.ftsExpression!!.contains("cach"))
     }
 
     @Test fun `pure facet query has no fts expression`() {
         assertNull(parse("is:starred").ftsExpression)
+    }
+
+    // ---- stemming (symmetric with the indexer — see QueryCompiler.compileFts's KDoc) ----
+
+    @Test fun `a bare term is stemmed in the compiled fts expression`() {
+        val bare = QueryNode.Term("caresses", prefix = false)
+        assertEquals("\"caress\"", QueryCompiler.compileFts(bare))
+        assertEquals("\"caress\"*", QueryCompiler.compileFts(bare, prefixBareTerms = true))
+    }
+
+    @Test fun `an explicit user-typed prefix term is never stemmed`() {
+        // "caresses*" means the literal prefix "caresses", not its stem "caress" -- typing a
+        // prefix glob is a request for exactly that spelling.
+        val explicitPrefix = QueryNode.Term("caresses", prefix = true)
+        assertEquals("\"caresses\"*", QueryCompiler.compileFts(explicitPrefix))
+        assertEquals("\"caresses\"*", QueryCompiler.compileFts(explicitPrefix, prefixBareTerms = true))
+    }
+
+    @Test fun `every word inside a quoted phrase is stemmed independently`() {
+        assertEquals("\"run test everi night\"", QueryCompiler.compileFts(QueryNode.Phrase("running tests every night")))
+    }
+
+    @Test fun `non-ascii-alphabetic terms pass through stemming unchanged`() {
+        assertEquals("\"नमस्ते\"", QueryCompiler.compileFts(QueryNode.Term("नमस्ते", prefix = false)))
     }
 
     @Test fun `query syntax characters inside a quoted phrase are escaped for fts`() {

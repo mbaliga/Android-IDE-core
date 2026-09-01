@@ -140,6 +140,34 @@ class SearchIndexerTest {
         assertEquals(rows.size.toLong(), db.searchQueries.countProjections().executeAsOne())
     }
 
+    @Test fun `tokenizer version bump triggers a full rebuild, not a resume from stale state`() {
+        // The stemming-side counterpart to the projection-version test above: a device holding
+        // an index built before English stemming existed has a fully-processed index_state
+        // (last_indexed_rowid == rows.size, current projection_version) but a stale
+        // tokenizer_version — SearchIndexer.TOKENIZER_VERSION's own KDoc calls this "a designed
+        // hook with nothing plugged into it" before this test existed; now it is.
+        val db = SearchDriverFactory.createInMemory().database
+        val rows = (1..5).map { row("c$it") }
+        SearchIndexer.reindex(db, rows, nowMillis = 1L)
+
+        db.searchQueries.upsertIndexState(
+            last_indexed_rowid = rows.size.toLong(),
+            projection_version = SearchProjector.PROJECTION_VERSION,
+            tokenizer_version = SearchIndexer.TOKENIZER_VERSION - 1,
+            schema_version = SearchIndexer.SCHEMA_VERSION,
+            updated_at = 1L,
+        )
+
+        var sawProgress = false
+        SearchIndexer.reindex(db, rows, nowMillis = 2L, onProgress = { sawProgress = true })
+
+        assertTrue("a stale tokenizer_version must force real work, not a no-op", sawProgress)
+        val state = db.searchQueries.selectIndexState().executeAsOne()
+        assertEquals(SearchIndexer.TOKENIZER_VERSION, state.tokenizer_version)
+        assertEquals(rows.size.toLong(), state.last_indexed_rowid)
+        assertEquals(rows.size.toLong(), db.searchQueries.countProjections().executeAsOne())
+    }
+
     @Test fun `already-fully-indexed rows are a no-op on the next call`() {
         val db = SearchDriverFactory.createInMemory().database
         val rows = (1..4).map { row("c$it") }

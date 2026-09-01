@@ -73,6 +73,11 @@ class LoopSearchProjectorTest {
     @Test fun `segmented fields are lowercased for FTS matching`() {
         val loop = Loop(id = "l1", name = "GRADLE Build", bpmnXml = null)
         val row = LoopSearchProjector.project(listOf(loop)).single()
-        assertTrue(row.title.contains("gradle"))
+        // Lowercased AND stemmed: "gradle" -> "gradl" (see StemmerTest).
+        assertTrue(row.title.contains("gradl"))
+    }
+
+    @Test fun `PROJECTION_VERSION is 2 -- stemming changed what gets indexed`() {
+        assertEquals(2L, LoopSearchProjector.PROJECTION_VERSION)
     }
 }

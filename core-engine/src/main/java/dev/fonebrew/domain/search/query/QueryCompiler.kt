@@ -1,5 +1,7 @@
 package dev.fonebrew.domain.search.query
 
+import dev.fonebrew.domain.search.Stemmer
+
 /**
  * [QueryNode] → text, in two different shapes: [compileFts] for FTS5's `MATCH` syntax, and
  * [renderCanonical] for round-trippable query-box text (chips, saved searches).
@@ -21,22 +23,49 @@ object QueryCompiler {
      * records this via [QueryNode.Semantic] surfacing separately as `ParsedQuery.semanticText`,
      * so a caller can still show "semantic search unavailable" without losing the term as a
      * plain-lexical fallback (hard rule 1: the raw query still runs).
+     *
+     * ### Stemming (symmetric with the indexer)
+     * A [QueryNode.Term] with [QueryNode.Term.prefix] `false`, and every word inside a
+     * [QueryNode.Phrase], are run through [Stemmer.maybeStem] before being quoted — the same
+     * transform [dev.fonebrew.data.search.SearchProjector]/[dev.fonebrew.data.search.LoopSearchProjector]/
+     * [dev.fonebrew.data.search.TaskSearchProjector] apply to indexed text, so "running" in a
+     * query and "runs" in a document land on the identical stemmed FTS5 token. This applies
+     * unconditionally, not just when [prefixBareTerms] is set: the index itself now stores
+     * stemmed text, so an *unstemmed* exact-token `MATCH` (no `prefixBareTerms`, no explicit `*`)
+     * against it would simply never hit — stemming the query is what keeps a non-prefix `MATCH`
+     * meaningful at all, not only an as-you-type convenience.
+     *
+     * An **explicit** user-typed prefix ([QueryNode.Term.prefix] `true`, i.e. the user typed
+     * `word*`) is the one exception: it is never stemmed. Typing a literal prefix glob is a
+     * request for exactly that spelling — stemming it would silently change what the user asked
+     * for (e.g. `caresses*` must search for that literal prefix, not the stem `caress*`).
+     * [QueryNode.Semantic] is stemmed the same way bare terms are: its `prefix = true` in the
+     * compiled expression comes from the *compiler's* semantic-fallback strategy, not from the
+     * user typing `*`, so the "explicit prefix is literal" exception does not apply to it.
      */
     /**
      * @param prefixBareTerms when true, a term the user did *not* explicitly suffix with `*` is
      *   still compiled as an FTS5 prefix match. This is what an as-you-type search box needs
      *   (spec S3): mid-word, `gradl` must already find `gradle`, or results only appear once the
      *   user finishes typing a whole token. Off by default so [ParsedQuery.ftsExpression] stays a
-     *   faithful rendering of exactly what was typed — the retrieval layer
+     *   faithful rendering of exactly what was typed, prefix-wise — the retrieval layer
      *   ([dev.fonebrew.data.search.SearchQuery]) opts in, a caller inspecting the parse does not.
+     *   Stemming (see above) is unaffected by this flag either way.
      */
     fun compileFts(node: QueryNode?, prefixBareTerms: Boolean = false): String? =
         node?.let { renderFts(it, prefixBareTerms) }?.takeIf { it.isNotBlank() }
 
     private fun renderFts(node: QueryNode, prefixBare: Boolean): String? = when (node) {
-        is QueryNode.Term -> quotedPrefix(node.text, node.prefix || prefixBare)
-        is QueryNode.Phrase -> quoted(node.text)
-        is QueryNode.Semantic -> quotedPrefix(node.text, prefix = true)
+        is QueryNode.Term -> {
+            val text = if (node.prefix) node.text else Stemmer.maybeStem(node.text)
+            quotedPrefix(text, node.prefix || prefixBare)
+        }
+        is QueryNode.Phrase -> quoted(Stemmer.stemJoined(node.text))
+        // node.text can be multi-word (?"gradle build cache" parses to one Semantic node whose
+        // text has a space in it) — stemJoined, not maybeStem, so every word gets stemmed
+        // independently rather than the whole phrase silently skipping isStemmable's ASCII-letter
+        // check over a string that contains a space.
+        is QueryNode.Semantic -> quotedPrefix(Stemmer.stemJoined(node.text), prefix = true)
         is QueryNode.Regex -> null
         is QueryNode.Facet -> null
         is QueryNode.Or -> {
@@ -67,6 +96,27 @@ object QueryCompiler {
      * `is:starred` to a lexical scorer would rank documents for containing the words "is" and
      * "starred"), and find-in-chat continuity (opening a result from a search for
      * `gradle is:starred` should look for `gradle` inside the conversation, not the facet).
+     *
+     * **Deliberately NOT stemmed, unlike [compileFts].** Both of [lexicalText]'s callers feed
+     * straight into [dev.fonebrew.domain.search.LexicalSearch], which matches by plain substring
+     * containment over the *raw*, un-stemmed conversation text and is explicitly never modified
+     * (see that class's own KDoc and [dev.fonebrew.data.search.SearchQuery]'s "never modified or
+     * replaced" — pinned by `SearchQueryTest`'s golden-ordering test, which asserts
+     * `SearchQuery.search`'s scores are byte-for-byte what calling `LexicalSearch.search` directly
+     * over the same raw documents would produce). Stemming this text would materially change
+     * those scores and visibly shorten every on-screen highlight span (a query for "gradle" would
+     * only highlight "gradl" — the stem — inside the displayed word), for the sake of surfacing a
+     * narrow class of relevance matches. So: [compileFts]'s FTS5 stemming widens *candidate
+     * generation* — a document spelled "runs" is now a real candidate for a query typed
+     * "running" — but that candidate only survives into [dev.fonebrew.data.search.SearchQuery]'s
+     * final ranked results if the raw query text also has some literal-substring relationship to
+     * the raw document text (true for the large majority of real inflection pairs — the shorter
+     * spelling is usually a literal prefix of the longer one, e.g. `cache`⊂`caches`,
+     * `test`⊂`tests` — but not for every pair, e.g. `running`/`runs` share no such raw-substring
+     * relationship at all). That is a real, named boundary of this two-stage design — not
+     * something this lane silently worked around — see `StemmingSearchIntegrationTest`'s own
+     * comment on its "running finds runs" case, which is verified at the FTS5 candidate layer
+     * this lane owns rather than through the full re-scored pipeline for exactly this reason.
      *
      * Negated terms are excluded — `-maven` is a thing to *avoid*, never a thing to highlight.
      */

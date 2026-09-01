@@ -4,6 +4,7 @@ import dev.fonebrew.domain.MessageNode
 import dev.fonebrew.domain.Role
 import dev.fonebrew.domain.ledger.LedgerEntry
 import dev.fonebrew.domain.search.Segmenter
+import dev.fonebrew.domain.search.Stemmer
 import dev.fonebrew.domain.thread.ThreadChains
 import dev.fonebrew.domain.thread.ThreadMarker
 import dev.fonebrew.domain.thread.ThreadMarkerKind
@@ -125,9 +126,14 @@ object SearchProjector {
 
         return Row(
             convId = summary.rootId,
-            title = Segmenter.tokenizeForIndex(titleRaw),
-            snippet = Segmenter.tokenizeForIndex(snippetRaw),
-            body = Segmenter.tokenizeForIndex(bodyRaw),
+            // Segmenter.tokenizeForIndex does word-boundary segmentation + NFKC/lowercase
+            // normalization only (its own offset contract stays untouched by this); Stemmer.
+            // stemJoined runs over that already-space-joined output as a separate pass, English
+            // suffix-stemming each ASCII-alphabetic token so a query for "running" finds a
+            // document that only ever says "runs" (see Stemmer's class KDoc).
+            title = Stemmer.stemJoined(Segmenter.tokenizeForIndex(titleRaw)),
+            snippet = Stemmer.stemJoined(Segmenter.tokenizeForIndex(snippetRaw)),
+            body = Stemmer.stemJoined(Segmenter.tokenizeForIndex(bodyRaw)),
             titleRaw = titleRaw,
             snippetRaw = snippetRaw,
             bodyRaw = bodyRaw,

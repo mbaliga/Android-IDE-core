@@ -2,6 +2,7 @@ package dev.fonebrew.data.search
 
 import dev.fonebrew.data.entity.TaskEntity
 import dev.fonebrew.domain.search.Segmenter
+import dev.fonebrew.domain.search.Stemmer
 
 /**
  * Flattens [TaskEntity] rows into search-index rows — the `task:` half of the search-corpus
@@ -15,7 +16,10 @@ import dev.fonebrew.domain.search.Segmenter
  */
 object TaskSearchProjector {
 
-    const val PROJECTION_VERSION = 1L
+    /** 2: English stemming ([Stemmer]) was added to [title]/[body] — see
+     *  [LoopSearchProjector.PROJECTION_VERSION]'s KDoc for why this same constant is also
+     *  task:'s tokenizer-version signal (`task_projection` has no separate column for one). */
+    const val PROJECTION_VERSION = 2L
 
     data class Row(
         val taskId: String,
@@ -37,8 +41,10 @@ object TaskSearchProjector {
         val bodyRaw = task.notes
         return Row(
             taskId = task.id,
-            title = Segmenter.tokenizeForIndex(task.title),
-            body = Segmenter.tokenizeForIndex(bodyRaw),
+            // Same segment-then-stem pipeline as SearchProjector — see its own comment on the
+            // equivalent lines for why these are two separate passes.
+            title = Stemmer.stemJoined(Segmenter.tokenizeForIndex(task.title)),
+            body = Stemmer.stemJoined(Segmenter.tokenizeForIndex(bodyRaw)),
             titleRaw = task.title,
             bodyRaw = bodyRaw,
             state = task.state.name,

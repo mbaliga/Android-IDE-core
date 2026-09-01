@@ -3,6 +3,7 @@ package dev.fonebrew.data.search
 import dev.fonebrew.domain.bpmn.BpmnArchive
 import dev.fonebrew.domain.loop.Loop
 import dev.fonebrew.domain.search.Segmenter
+import dev.fonebrew.domain.search.Stemmer
 
 /**
  * Flattens [Loop]s into search-index rows — the `loop:` half of the search-corpus expansion
@@ -24,8 +25,15 @@ import dev.fonebrew.domain.search.Segmenter
 object LoopSearchProjector {
 
     /** Bump when the projection logic changes shape — mirrors [SearchProjector.PROJECTION_VERSION]'s
-     *  role, but for [dev.fonebrew.data.search.SearchIndexer.syncLoops]'s own stamp comparison. */
-    const val PROJECTION_VERSION = 1L
+     *  role, but for [dev.fonebrew.data.search.SearchIndexer.syncLoops]'s own stamp comparison.
+     *  2: English stemming ([Stemmer]) was added to [title]/[body]. `loop_projection` has no
+     *  separate `tokenizer_version` column the way `index_state` does for the conv corpus
+     *  (`Search.sq`'s schema is frozen — see its own header comment) — this constant is loop:'s
+     *  only per-row version stamp, so it does double duty as loop:'s tokenizer-version signal
+     *  too: bumping it is what makes [dev.fonebrew.data.search.SearchIndexer.syncLoops] treat
+     *  every already-indexed loop as stale and re-upsert it with newly-stemmed text, exactly the
+     *  way a genuine shape change would. */
+    const val PROJECTION_VERSION = 2L
 
     data class Row(
         val loopId: String,
@@ -59,8 +67,10 @@ object LoopSearchProjector {
 
         return Row(
             loopId = loop.id,
-            title = Segmenter.tokenizeForIndex(loop.name),
-            body = Segmenter.tokenizeForIndex(bodyRaw),
+            // Same segment-then-stem pipeline as SearchProjector — see its own comment on the
+            // equivalent lines for why these are two separate passes.
+            title = Stemmer.stemJoined(Segmenter.tokenizeForIndex(loop.name)),
+            body = Stemmer.stemJoined(Segmenter.tokenizeForIndex(bodyRaw)),
             titleRaw = loop.name,
             bodyRaw = bodyRaw,
             state = loop.state.name,

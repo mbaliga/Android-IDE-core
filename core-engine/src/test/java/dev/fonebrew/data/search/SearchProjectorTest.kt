@@ -64,11 +64,14 @@ class SearchProjectorTest {
 
         assertEquals("u1", row.convId)
         assertEquals("How do I fix the gradle build cache", row.titleRaw)
-        assertTrue(row.title.contains("gradle"))
+        // title/body are segmented AND stemmed (Stemmer); titleRaw/bodyRaw stay the literal
+        // original text. "gradle" stems to "gradl" (Porter Step 5a: final-e removal) — see
+        // StemmerTest.
+        assertTrue(row.title.contains("gradl"))
         assertEquals("Pin GRADLE_USER_HOME under the project root", row.snippetRaw)
         assertTrue(row.bodyRaw.contains("How do I fix the gradle build cache"))
         assertTrue(row.bodyRaw.contains("Pin GRADLE_USER_HOME"))
-        assertTrue(row.body.contains("gradle"))
+        assertTrue(row.body.contains("gradl"))
         assertEquals(SearchProjector.PROJECTION_VERSION, row.projectionVersion)
     }
 
