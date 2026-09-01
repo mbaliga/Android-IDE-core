@@ -61,10 +61,14 @@ object LedgerCapture {
      * [chatId] carries [runId] (the same grouping key `GraphRunLog`/`RunLog` tag their tree
      * nodes with), so a run's steps share one thread the way Council members share a chat.
      *
-     * [estCostMinor] is always 0: the per-loop **dollar**-cost boundary isn't built yet (rule 5
-     * keeps `CostEstimator.kt` Council-escalation-scoped) — this only ever counts tokens, never
-     * invents a price. Every row that reaches here already completed (a [GraphRunResult]'s
-     * `steps` list only ever holds finished steps), so [Status] is always [Status.COMPLETE].
+     * [estCostMinor] is priced by the **caller** — [dev.fonebrew.domain.loop.GraphRunLedger],
+     * which runs a cloud step's tokens through the same `PricingBook` path a chat turn uses
+     * (`ChatViewModel`'s `usage.toAdviceCost(pricingStore.book.value.priceFor(...))` pattern) —
+     * this builder just records whatever it's handed, floored to 0 like every other figure
+     * here. It defaults to 0 so an on-device step (never priced) or a caller that hasn't wired
+     * pricing yet still gets the honest "no money changed hands" record, never an invented one.
+     * Every row that reaches here already completed (a [GraphRunResult]'s `steps` list only
+     * ever holds finished steps), so [Status] is always [Status.COMPLETE].
      */
     fun loopStep(
         timestampMillis: Long,
@@ -78,6 +82,7 @@ object LedgerCapture {
         outputTokens: Long,
         latencyMs: Long,
         estimated: Boolean,
+        estCostMinor: Long = 0,
     ): LedgerEntry = LedgerEntry(
         timestampMillis = timestampMillis,
         projectId = projectId,
@@ -90,7 +95,7 @@ object LedgerCapture {
         councilMemberId = null,
         inputTokens = inputTokens.coerceAtLeast(0),
         outputTokens = outputTokens.coerceAtLeast(0),
-        estCostMinor = 0,
+        estCostMinor = estCostMinor.coerceAtLeast(0),
         latencyMs = latencyMs.coerceAtLeast(0),
         tier = tier,
         status = Status.COMPLETE,

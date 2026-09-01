@@ -131,4 +131,37 @@ class LedgerCaptureTest {
         assertEquals(0, e.outputTokens)
         assertEquals(0, e.latencyMs)
     }
+
+    @Test
+    fun loopStepDefaultsToZeroCostWhenCallerDoesNotPrice() {
+        val e = LedgerCapture.loopStep(
+            timestampMillis = 500, runId = "run-1", loopId = "loop-1", nodeId = "node-3",
+            projectId = null, model = "qwen2.5-7b", tier = Tier.ON_DEVICE,
+            inputTokens = 40, outputTokens = 10, latencyMs = 120, estimated = true,
+        )
+        assertEquals(0, e.estCostMinor)
+    }
+
+    @Test
+    fun loopStepRecordsWhateverCostItsCallerPriced() {
+        // GraphRunLedger is the real caller that prices a cloud step (Cost epic, last mile);
+        // this only asserts the builder records — and floors — what it's handed.
+        val e = LedgerCapture.loopStep(
+            timestampMillis = 500, runId = "run-2", loopId = null, nodeId = "node-1",
+            projectId = "proj", model = "claude-sonnet", tier = Tier.CLOUD,
+            inputTokens = 100, outputTokens = 50, latencyMs = 900, estimated = false,
+            estCostMinor = 42,
+        )
+        assertEquals(42, e.estCostMinor)
+    }
+
+    @Test
+    fun loopStepFloorsNegativeCost() {
+        val e = LedgerCapture.loopStep(
+            timestampMillis = 0, runId = "r", loopId = null, nodeId = "n", projectId = null,
+            model = "m", tier = Tier.CLOUD, inputTokens = 1, outputTokens = 1,
+            latencyMs = 0, estimated = false, estCostMinor = -9,
+        )
+        assertEquals(0, e.estCostMinor)
+    }
 }

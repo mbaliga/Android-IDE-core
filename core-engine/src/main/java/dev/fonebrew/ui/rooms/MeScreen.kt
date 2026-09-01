@@ -57,6 +57,10 @@ fun MeScreen(onClose: () -> Unit) {
     // The on-device usage ledger (Doc 07 "Myself"); empty until the per-turn capture writer
     // lands — the StatePane renders the honest empty state meanwhile.
     val ledgerEntries by container.ledgerStore.entries().collectAsState(initial = emptyList())
+    // Cost epic, last mile: the user's own display-currency preference (an ISO-4217 label
+    // only — never a fetched exchange rate, binding rule 1), read the same way a chat turn's
+    // own cost gets priced (container.pricingStore).
+    val currencyCode by container.pricingStore.currencyCode.collectAsState()
 
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
@@ -139,12 +143,13 @@ fun MeScreen(onClose: () -> Unit) {
             val locale = java.util.Locale.getDefault()
             StatePane(MyselfPresenter.present(ledgerEntries)) { view ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Cost is a per-loop execution boundary, not a profile headline (brief §9):
-                    // the Myself views are token/usage-only, so the cards render showCost = false.
+                    // The accounting pipeline's last mile: showCost now on (the pricing form
+                    // over PricingStore is a real, user-set — or honestly-labelled-placeholder —
+                    // rate, so a token-usage view can show real money without inventing it).
                     // Budget rings here are usage/token budgets (the profile passes no cost budgets).
-                    InputOutputCard(view.totals, locale, "USD", showCost = false)
+                    InputOutputCard(view.totals, locale, currencyCode, showCost = true)
                     SovereigntyCard(view.provenanceSplit, locale)
-                    ByProviderList(view.byProvider, locale, "USD", showCost = false)
+                    ByProviderList(view.byProvider, locale, currencyCode, showCost = true)
                     view.budgetRings.forEach { ring -> BudgetRingView(ring, "Budget", locale) }
                 }
             }

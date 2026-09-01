@@ -1,5 +1,7 @@
 package dev.fonebrew.domain.loop
 
+import dev.fonebrew.domain.cost.PricingBook
+import dev.fonebrew.domain.cost.UsagePricing
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -66,9 +68,50 @@ class GraphRunLedgerTest {
         assertEquals(false, entries[1].estimated)
     }
 
-    @Test fun `cost is always zero — the per-loop dollar boundary is not built yet`() {
+    @Test fun `cost stays zero when no pricing is wired — never invents a number`() {
+        // Default call: no PricingBook, no tokenizer-id resolver. The cloud step's raw model
+        // string ("claude") isn't a cloud-prefixed tokenizer id, so PricingBook.priceFor treats
+        // it as unpriced/on-device rather than guessing — same honest degradation a chat turn
+        // gets from an unresolvable engine id.
         nextId = 0
         val entries = GraphRunLedger.toEntries(result(), treeNodes(), "loop-7", "run-1", null, 5000L)
+        assertTrue(entries.all { it.estCostMinor == 0L })
+    }
+
+    @Test fun `on-device step never carries a cost even when the model would otherwise price`() {
+        nextId = 0
+        val book = PricingBook().with("cloud:qwen", UsagePricing(centsPer1kInput = 100, centsPer1kOutput = 200))
+        val entries = GraphRunLedger.toEntries(
+            result(), treeNodes(), "loop-7", "run-1", null, 5000L,
+            pricingBook = book,
+            resolveTokenizerId = { id -> if (id == "qwen") "cloud:qwen" else id },
+        )
+        // entries[0] is the proposer step (estimated = true -> ON_DEVICE tier).
+        assertEquals(0L, entries[0].estCostMinor)
+    }
+
+    @Test fun `cloud step prices through the same PricingBook path a chat turn uses`() {
+        nextId = 0
+        val book = PricingBook().with("cloud:claude-x", UsagePricing(centsPer1kInput = 300, centsPer1kOutput = 1500))
+        val entries = GraphRunLedger.toEntries(
+            result(), treeNodes(), "loop-7", "run-1", null, 5000L,
+            pricingBook = book,
+            resolveTokenizerId = { id -> if (id == "claude") "cloud:claude-x" else id },
+        )
+        // entries[1] is the critic step (estimated = false -> CLOUD tier), tokensIn=22, tokensOut=6:
+        // 22*300/1000 (=6) + 6*1500/1000 (=9) = 15.
+        assertEquals(15L, entries[1].estCostMinor)
+        assertEquals(0L, entries[0].estCostMinor) // the on-device step is still never priced
+    }
+
+    @Test fun `an unresolvable cloud model still never invents a price`() {
+        nextId = 0
+        val book = PricingBook().withFallback(UsagePricing(centsPer1kInput = 50, centsPer1kOutput = 80))
+        val entries = GraphRunLedger.toEntries(
+            result(), treeNodes(), "loop-7", "run-1", null, 5000L,
+            pricingBook = book,
+            resolveTokenizerId = { null }, // e.g. the model was deleted since the run
+        )
         assertTrue(entries.all { it.estCostMinor == 0L })
     }
 

@@ -70,3 +70,14 @@ is standard, but the parameters are the user's.
 A wireframe **Cost facet** in the Develop room lets you enter a decision and read the
 forecast. Whether Cost should also attach inline to a chat turn ("this advice cost X;
 acting on it risks Y") is the open call.
+
+**2026-09-01 — accounting pipeline, last mile landed.** The Provider-pricing settings form
+(per provider/model input+output rates + a fallback rate + a display-currency preference, all
+over the already-wired `PricingStore`) now has UI, so a price shown anywhere is either
+something the user actually typed or clearly labelled a placeholder — never invented, never
+silently one or the other. `showCost` is on at all three mounted ledger-view call sites (the
+chat Instruments panel, both Me·Myself·I usage cards), and a loop run's cloud steps now price
+through the same `PricingBook` path a chat turn uses (`GraphRunLedger`), closing the
+`estCostMinor = 0` hole that used to swallow every loop's real spend. **Item G is still open**
+— this is the facet + ledger-view accounting getting real numbers, not a decision on whether a
+chat turn should carry its own inline cost line.

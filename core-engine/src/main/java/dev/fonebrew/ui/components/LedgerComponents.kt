@@ -143,9 +143,9 @@ fun InputOutputCard(
     val totalText = LocaleFormat.tokens(total, locale)
     val costText = LocaleFormat.currencyMinor(totals.estCostMinor, currencyCode, locale)
 
-    // Cost is a per-loop execution boundary, not a profile headline (brief §9): the Myself
-    // views pass showCost = false. The card keeps the cost row for cost-bearing surfaces
-    // (a loop's run trace, the reconciliation overlay).
+    // showCost defaults on; the Myself views and the chat Instruments panel both now show it
+    // (Cost epic, last mile) now that a real Provider-pricing form backs PricingStore — a
+    // caller can still pass false for a token-only surface that has no business showing money.
     val summary = "Tokens this period: $totalText total, $inputText in, $outputText out." +
         if (showCost) " Estimated cost $costText." else ""
 

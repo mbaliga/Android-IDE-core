@@ -65,6 +65,7 @@ import dev.fonebrew.domain.builds.WorkflowRun
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.mutableFloatStateOf
 import dev.fonebrew.domain.cloud.CloudProvider
+import dev.fonebrew.domain.cost.UsagePricing
 import dev.fonebrew.domain.codelens.CodeLens
 import dev.fonebrew.domain.council.Generator
 import dev.fonebrew.ui.codelens.CodeLensScreen
@@ -861,6 +862,16 @@ private fun AboutSettings() {
             Modifier
         },
     )
+
+    // S-new seam: license/entitlement status is Studio-side (validate-now/deactivate) — see
+    // SettingsEntitlementSlot's KDoc. Renders nothing (not even a divider) in the bare open
+    // core, where content is always null.
+    SettingsEntitlementSlot.content?.let { installed ->
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+        installed()
+    }
 }
 
 @Composable
@@ -893,6 +904,206 @@ private fun TextSettings(viewModel: SettingsViewModel) {
         },
         onCancelEdit = { editing = null },
     )
+
+    if (providers.isNotEmpty()) {
+        HorizontalDivider()
+        ProviderPricingSection(viewModel, providers)
+    }
+}
+
+/**
+ * The "Provider pricing" form (Cost epic, last mile — `docs/design/cost.md`'s binding
+ * sovereignty stance: **the engine never invents the numbers**). One row per configured cloud
+ * text provider, keyed by the exact [dev.fonebrew.domain.model.ModelSpec.tokenizerId]
+ * (`cloud:$model`, [dev.fonebrew.inference.toSpec]) a real chat/loop turn on that provider
+ * prices against — so a rate set here is guaranteed to be the rate that turn actually gets
+ * charged, never a parallel number that silently drifts from what
+ * [dev.fonebrew.domain.cost.PricingBook.priceFor] resolves at generation time. Plus one
+ * fallback-rate row (used for any priced-elsewhere model with no row of its own) and a
+ * display-currency preference — a plain ISO-4217 code; this never fetches an exchange rate
+ * (binding rule 1).
+ *
+ * [dev.fonebrew.ui.state.PricingFormPresenter] does the actual derivation/parsing (pure,
+ * JVM-tested); this composable is thin glue over it plus [SettingsViewModel]'s [PricingStore]
+ * passthrough.
+ */
+@Composable
+private fun ProviderPricingSection(viewModel: SettingsViewModel, providers: List<CloudProvider>) {
+    val book by viewModel.pricingBook.collectAsState()
+    val currencyCode by viewModel.currencyCode.collectAsState()
+
+    Text("Provider pricing", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Fonebrew never fetches or assumes a price — providers change theirs without notice, " +
+            "and this app never phones home to check. Enter your own per-1,000-token rates, in " +
+            "the smallest unit of your display currency (e.g. cents for USD), so a turn's cost " +
+            "is a real number you typed, not a guess.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    var currencyDraft by remember(currencyCode) { mutableStateOf(currencyCode) }
+    val currencyPlausible = dev.fonebrew.domain.cost.CurrencyPref.isValid(currencyDraft)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DesktopHyleField(
+            value = currencyDraft,
+            onValueChange = { currencyDraft = it.take(3) },
+            label = "Display currency (ISO-4217)",
+            isError = currencyDraft.isNotBlank() && !currencyPlausible,
+            supportingText = if (currencyDraft.isNotBlank() && !currencyPlausible) "Not a recognised code" else null,
+            modifier = Modifier.width(180.dp),
+        )
+        HyleButton(
+            "Set",
+            onClick = { viewModel.setDisplayCurrency(currencyDraft) },
+            enabled = currencyPlausible,
+        )
+    }
+    Text(
+        "Every cost figure in the app is labelled “$currencyCode”. This only changes the " +
+            "label — keep the rates below in that same currency yourself.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    val rows = dev.fonebrew.ui.state.PricingFormPresenter.rows(
+        book,
+        providers.map { "cloud:${it.model}" to "${it.displayName} · ${it.model}" },
+    )
+    rows.forEach { row ->
+        PricingRowEditor(
+            row = row,
+            onSave = { pricing -> viewModel.setModelPrice(row.tokenizerId, pricing) },
+            onClear = { viewModel.clearModelPrice(row.tokenizerId) },
+        )
+    }
+
+    HorizontalDivider()
+    Text("Fallback rate", style = MaterialTheme.typography.titleSmall)
+    Text(
+        "Used for any cloud model above with no price of its own (and for any other cloud " +
+            "model this account has ever used).",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val fallbackIsPlaceholder = book.fallback == UsagePricing.CONSERVATIVE_DEFAULT
+    FallbackPricingEditor(
+        pricing = book.fallback,
+        isPlaceholder = fallbackIsPlaceholder,
+        onSave = { pricing -> viewModel.setFallbackPrice(pricing) },
+    )
+}
+
+/** Glyph + label for a [dev.fonebrew.ui.state.PriceOrigin] — never colour alone (the owner is
+ *  red-green colorblind). */
+private fun priceOriginBadge(origin: dev.fonebrew.ui.state.PriceOrigin): String = when (origin) {
+    dev.fonebrew.ui.state.PriceOrigin.EXPLICIT -> "● set by you"
+    dev.fonebrew.ui.state.PriceOrigin.CUSTOM_FALLBACK -> "◐ your fallback rate"
+    dev.fonebrew.ui.state.PriceOrigin.DEFAULT_PLACEHOLDER -> "○ placeholder guess"
+}
+
+/** One editable [dev.fonebrew.ui.state.PricingRow]: input/output per-1k rate fields, a Save
+ *  (disabled until both parse), and — only when [PricingRow.origin] is EXPLICIT — a Clear that
+ *  drops back to the fallback. */
+@Composable
+private fun PricingRowEditor(
+    row: dev.fonebrew.ui.state.PricingRow,
+    onSave: (UsagePricing) -> Unit,
+    onClear: () -> Unit,
+) {
+    var inputDraft by remember(row.tokenizerId) { mutableStateOf(row.pricing.centsPer1kInput.toString()) }
+    var outputDraft by remember(row.tokenizerId) { mutableStateOf(row.pricing.centsPer1kOutput.toString()) }
+    val inputField = dev.fonebrew.ui.state.PricingFormPresenter.parseRate(inputDraft)
+    val outputField = dev.fonebrew.ui.state.PricingFormPresenter.parseRate(outputDraft)
+    val parsed = dev.fonebrew.ui.state.PricingFormPresenter.parsePricing(inputDraft, outputDraft)
+
+    HyleCard(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(row.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(
+                priceOriginBadge(row.origin),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DesktopHyleField(
+                value = inputDraft,
+                onValueChange = { inputDraft = it },
+                label = "In · per 1k",
+                isError = inputField.error != null,
+                supportingText = inputField.error,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            DesktopHyleField(
+                value = outputDraft,
+                onValueChange = { outputDraft = it },
+                label = "Out · per 1k",
+                isError = outputField.error != null,
+                supportingText = outputField.error,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HyleButton("Save", onClick = { parsed?.let(onSave) }, enabled = parsed != null)
+            if (row.origin == dev.fonebrew.ui.state.PriceOrigin.EXPLICIT) {
+                TextButton(onClick = onClear) { Text("Clear") }
+            }
+        }
+    }
+}
+
+/** The fallback rate's own editor — same shape as [PricingRowEditor] but with no Clear (there
+ *  is always a fallback; [UsagePricing.CONSERVATIVE_DEFAULT] is what "cleared" looks like). */
+@Composable
+private fun FallbackPricingEditor(
+    pricing: UsagePricing,
+    isPlaceholder: Boolean,
+    onSave: (UsagePricing) -> Unit,
+) {
+    var inputDraft by remember { mutableStateOf(pricing.centsPer1kInput.toString()) }
+    var outputDraft by remember { mutableStateOf(pricing.centsPer1kOutput.toString()) }
+    val inputField = dev.fonebrew.ui.state.PricingFormPresenter.parseRate(inputDraft)
+    val outputField = dev.fonebrew.ui.state.PricingFormPresenter.parseRate(outputDraft)
+    val parsed = dev.fonebrew.ui.state.PricingFormPresenter.parsePricing(inputDraft, outputDraft)
+
+    HyleCard {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Fallback", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(
+                if (isPlaceholder) "○ placeholder guess" else "● set by you",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DesktopHyleField(
+                value = inputDraft,
+                onValueChange = { inputDraft = it },
+                label = "In · per 1k",
+                isError = inputField.error != null,
+                supportingText = inputField.error,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            DesktopHyleField(
+                value = outputDraft,
+                onValueChange = { outputDraft = it },
+                label = "Out · per 1k",
+                isError = outputField.error != null,
+                supportingText = outputField.error,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        HyleButton("Save", onClick = { parsed?.let(onSave) }, enabled = parsed != null)
+    }
 }
 
 @Composable

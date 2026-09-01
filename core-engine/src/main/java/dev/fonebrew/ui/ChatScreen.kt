@@ -1134,6 +1134,7 @@ fun ChatScreen(
         val (tokenScores, tokenAvailability) = remember(state.lastTurnTokens) {
             dev.fonebrew.domain.instrument.InstrumentsAssembly.tokenScores(state.lastTurnTokens)
         }
+        val currencyCode by container0.pricingStore.currencyCode.collectAsState()
         InstrumentsPanel(
             assembled = state.instrumentsAssembly,
             tokenScores = tokenScores,
@@ -1141,6 +1142,7 @@ fun ChatScreen(
             ledgerTotals = ledgerTotals,
             delegationCounts = state.delegationCounts,
             locale = java.util.Locale.getDefault(),
+            currencyCode = currencyCode,
             onDismiss = { showInstruments = false },
         )
     }
@@ -2108,6 +2110,9 @@ private fun InstrumentsPanel(
     /** THREAD_TOPOLOGY_PLAN.md WP8's descriptive "delegated N · kept N · reverted N" card. */
     delegationCounts: dev.fonebrew.domain.thread.DelegationCounts.Counts,
     locale: java.util.Locale,
+    /** The user's own display-currency preference (Cost epic, last mile) — see
+     *  [dev.fonebrew.domain.cost.CurrencyPref]; never a fetched exchange rate. */
+    currencyCode: String,
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -2144,7 +2149,7 @@ private fun InstrumentsPanel(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-                dev.fonebrew.ui.components.InputOutputCard(ledgerTotals, locale, "USD", showCost = false)
+                dev.fonebrew.ui.components.InputOutputCard(ledgerTotals, locale, currencyCode, showCost = true)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
                 Text("Per-token confidence — last turn", style = MaterialTheme.typography.titleSmall)
