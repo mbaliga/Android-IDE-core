@@ -124,3 +124,89 @@ class DraftEditJournalTest {
         }
     }
 }
+
+/** Regression coverage for the LoopRoom mount finding: a random-UUID idempotency key defeats
+ *  FB-RAT-COM-006 (every write "looks new"); [contentIdempotencyKey] must be deterministic, and
+ *  wiring it through [DraftEditJournal] must actually exercise the dedup no-op path for unchanged
+ *  content while still applying genuinely new content. */
+class ContentIdempotencyKeyTest {
+
+    @Test
+    fun `the same field and value always produce the same key`() {
+        val a = contentIdempotencyKey("objective", "\"refine the widget\"")
+        val b = contentIdempotencyKey("objective", "\"refine the widget\"")
+        assertEquals(a, b)
+    }
+
+    @Test
+    fun `a different value for the same field produces a different key`() {
+        val a = contentIdempotencyKey("objective", "\"refine the widget\"")
+        val b = contentIdempotencyKey("objective", "\"refine the gadget\"")
+        assertTrue(a != b)
+    }
+
+    @Test
+    fun `a different field for the same value produces a different key`() {
+        val a = contentIdempotencyKey("objective", "\"same text\"")
+        val b = contentIdempotencyKey("nodes[0].systemPrompt", "\"same text\"")
+        assertTrue(a != b)
+    }
+
+    @Test
+    fun `repeated debounces over an unchanged draft are a real dedup no-op, not fresh entries`() {
+        // Mirrors LoopRoom's debounced LaunchedEffect firing several times (e.g. the graph's
+        // nodes/edges moved) while the journaled field (objective) itself never actually changed.
+        val journal = DraftEditJournal()
+        val objective = "\"make it airtight\""
+        repeat(5) {
+            journal.append(contentIdempotencyKey("objective", objective), "objective", objective)
+        }
+        assertEquals(1, journal.entriesSoFar().size) // 5 debounces, exactly 1 real edit
+    }
+
+    @Test
+    fun `a genuinely changed value still journals as a new entry`() {
+        val journal = DraftEditJournal()
+        journal.append(contentIdempotencyKey("objective", "\"draft one\""), "objective", "\"draft one\"")
+        journal.append(contentIdempotencyKey("objective", "\"draft two\""), "objective", "\"draft two\"")
+        assertEquals(2, journal.entriesSoFar().size)
+        assertEquals("\"draft two\"", journal.materialize()["objective"])
+    }
+}
+
+/** The recovery banner must show only when there is real content to restore/discard **and** the
+ *  machine agrees the draft is genuinely dirty-unresolved — never `hasPendingRecovery` alone
+ *  standing in for that state decision, and never true just because the live typing/autosave
+ *  cycle happens to be passing through DirtyJournaled too. */
+class ShouldShowRecoveryBannerTest {
+
+    @Test
+    fun `shows only when a recovered draft is pending and the machine is DirtyJournaled`() {
+        assertTrue(shouldShowRecoveryBanner(hasPendingRecovery = true, lifecycle = DraftLifecycleState.DirtyJournaled))
+    }
+
+    @Test
+    fun `never shows without a recovered draft, even if the machine is DirtyJournaled`() {
+        // The live typing/autosave cycle visits DirtyJournaled on every debounce -- this is
+        // exactly the case that must NOT spuriously show the recovery banner mid-edit.
+        assertTrue(!shouldShowRecoveryBanner(hasPendingRecovery = false, lifecycle = DraftLifecycleState.DirtyJournaled))
+    }
+
+    @Test
+    fun `never shows once the machine is back to DraftClean, even if a stale flag says pending`() {
+        assertTrue(!shouldShowRecoveryBanner(hasPendingRecovery = true, lifecycle = DraftLifecycleState.DraftClean))
+    }
+
+    @Test
+    fun `never shows for any other lifecycle state`() {
+        val others = listOf(
+            DraftLifecycleState.InProgress(LongOperationKind.RUNNING),
+            DraftLifecycleState.Interrupted(LongOperationKind.BUILDING_PACKAGE),
+            DraftLifecycleState.PackageExportComplete,
+            DraftLifecycleState.NoPublishedPackage,
+        )
+        for (state in others) {
+            assertTrue("expected false for $state", !shouldShowRecoveryBanner(hasPendingRecovery = true, lifecycle = state))
+        }
+    }
+}

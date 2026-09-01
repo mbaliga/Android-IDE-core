@@ -75,6 +75,8 @@ import dev.fonebrew.domain.loop.RecordingGatewayPolicy
 import dev.fonebrew.domain.loop.authoring.DraftLifecycleMachine
 import dev.fonebrew.domain.loop.authoring.DraftLifecycleState
 import dev.fonebrew.domain.loop.authoring.DraftEditJournal
+import dev.fonebrew.domain.loop.authoring.contentIdempotencyKey
+import dev.fonebrew.domain.loop.authoring.shouldShowRecoveryBanner
 import dev.fonebrew.domain.loop.authoring.RunViewAction
 import dev.fonebrew.domain.loop.authoring.RunViewStateClass
 import dev.fonebrew.domain.loop.authoring.TouchConnectionGrammar
@@ -305,13 +307,22 @@ fun LoopRoom(
     // forkDraftForEditing/guardEdit below. Cleared whenever a fresh run starts.
     var forkedThisRun by remember { mutableStateOf(false) }
     var runForkNote by remember { mutableStateOf<String?>(null) }
-    // §13 persistence/interruption/recovery — mounts DraftLifecycleMachine + DraftEditJournal for
-    // real (not a no-op decoration): every edit is journaled, then autosaved (debounced) to the
-    // real, process-death-surviving LoopStore, and a prior autosave is offered back explicitly on
-    // reopen — never silently restored, never silently discarded (this lane's own instruction,
-    // read as a deliberate refinement of §13's literal "MUST be restored" for a surface where an
-    // unannounced silent restore would be exactly the kind of invisible influence this app's
-    // legibility thesis exists to avoid).
+    // §13 persistence/interruption/recovery. The REAL, process-death-surviving mechanism is the
+    // simpler pair below it — writeAutosave/restoreFromAutosave over the real LoopStore
+    // (AUTOSAVE_LOOP_ID) — and a prior autosave is offered back explicitly on reopen, never
+    // silently restored, never silently discarded (this lane's own refinement of §13's literal
+    // "MUST be restored" for a surface where an unannounced silent restore would be exactly the
+    // kind of invisible influence this app's legibility thesis exists to avoid). DraftLifecycleMachine
+    // + DraftEditJournal are mounted alongside it, load-bearing in the two ways that are actually
+    // safe for a per-keystroke UI: (1) [contentIdempotencyKey] makes the journal's dedup a real,
+    // content-derived no-op (not a fresh random key defeating FB-RAT-COM-006 every debounce), and
+    // (2) [shouldShowRecoveryBanner] gates the recovery banner on the machine's own DirtyJournaled
+    // state, not the `pendingRecovery != null` check alone. What this mount deliberately does NOT
+    // do: gate the debounced autosave write itself on the machine's Edit/AcceptEdit verdict —
+    // Edit is illegal from DirtyJournaled (DraftPersistenceLifecycleTest pins this), and a rapid
+    // typing burst revisits DirtyJournaled on every keystroke before the previous debounce's
+    // AcceptEdit ever lands, so gating the write on "Edit was Advanced" would silently drop every
+    // autosave in a burst but the last uncancelled one — a real regression, not a refinement.
     var draftLifecycle by remember { mutableStateOf<DraftLifecycleState>(DraftLifecycleState.DraftClean) }
     val draftJournal = remember { DraftEditJournal() }
     var pendingRecovery by remember { mutableStateOf<Loop?>(null) }
@@ -342,9 +353,16 @@ fun LoopRoom(
         }
     }
     // §13: on (re)entering this room, offer any left-over autosave back explicitly — once, so
-    // dismissing it (Restore or Discard) doesn't re-prompt on every later recomposition.
+    // dismissing it (Restore or Discard) doesn't re-prompt on every later recomposition. A
+    // leftover autosave IS, definitionally, journaled content the machine never saw an AcceptEdit
+    // for — so this also seeds draftLifecycle at DirtyJournaled, the real state
+    // [shouldShowRecoveryBanner] checks (see [pendingRecovery]'s declaration above for why the
+    // decision isn't left to this nullable check alone).
     LaunchedEffect(Unit) {
-        store.get(AUTOSAVE_LOOP_ID)?.let { pendingRecovery = it }
+        store.get(AUTOSAVE_LOOP_ID)?.let {
+            pendingRecovery = it
+            draftLifecycle = DraftLifecycleState.DirtyJournaled
+        }
     }
     fun nodeById(id: String) = nodes.firstOrNull { it.id == id }
 
@@ -492,7 +510,9 @@ fun LoopRoom(
     }
 
     /** Explicit recovery only — never a silent restore, never a silent discard (this lane's own
-     *  refinement of §13's literal wording; see the state-var block above for why). */
+     *  refinement of §13's literal wording; see the state-var block above for why). Resolves
+     *  draftLifecycle back to DraftClean alongside clearing [pendingRecovery] — the recovery
+     *  decision is now made, so [shouldShowRecoveryBanner] correctly stops showing the banner. */
     fun restoreFromAutosave(autosave: Loop) {
         val xml = autosave.bpmnXml ?: return
         val g = runCatching { BpmnArchive.read(xml) }.getOrNull() ?: return
@@ -504,19 +524,25 @@ fun LoopRoom(
         loopName = autosave.name.ifBlank { loopName }
         savedNote = "Restored an unsaved draft from before."
         pendingRecovery = null
+        draftLifecycle = (DraftLifecycleMachine.apply(draftLifecycle, DraftLifecycleMachine.Event.AcceptEdit) as? DraftLifecycleMachine.Result.Advanced)?.state ?: DraftLifecycleState.DraftClean
     }
 
-    // §13's `DRAFT_CLEAN --Edit--> DIRTY_JOURNALED --AcceptEdit--> DRAFT_CLEAN` table, mounted
-    // for real: every edit is journaled immediately (never deferred to an eventual commit), then
-    // — debounced, so this isn't a write per keystroke — actually written to the real,
-    // process-death-surviving [LoopStore] autosave slot, which is treated as the "accept" event.
-    // Skips entirely while an unresolved recovery prompt is showing, and skips the very first
-    // firing (the just-opened/just-loaded pristine draft is not itself an "edit").
+    // §13's `DRAFT_CLEAN --Edit--> DIRTY_JOURNALED --AcceptEdit--> DRAFT_CLEAN` table, walked on
+    // every debounced autosave cycle: every edit is journaled immediately (never deferred to an
+    // eventual commit) under a key derived from the actual content ([contentIdempotencyKey]), so
+    // a debounce firing over an objective that hasn't actually changed (only nodes/edges moved)
+    // is a real FB-RAT-COM-006 dedup no-op, not a fresh entry from a random key — then, debounced
+    // so this isn't a write per keystroke, actually written to the real, process-death-surviving
+    // [LoopStore] autosave slot, which is treated as the "accept" event. Skips entirely while an
+    // unresolved recovery prompt is showing, and skips the very first firing (the just-opened/
+    // just-loaded pristine draft is not itself an "edit"). draftLifecycle's transitions here are
+    // applied unconditionally (never gated on the machine's verdict) — see the state-var block
+    // above for exactly why gating the write on it would be a regression, not a refinement.
     LaunchedEffect(nodes.toList(), edges.toList(), objective) {
         if (!autosaveArmed) { autosaveArmed = true; return@LaunchedEffect }
         if (pendingRecovery != null) return@LaunchedEffect
         draftLifecycle = (DraftLifecycleMachine.apply(draftLifecycle, DraftLifecycleMachine.Event.Edit) as? DraftLifecycleMachine.Result.Advanced)?.state ?: draftLifecycle
-        draftJournal.append(idempotencyKey = UUID.randomUUID().toString(), fieldPath = "objective", newValueJson = objective)
+        draftJournal.append(idempotencyKey = contentIdempotencyKey("objective", objective), fieldPath = "objective", newValueJson = objective)
         delay(400)
         writeAutosave()
         draftLifecycle = (DraftLifecycleMachine.apply(draftLifecycle, DraftLifecycleMachine.Event.AcceptEdit) as? DraftLifecycleMachine.Result.Advanced)?.state ?: draftLifecycle
@@ -559,9 +585,9 @@ fun LoopRoom(
                     params = params,
                     budget = budget,
                     onStep = { step -> liveSteps = liveSteps + step },
-                ) to recordingPolicy
+                ).let { Triple(it, recordingPolicy, fallback) }
             }.fold(
-                { (result, recordingPolicy) ->
+                { (result, recordingPolicy, fallback) ->
                     graphResult = result
                     ranNodeIds = result.steps.map { it.nodeId }.toSet()
                     liveSteps = result.steps
@@ -578,8 +604,16 @@ fun LoopRoom(
                             // Cost epic, last mile: price a loop-run's cloud steps through the
                             // same PricingBook a chat turn uses, keyed by each step's real
                             // engine tokenizer id (not the raw ModelSpec.id GraphStep carries).
+                            // A node with no per-node model override carries `step.model = null`
+                            // (LoopRoom.kt:139/203) — but it still actually executed on [fallback]
+                            // (the `?: fallback` in `generatorFor` above), so pricing resolution
+                            // mirrors that exact execution-time fallback rather than silently
+                            // reading a null/unmatched id as on-device (real cloud spend was
+                            // being recorded as estCostMinor=0 via UsagePricing.ON_DEVICE).
                             pricingBook = container.pricingStore.book.value,
-                            resolveTokenizerId = { id -> runnable.firstOrNull { it.id == id }?.tokenizerId },
+                            resolveTokenizerId = { id ->
+                                (id?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback).tokenizerId
+                            },
                         )
                         entries.forEach { container.ledgerStore.append(it) }
                         loggedNote = "Logged ${result.steps.size} step(s) to Tree · run $runId"
@@ -675,15 +709,37 @@ fun LoopRoom(
                         )
                     }
                 // §13: an unresolved autosave from before — explicit Restore/Discard, never a
-                // silent choice either way.
-                pendingRecovery?.let { rec ->
+                // silent choice either way. Shown when [shouldShowRecoveryBanner] says so, not
+                // `pendingRecovery != null` alone — see that function's KDoc.
+                pendingRecovery?.takeIf { shouldShowRecoveryBanner(hasPendingRecovery = true, lifecycle = draftLifecycle) }?.let { rec ->
                     HyleCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
                         Text("An unsaved draft was left from before this room last closed.", style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                             HyleButton("Restore", onClick = { restoreFromAutosave(rec) })
-                            TextButton(onClick = { store.delete(AUTOSAVE_LOOP_ID); pendingRecovery = null }) { Text("Discard") }
+                            TextButton(onClick = {
+                                store.delete(AUTOSAVE_LOOP_ID)
+                                pendingRecovery = null
+                                draftLifecycle = (DraftLifecycleMachine.apply(draftLifecycle, DraftLifecycleMachine.Event.AcceptEdit) as? DraftLifecycleMachine.Result.Advanced)?.state ?: DraftLifecycleState.DraftClean
+                            }) { Text("Discard") }
                         }
                     }
+                }
+                // Live, honest readout of the journal this mount actually keeps — real entries,
+                // real count, never a placeholder. Only shown while the debounced cycle above has
+                // this draft DirtyJournaled (mid-debounce or waiting on the write), so it reads as
+                // the transient "saving" state it is rather than a permanent fixture; the count is
+                // deliberately session-scoped, not "since last durable save" (the in-memory
+                // DraftEditJournal isn't Room-backed — see its KDoc — so it cannot describe a
+                // *prior* session's history, which is exactly why this line isn't the recovery
+                // banner above: entriesSoFar() would always read 0 there, since journaling is
+                // skipped for as long as that banner is unresolved).
+                if (pendingRecovery == null && draftLifecycle is DraftLifecycleState.DirtyJournaled) {
+                    Text(
+                        "Autosaving… (${draftJournal.entriesSoFar().size} distinct edit(s) journaled this session)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
                 }
                 runForkNote?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = colors.violet, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
@@ -862,13 +918,19 @@ fun LoopRoom(
                         }
                     }
 
-                    Column(
-                        Modifier.fillMaxWidth().heightIn(max = 150.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        HyleField(objective, { objective = it }, label = "Objective", mandatory = true, singleLine = false, modifier = Modifier.fillMaxWidth())
-                        if (objective.length > 200) {
-                            HyleButton("Expand ↗", onClick = { fullScreenEditTarget = "objective" })
+                    // Intent View already renders its own Objective editor above — a second one
+                    // here would duplicate it, not complement it (finding: Intent view showed two
+                    // Objective editors). Stage/Graph have no Objective field of their own, so this
+                    // persistent footer is the only place they get one.
+                    if (view != LoopEditorView.INTENT) {
+                        Column(
+                            Modifier.fillMaxWidth().heightIn(max = 150.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            HyleField(objective, { objective = it }, label = "Objective", mandatory = true, singleLine = false, modifier = Modifier.fillMaxWidth())
+                            if (objective.length > 200) {
+                                HyleButton("Expand ↗", onClick = { fullScreenEditTarget = "objective" })
+                            }
                         }
                     }
                 }

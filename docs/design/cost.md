@@ -76,8 +76,18 @@ acting on it risks Y") is the open call.
 over the already-wired `PricingStore`) now has UI, so a price shown anywhere is either
 something the user actually typed or clearly labelled a placeholder — never invented, never
 silently one or the other. `showCost` is on at all three mounted ledger-view call sites (the
-chat Instruments panel, both Me·Myself·I usage cards), and a loop run's cloud steps now price
-through the same `PricingBook` path a chat turn uses (`GraphRunLedger`), closing the
-`estCostMinor = 0` hole that used to swallow every loop's real spend. **Item G is still open**
-— this is the facet + ledger-view accounting getting real numbers, not a decision on whether a
-chat turn should carry its own inline cost line.
+chat Instruments panel, both Me·Myself·I usage cards), and a loop run's cloud steps price
+through the same `PricingBook` path a chat turn uses (`GraphRunLedger`). **2026-09-01 correction:**
+the sentence this note originally carried here overclaimed — it said this closed the
+`estCostMinor = 0` hole "that used to swallow every loop's real spend." It didn't: a node with no
+per-node model override (`LoopRoom`'s default authoring state) still executed on the run's
+fallback model but priced through a resolver that returned `null` for it, so that step was
+recorded as `UsagePricing.ON_DEVICE` regardless of real spend. That specific gap is now closed —
+the resolver wired at `LoopRoom.kt` mirrors the same `?: fallback` resolution the generator itself
+uses, pinned by `GraphRunLedgerTest`. The **honest remainder**: `LoopRoom`'s real run still does
+not wire a `tokenCounter` into `GraphRunner` (see `docs/HANDOFF-CURRENT.md`'s P3 honesty note), so
+every step today reports `estimated = true` no matter which model ran it — a live loop run's
+ledger rows are still all `Tier.ON_DEVICE` / `estCostMinor = 0` in practice, until that counter
+lands. This wave fixed the pricing *math* (`GraphRunLedger` + its resolver), not that remaining
+plumbing gap. **Item G is still open** — this is the facet + ledger-view accounting getting real
+numbers, not a decision on whether a chat turn should carry its own inline cost line.

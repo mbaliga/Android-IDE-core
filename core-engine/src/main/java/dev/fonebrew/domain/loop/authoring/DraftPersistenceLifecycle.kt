@@ -75,6 +75,36 @@ object DraftLifecycleMachine {
 }
 
 /**
+ * The §13 recovery banner ("an unsaved draft was left from before") should show exactly when
+ * there is real content to restore/discard **and** [DraftLifecycleMachine] agrees the draft is
+ * genuinely dirty-unresolved -- not [hasPendingRecovery] alone standing in, ad-hoc, for a state
+ * decision the machine already models. [DraftLifecycleState.DirtyJournaled] is exactly right for
+ * this: a leftover autosave is, definitionally, journaled content that was never accepted
+ * (`AcceptEdit`) before the room closed. This also protects against a real hazard the ad-hoc
+ * check alone couldn't: [LoopRoom][dev.fonebrew.ui.loops.LoopRoom]'s own live typing/autosave
+ * cycle transiently visits `DirtyJournaled` too (see that file's debounced `LaunchedEffect`) --
+ * conflating the two would make the recovery banner flash during ordinary edits. Requiring
+ * [hasPendingRecovery] too is what keeps that safe. Pure so this decision is JVM-tested directly,
+ * not only exercised (or not) inside a Composable.
+ */
+fun shouldShowRecoveryBanner(hasPendingRecovery: Boolean, lifecycle: DraftLifecycleState): Boolean =
+    hasPendingRecovery && lifecycle is DraftLifecycleState.DirtyJournaled
+
+/**
+ * A deterministic idempotency key for one (fieldPath, value) journal write -- same field and
+ * value always produce the same key, so a debounce that fires again over **unchanged** content
+ * (e.g. the graph's nodes/edges moved but the objective text didn't) is a genuine FB-RAT-COM-006
+ * retried-write no-op via [DraftEditJournal.append], not a fresh entry every time. A random key
+ * per call (e.g. [java.util.UUID.randomUUID]) would defeat that contract outright -- every write
+ * would look "new" to the journal regardless of content, which is the bug this function exists to
+ * close. Relies on [String.hashCode]'s specified, JVM-stable algorithm (Java/Kotlin guarantee it
+ * per the language spec, not merely observed behaviour), so the same inputs always produce the
+ * same key across calls, recompositions, and process restarts alike.
+ */
+fun contentIdempotencyKey(fieldPath: String, newValueJson: String): String =
+    "$fieldPath#${(fieldPath.hashCode() * 31 + newValueJson.hashCode())}"
+
+/**
  * One field-level draft edit, ready to journal. §13: "A journal entry SHOULD carry an idempotency
  * key (`FB-RAT-COM-006`)... so a retried journal write is not double-applied."
  */

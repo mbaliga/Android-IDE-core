@@ -104,13 +104,48 @@ class GraphRunLedgerTest {
         assertEquals(0L, entries[0].estCostMinor) // the on-device step is still never priced
     }
 
-    @Test fun `an unresolvable cloud model still never invents a price`() {
+    /** A [result] where neither step carries a per-node model override — [GraphStep.model] is
+     *  null on both, the default authoring state (`LoopRoom.kt`'s `LoopNode.modelId` defaults to
+     *  null) — plus the tree nodes [GraphRunLedger] correlates rows against, built the same way
+     *  [treeNodes] builds them for [result]. */
+    private fun nullModelResult() = result().let { r -> r.copy(steps = r.steps.map { it.copy(model = null) }) }
+    private fun nullModelTreeNodes() = GraphRunLog.toNodes(
+        objective = "make it airtight", result = nullModelResult(), loopRunId = "run-1", loopId = "loop-7",
+        now = 1000L, idGen = { "n${nextId++}" },
+    )
+
+    @Test fun `a default-model step (null) prices via the run's cloud fallback model, not on-device`() {
+        // Regression for the DEFAULT-case pricing miss: a node with no per-node override still
+        // executes on the run's fallback model (LoopRoom.kt:552's `?: fallback`), so the resolver
+        // wired at LoopRoom.kt must mirror that exact fallback resolution — mimicked here by
+        // resolving a null step model to the run's (cloud) fallback tokenizer id, exactly like
+        // `{ id -> (id?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback).tokenizerId }`
+        // would for an id with no per-node override. Previously this resolved to null and the
+        // step was silently priced as UsagePricing.ON_DEVICE despite being real cloud usage.
         nextId = 0
-        val book = PricingBook().withFallback(UsagePricing(centsPer1kInput = 50, centsPer1kOutput = 80))
+        val book = PricingBook().withFallback(UsagePricing(centsPer1kInput = 300, centsPer1kOutput = 1500))
         val entries = GraphRunLedger.toEntries(
-            result(), treeNodes(), "loop-7", "run-1", null, 5000L,
+            nullModelResult(), nullModelTreeNodes(), "loop-7", "run-1", null, 5000L,
             pricingBook = book,
-            resolveTokenizerId = { null }, // e.g. the model was deleted since the run
+            resolveTokenizerId = { id -> id ?: "cloud:run-fallback" }, // null -> the run's cloud fallback
+        )
+        // entries[1] is the critic step (estimated = false -> CLOUD tier), tokensIn=22, tokensOut=6,
+        // priced through the fallback rate exactly like a resolvable step: 22*300/1000 (=6) +
+        // 6*1500/1000 (=9) = 15 — same math as the resolvable-model case below.
+        assertEquals(15L, entries[1].estCostMinor)
+        assertEquals(0L, entries[0].estCostMinor) // the on-device step is still never priced
+    }
+
+    @Test fun `a default-model step still prices zero when the run's fallback is genuinely on-device`() {
+        // Zero cost must remain only for genuinely on-device work: when the run's fallback model
+        // itself doesn't resolve to a cloud tokenizer id, PricingBook.priceFor honestly treats it
+        // as on-device (never invents a price) even though this step's tier is CLOUD.
+        nextId = 0
+        val book = PricingBook().withFallback(UsagePricing(centsPer1kInput = 300, centsPer1kOutput = 1500))
+        val entries = GraphRunLedger.toEntries(
+            nullModelResult(), nullModelTreeNodes(), "loop-7", "run-1", null, 5000L,
+            pricingBook = book,
+            resolveTokenizerId = { id -> id ?: "gguf:run-fallback" }, // null -> the run's on-device fallback
         )
         assertTrue(entries.all { it.estCostMinor == 0L })
     }
