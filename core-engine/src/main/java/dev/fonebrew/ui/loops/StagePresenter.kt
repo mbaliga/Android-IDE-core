@@ -321,7 +321,18 @@ object StagePresenter {
     // ── Run View interventions (§9, FB-RAT-PHN-008) ─────────────────────────────────────────
 
     /** Every [RunViewAction] [RunViewActionGuard] currently permits from [state] — drives the
-     *  intervention button row without re-deriving the guard's own legality table. */
+     *  intervention button row without re-deriving the guard's own legality table.
+     *
+     *  Honest scope note: [dev.fonebrew.domain.loop.GraphRunner] (this app's only run engine
+     *  today) has no authority-request, human-decision, pause/resume, or per-node-retry
+     *  primitive — a run either proceeds autonomously or is cancelled. So in practice this
+     *  caller only ever reaches [RunViewStateClass.Running] (offering [RunViewAction.INSPECT]/
+     *  [RunViewAction.CANCEL]) or a plain [RunViewStateClass.Terminal] with no failure detail —
+     *  [RunViewAction.APPROVE_AUTHORITY]/[RunViewAction.PROVIDE_DECISION]/
+     *  [RunViewAction.REQUEST_PAUSE]/[RunViewAction.RETRY_FAILED_NODE]/
+     *  [RunViewAction.CHOOSE_RECOVERY_PATH] are real guard states this function would happily
+     *  return if a future runtime ever produced them, but nothing in this codebase drives the
+     *  guard into those states yet — named follow-up, not a silent gap. */
     fun legalRunActions(
         state: RunViewStateClass,
         runtimeSupportsSafePause: Boolean = false,
