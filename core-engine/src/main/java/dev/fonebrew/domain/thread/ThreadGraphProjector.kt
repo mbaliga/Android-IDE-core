@@ -4,6 +4,7 @@ package dev.fonebrew.domain.thread
 import dev.fonebrew.domain.MessageNode
 import dev.fonebrew.domain.curation.BookmarkKind
 import dev.fonebrew.domain.curation.MessageBookmark
+import dev.fonebrew.domain.ide.CommitAnchor
 import dev.fonebrew.domain.loop.RunLog
 import dev.fonebrew.domain.tree.MessageTree
 import dev.fonebrew.domain.tree.TreeFork
@@ -65,6 +66,22 @@ object ThreadGraphProjector {
      *   [DelegationOutcomes.correlate], WP8, resolves it — never re-derived here, only carried). A
      *   delegation with **no** rootId (the domain type allows one; nothing currently produces it)
      *   is honestly omitted rather than fabricating a `rootId` the schema requires non-blank.
+     * - **1.2.0 (graph-wave lane D)**: any tree node — of *any* kind above, checked independently
+     *   of that classification — that carries [CommitAnchor.SHA_KEY] insert-time metadata (minted
+     *   by [dev.fonebrew.data.AgentRepoRunner.commit] / [dev.fonebrew.domain.ide.RepoWorkLoop.run]
+     *   on a successful agent commit — see [CommitAnchor]'s own KDoc) additionally produces one
+     *   [ThreadNodeKind.COMMIT] node: `id` = `"commit:" + sha` (a graph-internal handle, never the
+     *   identity fact — [ThreadGraphNode.sha] is, per its own KDoc), `rootId` = the anchoring
+     *   node's own root, `parentId` = the anchoring node's id, `label` = a bounded preview of the
+     *   anchoring node's content (same "real data already on the node" idiom [ThreadNodeKind.
+     *   RUN_ROOT]'s label already uses), `sha`/`repoRef` copied verbatim from the metadata. Two
+     *   different nodes that happen to name the *same* sha (not expected in practice — a real git
+     *   commit id is unique per commit — but never assumed) collapse to the **same** COMMIT node
+     *   rather than violate this type's node-id-uniqueness invariant; each still gets its own
+     *   COMMIT_ANCHOR edge below. A node with no [CommitAnchor.SHA_KEY] metadata (every node
+     *   minted before lane D shipped, and every node no agent commit ever touched) projects
+     *   nothing here — absence is absence, never fabricated, same rule the confidence/outcome
+     *   cases above already follow.
      *
      * ### Edges
      * - [ThreadEdgeKind.REPLY]: real tree parent -> child, for every non-root [MessageNode].
@@ -76,6 +93,11 @@ object ThreadGraphProjector {
      * - [ThreadEdgeKind.LINEAGE]: a [ThreadMarkerKind.LINEAGE_SRC] marker node -> the
      *   [ThreadChains.LineagePointer.srcNodeId] its payload names (decoded via
      *   [ThreadChains.lineagePointer], the exact same parse WP6 uses — one decoder, two readers).
+     * - **1.2.0 (graph-wave lane D)**: [ThreadEdgeKind.COMMIT_ANCHOR]: the anchoring message/run
+     *   node -> the [ThreadNodeKind.COMMIT] node lane D projected from its metadata (see the node
+     *   section above) — deliberately `from` the message, `to` the commit (the reverse of the
+     *   three `*_ANCHOR` kinds above), matching [ThreadEdgeKind.COMMIT_ANCHOR]'s own KDoc: a
+     *   commit is the forward, causal *outcome* of the message/run's own action.
      *
      * Any edge whose target id isn't a node this call actually produced (a deleted message, a
      * lineage pointer into a conversation outside this snapshot) is dropped, never fabricated —
@@ -121,6 +143,11 @@ object ThreadGraphProjector {
 
         val nodes = ArrayList<ThreadGraphNode>(allTreeNodes.size + markers.size + delegations.size)
         val edges = ArrayList<ThreadGraphEdge>()
+        // 1.2.0 (graph-wave lane D): dedupes a COMMIT node by sha (the real identity fact) so two
+        // nodes that happen to name the same sha never violate this type's node-id uniqueness —
+        // see project()'s own KDoc "Node kinds" section for why this is expected to never actually
+        // collide in practice, but never assumed.
+        val emittedCommitShas = HashSet<String>()
 
         for (node in allTreeNodes) {
             val lineageKind = node.metadata[TreeFork.LINEAGE_KIND_KEY]
@@ -155,7 +182,7 @@ object ThreadGraphProjector {
                     rootId = node.id,
                     parentId = null,
                     at = Instant.ofEpochMilli(node.createdAt),
-                    label = node.content.take(RUN_ROOT_LABEL_MAX_CHARS).ifBlank { null },
+                    label = node.content.take(NODE_LABEL_PREVIEW_MAX_CHARS).ifBlank { null },
                 )
                 // No FORK/SPAWN-style edge: a loop run forks from nothing, it's a wholly new
                 // detached subtree (RunLog/GraphRunLog's own KDoc).
@@ -179,6 +206,33 @@ object ThreadGraphProjector {
                         because = "parent-child reply recorded in the message tree",
                     )
                 }
+            }
+
+            // 1.2.0 (graph-wave lane D): orthogonal to which of the three branches above fired —
+            // a commit anchor can sit on a plain MESSAGE, a FORK/SPAWN root, or a RUN_ROOT alike.
+            // See this function's own KDoc "Node kinds" section for the full contract.
+            val sha = node.metadata[CommitAnchor.SHA_KEY]
+            if (!sha.isNullOrBlank()) {
+                val commitNodeId = "commit:$sha"
+                if (emittedCommitShas.add(sha)) {
+                    nodes += ThreadGraphNode(
+                        id = commitNodeId,
+                        kind = ThreadNodeKind.COMMIT,
+                        rootId = rootIdOf(node),
+                        parentId = node.id,
+                        at = Instant.ofEpochMilli(node.createdAt),
+                        label = node.content.take(NODE_LABEL_PREVIEW_MAX_CHARS).ifBlank { null },
+                        sha = sha,
+                        repoRef = node.metadata[CommitAnchor.REPO_KEY],
+                    )
+                }
+                edges += ThreadGraphEdge(
+                    from = node.id,
+                    to = commitNodeId,
+                    kind = ThreadEdgeKind.COMMIT_ANCHOR,
+                    derivation = EdgeDerivation.EXTRACTED,
+                    because = "commit sha minted from this message's agent-run ChangeSet commit",
+                )
             }
         }
 
@@ -267,8 +321,11 @@ object ThreadGraphProjector {
         return ThreadGraph(generatedAtUtc = generatedAtUtc, nodes = nodes, edges = edges)
     }
 
-    /** Chars of [MessageNode.content] previewed onto a [ThreadNodeKind.RUN_ROOT] node's `label` —
-     *  real data already on the node (the run's own objective text), never a fabricated summary;
-     *  just bounded so one long objective doesn't blow out the graph's label rendering. */
-    private const val RUN_ROOT_LABEL_MAX_CHARS = 60
+    /** Chars of [MessageNode.content] previewed onto a [ThreadNodeKind.RUN_ROOT] node's `label`
+     *  (the run's own objective text) or, **1.2.0 (graph-wave lane D)**, a projected
+     *  [ThreadNodeKind.COMMIT] node's `label` (the anchoring node's own content, which
+     *  [dev.fonebrew.domain.ide.CommitAnchor.node] sets to the real commit message) — in both
+     *  cases real data already on the node, never a fabricated summary; just bounded so one long
+     *  objective/commit message doesn't blow out the graph's label rendering. */
+    private const val NODE_LABEL_PREVIEW_MAX_CHARS = 60
 }

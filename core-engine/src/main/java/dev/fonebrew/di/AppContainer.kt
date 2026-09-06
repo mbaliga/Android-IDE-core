@@ -365,8 +365,10 @@ class AppContainer(context: Context) {
     val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore, context.applicationContext)
 
     // Agentic repo loop (IA: agentic-ide #1): read repo → model proposes a ChangeSet → review → commit.
+    // Graph-wave lane D: `repository` is wired so a successful commit mints a queryable
+    // CommitAnchor node into the real message tree (dev.fonebrew.data.AgentRepoRunner's own KDoc).
     val agentRepoRunner: dev.fonebrew.data.AgentRepoRunner =
-        dev.fonebrew.data.AgentRepoRunner(gitTransport, gitHostStore, modelRegistry, engineProvider)
+        dev.fonebrew.data.AgentRepoRunner(gitTransport, gitHostStore, modelRegistry, engineProvider, repository)
 
     // Concurrent work in progress elsewhere in the app (a Loop run, the Agent proposing a
     // change) — surfaced together in Chat's background-tasks strip.

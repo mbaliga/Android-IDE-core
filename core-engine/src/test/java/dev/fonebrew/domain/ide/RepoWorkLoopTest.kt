@@ -6,6 +6,7 @@ import dev.fonebrew.domain.pm.BoardCard
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -83,5 +84,49 @@ class RepoWorkLoopTest {
         RepoWorkLoop(reader(), proposer, { _, _ -> Result.success("x") })
             .run(card(), listOf("src/Sender.kt", "does/not/exist.kt")) { true }
         assertEquals(setOf("src/Sender.kt"), seenContext!!.keys)
+    }
+
+    // ---- commit anchors (graph-wave lane D) ---------------------------------------------------
+
+    private fun committingProposer() = ChangeProposer { _, ctx -> ChangeSet.of(ctx, ctx.mapValues { "fun send() = 0" }) }
+
+    @Test fun `a successful commit mints a CommitAnchor node carrying the sha and repoRef`() = runTest {
+        val committer = ChangeCommitter { _, _ -> Result.success("sha123") }
+        val loop = RepoWorkLoop(reader(), committingProposer(), committer, now = { 42L }, idGen = { "anchor-1" })
+
+        val result = loop.run(card(), listOf("src/Sender.kt"), repoRef = "me/proj@main") { true }
+
+        assertTrue(result.committed)
+        val anchor = result.commitAnchor
+        assertEquals("anchor-1", anchor?.id)
+        assertNull(anchor?.parentId)
+        assertEquals(42L, anchor?.createdAt)
+        assertEquals("sha123", anchor?.metadata?.get(dev.fonebrew.domain.ide.CommitAnchor.SHA_KEY))
+        assertEquals("me/proj@main", anchor?.metadata?.get(dev.fonebrew.domain.ide.CommitAnchor.REPO_KEY))
+        // The anchor's content is the same real commit message the history records, not a
+        // second, divergent summary.
+        assertEquals("Address #42: Fix the crash on send", anchor?.content)
+    }
+
+    @Test fun `commitAnchor omits the repo key when no repoRef is supplied — never a fabricated one`() = runTest {
+        val committer = ChangeCommitter { _, _ -> Result.success("sha123") }
+        val result = RepoWorkLoop(reader(), committingProposer(), committer).run(card(), listOf("src/Sender.kt")) { true }
+        assertTrue(result.committed)
+        assertNull(result.commitAnchor?.metadata?.get(dev.fonebrew.domain.ide.CommitAnchor.REPO_KEY))
+    }
+
+    @Test fun `no commitAnchor when the commit is rejected, empty, or fails — nothing happened, nothing minted`() = runTest {
+        val committer = ChangeCommitter { _, _ -> Result.success("sha123") }
+
+        val rejected = RepoWorkLoop(reader(), committingProposer(), committer).run(card(), listOf("src/Sender.kt")) { false }
+        assertNull(rejected.commitAnchor)
+
+        val emptyProposer = ChangeProposer { _, ctx -> ChangeSet.of(ctx, ctx) }
+        val noProposal = RepoWorkLoop(reader(), emptyProposer, committer).run(card(), listOf("src/Sender.kt")) { true }
+        assertNull(noProposal.commitAnchor)
+
+        val failingCommitter = ChangeCommitter { _, _ -> Result.failure(RuntimeException("409")) }
+        val failed = RepoWorkLoop(reader(), committingProposer(), failingCommitter).run(card(), listOf("src/Sender.kt")) { true }
+        assertNull(failed.commitAnchor)
     }
 }

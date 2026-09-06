@@ -29,7 +29,11 @@ data class ThreadGraph(
     // ThreadGraphAnalytics.hotPathEdges' own derived, always-INFERRED link between two sibling
     // continuations of a recorded branch point — the first real INFERRED-edge producer this
     // corpus's own adversarial fixture (thread-graph-inferred-edge-interpretive-because)
-    // anticipated. Still major 1 — every field the shape grew is additive and
+    // anticipated. Graph-wave lane D (no wire-shape change, no version bump — the COMMIT/
+    // COMMIT_ANCHOR vocabulary lane A already shipped in 1.2.0 was schema-only until now):
+    // AgentRepoRunner.commit/RepoWorkLoop.run mint CommitAnchor.SHA_KEY/REPO_KEY insert-time
+    // metadata on a successful agent commit, and ThreadGraphProjector now projects a COMMIT node
+    // + COMMIT_ANCHOR edge from it. Still major 1 — every field the shape grew is additive and
     // optional, so a 1.0.0 reader that ignores unknown enum values it doesn't recognize (or
     // simply doesn't ask for the new optional fields) degrades, it doesn't break; see
     // thread-graph.schema.json's own changelog notes.
@@ -63,7 +67,11 @@ data class ThreadGraphNode(
     /** 1.2.0. COMMIT only: the git commit's own sha this node records — the node's real stable
      *  identity fact (FB-RAT-COM-002); [id] need not literally equal [sha] (a future minter may
      *  namespace it), but this is always the raw commit hash. Null for every other kind and
-     *  never fabricated. Schema only in 1.2.0 — no producer mints a COMMIT node yet. */
+     *  never fabricated. **Graph-wave lane D**: [dev.fonebrew.domain.thread.ThreadGraphProjector]
+     *  now projects this from [dev.fonebrew.domain.ide.CommitAnchor.SHA_KEY] insert-time metadata,
+     *  minted by [dev.fonebrew.data.AgentRepoRunner.commit] / [dev.fonebrew.domain.ide.
+     *  RepoWorkLoop.run] on a successful agent commit — schema-only through 1.2.0/1.3.0, real as
+     *  of lane D. */
     val sha: String? = null,
     /** 1.2.0. COMMIT only, optional: a short display label naming the repo/ref the commit
      *  belongs to (e.g. "owner/repo@main") — convenience only, [sha] is the identity field. */
@@ -129,8 +137,9 @@ enum class ThreadNodeKind {
     DECISION,
     DELEGATION,
     /** 1.2.0: a git commit a message/run node's agent action minted — see
-     *  [ThreadGraphNode.sha]/[ThreadGraphNode.repoRef]. Schema only: no producer mints or
-     *  projects one yet (a future work package's scope). */
+     *  [ThreadGraphNode.sha]/[ThreadGraphNode.repoRef]. **Graph-wave lane D**: projected by
+     *  [dev.fonebrew.domain.thread.ThreadGraphProjector] from [dev.fonebrew.domain.ide.
+     *  CommitAnchor.SHA_KEY] insert-time metadata. */
     COMMIT,
 }
 
@@ -147,7 +156,9 @@ enum class ThreadEdgeKind {
      *  minted — `from` is the message/run node, `to` is the COMMIT node, deliberately the
      *  REVERSE direction of the three `*_ANCHOR` kinds above (those point FROM the annotation TO
      *  the message they describe; a commit is the forward, causal OUTCOME of the message/run's
-     *  own action, so the edge points the other way). Schema only: no producer emits one yet. */
+     *  own action, so the edge points the other way). **Graph-wave lane D**: emitted by
+     *  [dev.fonebrew.domain.thread.ThreadGraphProjector] alongside the [ThreadNodeKind.COMMIT]
+     *  node it points to — schema-only through 1.2.0/1.3.0, real as of lane D. */
     COMMIT_ANCHOR,
     /** 1.3.0 (graph-wave lane B): [dev.fonebrew.domain.thread.ThreadGraphAnalytics.hotPathEdges]'s
      *  own link between two sibling continuations of a branch point the recorded tree shows was

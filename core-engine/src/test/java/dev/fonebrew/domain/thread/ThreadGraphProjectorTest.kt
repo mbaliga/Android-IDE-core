@@ -5,6 +5,7 @@ import dev.fonebrew.domain.Role
 import dev.fonebrew.domain.curation.BookmarkKind
 import dev.fonebrew.domain.curation.MessageBookmark
 import dev.fonebrew.domain.curation.MessageRef
+import dev.fonebrew.domain.ide.CommitAnchor
 import dev.fonebrew.domain.loop.RunLog
 import dev.fonebrew.domain.tree.MessageTree
 import dev.fonebrew.domain.tree.TreeFork
@@ -352,6 +353,88 @@ class ThreadGraphProjectorTest {
         val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
         assertNull(graph.nodes.single { it.id == "bad-1" }.confidence)
         assertNull(graph.nodes.single { it.id == "bad-2" }.confidence)
+    }
+
+    // ---- commit anchors (graph-wave lane D) ----------------------------------------------------
+
+    private fun commitNode(id: String, parentId: String?, createdAt: Long, sha: String, repoRef: String? = null, content: String = "x") =
+        MessageNode(
+            id = id, parentId = parentId, role = Role.SYSTEM, content = content, createdAt = createdAt,
+            metadata = mapOf(CommitAnchor.SHA_KEY to sha) + (repoRef?.let { mapOf(CommitAnchor.REPO_KEY to it) } ?: emptyMap()),
+        )
+
+    @Test fun `a node with no commit-anchor metadata projects no COMMIT node or COMMIT_ANCHOR edge — absence is absence`() {
+        val tree = MessageTree(listOf(node("root-1", null, 100L), node("msg-42", "root-1", 200L)))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertTrue(graph.nodes.none { it.kind == ThreadNodeKind.COMMIT })
+        assertTrue(graph.edges.none { it.kind == ThreadEdgeKind.COMMIT_ANCHOR })
+    }
+
+    @Test fun `a node carrying run_commit_sha metadata projects a COMMIT node with a COMMIT_ANCHOR edge`() {
+        val tree = MessageTree(listOf(
+            node("root-1", null, 100L),
+            commitNode("msg-101", "root-1", 200L, sha = "a1b2c3", repoRef = "me/proj@main", content = "Fix off-by-one"),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+
+        val commit = graph.nodes.single { it.kind == ThreadNodeKind.COMMIT }
+        assertEquals("a1b2c3", commit.sha)
+        assertEquals("me/proj@main", commit.repoRef)
+        assertEquals("root-1", commit.rootId)
+        assertEquals("msg-101", commit.parentId)
+        assertEquals("Fix off-by-one", commit.label)
+        assertTrue(
+            ThreadGraphEdge(
+                "msg-101", commit.id, ThreadEdgeKind.COMMIT_ANCHOR, EdgeDerivation.EXTRACTED,
+                "commit sha minted from this message's agent-run ChangeSet commit",
+            ) in graph.edges,
+        )
+    }
+
+    @Test fun `a COMMIT node's repoRef is null when the metadata carries no repo key — never fabricated`() {
+        val tree = MessageTree(listOf(commitNode("msg-101", null, 100L, sha = "sha-1")))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertNull(graph.nodes.single { it.kind == ThreadNodeKind.COMMIT }.repoRef)
+    }
+
+    @Test fun `two nodes naming the same sha collapse to one COMMIT node, each keeping its own COMMIT_ANCHOR edge`() {
+        val tree = MessageTree(listOf(
+            commitNode("msg-101", null, 100L, sha = "sha-shared"),
+            commitNode("msg-102", "msg-101", 200L, sha = "sha-shared"),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(1, graph.nodes.count { it.kind == ThreadNodeKind.COMMIT })
+        assertEquals(2, graph.edges.count { it.kind == ThreadEdgeKind.COMMIT_ANCHOR })
+    }
+
+    @Test fun `a commit anchor can sit on a FORK_ROOT alongside its own FORK edge — the two are orthogonal`() {
+        val tree = MessageTree(listOf(
+            node("root-1", null, 100L),
+            node("msg-42", "root-1", 200L),
+            MessageNode(
+                id = "root-2", parentId = null, role = Role.SYSTEM, content = "x", createdAt = 300L,
+                metadata = mapOf(
+                    TreeFork.LINEAGE_KIND_KEY to TreeFork.LineageKind.FORK.name,
+                    TreeFork.LINEAGE_SRC_ROOT_KEY to "root-1",
+                    TreeFork.LINEAGE_SRC_NODE_KEY to "msg-42",
+                    CommitAnchor.SHA_KEY to "sha-fork",
+                ),
+            ),
+        ))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        assertEquals(ThreadNodeKind.FORK_ROOT, graph.nodes.single { it.id == "root-2" }.kind)
+        val commit = graph.nodes.single { it.kind == ThreadNodeKind.COMMIT }
+        assertEquals("root-2", commit.parentId)
+        assertEquals("root-2", commit.rootId) // FORK_ROOT is its own rootId
+        assertTrue(graph.edges.any { it.kind == ThreadEdgeKind.FORK })
+        assertTrue(graph.edges.any { it.kind == ThreadEdgeKind.COMMIT_ANCHOR })
+    }
+
+    @Test fun `a projected graph with a COMMIT node round-trips through ThreadCodec`() {
+        val tree = MessageTree(listOf(commitNode("msg-101", null, 100L, sha = "sha-1", repoRef = "me/proj@main")))
+        val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
+        val decoded = ThreadCodec.decodeThreadGraph(ThreadCodec.encodeThreadGraph(graph))
+        assertEquals(graph, decoded)
     }
 
     // ---- structural invariants -----------------------------------------------------------------
