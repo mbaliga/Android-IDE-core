@@ -10,7 +10,8 @@ class ObserverScriptTest {
 
     private val at = Instant.parse("2026-08-12T00:00:00Z")
 
-    private fun n(id: String, kind: ThreadNodeKind) = ThreadGraphNode(id = id, kind = kind, rootId = "root-1", at = at)
+    private fun n(id: String, kind: ThreadNodeKind, outcome: DelegationOutcome? = null, parentId: String? = null) =
+        ThreadGraphNode(id = id, kind = kind, rootId = "root-1", parentId = parentId, at = at, outcome = outcome)
 
     // ---- describe(graph) ----------------------------------------------------------------------
 
@@ -53,6 +54,55 @@ class ObserverScriptTest {
 
         val two = ThreadGraph(generatedAtUtc = at, nodes = listOf(n("m1", ThreadNodeKind.MESSAGE), n("m2", ThreadNodeKind.MESSAGE)))
         assertTrue(ObserverScript.describe(two).any { it == "2 messages across the captured tree." })
+    }
+
+    // ---- describe: graph-wave lane B additions (ThreadGraphAnalytics facts) --------------------
+
+    @Test fun `describe reports the decision-outcome rollup when at least one node has been decided`() {
+        val graph = ThreadGraph(
+            generatedAtUtc = at,
+            nodes = listOf(
+                n("dg1", ThreadNodeKind.DELEGATION, outcome = DelegationOutcome.KEPT),
+                n("dg2", ThreadNodeKind.DELEGATION, outcome = DelegationOutcome.REVERTED),
+                n("dg3", ThreadNodeKind.DELEGATION, outcome = DelegationOutcome.PENDING),
+            ),
+        )
+        val remarks = ObserverScript.describe(graph)
+        assertTrue(remarks.any { it == "Of 3 recorded decisions: 1 kept, 1 reverted, 1 pending." })
+    }
+
+    @Test fun `describe reports a recorded branch point when one exists`() {
+        val graph = ThreadGraph(
+            generatedAtUtc = at,
+            nodes = listOf(
+                n("root", ThreadNodeKind.MESSAGE),
+                n("a", ThreadNodeKind.MESSAGE, parentId = "root"),
+                n("b", ThreadNodeKind.MESSAGE, parentId = "root"),
+            ),
+            edges = listOf(ThreadGraphEdge("root", "a", ThreadEdgeKind.REPLY), ThreadGraphEdge("root", "b", ThreadEdgeKind.REPLY)),
+        )
+        val remarks = ObserverScript.describe(graph)
+        assertTrue(remarks.any { it == "1 branch point recorded with 2 or more continuations." })
+    }
+
+    @Test fun `describe reports an orphaned branch when a leaf has no bookmark`() {
+        val graph = ThreadGraph(
+            generatedAtUtc = at,
+            nodes = listOf(n("root", ThreadNodeKind.MESSAGE), n("leaf", ThreadNodeKind.MESSAGE, parentId = "root")),
+            edges = listOf(ThreadGraphEdge("root", "leaf", ThreadEdgeKind.REPLY)),
+        )
+        val remarks = ObserverScript.describe(graph)
+        assertTrue(remarks.any { it == "1 branch ended with no further reply and no decision recorded." })
+    }
+
+    @Test fun `describe omits the new lane-B remarks entirely when the underlying counts are zero`() {
+        val graph = ThreadGraph(generatedAtUtc = at, nodes = listOf(n("m1", ThreadNodeKind.MESSAGE)))
+        val remarks = ObserverScript.describe(graph)
+        // A single, childless MESSAGE has no recorded decisions and is itself orphaned (a leaf, no
+        // bookmark) — so this exercises "decisions omitted" while "orphaned" legitimately fires;
+        // the point is "recorded decisions"/"branch point" never appear from a zero count.
+        assertTrue(remarks.none { it.contains("recorded decision") })
+        assertTrue(remarks.none { it.contains("branch point") })
     }
 
     // ---- describeDelta --------------------------------------------------------------------------

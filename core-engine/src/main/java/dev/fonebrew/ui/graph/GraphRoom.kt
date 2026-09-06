@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.absoluteOffset
@@ -54,8 +55,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.fonebrew.domain.thread.EdgeDerivation
 import dev.fonebrew.domain.thread.ThreadEdgeKind
 import dev.fonebrew.domain.thread.ThreadGraph
+import dev.fonebrew.domain.thread.ThreadGraphAnalytics
+import dev.fonebrew.domain.thread.ThreadGraphEdge
+import dev.fonebrew.domain.thread.ThreadGraphExplainPath
 import dev.fonebrew.domain.thread.ThreadGraphNode
 import dev.fonebrew.domain.thread.ThreadMapLayout
 import dev.fonebrew.domain.thread.ThreadNodeKind
@@ -76,6 +81,12 @@ private val COL_SPACING = 180.dp
 private val ROW_SPACING = 92.dp
 private val CANVAS_PADDING = 60.dp
 private val NODE_SIZE = 40.dp
+
+/** Graph-wave lane B: how close (in content-space pixels, before pan/zoom) a tap must land to a
+ *  drawn edge for [ThreadMapCanvas] to treat it as an edge tap rather than empty canvas. No
+ *  device to tune this on — see this file's own "Environment honesty" precedent; the owner may
+ *  want to adjust it once verified by touch. */
+private val EDGE_TAP_THRESHOLD = 14.dp
 
 /**
  * **WP10** — the living graph, native (THREAD_TOPOLOGY_PLAN.md WP10 "Native graph surfaces"):
@@ -124,11 +135,19 @@ fun GraphRoom(
     }
 
     var selectedNodeId by remember { mutableStateOf<String?>(null) }
+    var selectedEdge by remember { mutableStateOf<ThreadGraphEdge?>(null) }
     var radialNodeId by remember { mutableStateOf<String?>(null) }
     var showObserverPanel by remember { mutableStateOf(false) }
     var observerRemarks by remember { mutableStateOf<List<String>>(emptyList()) }
     var observerLoading by remember { mutableStateOf(false) }
     var showDeepView by remember { mutableStateOf(false) }
+    // Graph-wave lane B: the decision-outcome rollup card + explain-path picker, same
+    // "togglable-visibility HyleChip, off by default" idiom as Observations/Deep view above —
+    // neither analysis reads anything beyond the [graph] this room already loaded.
+    var showAnalyticsPanel by remember { mutableStateOf(false) }
+    var explainMode by remember { mutableStateOf(false) }
+    var explainFromId by remember { mutableStateOf<String?>(null) }
+    var explainToId by remember { mutableStateOf<String?>(null) }
     val observerEnabled by viewModel.observerEnabled.collectAsState()
     val disclosureTier by viewModel.disclosureTier.collectAsState()
     // WP11's G6 deep-view entry point — Surface.GRAPH_DEEP is POWER-tier, same "surface + tier"
@@ -138,6 +157,28 @@ fun GraphRoom(
         dev.fonebrew.domain.disclosure.Disclosure.tierOf(disclosureTier),
     )
     val scope = rememberCoroutineScope()
+
+    // Graph-wave lane B — descriptive analytics over whatever [graph] this room already loaded,
+    // recomputed only when the graph itself (or, for the explain-path picker, the picked node
+    // pair) changes; every one of these is a plain pure-function call over already-loaded facts,
+    // never a second store read. Empty/EMPTY_ROLLUP while [graph] hasn't loaded yet — never a
+    // fabricated non-zero placeholder.
+    val decisionRollup = remember(graph) { graph?.let(ThreadGraphAnalytics::decisionOutcomeRollup) ?: ThreadGraphAnalytics.EMPTY_ROLLUP }
+    val hotPathCount = remember(graph) { graph?.let { ThreadGraphAnalytics.hotPaths(it).size } ?: 0 }
+    val orphanedBranchCount = remember(graph) { graph?.let { ThreadGraphAnalytics.orphanedBranches(it).size } ?: 0 }
+    val explainResult = remember(explainFromId, explainToId, graph) {
+        val g2 = graph
+        val from = explainFromId
+        val to = explainToId
+        if (g2 != null && from != null && to != null) {
+            // INFERRED edges (hot-path siblings) are folded in here too — ThreadGraphExplainPath's
+            // own two-pass contract means they only ever surface as [inferredAlternative], never
+            // silently substituted for a recorded path (see that object's own KDoc).
+            ThreadGraphExplainPath.explain(g2.copy(edges = g2.edges + ThreadGraphAnalytics.hotPathEdges(g2)), from, to)
+        } else {
+            null
+        }
+    }
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -165,6 +206,22 @@ fun GraphRoom(
                                 modifier = Modifier.padding(end = 4.dp),
                             )
                         }
+                        HyleChip(
+                            selected = showAnalyticsPanel,
+                            onClick = { showAnalyticsPanel = !showAnalyticsPanel },
+                            label = "Decisions",
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                        HyleChip(
+                            selected = explainMode,
+                            onClick = {
+                                explainMode = !explainMode
+                                explainFromId = null
+                                explainToId = null
+                            },
+                            label = "Explain path",
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
                         HyleChip(
                             selected = showObserverPanel,
                             onClick = { showObserverPanel = !showObserverPanel },
@@ -194,12 +251,34 @@ fun GraphRoom(
                             modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         )
                         else -> {
-                            val layout = remember(g) { ThreadMapLayout.compute(g) }
+                            // Graph-wave lane B: hot-path INFERRED edges are merged onto the
+                            // rendered graph here (never mutating [g]/[graph] itself, and never fed
+                            // back through ThreadGraphProjector) — ThreadMapLayout ignores any edge
+                            // kind it doesn't itself use for column/row placement (FORK/SPAWN/REPLY
+                            // only, per its own KDoc), so this is layout-neutral, purely additive.
+                            val displayGraph = remember(g) { g.copy(edges = g.edges + ThreadGraphAnalytics.hotPathEdges(g)) }
+                            val layout = remember(displayGraph) { ThreadMapLayout.compute(displayGraph) }
+                            val nodeStatsById = remember(g) { ThreadGraphAnalytics.nodeStats(g).associateBy { it.nodeId } }
                             ThreadMapCanvas(
-                                graph = g,
+                                graph = displayGraph,
                                 layout = layout,
-                                onTapNode = { id -> selectedNodeId = id },
-                                onLongPressNode = { id -> radialNodeId = id },
+                                nodeStatsById = nodeStatsById,
+                                onTapNode = { id ->
+                                    if (explainMode) {
+                                        when {
+                                            explainFromId == null -> explainFromId = id
+                                            explainToId == null && id != explainFromId -> explainToId = id
+                                            else -> {
+                                                explainFromId = id
+                                                explainToId = null
+                                            }
+                                        }
+                                    } else {
+                                        selectedNodeId = id
+                                    }
+                                },
+                                onLongPressNode = { id -> if (!explainMode) radialNodeId = id },
+                                onTapEdge = { edge -> if (!explainMode) selectedEdge = edge },
                             )
                         }
                     }
@@ -269,6 +348,103 @@ fun GraphRoom(
                         }
                     }
                 }
+
+                // Graph-wave lane B: decision-outcome rollup — counts only, never a judgment
+                // (binding constraint 3 / Issue #2). Reads straight off [graph]; unlike
+                // Observations this needs no toggle/store gate of its own, since it computes no
+                // drift/idiolect signal — same "plain structural re-shape" the graph itself is.
+                if (showAnalyticsPanel) {
+                    HorizontalDivider()
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Decisions", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Decided ${decisionRollup.decided} · Kept ${decisionRollup.kept} · " +
+                                "Reverted ${decisionRollup.reverted} · Pending ${decisionRollup.pending}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "$hotPathCount branch point${if (hotPathCount == 1) "" else "s"} recorded with 2+ continuations.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "$orphanedBranchCount branch${if (orphanedBranchCount == 1) "" else "es"} ended with no further reply and no decision recorded.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+
+                // Graph-wave lane B: the explain-path picker — tap two nodes on the canvas above
+                // (while the "Explain path" chip is selected) and this shows the shortest RECORDED
+                // path between them, edge by edge, each with its own `because`. Never routes
+                // through an INFERRED edge silently: see ThreadGraphExplainPath's own KDoc for the
+                // two-pass contract this panel just renders the result of.
+                if (explainMode) {
+                    HorizontalDivider()
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Explain path", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            if (explainFromId != null || explainToId != null) {
+                                HyleButton(
+                                    "Reset",
+                                    onClick = { explainFromId = null; explainToId = null },
+                                    secondary = true,
+                                )
+                            }
+                        }
+                        when {
+                            explainToId == null -> Text(
+                                if (explainFromId == null) "Tap a node on the graph to start." else "From $explainFromId — tap a second node.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            explainResult == null -> Text(
+                                "Computing…",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            explainResult.found -> {
+                                val path = explainResult.extractedPath.orEmpty()
+                                if (path.isEmpty()) {
+                                    Text("Same node — nothing to explain.", style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    path.forEach { edge ->
+                                        Text(
+                                            "${edge.from} → ${edge.to} (${edgeKindLabel(edge.kind)}): ${edge.because ?: "(no because recorded)"}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                            }
+                            else -> {
+                                Text(
+                                    "No recorded path connects these two nodes.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                val alternative = explainResult.inferredAlternative
+                                if (alternative != null) {
+                                    Text(
+                                        "An inferred alternative exists (not a recorded fact):",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    alternative.forEach { edge ->
+                                        Text(
+                                            "${edge.from} ⇢ ${edge.to} (${edgeKindLabel(edge.kind)}): ${edge.because ?: "(no because recorded)"}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -286,10 +462,21 @@ fun GraphRoom(
         }
     }
 
+    // Graph-wave lane B: tapping a drawn edge (native canvas — see ThreadMapCanvas's own edge-hit
+    // detection) shows its kind/derivation/because as TEXT, the same "never leave a line-style/
+    // dash cue as the only way to read a value" discipline NodeDetailsDialog already follows for
+    // outcome/confidence (binding constraint 6 / WCAG 1.4.1).
+    selectedEdge?.let { edge ->
+        EdgeDetailsDialog(edge = edge, onDismiss = { selectedEdge = null })
+    }
+
     if (showDeepView) {
         val g = graph
         if (g != null) {
-            GraphWebRoom(graph = g, onClose = { showDeepView = false })
+            // The same hot-path INFERRED edges the native canvas draws, folded in here too so the
+            // G6 deep room shows the identical picture rather than a strict subset of it.
+            val merged = remember(g) { g.copy(edges = g.edges + ThreadGraphAnalytics.hotPathEdges(g)) }
+            GraphWebRoom(graph = merged, onClose = { showDeepView = false })
         } else {
             showDeepView = false
         }
@@ -325,6 +512,29 @@ private fun outcomeLabel(outcome: dev.fonebrew.domain.thread.DelegationOutcome):
     dev.fonebrew.domain.thread.DelegationOutcome.REVERTED -> "Reverted"
 }
 
+/** Human vocabulary for a [ThreadEdgeKind] — the explain-path panel's + [EdgeDetailsDialog]'s own
+ *  precedent for [kindLabel] above, never the bare enum. */
+private fun edgeKindLabel(kind: ThreadEdgeKind): String = when (kind) {
+    ThreadEdgeKind.REPLY -> "Reply"
+    ThreadEdgeKind.FORK -> "Fork"
+    ThreadEdgeKind.SPAWN -> "Spawn"
+    ThreadEdgeKind.LINEAGE -> "Lineage"
+    ThreadEdgeKind.MARKER_ANCHOR -> "Marker anchor"
+    ThreadEdgeKind.DECISION_ANCHOR -> "Decision anchor"
+    ThreadEdgeKind.DELEGATION_ANCHOR -> "Delegation anchor"
+    ThreadEdgeKind.COMMIT_ANCHOR -> "Commit anchor"
+    ThreadEdgeKind.HOT_PATH -> "Hot path"
+}
+
+/** Derivation text is the WCAG-safe channel for [ThreadGraphEdge.derivation] (binding constraint
+ *  6 — never dash-style-only): shown in [EdgeDetailsDialog] alongside the dash/solid line style
+ *  [ThreadMapCanvas] already draws, never left as the only way to tell EXTRACTED from INFERRED. */
+private fun derivationLabel(derivation: EdgeDerivation?): String = when (derivation) {
+    EdgeDerivation.EXTRACTED -> "Extracted — restates a recorded fact"
+    EdgeDerivation.INFERRED -> "Inferred — computed from recorded structure"
+    null -> "Unlabelled (predates edge provenance)"
+}
+
 @Composable
 private fun NodeDetailsDialog(node: ThreadGraphNode, onOpen: (() -> Unit)?, onDismiss: () -> Unit) {
     androidx.compose.material3.AlertDialog(
@@ -355,6 +565,29 @@ private fun NodeDetailsDialog(node: ThreadGraphNode, onOpen: (() -> Unit)?, onDi
         confirmButton = {
             if (onOpen != null) HyleButton("Open", onClick = onOpen)
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/** Graph-wave lane B: tapping a drawn edge on [ThreadMapCanvas] opens this — the edge's kind,
+ *  provenance ([derivationLabel] — never left to the dash-vs-solid line style alone, binding
+ *  constraint 6), and its full [ThreadGraphEdge.because], always as readable text. */
+@Composable
+private fun EdgeDetailsDialog(edge: ThreadGraphEdge, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(edgeKindLabel(edge.kind)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("${edge.from} → ${edge.to}", style = MaterialTheme.typography.bodyMedium)
+                Text(derivationLabel(edge.derivation), style = MaterialTheme.typography.labelSmall)
+                Text(
+                    edge.because?.takeIf { it.isNotBlank() } ?: "(no because recorded)",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
 }
@@ -540,6 +773,17 @@ private fun ThreadMapCanvas(
     layout: ThreadMapLayout.Layout,
     onTapNode: (String) -> Unit,
     onLongPressNode: (String) -> Unit,
+    // Graph-wave lane B: [ThreadGraphAnalytics.nodeStats], keyed by id — sizes each node by total
+    // degree (SIZE, never a hue/colour swap — binding constraint 6) so a heavily-connected turn
+    // (many replies/anchors/hot-path links) visibly reads as more central without a second colour
+    // ramp competing with kind's own colour. Defaults empty so every existing call site (none
+    // outside this file today) keeps rendering at the plain default size.
+    nodeStatsById: Map<String, ThreadGraphAnalytics.NodeStats> = emptyMap(),
+    // Graph-wave lane B: tapping empty canvas near a drawn edge (never a node — those already
+    // consume the tap via their own combinedClickable) reports the nearest edge under the finger,
+    // within EDGE_TAP_THRESHOLD content-space pixels. No device to tune this threshold on — see
+    // this file's own "Environment honesty" precedent elsewhere; the owner may want to adjust it.
+    onTapEdge: (ThreadGraphEdge) -> Unit = {},
 ) {
     val colors = LocalHyleColors.current
     val density = LocalDensity.current
@@ -550,10 +794,51 @@ private fun ThreadMapCanvas(
     val rowSpacingPx = with(density) { ROW_SPACING.toPx() }
     val paddingPx = with(density) { CANVAS_PADDING.toPx() }
     val nodeSizePx = with(density) { NODE_SIZE.toPx() }
+    val edgeTapThresholdPx = with(density) { EDGE_TAP_THRESHOLD.toPx() }
+
+    /** Total degree (in + out) scales the node up to ~1.6x — SIZE is the channel, never a colour
+     *  ramp (binding constraint 6). A node absent from [nodeStatsById] (the empty-map default
+     *  above) draws at the plain [NODE_SIZE]. */
+    fun nodeSizePxFor(id: String): Float {
+        val degree = nodeStatsById[id]?.let { it.inDegree + it.outDegree } ?: 0
+        val scaleFactor = (1f + 0.08f * degree.coerceAtMost(8)).coerceAtMost(1.6f)
+        return nodeSizePx * scaleFactor
+    }
 
     fun centerOf(id: String): Offset? {
         val pos = layout.positions[id] ?: return null
         return Offset(paddingPx + colSpacingPx * pos.column, paddingPx + rowSpacingPx * pos.row)
+    }
+
+    /** Perpendicular distance from [point] to the segment [a]-[b] — plain point-to-segment
+     *  distance, clamped to the segment's own extent (never the infinite-line distance). */
+    fun distanceToSegment(point: Offset, a: Offset, b: Offset): Float {
+        val abx = b.x - a.x
+        val aby = b.y - a.y
+        val lengthSquared = abx * abx + aby * aby
+        if (lengthSquared <= 0f) return hypot(point.x - a.x, point.y - a.y)
+        val t = (((point.x - a.x) * abx + (point.y - a.y) * aby) / lengthSquared).coerceIn(0f, 1f)
+        val nearestX = a.x + t * abx
+        val nearestY = a.y + t * aby
+        return hypot(point.x - nearestX, point.y - nearestY)
+    }
+
+    /** The closest edge to [point] (content-space) within [edgeTapThresholdPx], or `null` when
+     *  nothing drawn is close enough — an honest "no edge here," never a best-effort guess past
+     *  the threshold. */
+    fun edgeNear(point: Offset): ThreadGraphEdge? {
+        var best: ThreadGraphEdge? = null
+        var bestDistance = edgeTapThresholdPx
+        for (edge in graph.edges) {
+            val from = centerOf(edge.from) ?: continue
+            val to = centerOf(edge.to) ?: continue
+            val distance = distanceToSegment(point, from, to)
+            if (distance <= bestDistance) {
+                bestDistance = distance
+                best = edge
+            }
+        }
+        return best
     }
 
     val contentWidthPx = paddingPx * 2 + colSpacingPx * (layout.columnCount - 1).coerceAtLeast(0)
@@ -570,6 +855,18 @@ private fun ThreadMapCanvas(
                 detectTransformGestures { _, panChange, zoomChange, _ ->
                     scale = (scale * zoomChange).coerceIn(0.35f, 3f)
                     pan += panChange
+                }
+            }
+            // Graph-wave lane B: a tap that lands on a node is already consumed by that node's own
+            // combinedClickable (a CHILD of this Box, processed before this ancestor sees the Main
+            // pass — the same nested-clickable cooperation every Compose click handler relies on),
+            // so this only ever fires for a tap on empty canvas near a drawn EDGE. Keyed on [graph]
+            // (not Unit, unlike the transform-gesture detector above, which touches no per-graph
+            // state) so a freshly loaded graph is never explained against a stale closure.
+            .pointerInput(graph) {
+                detectTapGestures { screenOffset ->
+                    val contentPoint = (screenOffset - pan) / scale
+                    edgeNear(contentPoint)?.let(onTapEdge)
                 }
             },
     ) {
@@ -609,20 +906,41 @@ private fun ThreadMapCanvas(
                         // 1.2.0, minimal (schema-only work package — see glyphFor's own note):
                         // colors.outline pairs this edge with the COMMIT node glyph above.
                         ThreadEdgeKind.COMMIT_ANCHOR -> colors.outline.copy(alpha = 0.7f)
+                        // Graph-wave lane B: a previously-unused token — never confused with
+                        // LINEAGE's violet or the hairline *_ANCHOR kinds it sits alongside on a
+                        // busy graph.
+                        ThreadEdgeKind.HOT_PATH -> colors.textDisabled.copy(alpha = 0.8f)
                     }
                     // Fixed per audit (binding constraint 6 / WCAG 1.4.1): colour was the ONLY
                     // channel distinguishing edge kinds (FORK and SPAWN were indistinguishable —
                     // same colour, same dash, same everything). Dash pattern is now the redundant
                     // channel, mirroring graph-room.html's own edgeStyleFor (the WP11 G6 bootstrap
                     // this room's own "Deep view" opens already got this right).
-                    val pathEffect = when (edge.kind) {
-                        ThreadEdgeKind.REPLY, ThreadEdgeKind.FORK -> null
-                        ThreadEdgeKind.SPAWN -> PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))
-                        ThreadEdgeKind.LINEAGE -> PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
-                        ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR ->
-                            PathEffect.dashPathEffect(floatArrayOf(1.dp.toPx(), 3.dp.toPx()))
-                        // A long dash — distinct from every pattern above (solid / 6-4 / 4-3 / 1-3).
-                        ThreadEdgeKind.COMMIT_ANCHOR -> PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 2.dp.toPx()))
+                    //
+                    // Graph-wave lane B (binding constraint 6): [ThreadGraphEdge.derivation] is now
+                    // the PRIMARY dash channel — any INFERRED edge (today, only HOT_PATH — see
+                    // ThreadGraphAnalytics's own contract) draws this fine dash regardless of kind,
+                    // so "recorded vs derived" reads the same way at a glance as the explain-path
+                    // picker and the G6 deep room's tooltip both name it in text. An EXTRACTED (or
+                    // unlabelled, pre-1.2.0) edge keeps its existing per-KIND pattern below,
+                    // unchanged — FORK/SPAWN/LINEAGE/*_ANCHOR still read exactly as before.
+                    val pathEffect = if (edge.derivation == EdgeDerivation.INFERRED) {
+                        PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx()))
+                    } else {
+                        when (edge.kind) {
+                            ThreadEdgeKind.REPLY, ThreadEdgeKind.FORK -> null
+                            ThreadEdgeKind.SPAWN -> PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))
+                            ThreadEdgeKind.LINEAGE -> PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
+                            ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR ->
+                                PathEffect.dashPathEffect(floatArrayOf(1.dp.toPx(), 3.dp.toPx()))
+                            // A long dash — distinct from every pattern above (solid / 6-4 / 4-3 / 1-3).
+                            ThreadEdgeKind.COMMIT_ANCHOR -> PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 2.dp.toPx()))
+                            // HOT_PATH is always INFERRED in practice (ThreadGraphAnalytics's own
+                            // contract, never reached via this branch) — kept exhaustive with its
+                            // own fine dash anyway, honest about the hypothetical of a HOT_PATH
+                            // edge some future caller minted with a non-INFERRED derivation.
+                            ThreadEdgeKind.HOT_PATH -> PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx()))
+                        }
                     }
                     // A second, non-colour, non-dash channel for FORK vs SPAWN specifically (both
                     // solid otherwise): SPAWN draws fractionally thicker, same distinction the
@@ -658,10 +976,16 @@ private fun ThreadMapCanvas(
                 // node) — ThreadRail.kt (same WP batch) is meticulous about exactly this for a
                 // structurally similar canvas-drawn surface; this brings the graph nodes to parity.
                 val interactionSource = remember(node.id) { MutableInteractionSource() }
+                // Graph-wave lane B: sized by total degree ([nodeSizePxFor]) — SIZE, never a
+                // colour/hue swap (binding constraint 6) — so a heavily-connected turn visibly
+                // reads as more central at a glance, on top of (never instead of) its own
+                // shape/colour-by-kind glyph below.
+                val nodeSizePxHere = nodeSizePxFor(node.id)
+                val nodeSizeDpHere = with(density) { nodeSizePxHere.toDp() }
                 Box(
                     Modifier
-                        .absoluteOffset { IntOffset((c.x - nodeSizePx / 2).roundToInt(), (c.y - nodeSizePx / 2).roundToInt()) }
-                        .size(NODE_SIZE)
+                        .absoluteOffset { IntOffset((c.x - nodeSizePxHere / 2).roundToInt(), (c.y - nodeSizePxHere / 2).roundToInt()) }
+                        .size(nodeSizeDpHere)
                         .combinedClickable(
                             interactionSource = interactionSource,
                             indication = LocalIndication.current,

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.3.0",
+  "generatedAtUtc": "2026-09-06T00:00:00Z",
+  "nodes": [
+    { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": null, "at": "2026-09-01T10:00:00Z", "label": null },
+    { "id": "01JB0000000000000MSGBRA", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z", "label": null },
+    { "id": "01JB0000000000000MSGALT", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:06:00Z", "label": null }
+  ],
+  "edges": [
+    { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSGBRA", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+    { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSGALT", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+    { "from": "01JB0000000000000MSGALT", "to": "01JB0000000000000MSGBRA", "kind": "HOT_PATH", "derivation": "INFERRED", "because": "shares a branch point (01JB00000000000000000RT1) recorded with 2 continuations" }
+  ],
+  "unknownFields": {}
+}

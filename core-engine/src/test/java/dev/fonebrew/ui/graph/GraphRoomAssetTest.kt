@@ -207,6 +207,36 @@ class GraphRoomAssetTest {
         assertTrue("inspector never renders outcome as text", html.contains("node.outcome"))
     }
 
+    @Test fun `derivation is a dash channel independent of edge kind — an INFERRED edge always gets the fine dash`() {
+        // Graph-wave lane B (binding constraint 6 / WCAG 1.4.1): lineDashFor makes `derivation`
+        // the PRIMARY dash rule, layered on top of the existing per-KIND one (edgeStyleFor) — see
+        // this file's own header comment for the full rationale, mirroring GraphRoom.kt's native
+        // ThreadMapCanvas rule of the same name.
+        assertTrue("no lineDashFor function", html.contains("function lineDashFor("))
+        assertTrue("lineDashFor doesn't special-case INFERRED", html.contains("derivation === 'INFERRED'"))
+        assertTrue("toGraphData doesn't call lineDashFor for the edge style", html.contains("lineDashFor(e.kind, e.derivation, theme)"))
+    }
+
+    @Test fun `HOT_PATH is a mapped edge kind, not left to the default fallback only`() {
+        // Graph-wave lane B: dev.fonebrew.domain.thread.ThreadGraphAnalytics.hotPathEdges is the
+        // first real INFERRED-edge producer in this repo (1.3.0) — its edge kind has its own
+        // vocabulary entries here, not just edgeStyleFor's generic default.
+        assertTrue("HOT_PATH not mapped in edgeStyleFor", html.contains("case 'HOT_PATH':"))
+        assertTrue("HOT_PATH missing from EDGE_KIND_LABEL", html.contains("HOT_PATH: 'Hot path'"))
+    }
+
+    @Test fun `an edge click renders its kind, from-to, derivation, and because as inspector text`() {
+        // Graph-wave lane B: the edge counterpart to the node inspector asserted above —
+        // GraphRoom.kt's own EdgeDetailsDialog is the native precedent (kind + from/to +
+        // derivation + because, always readable as TEXT — binding constraint 6, never left to the
+        // dash-vs-solid line style alone).
+        assertTrue("no renderEdgeInspector function", html.contains("function renderEdgeInspector("))
+        assertTrue("no 'edge:click' wiring", html.contains("'edge:click'"))
+        assertTrue("edge inspector never renders derivation as text", html.contains("DERIVATION_LABEL"))
+        assertTrue("edge inspector never renders because as text", html.contains("edge.because"))
+        assertTrue("edge inspector doesn't reuse the shared inspector element", html.contains("lastGraphEdgesById"))
+    }
+
     @Test fun `no drag-element behavior is enabled`() {
         // Read-only projection parity with the native GraphRoom.kt surface (its own KDoc: "unlike
         // the Loop editor, nothing here can be dragged into a different position") — this deep

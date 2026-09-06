@@ -22,6 +22,12 @@ package dev.fonebrew.domain.thread
  * Callers ([dev.fonebrew.data.ThreadObserver] today; a future WP10 remark card) present these **on
  * request only** — this object has no push/notification surface of its own, matching the plan's
  * "remarks presented on request, never pushed."
+ *
+ * **Graph-wave lane B**: [describe] additionally reports [ThreadGraphAnalytics]'s decision-outcome
+ * rollup, recorded branch-point ("hot path"), and orphaned-branch counts — the exact same
+ * count-or-structural-fact discipline as every remark above, never a judgment about the branch
+ * point's or the orphaned turn's significance. [ThreadObserver] stays inert by default and
+ * change-no-defaults (see that class's own KDoc); this file's own defaults didn't change either.
  */
 object ObserverScript {
 
@@ -51,6 +57,25 @@ object ObserverScript {
         if (spawnCount > 0) remarks += "$spawnCount conversation${plural(spawnCount)} spawned with a summary bridge."
         if (markerCount > 0) remarks += "$markerCount marker${plural(markerCount)} placed (chapters, session starts, compaction runs, lineage)."
         if (delegationCount > 0) remarks += "$delegationCount delegation${plural(delegationCount)} recorded (\"choose for me\")."
+
+        // Graph-wave lane B: the new descriptive facts ThreadGraphAnalytics computes — counts and
+        // structure only, same anti-"overseer" tone as every remark above (no judgment, no "why").
+        val rollup = ThreadGraphAnalytics.decisionOutcomeRollup(graph)
+        if (rollup.decided > 0) {
+            remarks += "Of ${rollup.decided} recorded decision${plural(rollup.decided)}: " +
+                "${rollup.kept} kept, ${rollup.reverted} reverted, ${rollup.pending} pending."
+        }
+        val hotPathCount = ThreadGraphAnalytics.hotPaths(graph).size
+        if (hotPathCount > 0) {
+            remarks += "$hotPathCount branch point${plural(hotPathCount)} recorded with 2 or more continuations."
+        }
+        val orphanedCount = ThreadGraphAnalytics.orphanedBranches(graph).size
+        if (orphanedCount > 0) {
+            // "branch"/"branches" is an irregular plural — plural() (a bare "s" suffix) would
+            // produce "branchs", so this spells both forms out rather than reusing that helper.
+            val branchWord = if (orphanedCount == 1) "branch" else "branches"
+            remarks += "$orphanedCount $branchWord ended with no further reply and no decision recorded."
+        }
         return remarks
     }
 

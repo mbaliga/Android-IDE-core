@@ -25,11 +25,15 @@ data class ThreadGraph(
     // ThreadGraphEdge.derivation/because (EXTRACTED|INFERRED provenance, adapted from the
     // Graphify codebase-knowledge-graph tool — see thread-graph.schema.json's own $comment),
     // the COMMIT node kind + COMMIT_ANCHOR edge kind (commit-anchor vocabulary, schema only —
-    // no producer mints one yet). Still major 1 — every field the shape grew is additive and
+    // no producer mints one yet). 1.3.0 (graph-wave lane B): the HOT_PATH edge kind —
+    // ThreadGraphAnalytics.hotPathEdges' own derived, always-INFERRED link between two sibling
+    // continuations of a recorded branch point — the first real INFERRED-edge producer this
+    // corpus's own adversarial fixture (thread-graph-inferred-edge-interpretive-because)
+    // anticipated. Still major 1 — every field the shape grew is additive and
     // optional, so a 1.0.0 reader that ignores unknown enum values it doesn't recognize (or
     // simply doesn't ask for the new optional fields) degrades, it doesn't break; see
     // thread-graph.schema.json's own changelog notes.
-    val schemaVersion: String = "1.2.0",
+    val schemaVersion: String = "1.3.0",
     val unknownFields: Map<String, Any?> = emptyMap(),
 ) {
     init {
@@ -145,6 +149,14 @@ enum class ThreadEdgeKind {
      *  the message they describe; a commit is the forward, causal OUTCOME of the message/run's
      *  own action, so the edge points the other way). Schema only: no producer emits one yet. */
     COMMIT_ANCHOR,
+    /** 1.3.0 (graph-wave lane B): [dev.fonebrew.domain.thread.ThreadGraphAnalytics.hotPathEdges]'s
+     *  own link between two sibling continuations of a branch point the recorded tree shows was
+     *  branched more than once — `from`/`to` is a deterministic (sorted-id) pick between two
+     *  undirected siblings, not a causal-direction claim. The only edge kind [ThreadGraphProjector]
+     *  never emits, and the only one a real analysis layer in this repo does — always
+     *  [EdgeDerivation.INFERRED] in practice (see `ThreadGraphAnalytics`'s own KDoc for why that
+     *  isn't structurally enforced here, only by its own contract + tests). */
+    HOT_PATH,
 }
 
 /** 1.2.0. See [ThreadGraphEdge]'s own KDoc for the full Graphify-adaptation rationale. */
@@ -153,8 +165,10 @@ enum class EdgeDerivation {
      *  parent-child pointer, a fork/spawn's lineage metadata, a marker/decision/delegation/
      *  commit's own anchor field). The only value [ThreadGraphProjector] ever emits. */
     EXTRACTED,
-    /** A future analysis layer computed this relationship rather than reading it off an
-     *  existing record. Nothing in this repo emits this value yet (binding constraint 3 /
-     *  Issue #2 — structure, never interpretation, is the bar any future emitter must clear). */
+    /** A relationship an analysis layer computed rather than reading it off an existing record.
+     *  1.3.0: [dev.fonebrew.domain.thread.ThreadGraphAnalytics.hotPathEdges] is the first and only
+     *  producer of this value in this repo (binding constraint 3 / Issue #2 — structure, never
+     *  interpretation, is the bar it clears: every `because` it writes names a recorded branch
+     *  point + a recorded continuation count, nothing about why the user branched). */
     INFERRED,
 }

@@ -372,6 +372,36 @@ class ThreadCodecTest {
         assertEquals(decoded, roundTripped)
     }
 
+    // Verbatim copy of fixtures/thread/valid/thread-graph-hot-path-valid.json
+    private val threadGraphHotPathValidJson = """
+        {
+          "schemaVersion": "1.3.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": null, "at": "2026-09-01T10:00:00Z", "label": null },
+            { "id": "01JB0000000000000MSGBRA", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z", "label": null },
+            { "id": "01JB0000000000000MSGALT", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:06:00Z", "label": null }
+          ],
+          "edges": [
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSGBRA", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSGALT", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+            { "from": "01JB0000000000000MSGALT", "to": "01JB0000000000000MSGBRA", "kind": "HOT_PATH", "derivation": "INFERRED", "because": "shares a branch point (01JB00000000000000000RT1) recorded with 2 continuations" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the hot-path fixture decodes with the 1_3_0 HOT_PATH edge kind and round-trips`() {
+        val decoded = ThreadCodec.decodeThreadGraph(JSONObject(threadGraphHotPathValidJson))
+        assertEquals("1.3.0", decoded.schemaVersion)
+        val hotPathEdge = decoded.edges.single { it.kind == ThreadEdgeKind.HOT_PATH }
+        assertEquals(EdgeDerivation.INFERRED, hotPathEdge.derivation)
+        assertTrue(hotPathEdge.because!!.startsWith("shares a branch point"))
+
+        val roundTripped = ThreadCodec.decodeThreadGraph(ThreadCodec.encodeThreadGraph(decoded))
+        assertEquals(decoded, roundTripped)
+    }
+
     // Verbatim copy of fixtures/thread/invalid/thread-graph-edge-missing-derivation.invalid.json
     private val threadGraphEdgeMissingDerivationJson = """
         {

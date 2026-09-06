@@ -200,6 +200,25 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
   // mirrors GraphRoom.kt's own outcomeLabel().
   var OUTCOME_LABEL = { PENDING: 'Pending', KEPT: 'Kept', REVERTED: 'Reverted' };
 
+  // Human vocabulary for a raw ThreadEdgeKind token (graph-wave lane B) — mirrors GraphRoom.kt's
+  // own edgeKindLabel(), for the edge inspector below.
+  var EDGE_KIND_LABEL = {
+    REPLY: 'Reply',
+    FORK: 'Fork',
+    SPAWN: 'Spawn',
+    LINEAGE: 'Lineage',
+    MARKER_ANCHOR: 'Marker anchor',
+    DECISION_ANCHOR: 'Decision anchor',
+    DELEGATION_ANCHOR: 'Delegation anchor',
+    COMMIT_ANCHOR: 'Commit anchor',
+    HOT_PATH: 'Hot path',
+  };
+
+  // Vocabulary for ThreadGraphEdge.derivation (graph-wave lane B) — mirrors GraphRoom.kt's own
+  // derivationLabel(): the WCAG-safe TEXT channel alongside the dash/solid line style
+  // lineDashFor draws (binding constraint 6 — never dash-only).
+  var DERIVATION_LABEL = { EXTRACTED: 'Extracted — restates a recorded fact', INFERRED: 'Inferred — computed from recorded structure' };
+
   function shapeFor(kind) {
     switch (kind) {
       case 'MESSAGE': return 'circle';
@@ -238,8 +257,24 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
       case 'MARKER_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
       case 'DECISION_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
       case 'DELEGATION_ANCHOR': return { stroke: '#5b6068', lineDash: [1, 3] };
+      // HOT_PATH (graph-wave lane B): dev.fonebrew.domain.thread.ThreadGraphAnalytics's own derived
+      // sibling link — always 'INFERRED' in practice, so DERIVATION_DASH below is what actually
+      // draws for it; this entry only supplies the fallback colour + a defensive dash pattern for
+      // the hypothetical of a HOT_PATH edge some future caller minted with no derivation at all.
+      case 'HOT_PATH': return { stroke: theme.textMid, lineDash: [2, 3] };
       default: return { stroke: theme.textMid, lineDash: null };
     }
+  }
+
+  // Graph-wave lane B (binding constraint 6 / WCAG 1.4.1): 'derivation' is the PRIMARY dash
+  // channel — any INFERRED edge draws this fine dash regardless of the kind's own pattern above,
+  // so "recorded vs derived" reads the same way at a glance as GraphRoom.kt's native canvas draws
+  // it (that file's own ThreadMapCanvas comment names the identical rule). An EXTRACTED (or
+  // unlabelled, pre-1.2.0) edge keeps its existing per-KIND pattern from edgeStyleFor, unchanged.
+  var DERIVATION_DASH = [2, 3];
+  function lineDashFor(kind, derivation, theme) {
+    if (derivation === 'INFERRED') return DERIVATION_DASH;
+    return edgeStyleFor(kind, theme).lineDash;
   }
 
   // A blank/missing label used to render the raw enum token (e.g. "FORK_ROOT") straight onto the
@@ -305,13 +340,14 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
         id: 'e' + i,
         source: e.from,
         target: e.to,
-        style: { stroke: st.stroke, lineDash: st.lineDash, lineWidth: lineWidth, strokeOpacity: strokeOpacity },
-        // derivation/because (1.2.0, graph-wave lane A): passthrough only — carried onto the G6
-        // edge's own data so a future load()/inspector call can read them, same as every other
-        // field here. Absent (undefined) for an edge from a pre-1.2.0 snapshot or one this
-        // producer never populated, never a fabricated placeholder. No new visual encoding is
-        // added for them here (no colour/dash driven off derivation) — that's a rendering
-        // decision for a later work package, not this passthrough.
+        // derivation/because (graph-wave lane B): lineDashFor makes derivation the PRIMARY dash
+        // channel (any INFERRED edge — today, HOT_PATH only — draws the same fine dash regardless
+        // of the kind's own pattern), mirroring GraphRoom.kt's native canvas rule of the same name.
+        style: { stroke: st.stroke, lineDash: lineDashFor(e.kind, e.derivation, theme), lineWidth: lineWidth, strokeOpacity: strokeOpacity },
+        // derivation/because (1.2.0, graph-wave lane A; edge click inspector wired graph-wave lane
+        // B — see renderEdgeInspector/'edge:click' below): carried onto the G6 edge's own data,
+        // same as every other field here. Absent (undefined) for an edge from a pre-1.2.0 snapshot
+        // or one this producer never populated, never a fabricated placeholder.
         data: { kind: e.kind, confidence: targetConfidence, derivation: e.derivation, because: e.because },
       };
     });
@@ -354,6 +390,10 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
   // internal node-data-lookup API, so this stays correct even if a future vendor bump changes
   // that internal shape.
   var lastGraphNodesById = {};
+  // Graph-wave lane B: same "read straight from the last parsed ThreadGraph JSON, never a G6
+  // internal lookup" rationale as lastGraphNodesById above, keyed the same way toGraphData's own
+  // edges.map assigns ids ('e' + index).
+  var lastGraphEdgesById = {};
 
   function renderInspector(node) {
     var el = document.getElementById('graph-room-inspector');
@@ -364,6 +404,27 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
     if (node.outcome && OUTCOME_LABEL[node.outcome]) lines.push('Outcome: ' + OUTCOME_LABEL[node.outcome]);
     if (typeof node.confidence === 'number') lines.push('Confidence: ' + Math.round(node.confidence * 100) + '%');
     if (node.at) lines.push(String(node.at));
+    el.textContent = lines.join('\n');
+    el.hidden = false;
+  }
+
+  // Graph-wave lane B: the edge counterpart to renderInspector above — GraphRoom.kt's native
+  // EdgeDetailsDialog is the precedent (kind + from/to + derivation + because, always as TEXT,
+  // never left to the dash-vs-solid line style alone — binding constraint 6). Shares the same
+  // #graph-room-inspector element (mutually exclusive with a node selection); a fresh load() or a
+  // canvas click clears it via the same renderInspector(null) call.
+  function renderEdgeInspector(edge) {
+    var el = document.getElementById('graph-room-inspector');
+    if (!el) return;
+    if (!edge) { el.hidden = true; el.textContent = ''; return; }
+    var lines = [(EDGE_KIND_LABEL[edge.kind] || edge.kind)];
+    // → escaped (not a literal arrow char), matching this bootstrap's own '\u00b7' status-
+    // line convention below — this string is authored inside a JS template literal that is itself
+    // interpolated into an outer HTML template literal, so an escaped codepoint is the safer
+    // round-trip than a literal multi-byte character here.
+    lines.push(String(edge.from) + ' \u2192 ' + String(edge.to));
+    if (edge.derivation) lines.push(DERIVATION_LABEL[edge.derivation] || edge.derivation);
+    if (edge.because) lines.push(String(edge.because));
     el.textContent = lines.join('\n');
     el.hidden = false;
   }
@@ -397,6 +458,15 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
         renderInspector(id ? lastGraphNodesById[id] : null);
       } catch (err) { /* inspector is best-effort; the graph itself must keep working */ }
     });
+    // Graph-wave lane B: the edge counterpart — 'edge:click' is the same real graph-level event
+    // this vendored build's click-select behavior keys off internally for edges, mirroring
+    // 'node:click' above exactly (evt.target.id, try/catch, best-effort).
+    graph.on('edge:click', function (evt) {
+      try {
+        var id = evt && evt.target && evt.target.id;
+        renderEdgeInspector(id ? lastGraphEdgesById[id] : null);
+      } catch (err) { /* inspector is best-effort; the graph itself must keep working */ }
+    });
     graph.on('canvas:click', function () { renderInspector(null); });
     return graph;
   }
@@ -425,6 +495,10 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
         var parsed = JSON.parse(jsonText);
         lastGraphNodesById = {};
         (parsed.nodes || []).forEach(function (n) { lastGraphNodesById[n.id] = n; });
+        // Graph-wave lane B: keyed 'e' + index — the exact id scheme toGraphData's own edges.map
+        // assigns each G6 edge, so 'edge:click's evt.target.id looks itself up here correctly.
+        lastGraphEdgesById = {};
+        (parsed.edges || []).forEach(function (e, i) { lastGraphEdgesById['e' + i] = e; });
         renderInspector(null); // a fresh load invalidates whatever was selected before
         var data = toGraphData(parsed, theme);
         var g = ensureGraph();

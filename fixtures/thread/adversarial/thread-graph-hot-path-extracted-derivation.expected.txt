@@ -1,0 +1,34 @@
+Structural validation result: PASSES schemas/thread/thread-graph.schema.json. `kind` and
+`derivation` are independent enums at the schema layer — nothing in the JSON Schema itself ties a
+HOT_PATH edge to INFERRED, and `because` is only constrained to be a non-blank string, not checked
+for content — so this fixture is adversarial at the semantic/contract layer only, same class of gap
+fixtures/thread/adversarial/thread-graph-inferred-edge-interpretive-because.adversarial.json
+documents for `because` content generally.
+
+This fixture bundles two defects a real `dev.fonebrew.domain.thread.ThreadGraphAnalytics` (the
+HOT_PATH producer) MUST NEVER emit, even though both pass structural validation:
+
+  1. `"kind": "HOT_PATH", "derivation": "EXTRACTED"` — HOT_PATH names a relationship
+     `ThreadGraphAnalytics` computed from recorded branch counts, not one `ThreadGraphProjector`
+     read off an existing record (schemas/thread/thread-graph.schema.json's own HOT_PATH
+     description: "the only edge kind a real INFERRED-edge producer emits in this repo today").
+     `ThreadGraphAnalyticsTest` MUST assert every HOT_PATH edge `hotPathEdges` returns carries
+     `derivation == EdgeDerivation.INFERRED`, never EXTRACTED — an EXTRACTED HOT_PATH edge would
+     misrepresent a derived relationship as a recorded fact.
+
+  2. `"because": "the user kept coming back here because they were unsure which answer was
+     right"` — a psychological/motivational claim about *why* the user branched, exactly the class
+     of interpretation CLAUDE.md binding rule 4 / THREAD_TOPOLOGY_PLAN.md binding constraint 3
+     (Issue #2) blocks ("§5c idiolect baseline is owner-only input — do not invent it"), regardless
+     of whether the edge is EXTRACTED or INFERRED. The honest structural equivalent — what
+     `ThreadGraphAnalytics.hotPathEdges` actually emits — names only the recorded branch point and
+     its recorded continuation count (e.g. "shares a branch point (msg-42) recorded with 3
+     continuations"), never a claim about motive, tone, or intent.
+
+Required behavior from a real implementation (not just structural validation): a HOT_PATH producer
+that emitted either defect above would still validate against the schema, so `ThreadGraphAnalytics`'s
+own JVM tests — not the schema — are what this corpus relies on to catch it, per this corpus's
+"fixtures first" Definition of Ready (FB-RAT-DIST-004): this fixture documents the obligation
+`ThreadGraphAnalyticsTest` MUST exercise before the producer shipped, mirroring the sibling
+INFERRED-edge adversarial fixture's own "documents the obligation a later work package MUST
+satisfy" framing — except this lane IS that later work package.
