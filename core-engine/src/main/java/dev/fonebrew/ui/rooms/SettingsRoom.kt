@@ -921,11 +921,15 @@ private fun TextSettings(viewModel: SettingsViewModel) {
  * [dev.fonebrew.domain.cost.PricingBook.priceFor] resolves at generation time. Plus one
  * fallback-rate row (used for any priced-elsewhere model with no row of its own) and a
  * display-currency preference — a plain ISO-4217 code; this never fetches an exchange rate
- * (binding rule 1).
+ * (binding rule 1). Also hosts the **"Per-turn cost in chat"** toggle (Lane G / owner ruling
+ * 2026-09-06, item G G1-MODIFIED) — same region, since it governs how the currency/rates below
+ * ever surface inline in Chat.
  *
  * [dev.fonebrew.ui.state.PricingFormPresenter] does the actual derivation/parsing (pure,
  * JVM-tested); this composable is thin glue over it plus [SettingsViewModel]'s [PricingStore]
- * passthrough.
+ * passthrough. The per-turn-cost toggle itself reads/writes [dev.fonebrew.data.SessionStore]
+ * directly (same idiom as every other boolean Settings switch in this file) since it isn't part
+ * of [PricingBook] state.
  */
 @Composable
 private fun ProviderPricingSection(viewModel: SettingsViewModel, providers: List<CloudProvider>) {
@@ -965,6 +969,37 @@ private fun ProviderPricingSection(viewModel: SettingsViewModel, providers: List
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+
+    HorizontalDivider()
+
+    // Lane G / owner ruling 2026-09-06 (open-ux-decisions.md item G, G1-MODIFIED): an inline
+    // per-turn cost line exists in Chat, but only ever behind this intentional, default-OFF
+    // toggle (owner's words: "Cost always visible has to be a toggle turned on intentionally as
+    // it takes up screen space and will make the interface look more cluttered"). The Cost facet
+    // and every ledger view (Instruments, Me·Myself·I) above are unaffected — this only gates the
+    // small footnote line under a cloud turn's bubble.
+    val container = (LocalContext.current.applicationContext as dev.fonebrew.FonebrewApp).container
+    val perTurnCostInChat by container.sessionStore.perTurnCostInChat.collectAsState()
+    Text("Per-turn cost in chat", style = MaterialTheme.typography.titleSmall)
+    Text(
+        "Off by default. When on, a watched-cloud turn that reported real usage shows a small, " +
+            "quiet cost line under it (amount + token counts). On-device turns never show one — " +
+            "they cost nothing — and a turn with no recorded cost stays silent too; this never " +
+            "estimates a price.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Show cost under cloud turns", style = MaterialTheme.typography.bodyMedium)
+        HyleSwitch(
+            checked = perTurnCostInChat,
+            onCheckedChange = { container.sessionStore.setPerTurnCostInChat(it) },
+        )
+    }
 
     val rows = dev.fonebrew.ui.state.PricingFormPresenter.rows(
         book,

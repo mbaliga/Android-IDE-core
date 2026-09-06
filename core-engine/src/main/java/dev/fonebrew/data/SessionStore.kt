@@ -356,6 +356,20 @@ class SessionStore(context: Context) {
         _observerEnabled.value = on
     }
 
+    // Lane G / owner ruling 2026-09-06 on open-ux-decisions.md item G (G1-MODIFIED): the per-turn
+    // inline cost line is real, but only ever shown behind an intentional, default-OFF toggle
+    // (owner's words: "Cost always visible has to be a toggle turned on intentionally as it takes
+    // up screen space and will make the interface look more cluttered"). Off by default — same
+    // shape as [observerEnabled]/[entropyColoring] above; the Cost facet and every ledger-view
+    // panel (Instruments, Me·Myself·I) stay unaffected, this only gates the inline chat line.
+    private val _perTurnCostInChat = MutableStateFlow(prefs.getBoolean(KEY_PER_TURN_COST, false))
+    val perTurnCostInChat: StateFlow<Boolean> = _perTurnCostInChat.asStateFlow()
+
+    fun setPerTurnCostInChat(on: Boolean) {
+        prefs.edit().putBoolean(KEY_PER_TURN_COST, on).apply()
+        _perTurnCostInChat.value = on
+    }
+
     companion object {
         // A clean, generic blue (a shipped, AA-verified preset) — neutral default in place of
         // the Aeon violet, which stays available as a preset.
@@ -406,5 +420,6 @@ class SessionStore(context: Context) {
         private const val KEY_GESTURE_QUOTE_REPLY = "gestureQuoteReplyEnabled"
         private const val KEY_GESTURE_RADIAL = "gestureRadialFanEnabled"
         private const val KEY_OBSERVER = "threadObserverEnabled"
+        private const val KEY_PER_TURN_COST = "perTurnCostInChat"
     }
 }

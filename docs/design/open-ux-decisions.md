@@ -73,7 +73,7 @@ The token-first GitHub wizard exists but is buried in Settings. For users with n
 - **E2** Make it a **Loop** ("draft listing → critique tone → fit limits").
 - **E3** Defer entirely until the IDE/PM rooms ship.
 
-## G. Where does Cost live?
+## G. Where does Cost live? — RESOLVED (owner, 2026-09-06)
 
 The Cost epic (`docs/design/cost.md`) is built headless + has a wireframe **Cost facet**
 in the Develop room. Beyond that:
@@ -83,6 +83,22 @@ in the Develop room. Beyond that:
 - **G2** Cost facet only; no inline per-turn cost.
 - **G3** Make decisions first-class **tree nodes** (a "decision" turn type) so a forecast
   attaches to the conversation and travels with your history. Heaviest, most thesis-pure.
+
+**Ruling: G1-MODIFIED.** The owner's verbatim framing: *"Cost always visible has to be a
+toggle turned on intentionally as it takes up screen space and will make the interface look
+more cluttered."* So G1's inline per-turn cost line ships, but not unconditionally-on the way
+the earlier build had it — it sits behind an intentional, **default-OFF** Settings toggle
+("Per-turn cost in chat," in the Provider-pricing section of Settings → Text). With the toggle
+off (the default), nothing renders inline and the chat surface stays exactly as uncluttered as
+before this epic touched it. With it on, a **CLOUD** turn that carries recorded cost metadata
+shows a small, subdued footnote line (amount via the display-currency preference + token
+counts, `dev.fonebrew.ui.state.CostLinePresenter`) — never a hue-only signal (the owner is
+red-green colorblind), never an estimate for a turn with no recorded metadata, and never
+anything at all for an on-device turn (it cost nothing — there's nothing to show, not a zero).
+The Cost facet and every ledger view (chat Instruments, both Me·Myself·I usage cards) are
+unaffected by this toggle — they keep showing cost the way they already did; only the inline
+chat footnote is gated. G3 (decisions as first-class tree nodes) remains un-adopted — out of
+scope for this ruling.
 
 ## F. APK install affordance wording (sideload vs Play)
 

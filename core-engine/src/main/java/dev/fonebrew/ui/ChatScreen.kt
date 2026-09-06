@@ -134,6 +134,9 @@ import dev.fonebrew.ui.components.matchSlashCommands
 import dev.fonebrew.ui.develop.TerminalFacet
 import dev.fonebrew.ui.search.InChatFindBar
 import dev.fonebrew.ui.search.InChatFindPresenter
+import dev.fonebrew.ui.state.CostLinePresenter
+import dev.fonebrew.ui.state.TurnCostMetadata
+import dev.fonebrew.ui.state.TurnProvenance
 import dev.aarso.hyle.theme.LocalHyleColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -291,6 +294,15 @@ fun ChatScreen(
     val gestureToggles = remember(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan) {
         MessageGestureToggles(gestureVerdictDrag, gestureQuoteReply, gestureRadialFan)
     }
+
+    // Lane G / owner ruling 2026-09-06 (open-ux-decisions.md item G, G1-MODIFIED): the per-turn
+    // inline cost line only renders when this Settings toggle is on (default off — see
+    // SessionStore.perTurnCostInChat's own KDoc). currencyCode is the same display-currency
+    // preference the Provider-pricing form and every ledger view already use — CostLinePresenter
+    // never invents its own number or its own currency.
+    val perTurnCostVisible by container0.sessionStore.perTurnCostInChat.collectAsState()
+    val costCurrencyCode by container0.pricingStore.currencyCode.collectAsState()
+    val costLocale = java.util.Locale.getDefault()
 
     // Chat / Terminal / Tasks — three lenses on the centre's one activity: ask in Chat and it
     // runs, drive the shell directly in Terminal (§ owner spec, 2026-07-27), or watch what's
@@ -556,6 +568,9 @@ fun ChatScreen(
                         MessageTurn(
                             step = step,
                             enabled = !state.isGenerating,
+                            showPerTurnCost = perTurnCostVisible,
+                            costCurrencyCode = costCurrencyCode,
+                            costLocale = costLocale,
                             onSwitch = { dir -> viewModel.switchAlternative(step.node.id, dir) },
                             onLongPress = { actionStep = step },
                             onCompare = { viewModel.openCompare(step.node.id) },
@@ -2344,6 +2359,12 @@ private fun MessageTurn(
     enabled: Boolean,
     onSwitch: (Int) -> Unit,
     onLongPress: () -> Unit,
+    /** Lane G / owner ruling 2026-09-06 (open-ux-decisions.md item G, G1-MODIFIED) — the three
+     *  inputs [CostLinePresenter.resolve] needs to decide this turn's inline cost line. Defaults
+     *  match the toggle's own default-off shape, so this composable stays backward compatible. */
+    showPerTurnCost: Boolean = false,
+    costCurrencyCode: String = dev.fonebrew.domain.cost.CurrencyPref.DEFAULT,
+    costLocale: java.util.Locale = java.util.Locale.getDefault(),
     highlighted: Boolean = false,
     verdict: dev.fonebrew.domain.curation.Verdict? = null,
     bookmarked: Boolean = false,
@@ -2387,6 +2408,10 @@ private fun MessageTurn(
     onOpenObject3d: (relativePath: String, format: String) -> Unit = { _, _ -> },
 ) {
     val fromUser = step.node.role == Role.USER
+    // costMinor is only ever recorded for a watched-cloud turn that reported usage — the single
+    // provenance signal, reused below for both the header glyph and CostLinePresenter's decision
+    // rather than adding a second source of truth for the same fact.
+    val watchedTurn = step.node.metadata["costMinor"] != null
     Column(modifier = Modifier.fillMaxWidth()) {
         if (bridge != null) {
             SummaryNodeCard(bridge = bridge, onViewFullPrior = onViewFullPrior)
@@ -2409,10 +2434,21 @@ private fun MessageTurn(
                 // costMinor is only ever recorded for a watched-cloud turn that reported usage
                 // (LedgerComponents.kt) — reuse it as the provenance signal rather than adding a
                 // second source of truth for the same fact.
-                watched = step.node.metadata["costMinor"] != null,
-                costMinor = step.node.metadata["costMinor"],
-                tokensIn = step.node.metadata["tokensIn"],
-                tokensOut = step.node.metadata["tokensOut"],
+                watched = watchedTurn,
+                // Lane G / owner ruling 2026-09-06 (G1-MODIFIED): CostLinePresenter is the one
+                // place the toggle x provenance x metadata-presence decision gets made — this
+                // composable just renders whatever comes back, never re-derives it.
+                costLineText = CostLinePresenter.resolve(
+                    showPerTurnCost = showPerTurnCost,
+                    provenance = if (watchedTurn) TurnProvenance.CLOUD else TurnProvenance.ON_DEVICE,
+                    metadata = TurnCostMetadata.from(
+                        step.node.metadata["costMinor"],
+                        step.node.metadata["tokensIn"],
+                        step.node.metadata["tokensOut"],
+                    ),
+                    currencyCode = costCurrencyCode,
+                    locale = costLocale,
+                ),
                 // W2: web-search provenance — "webSearch" records the model was allowed to search
                 // this turn (the watched-object fact) independent of whether any source came back;
                 // "sources" is only ever non-empty when the provider's tool actually returned one.
@@ -2461,15 +2497,6 @@ private fun MessageTurn(
             }
         }
     }
-}
-
-/**
- * The per-turn cost line. [minor] is in the user's own price denomination (we never invent a
- * currency — binding rule 8), so it's shown as a plain value alongside the real token counts.
- */
-private fun costLine(minor: String, tokensIn: String, tokensOut: String): String {
-    val m = minor.toLongOrNull() ?: 0L
-    return "≈ $m  ·  in $tokensIn / out $tokensOut tok"
 }
 
 /** The four verdict detents' human labels (STUDIO_UX_SPEC.md §4.2) — shared by the chevron row's
@@ -2535,9 +2562,12 @@ private fun MessageBubble(
     /** costMinor is only ever recorded for a watched-cloud turn that reported usage — reused as
      *  the provenance signal for the "☁"/"⌂" header glyph and Hyle's Radiant/Reflective pulse. */
     watched: Boolean = false,
-    costMinor: String? = null,
-    tokensIn: String? = null,
-    tokensOut: String? = null,
+    /** Lane G / owner ruling 2026-09-06 (open-ux-decisions.md item G, G1-MODIFIED): the exact
+     *  line to render, already resolved by [CostLinePresenter.resolve] (toggle state x
+     *  provenance x metadata presence) — `null` renders nothing. This composable never sees the
+     *  raw costMinor/tokensIn/tokensOut strings or the Settings toggle itself; it only renders
+     *  what the presenter decided, which is what keeps it thin. */
+    costLineText: String? = null,
     // W2: web search provenance. webSearch = the model was allowed to search this turn (the
     // watched-object fact, recorded regardless of whether it actually searched); sources = the
     // results the provider's tool actually surfaced, if any; searchPaused = the server-side
@@ -2739,15 +2769,16 @@ private fun MessageBubble(
                             // well-formed markdown, so a complete turn passes through unchanged.
                             else -> Markdown(content = StreamingMarkdown.reconcile(content).text)
                         }
-                        if (stopped || costMinor != null || sources.isNotEmpty() || searchPaused) {
+                        if (stopped || costLineText != null || sources.isNotEmpty() || searchPaused) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = c.hairline)
-                            // Cost (G1): a small per-turn line for watched-cloud turns that
-                            // reported usage. [costMinor] is in the user's own price
-                            // denomination (we never invent a currency), so it's shown as a
-                            // plain value alongside the real token counts.
-                            if (costMinor != null) {
+                            // Cost (G1-MODIFIED, Lane G): a small, subdued per-turn line — only
+                            // ever present when CostLinePresenter.resolve found the Settings
+                            // toggle on, a CLOUD turn, and recorded metadata all at once. Quiet
+                            // by design (label-typography only, no hue-only semantics — the owner
+                            // is red-green colorblind): this reads as a footnote, not a badge.
+                            if (costLineText != null) {
                                 Text(
-                                    costLine(costMinor, tokensIn ?: "?", tokensOut ?: "?"),
+                                    costLineText,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = c.textMid,
                                 )
