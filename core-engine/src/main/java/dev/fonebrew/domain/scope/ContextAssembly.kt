@@ -1,5 +1,8 @@
 package dev.fonebrew.domain.scope
 
+import dev.fonebrew.domain.search.GraphAdjacentRecall
+import dev.fonebrew.domain.thread.ThreadGraph
+
 /**
  * Context assembly: the deterministic floor of Doc 03's hybrid context-assembly model.
  *
@@ -42,19 +45,27 @@ object ContextAssembly {
      * - [Verbatim]              — the entire scoped corpus fit; nothing was cut.
      * - [PrioritizedTruncation] — over budget; included by explicit priority (the
      *   pre-embedder rule), the remainder cut.
+     * - [GraphAdjacent]         — graph-wave lane C: non-semantic recall by expanding lexical
+     *   search hits through recorded [ThreadGraph] structure ([GraphAdjacentRecall]). Implemented
+     *   — see [assembleGraphAdjacent] — and deliberately **not** selected by [assemble]; a caller
+     *   opts into it explicitly (e.g. the user ran a search for this turn).
      * - [Recall]                — reserved for the embedder-driven semantic-retrieval
      *   layer. **Not implemented here** (the floor ships without an embedder). The case
      *   exists so the type is complete and call sites can switch on it once Recall lands.
+     *   [GraphAdjacent] is its non-semantic sibling, shipped today — see that case's own KDoc.
      */
     enum class AssemblyMode {
         Verbatim,
         PrioritizedTruncation,
+        GraphAdjacent,
 
         /**
          * TODO(embedder): embedding-based semantic recall. When a real on-device embedder
          * replaces `PlaceholderEmbedder`, this mode retrieves the most *relevant* pieces
          * (not merely the most recent) within budget. Deliberately unimplemented — the
-         * deterministic floor never selects it.
+         * deterministic floor never selects it. [GraphAdjacent] is the non-semantic sibling
+         * that graph-wave lane C shipped in the meantime: a real graph, traversed with citable
+         * edges, not similarity scores (see [GraphAdjacentRecall]'s own class KDoc).
          */
         Recall,
     }
@@ -103,6 +114,14 @@ object ContextAssembly {
         val cut: List<CorpusPiece>,
         val meter: BudgetMeter,
         val scope: Scope,
+        /**
+         * Populated only by [assembleGraphAdjacent] (mode [AssemblyMode.GraphAdjacent]) — the
+         * full graph-traversal citations behind that mode's [included]/[cut] pieces, keyed
+         * structurally rather than folded into prose. `null` for every other mode/call site
+         * ([assemble] never sets it), so this addition is invisible to every pre-existing caller
+         * and test.
+         */
+        val graphRecall: GraphAdjacentRecall.Result? = null,
     )
 
     /**
@@ -195,6 +214,80 @@ object ContextAssembly {
                 overBudget = includedCost > available,
             ),
             scope = scope,
+        )
+    }
+
+    /**
+     * Graph-wave lane C: assemble context by expanding lexical search hits ([seeds]) through
+     * recorded [ThreadGraph] structure ([GraphAdjacentRecall]) — the non-semantic sibling of the
+     * still-blocked [AssemblyMode.Recall] (see that case's own KDoc). Unlike [assemble], this is
+     * never auto-selected: a caller invokes it explicitly when it has both a graph snapshot and a
+     * set of search hits to expand (e.g. the user ran an in-app search for this turn).
+     *
+     * Steps:
+     * 1. Resolve [scope] -> project ids, filter [corpus] to them — identical to [assemble].
+     * 2. [GraphAdjacentRecall.expand] over [seeds] and [graph], capped at [recallCap]. That result
+     *    is the legibility ledger's spine: it names, for every candidate, exactly which recorded
+     *    edge and which matched query term put it here — never a similarity score.
+     * 3. Walk the capped candidates **in that recall order** (hit rank, then the six relations'
+     *    documented priority — see [GraphAdjacentRecall]): a candidate is included while the
+     *    running token total stays within [budget]'s available room, else it is cut — the same
+     *    greedy-while-it-fits rule [assemble]'s [AssemblyMode.PrioritizedTruncation] path uses for
+     *    unpinned pieces. A candidate with no matching [CorpusPiece] in the scoped [corpus] (its
+     *    id isn't one of [corpus]'s pieces) is honestly skipped from the [Assembled.included]/
+     *    [Assembled.cut] ledger — there is no text/cost to attribute — but it is never dropped
+     *    from [Assembled.graphRecall], so the full citation trail survives regardless of whether a
+     *    priced [CorpusPiece] happens to back it.
+     * 4. A candidate [GraphAdjacentRecall] itself already left out at [recallCap] is also folded
+     *    into [Assembled.cut] (when a matching piece exists) — the recall cap and the token
+     *    budget are two independently honest reasons a candidate can be missing, and both surface
+     *    through the same [Assembled.cut] list rather than one silently swallowing the other.
+     *
+     * [Assembled.meter]'s `overBudget` is always `false` here — nothing in this mode is
+     * *guaranteed* included past budget the way a pin is in [assemble]; a candidate that doesn't
+     * fit is simply cut, not force-kept.
+     */
+    fun assembleGraphAdjacent(
+        scope: Scope,
+        corpus: Corpus,
+        currentProjectId: String,
+        allProjectIds: Set<String>,
+        budget: ContextBudget,
+        seeds: List<GraphAdjacentRecall.Seed>,
+        graph: ThreadGraph,
+        recallCap: Int,
+    ): Assembled {
+        val projects = Scopes.resolveProjects(scope, currentProjectId, allProjectIds)
+        val scoped = corpus.filterToProjects(projects)
+        val piecesById = scoped.pieces.associateBy { it.id }
+        val available = budget.availableForCorpus
+
+        val recall = GraphAdjacentRecall.expand(seeds, graph, recallCap)
+
+        val included = ArrayList<CorpusPiece>()
+        val cut = ArrayList<CorpusPiece>()
+        var includedCost = 0
+        for (item in recall.included) {
+            val piece = piecesById[item.nodeId] ?: continue
+            val c = cost(piece)
+            if (includedCost + c <= available) {
+                included.add(piece)
+                includedCost += c
+            } else {
+                cut.add(piece)
+            }
+        }
+        for (item in recall.cut) {
+            piecesById[item.nodeId]?.let { cut.add(it) }
+        }
+
+        return Assembled(
+            mode = AssemblyMode.GraphAdjacent,
+            included = included,
+            cut = cut,
+            meter = meter(corpusTokens = includedCost, budget = budget, overBudget = false),
+            scope = scope,
+            graphRecall = recall,
         )
     }
 

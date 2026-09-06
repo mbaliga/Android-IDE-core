@@ -57,6 +57,7 @@ import dev.fonebrew.domain.scope.Scope
 private fun AssemblyMode.uiLabel(): String = when (this) {
     AssemblyMode.Verbatim -> "verbatim"
     AssemblyMode.PrioritizedTruncation -> "prioritized"
+    AssemblyMode.GraphAdjacent -> "graph recall"
     AssemblyMode.Recall -> "recall"
 }
 
@@ -70,6 +71,9 @@ private fun AssemblyMode.reason(): String = when (this) {
     AssemblyMode.Verbatim -> "the whole scoped corpus fit the budget — nothing was cut"
     AssemblyMode.PrioritizedTruncation ->
         "over budget — included by explicit priority (pinned, then most recent); the rest cut"
+    AssemblyMode.GraphAdjacent ->
+        "graph recall — search hits expanded through recorded graph edges (parent/children/" +
+            "branches/lineage/decisions), each one citable; no embedder"
     AssemblyMode.Recall -> "semantic recall (embedder-driven retrieval)"
 }
 

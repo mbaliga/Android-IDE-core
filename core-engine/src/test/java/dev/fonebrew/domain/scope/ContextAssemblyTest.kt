@@ -2,10 +2,19 @@ package dev.fonebrew.domain.scope
 
 import dev.fonebrew.domain.scope.ContextAssembly.AssemblyMode
 import dev.fonebrew.domain.scope.ContextAssembly.ContextBudget
+import dev.fonebrew.domain.search.GraphAdjacentRecall
+import dev.fonebrew.domain.thread.EdgeDerivation
+import dev.fonebrew.domain.thread.ThreadEdgeKind
+import dev.fonebrew.domain.thread.ThreadGraph
+import dev.fonebrew.domain.thread.ThreadGraphEdge
+import dev.fonebrew.domain.thread.ThreadGraphNode
+import dev.fonebrew.domain.thread.ThreadNodeKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 /**
  * The deterministic floor of context assembly: scope filtering, Verbatim vs prioritised
@@ -299,5 +308,136 @@ class ContextAssemblyTest {
         val r = assemble(corpus, ContextBudget(total = 10, reserved = 0))
         assertEquals(AssemblyMode.Verbatim, r.mode)
         assertEquals(0, r.meter.corpusTokens)
+    }
+
+    // ---- Graph-adjacent recall (graph-wave lane C) ----------------------------------------------
+
+    private val at: Instant = Instant.parse("2026-09-06T00:00:00Z")
+
+    private fun node(id: String, rootId: String, parentId: String? = null) =
+        ThreadGraphNode(id = id, kind = ThreadNodeKind.MESSAGE, rootId = rootId, parentId = parentId, at = at)
+
+    private fun replyEdge(from: String, to: String) =
+        ThreadGraphEdge(from, to, ThreadEdgeKind.REPLY, EdgeDerivation.EXTRACTED, "parent-child reply recorded in the message tree")
+
+    private fun seed(id: String, terms: List<String> = listOf("gradle")) = GraphAdjacentRecall.Seed(id, terms)
+
+    @Test
+    fun graphAdjacent_includesRecalledPieceWithCitationsAndSetsMode() {
+        // root -> hit -> child; the hit is the search hit, the child is one hop of recorded
+        // structure away from it.
+        val graph = ThreadGraph(
+            generatedAtUtc = at,
+            nodes = listOf(node("root", "root"), node("hit", "root", "root"), node("child", "root", "hit")),
+            edges = listOf(replyEdge("root", "hit"), replyEdge("hit", "child")),
+        )
+        val corpus = Corpus(listOf(piece("child", tokens = 50, source = CorpusSource.Conversation("root", "child"))))
+
+        val r = ContextAssembly.assembleGraphAdjacent(
+            scope = Scope.ThisProject,
+            corpus = corpus,
+            currentProjectId = "p1",
+            allProjectIds = all,
+            budget = ContextBudget(total = 1000, reserved = 0),
+            seeds = listOf(seed("hit")),
+            graph = graph,
+            recallCap = 10,
+        )
+
+        assertEquals(AssemblyMode.GraphAdjacent, r.mode)
+        assertEquals(listOf("child"), r.included.map { it.id })
+        assertTrue(r.cut.isEmpty())
+        assertEquals(50, r.meter.corpusTokens)
+        assertFalse(r.meter.overBudget)
+
+        // The structured citation trail is on the ledger too, not just prose.
+        val recalled = r.graphRecall
+        assertTrue("graphRecall must be populated for this mode", recalled != null)
+        val citation = recalled!!.included.single { it.nodeId == "child" }.citations.single()
+        assertEquals(GraphAdjacentRecall.Relation.CHILDREN, citation.relation)
+        assertEquals("parent-child reply recorded in the message tree", citation.because)
+        assertEquals(listOf("gradle"), citation.matchedQueryTerms)
+    }
+
+    @Test
+    fun graphAdjacent_scopeFiltersRecalledPieces_butGraphRecallStillShowsTheCitation() {
+        val graph = ThreadGraph(
+            generatedAtUtc = at,
+            nodes = listOf(node("hit", "root"), node("child", "root", "hit")),
+            edges = listOf(replyEdge("hit", "child")),
+        )
+        // "child"'s CorpusPiece belongs to p2, but scope is ThisProject (p1) — it must be
+        // dropped from the priced included/cut ledger, honestly, while the structural citation
+        // trail (graphRecall) still names it: nothing here is silently invented OR silently lost.
+        val corpus = Corpus(listOf(piece("child", projectId = "p2", tokens = 50, source = CorpusSource.Conversation("root", "child"))))
+
+        val r = ContextAssembly.assembleGraphAdjacent(
+            scope = Scope.ThisProject,
+            corpus = corpus,
+            currentProjectId = "p1",
+            allProjectIds = all,
+            budget = ContextBudget(total = 1000, reserved = 0),
+            seeds = listOf(seed("hit")),
+            graph = graph,
+            recallCap = 10,
+        )
+
+        assertTrue(r.included.isEmpty())
+        assertTrue(r.cut.isEmpty())
+        assertEquals(listOf("child"), r.graphRecall!!.included.map { it.nodeId })
+    }
+
+    @Test
+    fun graphAdjacent_cutsCandidatesThatDoNotFitTheTokenBudget() {
+        val graph = ThreadGraph(
+            generatedAtUtc = at,
+            nodes = listOf(node("hit", "root"), node("a", "root", "hit"), node("b", "root", "hit")),
+            edges = listOf(replyEdge("hit", "a"), replyEdge("hit", "b")),
+        )
+        val corpus = Corpus(
+            listOf(
+                piece("a", tokens = 400, source = CorpusSource.Conversation("root", "a")),
+                piece("b", tokens = 400, source = CorpusSource.Conversation("root", "b")),
+            ),
+        )
+        // available = 500: "a" (400) fits, "b" (400 more) would push to 800 > 500 -> cut.
+        val r = ContextAssembly.assembleGraphAdjacent(
+            scope = Scope.ThisProject, corpus = corpus, currentProjectId = "p1", allProjectIds = all,
+            budget = ContextBudget(total = 500, reserved = 0), seeds = listOf(seed("hit")), graph = graph, recallCap = 10,
+        )
+
+        assertEquals(listOf("a"), r.included.map { it.id })
+        assertEquals(listOf("b"), r.cut.map { it.id })
+        assertEquals(400, r.meter.corpusTokens)
+        assertFalse("a candidate that doesn't fit is cut, never a broken pin-style promise", r.meter.overBudget)
+    }
+
+    @Test
+    fun graphAdjacent_recallCapCutsAreSurfacedInTheLedgerToo() {
+        val nodes = mutableListOf(node("hit", "root"))
+        val edges = mutableListOf<ThreadGraphEdge>()
+        val pieces = mutableListOf<CorpusPiece>()
+        for (i in 1..3) {
+            nodes += node("c$i", "root", "hit")
+            edges += replyEdge("hit", "c$i")
+            pieces += piece("c$i", tokens = 10, source = CorpusSource.Conversation("root", "c$i"))
+        }
+        val graph = ThreadGraph(generatedAtUtc = at, nodes = nodes, edges = edges)
+
+        val r = ContextAssembly.assembleGraphAdjacent(
+            scope = Scope.ThisProject, corpus = Corpus(pieces), currentProjectId = "p1", allProjectIds = all,
+            budget = ContextBudget(total = 1000, reserved = 0), seeds = listOf(seed("hit")), graph = graph, recallCap = 1,
+        )
+
+        assertEquals(listOf("c1"), r.included.map { it.id })
+        // c2/c3 were cut by GraphAdjacentRecall's own cap, not the token budget — still surfaced.
+        assertEquals(setOf("c2", "c3"), r.cut.map { it.id }.toSet())
+        assertTrue(r.graphRecall!!.truncated)
+    }
+
+    @Test
+    fun graphAdjacent_nonGraphAdjacentModesNeverPopulateGraphRecall() {
+        val r = assemble(Corpus(listOf(piece("a", tokens = 10))), ContextBudget(total = 1000, reserved = 0))
+        assertNull(r.graphRecall)
     }
 }
