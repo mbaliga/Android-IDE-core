@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import dev.fonebrew.FonebrewApp
+import dev.fonebrew.core_engine.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -71,7 +72,11 @@ class DownloadService : Service() {
     private fun notification(title: String, progress: Int, max: Int): Notification =
         Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            // Status-bar icons are rendered as a white alpha mask by the platform —
+            // ic_stat_fonebrew is a real alpha-mask asset (see its derivation note),
+            // not a placeholder or a colour bitmap. Actual status-bar rendering is
+            // owner-verified on device only.
+            .setSmallIcon(R.drawable.ic_stat_fonebrew)
             .setOngoing(true)
             .apply { if (max > 0) setProgress(max, progress, false) }
             .build()

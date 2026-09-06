@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android 13+ (API 33) themed-icon support: <monochrome> is read only on API 33+
+     launchers with "Themed icons" enabled; below that (or with the setting off) this
+     layer is ignored and background+foreground render as before, so it's additive.
+     ic_launcher_monochrome.png is a derived alpha mask (see its own note + docs/brand/
+     README.md) — the system tints its alpha channel with the user's wallpaper accent,
+     it does not use the drawable's own colour. Rendering/circle-mask/tint behaviour is
+     owner-verified on a real device only (no device in this build environment). -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/brand_logo" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

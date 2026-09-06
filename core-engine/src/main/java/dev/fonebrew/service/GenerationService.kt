@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import dev.fonebrew.core_engine.R
 
 /**
  * A minimal foreground service whose only job is to keep the process alive while
@@ -27,7 +28,11 @@ class GenerationService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Fonebrew")
                 .setContentText("Running a model on-device…")
-                .setSmallIcon(android.R.drawable.stat_sys_download)
+                // Status-bar icons are rendered as a white alpha mask by the platform —
+                // ic_stat_fonebrew is a real alpha-mask asset (see its derivation note),
+                // not a placeholder or a colour bitmap. Actual status-bar rendering is
+                // owner-verified on device only.
+                .setSmallIcon(R.drawable.ic_stat_fonebrew)
                 .setOngoing(true)
                 .build()
         // API 34+ requires the type to be passed; minSdk 31 always has the 3-arg form.

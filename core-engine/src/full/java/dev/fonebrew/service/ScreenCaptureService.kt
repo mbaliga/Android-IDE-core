@@ -20,6 +20,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import dev.fonebrew.FonebrewApp
+import dev.fonebrew.core_engine.R
 import dev.fonebrew.data.Intake
 import dev.fonebrew.ui.MainActivity
 
@@ -45,7 +46,11 @@ class ScreenCaptureService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Fonebrew")
                 .setContentText("Reading the screen…")
-                .setSmallIcon(android.R.drawable.ic_menu_camera)
+                // Status-bar icons are rendered as a white alpha mask by the platform —
+                // ic_stat_fonebrew is a real alpha-mask asset (see its derivation note),
+                // not a placeholder or a colour bitmap. Actual status-bar rendering is
+                // owner-verified on device only.
+                .setSmallIcon(R.drawable.ic_stat_fonebrew)
                 .setOngoing(true)
                 .build(),
         )

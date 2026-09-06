@@ -16,6 +16,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import dev.fonebrew.core_engine.R
 import dev.fonebrew.ui.MainActivity
 import dev.fonebrew.ui.ScreenCaptureActivity
 import kotlin.math.abs
@@ -40,7 +41,11 @@ class OverlayService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Fonebrew")
                 .setContentText("Floating bubble active")
-                .setSmallIcon(android.R.drawable.ic_menu_view)
+                // Status-bar icons are rendered as a white alpha mask by the platform —
+                // ic_stat_fonebrew is a real alpha-mask asset (see its derivation note),
+                // not a placeholder or a colour bitmap. Actual status-bar rendering is
+                // owner-verified on device only.
+                .setSmallIcon(R.drawable.ic_stat_fonebrew)
                 .setOngoing(true)
                 .build(),
         )
