@@ -39,8 +39,8 @@ android {
         // Continues the launch spine (0.1.0 reset, 2026-07-16). versionCode jumps past 17
         // because interim dev sideloads shipped 0.13.0(17) — code must stay monotonic for
         // in-place upgrades on devices that installed those.
-        versionCode = 26
-        versionName = "0.2.8"
+        versionCode = 27
+        versionName = "0.2.9"
 
         // arm64 is the only ABI the target device (and most modern phones) needs;
         // restricting it keeps the packaged native libs (from :core-engine's AAR) small.
