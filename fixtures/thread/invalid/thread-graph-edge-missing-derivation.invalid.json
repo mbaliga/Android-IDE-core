@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.2.0",
+  "generatedAtUtc": "2026-09-06T00:00:00Z",
+  "nodes": [
+    { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "at": "2026-09-01T10:00:00Z" },
+    { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z" }
+  ],
+  "edges": [
+    { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "because": "parent-child reply recorded in the message tree" }
+  ],
+  "unknownFields": {}
+}

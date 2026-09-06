@@ -283,7 +283,9 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
           labelFill: '#e6e6e6',
           labelPlacement: 'bottom',
         },
-        data: { kind: n.kind, at: n.at, label: n.label, outcome: n.outcome, confidence: n.confidence },
+        // sha/repoRef (1.2.0, COMMIT node — schema only, no producer mints one yet): passthrough
+        // only, same rationale the edge data's derivation/because carry below.
+        data: { kind: n.kind, at: n.at, label: n.label, outcome: n.outcome, confidence: n.confidence, sha: n.sha, repoRef: n.repoRef },
       };
     });
     const edges = (g.edges || []).map(function (e, i) {
@@ -304,7 +306,13 @@ var _c=function(t,e){return _c=Object.setPrototypeOf||{__proto__:[]}instanceof A
         source: e.from,
         target: e.to,
         style: { stroke: st.stroke, lineDash: st.lineDash, lineWidth: lineWidth, strokeOpacity: strokeOpacity },
-        data: { kind: e.kind, confidence: targetConfidence },
+        // derivation/because (1.2.0, graph-wave lane A): passthrough only — carried onto the G6
+        // edge's own data so a future load()/inspector call can read them, same as every other
+        // field here. Absent (undefined) for an edge from a pre-1.2.0 snapshot or one this
+        // producer never populated, never a fabricated placeholder. No new visual encoding is
+        // added for them here (no colour/dash driven off derivation) — that's a rendering
+        // decision for a later work package, not this passthrough.
+        data: { kind: e.kind, confidence: targetConfidence, derivation: e.derivation, because: e.because },
       };
     });
     return { nodes: nodes, edges: edges };

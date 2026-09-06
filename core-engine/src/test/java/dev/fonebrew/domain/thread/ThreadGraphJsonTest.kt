@@ -209,4 +209,175 @@ class ThreadGraphJsonTest {
             assertTrue(expected.message!!.contains("confidence"))
         }
     }
+
+    // Verbatim copy of fixtures/thread/valid/thread-graph-derivation-and-commit-anchor-valid.json (graph-wave lane A, 1.2.0)
+    private val threadGraphDerivationAndCommitAnchorValidJson = """
+        {
+          "schemaVersion": "1.2.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": null, "at": "2026-09-01T10:00:00Z", "label": null },
+            { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z", "label": null },
+            { "id": "01JB0000000000000MSG102", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB0000000000000MSG101", "at": "2026-09-01T10:06:00Z", "label": null },
+            { "id": "01JB000000000000COMMIT1", "kind": "COMMIT", "rootId": "01JB00000000000000000RT1", "parentId": "01JB0000000000000MSG101", "at": "2026-09-01T10:07:00Z", "label": "Fix off-by-one in fixture indexer", "sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", "repoRef": "mbaliga/android-ide-core@main" }
+          ],
+          "edges": [
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+            { "from": "01JB0000000000000MSG101", "to": "01JB0000000000000MSG102", "kind": "REPLY", "derivation": "INFERRED", "because": "a future analysis layer would derive this continuation relationship; no current projector emits it" },
+            { "from": "01JB0000000000000MSG101", "to": "01JB000000000000COMMIT1", "kind": "COMMIT_ANCHOR", "derivation": "EXTRACTED", "because": "commit sha minted from this message's agent-run ChangeSet commit" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the derivation-and-commit-anchor fixture decodes with the new 1_2_0 edge and COMMIT vocabulary`() {
+        val decoded = ThreadGraphJson.fromJsonString(threadGraphDerivationAndCommitAnchorValidJson)
+        assertEquals(4, decoded.nodes.size)
+        assertEquals(3, decoded.edges.size)
+        assertEquals(ThreadNodeKind.COMMIT, decoded.nodes.single { it.id == "01JB000000000000COMMIT1" }.kind)
+        assertTrue(
+            ThreadGraphEdge(
+                "01JB0000000000000MSG101", "01JB000000000000COMMIT1", ThreadEdgeKind.COMMIT_ANCHOR,
+                EdgeDerivation.EXTRACTED, "commit sha minted from this message's agent-run ChangeSet commit",
+            ) in decoded.edges,
+        )
+        assertTrue(decoded.edges.any { it.derivation == EdgeDerivation.INFERRED })
+
+        val roundTripped = ThreadGraphJson.fromJsonString(ThreadGraphJson.toJsonString(decoded))
+        assertEquals(decoded, roundTripped)
+    }
+
+    @Test fun `the fixture's COMMIT_ANCHOR edge also round-trips through the full envelope wrapper`() {
+        val payload = ThreadGraphJson.fromJsonString(threadGraphDerivationAndCommitAnchorValidJson)
+        val envelope = ThreadGraphJson.envelope(payload, objectId = "fixture-obj-2", producer = producer())
+        val decoded = ThreadGraphJson.decode(ThreadGraphJson.encode(envelope))
+        assertEquals(payload, decoded.payload)
+    }
+
+    // Verbatim copy of fixtures/thread/invalid/thread-graph-edge-missing-derivation.invalid.json
+    private val threadGraphEdgeMissingDerivationJson = """
+        {
+          "schemaVersion": "1.2.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "at": "2026-09-01T10:00:00Z" },
+            { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z" }
+          ],
+          "edges": [
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "because": "parent-child reply recorded in the message tree" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the invalid missing-derivation fixture is rejected by decode, not silently accepted`() {
+        try {
+            ThreadGraphJson.fromJsonString(threadGraphEdgeMissingDerivationJson)
+            org.junit.Assert.fail("expected IllegalArgumentException for a because with no derivation")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("derivation"))
+        }
+    }
+
+    // Verbatim copy of fixtures/thread/invalid/thread-graph-edge-empty-because.invalid.json
+    private val threadGraphEdgeEmptyBecauseJson = """
+        {
+          "schemaVersion": "1.2.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "at": "2026-09-01T10:00:00Z" },
+            { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z" }
+          ],
+          "edges": [
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "derivation": "EXTRACTED", "because": "" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the invalid empty-because fixture is rejected by decode, not silently accepted`() {
+        try {
+            ThreadGraphJson.fromJsonString(threadGraphEdgeEmptyBecauseJson)
+            org.junit.Assert.fail("expected IllegalArgumentException for a blank because")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("because"))
+        }
+    }
+
+    // Verbatim copy of fixtures/thread/invalid/thread-graph-edge-unknown-derivation-value.invalid.json
+    private val threadGraphEdgeUnknownDerivationValueJson = """
+        {
+          "schemaVersion": "1.2.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "at": "2026-09-01T10:00:00Z" },
+            { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z" }
+          ],
+          "edges": [
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "derivation": "GUESSED", "because": "a made-up derivation value that isn't EXTRACTED or INFERRED" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the invalid unknown-derivation-value fixture is rejected by decode, not silently accepted`() {
+        try {
+            ThreadGraphJson.fromJsonString(threadGraphEdgeUnknownDerivationValueJson)
+            org.junit.Assert.fail("expected IllegalArgumentException for an unrecognized EdgeDerivation value")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("GUESSED"))
+        }
+    }
+
+    // Verbatim copy of fixtures/thread/invalid/thread-graph-commit-missing-sha.invalid.json
+    private val threadGraphCommitMissingShaJson = """
+        {
+          "schemaVersion": "1.2.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "at": "2026-09-01T10:00:00Z" },
+            { "id": "01JB000000000000COMMIT1", "kind": "COMMIT", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:07:00Z", "label": "Fix off-by-one", "repoRef": "mbaliga/android-ide-core@main" }
+          ],
+          "edges": [],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the invalid commit-missing-sha fixture is rejected by decode, not silently accepted`() {
+        try {
+            ThreadGraphJson.fromJsonString(threadGraphCommitMissingShaJson)
+            org.junit.Assert.fail("expected IllegalArgumentException for a COMMIT node without a sha")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("COMMIT"))
+        }
+    }
+
+    // Verbatim copy of fixtures/thread/adversarial/thread-graph-inferred-edge-interpretive-because.adversarial.json —
+    // structurally PASSES (see its own .expected.txt sibling for the semantic-layer obligation this documents).
+    private val threadGraphInferredEdgeInterpretiveBecauseJson = """
+        {
+          "schemaVersion": "1.2.0",
+          "generatedAtUtc": "2026-09-06T00:00:00Z",
+          "nodes": [
+            { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "at": "2026-09-01T10:00:00Z" },
+            { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z" },
+            { "id": "01JB0000000000000MSG102", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB0000000000000MSG101", "at": "2026-09-01T10:12:00Z" }
+          ],
+          "edges": [
+            { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+            { "from": "01JB0000000000000MSG101", "to": "01JB0000000000000MSG102", "kind": "REPLY", "derivation": "INFERRED", "because": "the user's phrasing here echoes a defensive, hedging pattern seen a few sessions ago -- this edge marks the probable idiolect drift between the two turns" }
+          ],
+          "unknownFields": {}
+        }
+    """.trimIndent()
+
+    @Test fun `the adversarial inferred-edge fixture structurally decodes — the defect is semantic, per its own expected txt`() {
+        // Mirrors this corpus's existing adversarial idiom (thread-marker-interpretive-note,
+        // thread-event-delegation-secret-leak): JSON Schema / this codec cannot see that
+        // `because`'s CONTENT interprets the user, only that it is a non-blank string paired with
+        // a `derivation` — so decode succeeds. The obligation a real INFERRED-edge producer MUST
+        // satisfy lives in the fixture's own `.expected.txt` sibling, not as a decode-time check.
+        val decoded = ThreadGraphJson.fromJsonString(threadGraphInferredEdgeInterpretiveBecauseJson)
+        assertEquals(EdgeDerivation.INFERRED, decoded.edges.single { it.kind == ThreadEdgeKind.REPLY && it.from == "01JB0000000000000MSG101" }.derivation)
+    }
 }

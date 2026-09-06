@@ -297,10 +297,12 @@ fun GraphRoom(
 }
 
 /** Where "Open" lands for [node] — the node itself for a real tree node, its anchor for a marker
- *  or delegation, or nothing for an unanchored marker (never fabricated). */
+ *  or delegation, or nothing for an unanchored marker (never fabricated). A COMMIT node (1.2.0)
+ *  has no conversation view of its own — like MARKER/DECISION/DELEGATION, "Open" lands on the
+ *  message/run node it's anchored from (its `parentId`), never the commit itself. */
 private fun openTargetId(node: ThreadGraphNode): String? = when (node.kind) {
     ThreadNodeKind.MESSAGE, ThreadNodeKind.FORK_ROOT, ThreadNodeKind.SPAWN_ROOT, ThreadNodeKind.RUN_ROOT -> node.id
-    ThreadNodeKind.MARKER, ThreadNodeKind.DECISION, ThreadNodeKind.DELEGATION -> node.parentId
+    ThreadNodeKind.MARKER, ThreadNodeKind.DECISION, ThreadNodeKind.DELEGATION, ThreadNodeKind.COMMIT -> node.parentId
 }
 
 private fun kindLabel(kind: ThreadNodeKind): String = when (kind) {
@@ -311,6 +313,7 @@ private fun kindLabel(kind: ThreadNodeKind): String = when (kind) {
     ThreadNodeKind.MARKER -> "Marker"
     ThreadNodeKind.DECISION -> "Decision"
     ThreadNodeKind.DELEGATION -> "Delegation"
+    ThreadNodeKind.COMMIT -> "Commit"
 }
 
 /** Outcome text is the WCAG-safe channel for a [ThreadGraphNode.outcome] (binding constraint 6 —
@@ -338,6 +341,14 @@ private fun NodeDetailsDialog(node: ThreadGraphNode, onOpen: (() -> Unit)?, onDi
                 }
                 node.confidence?.let {
                     Text("Confidence: ${(it * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall)
+                }
+                // 1.2.0: COMMIT's own identity/display fields — same "always readable as text,
+                // never a shape/colour-only cue" discipline outcome/confidence already follow.
+                node.sha?.let {
+                    Text("Commit: ${it.take(12)}", style = MaterialTheme.typography.labelSmall)
+                }
+                node.repoRef?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },
@@ -468,6 +479,18 @@ private fun glyphFor(kind: ThreadNodeKind, colors: dev.aarso.hyle.theme.HyleColo
             drawRect(colors.violet, topLeft = Offset(size.width / 2f - t / 2f, 0f), size = androidx.compose.ui.geometry.Size(t, size.height))
         }
     }
+    ThreadNodeKind.COMMIT -> {
+        // 1.2.0, minimal (schema-only work package — full rendering polish is a later work
+        // package's job, per this file's own audit history for prior kinds): a diagonal "X"
+        // cross, distinct from DELEGATION's upright "+" cross and every other glyph here
+        // (circle/triangle/rect/hexagon/diamond/star). colors.outline is otherwise unused in
+        // this file, so COMMIT gets its own colour too, not just its own shape.
+        {
+            val t = size.minDimension * 0.22f
+            drawLine(colors.outline, Offset(0f, 0f), Offset(size.width, size.height), t, androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(colors.outline, Offset(size.width, 0f), Offset(0f, size.height), t, androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
 }
 
 /**
@@ -583,6 +606,9 @@ private fun ThreadMapCanvas(
                         ThreadEdgeKind.SPAWN -> colors.warning.copy(alpha = 0.7f)
                         ThreadEdgeKind.LINEAGE -> colors.violet.copy(alpha = 0.5f)
                         ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR -> colors.hairline
+                        // 1.2.0, minimal (schema-only work package — see glyphFor's own note):
+                        // colors.outline pairs this edge with the COMMIT node glyph above.
+                        ThreadEdgeKind.COMMIT_ANCHOR -> colors.outline.copy(alpha = 0.7f)
                     }
                     // Fixed per audit (binding constraint 6 / WCAG 1.4.1): colour was the ONLY
                     // channel distinguishing edge kinds (FORK and SPAWN were indistinguishable —
@@ -595,6 +621,8 @@ private fun ThreadMapCanvas(
                         ThreadEdgeKind.LINEAGE -> PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
                         ThreadEdgeKind.MARKER_ANCHOR, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR ->
                             PathEffect.dashPathEffect(floatArrayOf(1.dp.toPx(), 3.dp.toPx()))
+                        // A long dash — distinct from every pattern above (solid / 6-4 / 4-3 / 1-3).
+                        ThreadEdgeKind.COMMIT_ANCHOR -> PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 2.dp.toPx()))
                     }
                     // A second, non-colour, non-dash channel for FORK vs SPAWN specifically (both
                     // solid otherwise): SPAWN draws fractionally thicker, same distinction the
@@ -608,7 +636,12 @@ private fun ThreadMapCanvas(
                     val stroke = confidence?.let { (baseStroke * (0.7f + 1.8f * it.toFloat())) } ?: baseStroke
                     val finalEdgeColor = confidence?.let { edgeColor.copy(alpha = edgeColor.alpha * (0.5f + 0.5f * it.toFloat())) } ?: edgeColor
                     drawLine(finalEdgeColor, from, to, stroke, androidx.compose.ui.graphics.StrokeCap.Round, pathEffect = pathEffect)
-                    if (edge.kind == ThreadEdgeKind.REPLY || edge.kind == ThreadEdgeKind.FORK || edge.kind == ThreadEdgeKind.SPAWN) {
+                    // COMMIT_ANCHOR included (1.2.0): like REPLY/FORK/SPAWN it is a forward,
+                    // causal edge (message/run node -> the commit it minted), unlike the
+                    // annotation-pointing-at-a-message *_ANCHOR kinds, which stay arrow-less.
+                    if (edge.kind == ThreadEdgeKind.REPLY || edge.kind == ThreadEdgeKind.FORK ||
+                        edge.kind == ThreadEdgeKind.SPAWN || edge.kind == ThreadEdgeKind.COMMIT_ANCHOR
+                    ) {
                         val angle = atan2((to.y - from.y).toDouble(), (to.x - from.x).toDouble())
                         val aLen = 8.dp.toPx().toDouble(); val aAngle = 0.4
                         drawLine(finalEdgeColor, to, Offset((to.x - aLen * cos(angle - aAngle)).toFloat(), (to.y - aLen * sin(angle - aAngle)).toFloat()), stroke)

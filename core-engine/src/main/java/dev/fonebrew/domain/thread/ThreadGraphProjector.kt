@@ -84,6 +84,17 @@ object ThreadGraphProjector {
      * marker, bookmark, delegation — is itself a unique-id domain type); [ThreadGraphProjectorTest]
      * asserts this holds, per `thread-graph.schema.json`'s own "a future test MUST assert it" note.
      *
+     * ### Edge provenance (1.2.0)
+     * Every edge this function emits carries [ThreadGraphEdge.derivation] `= `[EdgeDerivation.EXTRACTED]
+     * and a truthful, purely structural [ThreadGraphEdge.because] naming the recorded fact the edge
+     * restates (a reply's parent-child pointer, a fork/spawn's lineage metadata, a marker/decision/
+     * delegation's own anchor field, a lineage marker's payload pointer) — never
+     * [EdgeDerivation.INFERRED]. This function projects recorded facts only; it computes no
+     * derived relationship, so it has nothing honest to label INFERRED. [EdgeDerivation.INFERRED]
+     * ships in the schema/domain model for a future analysis layer to use, per binding
+     * constraint 3 (Issue #2) — structure, never interpretation — and [ThreadGraphProjectorTest]
+     * has a structural test asserting every edge this function emits carries both fields.
+     *
      * @param bookmarks **1.1.0**, defaulted to empty so [dev.fonebrew.data.ThreadObserver]'s
      *   existing call (which has no [dev.fonebrew.data.CurationStore] to draw from, and whose
      *   descriptive-remarks surface this fix doesn't touch) keeps compiling and behaving exactly
@@ -128,6 +139,8 @@ object ThreadGraphProjector {
                         from = srcNodeId,
                         to = node.id,
                         kind = if (lineageKind == TreeFork.LineageKind.FORK) ThreadEdgeKind.FORK else ThreadEdgeKind.SPAWN,
+                        derivation = EdgeDerivation.EXTRACTED,
+                        because = "fork/spawn lineage recorded at insert (TreeFork.LINEAGE_SRC_NODE_KEY metadata on the new root's own node)",
                     )
                 }
             } else if (node.isRoot && node.metadata.containsKey(RunLog.TAG_RUN)) {
@@ -158,7 +171,13 @@ object ThreadGraphProjector {
                 )
                 val parentId = node.parentId
                 if (parentId != null && parentId in treeNodeIds) {
-                    edges += ThreadGraphEdge(from = parentId, to = node.id, kind = ThreadEdgeKind.REPLY)
+                    edges += ThreadGraphEdge(
+                        from = parentId,
+                        to = node.id,
+                        kind = ThreadEdgeKind.REPLY,
+                        derivation = EdgeDerivation.EXTRACTED,
+                        because = "parent-child reply recorded in the message tree",
+                    )
                 }
             }
         }
@@ -174,12 +193,24 @@ object ThreadGraphProjector {
             )
             val anchor = marker.anchorMsgId
             if (anchor != null && anchor in treeNodeIds) {
-                edges += ThreadGraphEdge(from = marker.id, to = anchor, kind = ThreadEdgeKind.MARKER_ANCHOR)
+                edges += ThreadGraphEdge(
+                    from = marker.id,
+                    to = anchor,
+                    kind = ThreadEdgeKind.MARKER_ANCHOR,
+                    derivation = EdgeDerivation.EXTRACTED,
+                    because = "marker anchor recorded on the ThreadMarker itself (anchorMsgId)",
+                )
             }
             if (marker.kind == ThreadMarkerKind.LINEAGE_SRC) {
                 val pointer = ThreadChains.lineagePointer(marker)
                 if (pointer != null && pointer.srcNodeId in treeNodeIds) {
-                    edges += ThreadGraphEdge(from = marker.id, to = pointer.srcNodeId, kind = ThreadEdgeKind.LINEAGE)
+                    edges += ThreadGraphEdge(
+                        from = marker.id,
+                        to = pointer.srcNodeId,
+                        kind = ThreadEdgeKind.LINEAGE,
+                        derivation = EdgeDerivation.EXTRACTED,
+                        because = "lineage source pointer recorded in the LINEAGE_SRC marker's own payload",
+                    )
                 }
             }
         }
@@ -200,7 +231,13 @@ object ThreadGraphProjector {
                 label = bookmark.label,
             )
             if (anchorMsgId in treeNodeIds) {
-                edges += ThreadGraphEdge(from = bookmark.id, to = anchorMsgId, kind = ThreadEdgeKind.DECISION_ANCHOR)
+                edges += ThreadGraphEdge(
+                    from = bookmark.id,
+                    to = anchorMsgId,
+                    kind = ThreadEdgeKind.DECISION_ANCHOR,
+                    derivation = EdgeDerivation.EXTRACTED,
+                    because = "decision anchor recorded on the MessageBookmark itself (ref.msgId)",
+                )
             }
         }
 
@@ -217,7 +254,13 @@ object ThreadGraphProjector {
             )
             val anchor = delegation.anchorMsgId
             if (anchor != null && anchor in treeNodeIds) {
-                edges += ThreadGraphEdge(from = delegation.id, to = anchor, kind = ThreadEdgeKind.DELEGATION_ANCHOR)
+                edges += ThreadGraphEdge(
+                    from = delegation.id,
+                    to = anchor,
+                    kind = ThreadEdgeKind.DELEGATION_ANCHOR,
+                    derivation = EdgeDerivation.EXTRACTED,
+                    because = "delegation anchor recorded on the DelegationEvent itself (anchorMsgId)",
+                )
             }
         }
 

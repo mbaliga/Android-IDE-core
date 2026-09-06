@@ -120,8 +120,8 @@ object ThreadCodec {
     // -------------------------------------------------------------------------------------
 
     private val THREAD_GRAPH_KNOWN_KEYS = setOf("schemaVersion", "generatedAtUtc", "nodes", "edges")
-    private val THREAD_GRAPH_NODE_KNOWN_KEYS = setOf("id", "kind", "rootId", "parentId", "at", "label", "outcome", "confidence")
-    private val THREAD_GRAPH_EDGE_KNOWN_KEYS = setOf("from", "to", "kind")
+    private val THREAD_GRAPH_NODE_KNOWN_KEYS = setOf("id", "kind", "rootId", "parentId", "at", "label", "outcome", "confidence", "sha", "repoRef")
+    private val THREAD_GRAPH_EDGE_KNOWN_KEYS = setOf("from", "to", "kind", "derivation", "because")
 
     fun encodeThreadGraph(graph: ThreadGraph): JSONObject {
         val obj = JSONObject()
@@ -150,6 +150,8 @@ object ThreadCodec {
         node.label?.let { put("label", it) }
         node.outcome?.let { put("outcome", it.name) }
         node.confidence?.let { put("confidence", it) }
+        node.sha?.let { put("sha", it) }
+        node.repoRef?.let { put("repoRef", it) }
     }
 
     private fun decodeThreadGraphNode(json: JSONObject): ThreadGraphNode = ThreadGraphNode(
@@ -161,18 +163,29 @@ object ThreadCodec {
         label = json.optStringOrNull("label"),
         outcome = json.optStringOrNull("outcome")?.let(DelegationOutcome::valueOf),
         confidence = if (json.has("confidence") && !json.isNull("confidence")) json.getDouble("confidence") else null,
+        sha = json.optStringOrNull("sha"),
+        repoRef = json.optStringOrNull("repoRef"),
     )
 
     private fun encodeThreadGraphEdge(edge: ThreadGraphEdge): JSONObject = JSONObject().apply {
         put("from", edge.from)
         put("to", edge.to)
         put("kind", edge.kind.name)
+        edge.derivation?.let { put("derivation", it.name) }
+        edge.because?.let { put("because", it) }
     }
 
     private fun decodeThreadGraphEdge(json: JSONObject): ThreadGraphEdge = ThreadGraphEdge(
         from = json.getString("from"),
         to = json.getString("to"),
         kind = ThreadEdgeKind.valueOf(json.getString("kind")),
+        // 1.2.0: tolerant of absence (old 1.0.x/1.1.x edges predate the field — see
+        // ThreadGraphEdge's own KDoc), but a present-and-unrecognized value still throws
+        // (EdgeDerivation.valueOf), and ThreadGraphEdge's init block rejects a half-populated
+        // pair or a blank `because` — same "tolerant of absence, strict about garbage" split
+        // decodeThreadGraphNode's `outcome`/`confidence` already use.
+        derivation = json.optStringOrNull("derivation")?.let(EdgeDerivation::valueOf),
+        because = json.optStringOrNull("because"),
     )
 }
 

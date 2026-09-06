@@ -43,7 +43,17 @@ class ThreadGraphProjectorTest {
         assertEquals("root-1", child.parentId)
         assertEquals("root-1", child.rootId)
 
-        assertEquals(listOf(ThreadGraphEdge("root-1", "msg-42", ThreadEdgeKind.REPLY)), graph.edges)
+        // 1.2.0: every REPLY edge the projector emits now carries derivation=EXTRACTED + a
+        // truthful because — see ThreadGraphProjector's own edge-emission call site.
+        assertEquals(
+            listOf(
+                ThreadGraphEdge(
+                    "root-1", "msg-42", ThreadEdgeKind.REPLY,
+                    EdgeDerivation.EXTRACTED, "parent-child reply recorded in the message tree",
+                ),
+            ),
+            graph.edges,
+        )
     }
 
     @Test fun `rootId is computed correctly for a deep branch, not just the immediate parent`() {
@@ -80,7 +90,12 @@ class ThreadGraphProjectorTest {
         assertEquals("msg-42", forkRoot.parentId)
         assertEquals("root-2", forkRoot.rootId)
 
-        assertTrue(ThreadGraphEdge("msg-42", "root-2", ThreadEdgeKind.FORK) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                "msg-42", "root-2", ThreadEdgeKind.FORK, EdgeDerivation.EXTRACTED,
+                "fork/spawn lineage recorded at insert (TreeFork.LINEAGE_SRC_NODE_KEY metadata on the new root's own node)",
+            ) in graph.edges,
+        )
         // A fork root has no tree parent, so it must never also emit a REPLY edge.
         assertTrue(graph.edges.none { it.to == "root-2" && it.kind == ThreadEdgeKind.REPLY })
     }
@@ -99,7 +114,12 @@ class ThreadGraphProjectorTest {
         ))
         val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
         assertEquals(ThreadNodeKind.SPAWN_ROOT, graph.nodes.single { it.id == "root-2" }.kind)
-        assertTrue(ThreadGraphEdge("root-1", "root-2", ThreadEdgeKind.SPAWN) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                "root-1", "root-2", ThreadEdgeKind.SPAWN, EdgeDerivation.EXTRACTED,
+                "fork/spawn lineage recorded at insert (TreeFork.LINEAGE_SRC_NODE_KEY metadata on the new root's own node)",
+            ) in graph.edges,
+        )
     }
 
     @Test fun `an ordinary root with no lineage metadata stays a plain MESSAGE`() {
@@ -122,7 +142,12 @@ class ThreadGraphProjectorTest {
         assertEquals(ThreadNodeKind.MARKER, markerNode.kind)
         assertEquals("msg-42", markerNode.parentId)
         assertEquals("Auth flow rewrite", markerNode.label)
-        assertTrue(ThreadGraphEdge("mk-1", "msg-42", ThreadEdgeKind.MARKER_ANCHOR) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                "mk-1", "msg-42", ThreadEdgeKind.MARKER_ANCHOR, EdgeDerivation.EXTRACTED,
+                "marker anchor recorded on the ThreadMarker itself (anchorMsgId)",
+            ) in graph.edges,
+        )
     }
 
     @Test fun `a SESSION_START marker with no anchor becomes a node with no MARKER_ANCHOR edge`() {
@@ -140,7 +165,12 @@ class ThreadGraphProjectorTest {
         val tree = MessageTree(listOf(node("root-1", null, 100L), node("root-2", null, 300L)))
         val marker = ThreadMarkerStoreLikeFixtures.lineageSrc(newRootId = "root-2", srcRootId = "root-1", srcNodeId = "root-1")
         val graph = ThreadGraphProjector.project(tree, listOf(marker), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
-        assertTrue(ThreadGraphEdge(marker.id, "root-1", ThreadEdgeKind.LINEAGE) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                marker.id, "root-1", ThreadEdgeKind.LINEAGE, EdgeDerivation.EXTRACTED,
+                "lineage source pointer recorded in the LINEAGE_SRC marker's own payload",
+            ) in graph.edges,
+        )
     }
 
     @Test fun `a marker anchored to an unknown message is kept as a node but drops the dangling edge`() {
@@ -168,7 +198,12 @@ class ThreadGraphProjectorTest {
         assertEquals(ThreadNodeKind.DELEGATION, delegationNode.kind)
         assertEquals("root-1", delegationNode.rootId)
         assertEquals("MODEL_PICK_BRANCH", delegationNode.label)
-        assertTrue(ThreadGraphEdge("dg-1", "msg-42", ThreadEdgeKind.DELEGATION_ANCHOR) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                "dg-1", "msg-42", ThreadEdgeKind.DELEGATION_ANCHOR, EdgeDerivation.EXTRACTED,
+                "delegation anchor recorded on the DelegationEvent itself (anchorMsgId)",
+            ) in graph.edges,
+        )
     }
 
     @Test fun `a DelegationEvent with no rootId is honestly omitted, not fabricated`() {
@@ -234,7 +269,12 @@ class ThreadGraphProjectorTest {
         ))
         val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
         assertEquals(ThreadNodeKind.MESSAGE, graph.nodes.single { it.id == "step-1" }.kind)
-        assertTrue(ThreadGraphEdge("run-root-1", "step-1", ThreadEdgeKind.REPLY) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                "run-root-1", "step-1", ThreadEdgeKind.REPLY, EdgeDerivation.EXTRACTED,
+                "parent-child reply recorded in the message tree",
+            ) in graph.edges,
+        )
     }
 
     // ---- decisions (2026-08-29 audit gap 1, "decisions invisible") -----------------------------
@@ -254,7 +294,12 @@ class ThreadGraphProjectorTest {
         assertEquals("msg-42", decisionNode.parentId)
         assertEquals("root-1", decisionNode.rootId)
         assertEquals("Use SQLDelight for FTS5", decisionNode.label)
-        assertTrue(ThreadGraphEdge("bm-1", "msg-42", ThreadEdgeKind.DECISION_ANCHOR) in graph.edges)
+        assertTrue(
+            ThreadGraphEdge(
+                "bm-1", "msg-42", ThreadEdgeKind.DECISION_ANCHOR, EdgeDerivation.EXTRACTED,
+                "decision anchor recorded on the MessageBookmark itself (ref.msgId)",
+            ) in graph.edges,
+        )
     }
 
     @Test fun `a non-DECISION bookmark is never projected as a graph node`() {
@@ -347,6 +392,57 @@ class ThreadGraphProjectorTest {
         val graph = ThreadGraphProjector.project(tree, emptyList(), emptyList(), Instant.parse("2026-08-12T00:00:00Z"))
         val decoded = ThreadCodec.decodeThreadGraph(ThreadCodec.encodeThreadGraph(graph))
         assertEquals(graph, decoded)
+    }
+
+    // ---- edge provenance (1.2.0, graph-wave lane A) -------------------------------------------
+
+    @Test fun `every edge the projector emits carries derivation EXTRACTED and a non-blank because — never INFERRED, never absent`() {
+        // Exercises one tree that produces every edge kind the projector currently emits (REPLY,
+        // FORK, MARKER_ANCHOR, LINEAGE, DECISION_ANCHOR, DELEGATION_ANCHOR) — the projector
+        // projects recorded facts only (its own KDoc), so it must never invent an INFERRED edge,
+        // and 1.2.0's pairing invariant (ThreadGraphEdge's own init) already forbids a half-
+        // populated edge, but this test additionally asserts the projector's OWN policy: it never
+        // leaves an edge with a null derivation/because at all.
+        val tree = MessageTree(
+            listOf(
+                node("root-1", null, 100L),
+                node("msg-42", "root-1", 200L),
+                node(
+                    "root-2", null, 300L,
+                    metadata = mapOf(
+                        TreeFork.LINEAGE_KIND_KEY to TreeFork.LineageKind.FORK.name,
+                        TreeFork.LINEAGE_SRC_ROOT_KEY to "root-1",
+                        TreeFork.LINEAGE_SRC_NODE_KEY to "msg-42",
+                    ),
+                ),
+            ),
+        )
+        val chapterMarker = ThreadMarker(
+            id = "mk-1", rootId = "root-1", anchorMsgId = "msg-42", kind = ThreadMarkerKind.CHAPTER,
+            label = "x", at = 1L, source = ThreadMarkerSource.USER,
+        )
+        val lineageMarker = ThreadMarkerStoreLikeFixtures.lineageSrc(newRootId = "root-2", srcRootId = "root-1", srcNodeId = "root-1")
+        val bookmark = MessageBookmark(id = "bm-1", ref = MessageRef("msg-42"), kind = BookmarkKind.DECISION, label = "Decision", at = 1L)
+        val delegation = DelegationEvent(id = "dg-1", at = 1L, kind = DelegationKind.AUTO_DEFAULT, rootId = "root-1", anchorMsgId = "msg-42")
+
+        val graph = ThreadGraphProjector.project(
+            tree, listOf(chapterMarker, lineageMarker), listOf(delegation), Instant.parse("2026-09-06T00:00:00Z"), bookmarks = listOf(bookmark),
+        )
+
+        // Sanity: this tree really does exercise every edge kind the projector emits today.
+        val emittedKinds = graph.edges.map { it.kind }.toSet()
+        assertEquals(
+            setOf(
+                ThreadEdgeKind.REPLY, ThreadEdgeKind.FORK, ThreadEdgeKind.MARKER_ANCHOR,
+                ThreadEdgeKind.LINEAGE, ThreadEdgeKind.DECISION_ANCHOR, ThreadEdgeKind.DELEGATION_ANCHOR,
+            ),
+            emittedKinds,
+        )
+        assertTrue("expected at least one edge", graph.edges.isNotEmpty())
+        graph.edges.forEach { edge ->
+            assertEquals("edge $edge should be EXTRACTED, never INFERRED", EdgeDerivation.EXTRACTED, edge.derivation)
+            assertTrue("edge $edge should carry a non-blank because", !edge.because.isNullOrBlank())
+        }
     }
 }
 
