@@ -80,7 +80,10 @@ class OnDeviceReadAloud(
                 override fun onStop(utteranceId: String?, interrupted: Boolean) = onDone()
             },
         )
-        val runSpeak = {
+        // Explicit `() -> Unit` — without it, the last statement's Int (TextToSpeech.speak's own
+        // status return) would make Kotlin infer this val itself as `() -> Int`, which then
+        // fails to assign into the `(() -> Unit)?` pendingSpeak field below.
+        val runSpeak: () -> Unit = {
             e.stop()
             e.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
         }
