@@ -230,11 +230,74 @@ dependencies {
 
 // §1.8 license gate — moved here verbatim from :app, since this module now carries the actual
 // runtime dependency graph. See the (unchanged) reasoning comment this was copied from.
+//
+// AUDIT FIX (2026-09-15, lane LC-license): Studio's own hygiene wave found that its :app license
+// scan was silently dropping every first-party project() dependency because lenient resolution
+// swallows an ambiguous-variant failure instead of erroring (see, read-only reference — NOT this
+// repo — android-ide-studio/app/build.gradle.kts's own long comment on the same block). Checked
+// empirically here rather than assumed inherited: before this fix,
+// `:core-engine:generateLicenseReport` produced a 162-entry report with ZERO `dev.aarso:*` /
+// `dev.fonebrew:*` entries, and `:core-engine:dependencyInsight --dependency
+// <sdengine|hyle|crash-recovery|interaction-mode> --configuration fullLicenseScan` showed the
+// identical shape for all four of this module's project()/includeBuild edges: "FAILED — cannot
+// choose between … debugRuntimeElements / releaseRuntimeElements … distinguishing attribute
+// BuildTypeAttr" — i.e. the bug Studio found is real here too, just with a narrower trigger: this
+// scan config only ever lacked `BuildTypeAttr`, not the flavor attribute Studio also had to pin.
+// (Unlike Studio's :app, which pulls in project(":core-engine") — a module that itself declares
+// the "dist" flavor dimension — none of core-engine's own edges (:sdengine, and the
+// hyle-design-system / shared-libraries includeBuild substitutions for :hyle / :crash-recovery /
+// :interaction-mode) declare a flavor dimension of their own, so their runtime variants only ever
+// differ by build type; there is no `ProductFlavorAttr` ambiguity to pin here, and adding one that
+// no producer variant declares would be scope creep past what the empirical failure showed.) Fix:
+// pin BuildTypeAttr to "debug", matching the variant these gates actually compile/test
+// (testFullDebugUnitTest/testPlayDebugUnitTest); this module never minifies, so the dependency
+// SET doesn't differ by build type — only which one a report attaches to.
+//
+// Deliberately NOT pinning Kotlin's `org.jetbrains.kotlin.platform.type` attribute either, for the
+// same reason Studio's comment gives: several androidx.compose.* artifacts resolve to a cosmetic
+// extra "-jvmstubs" coordinate (own Apache-2.0 POM, no bundled LICENSE.txt) alongside their real
+// Android one when that attribute isn't requested — pinning it to "androidJvm" would dedupe those,
+// but it also makes plain JVM-only Kotlin libraries (kotlin-stdlib itself,
+// kotlinx-coroutines-core/-android, okio, …) incompatible and silently drops them from the scan
+// instead, since this ad hoc configuration has no access to the Kotlin Gradle Plugin's own
+// jvm<->androidJvm compatibility rule. A coverage loss on real, shipped dependencies is strictly
+// worse than a same-license cosmetic duplicate, so the duplicate stays (pre-existing, unchanged by
+// this fix).
+//
+// Verified by regenerating core-engine/build/reports/dependency-license/
+// project-licenses-for-check-license-task.json (via `:core-engine:checkLicense --rerun`, which is
+// what actually drives that file — plain `generateLicenseReport` alone does not): raw dependency
+// count rose 162 -> 165, surfacing three real, previously-silently-dropped first-party deps —
+// dev.aarso:hyle:0.2.1, dev.aarso:crash-recovery:1.5.0, dev.aarso:interaction-mode:0.1.0 — which
+// then correctly FAILED checkLicense (empty moduleLicense: composite-substituted project modules
+// carry no POM for the plugin to read a license off of), so they're allow-listed by name below,
+// same as this file already does for other first-party/no-POM entries.
+//
+// project(":sdengine") is NOT among the three and does not newly appear in the report even after
+// this fix, but that is a *different*, pre-existing, non-bug property, checked separately:
+// `dependencyInsight` above confirms sdengine's own variant selection resolves cleanly post-fix
+// (no FAILED, no ambiguity) — so this is not the silent-drop bug recurring. Rather, :sdengine is a
+// plain `include(":sdengine")` subproject of *this same build* (not a composite/includeBuild
+// substitution like the three above), so Gradle resolves it as a bare ProjectComponentIdentifier
+// with no synthesized module/GAV coordinates for the license-report plugin to key a report entry
+// on — there is no separate license to vet because it isn't a separate published artifact, it's
+// this very repo. (Contrast Studio's own :app scan, where :sdengine is reached *transitively*,
+// crossing the "core" includeBuild boundary from Studio's side — that boundary is what gives it
+// synthesized `Fonebrew:sdengine` coordinates in Studio's report; no such boundary exists between
+// core-engine and its own sibling :sdengine.) Named here, not silently assumed, per the honest-
+// scope rule: if :sdengine ever gains a real external dependency of its own, that dependency would
+// need scanning directly (:sdengine has no licenseScan of its own today) — tracked as a follow-up,
+// not fixed here, since it's a scope expansion (a new scan target) rather than a repair of this
+// block's existing one.
 val licenseScanAttrs: (org.gradle.api.attributes.AttributeContainer) -> Unit = { attrs ->
     attrs.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
     attrs.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category::class.java, Category.LIBRARY))
     attrs.attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class.java, Bundling.EXTERNAL))
     attrs.attribute(Attribute.of("artifactType", String::class.java), "jar")
+    attrs.attribute(
+        com.android.build.api.attributes.BuildTypeAttr.ATTRIBUTE,
+        objects.named(com.android.build.api.attributes.BuildTypeAttr::class.java, "debug"),
+    )
 }
 listOf("full", "play").forEach { flavor ->
     configurations.create("${flavor}LicenseScan") {

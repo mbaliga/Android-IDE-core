@@ -3,28 +3,57 @@ android-ide-core / Aarso / Workbench (dev.fonebrew) — Third-Party NOTICE
 
 This file lists the runtime dependencies packaged into the app (both `full` and
 `play` dist flavors), grouped by license, and is generated from the gate's
-license-report tool. See `app/build.gradle.kts` (`licenseReport { ... }`) and
-`config/allowed-licenses.json` for the enforcement mechanism (§1.8 of
-`CLAUDE.md`): the `:app:checkLicense` Gradle task fails the build on any
-runtime dependency whose license isn't on that allowlist.
+license-report tool. See `core-engine/build.gradle.kts` (`licenseReport { ... }`)
+and `config/allowed-licenses.json` for the enforcement mechanism (§1.8 of
+`CLAUDE.md`): the `:core-engine:checkLicense` Gradle task fails the build on any
+runtime dependency whose license isn't on that allowlist. (Pre-de-fork this said
+`:app:checkLicense` — test + license tasks moved to `:core-engine`; see
+CLAUDE.md's Building section.)
 
-`dev.aarso:hyle` (the design system, consumed via the `hyle-design-system` git
-submodule + `includeBuild`) is deliberately not listed below — it's first-party
-code from a sibling repo in this constellation (`mbaliga/Hyle-Design-System`,
-same owner), not a third-party dependency in the §1.8 sense. It's excluded from
-the scan by construction: an included-build project substitution has no Maven
-POM for the license-report tool to read license metadata from in the first
-place.
+`dev.aarso:hyle`, `dev.aarso:crash-recovery` and `dev.aarso:interaction-mode`
+(consumed via the `hyle-design-system` / `shared-libraries` git submodules +
+`includeBuild`) are deliberately not itemized in the per-license lists below —
+they're first-party code from sibling repos in this constellation
+(`mbaliga/Hyle-Design-System`, `mbaliga/Shared-Libraries-asoc`; same owner),
+not third-party dependencies in the §1.8 sense. They DO now appear as scan
+entries (see AUDIT FIX note below — that wasn't always true), but with no
+license the report can read: an included-build project substitution has no
+Maven POM for the tool to read license metadata from, so they're allow-listed
+by module name instead of by license in `config/allowed-licenses.json`
+(`crash-recovery`/`interaction-mode` are Apache-2.0 by hand-verified inspection
+of `shared-libraries/LICENSE`, same as this repo's own `LICENSE`; hyle-design-
+system carries no repo-level LICENSE file at all — flagged, not this repo's to
+fix).
+
+**AUDIT FIX (2026-09-15, lane LC-license):** `:core-engine`'s license-scan
+configurations were missing AGP's `BuildTypeAttr`, the same silent-drop shape
+Studio's hygiene wave found in its own `:app` scan (dependency-license-report
+resolves leniently, so an ambiguous project()/includeBuild variant selection
+was silently DROPPED rather than failing the build) — see the long comment on
+`licenseScanAttrs` in `core-engine/build.gradle.kts` for the empirical
+diagnosis. Fixed by pinning `BuildTypeAttr = "debug"`. This surfaced the three
+dev.aarso:* entries above, now correctly present and allow-listed; it did NOT
+change resolution of any third-party (non-first-party) dependency — verified
+by diffing the regenerated report against this file's prior list, the only
+deltas beyond the three first-party entries are unrelated dependency drift
+already present since the "last regenerated" date below (SQLDelight,
+Guava/coroutines-guava, an androidx.sqlite version bump, etc. — pulled in by
+work after 2026-07-11, nothing to do with this fix). That drift means the
+itemized per-license lists below are stale independent of this fix; refreshing
+them is a separate, ordinary NOTICE-regen pass, not done here — named as a
+follow-up, not silently left implied current.
 
 Regenerate the underlying data with:
-    ANDROID_HOME=<sdk> ./gradlew :app:generateLicenseReport
+    ANDROID_HOME=<sdk> ./gradlew :core-engine:checkLicense
     (full detail, including bundled LICENSE files where available, lands in
-    app/build/reports/dependency-license/)
+    core-engine/build/reports/dependency-license/)
 
 Test-only dependencies (JUnit, kotlinx-coroutines-test, org.json) are not
 runtime-linked and are not listed here — they never ship in the APK.
 
-Last regenerated: 2026-07-11 (Studio Suite brief / CORE_PHASES.md P0-core).
+Last regenerated (full itemized list below): 2026-07-11 (Studio Suite brief /
+CORE_PHASES.md P0-core). Per-license artifact counts below are NOT refreshed
+by the 2026-09-15 audit fix above — see that note.
 
 ## Apache License 2.0 (124 artifacts)
 

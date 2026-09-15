@@ -34,6 +34,11 @@
 
     { "moduleLicense": "Android Software Development Kit License", "moduleName": "com\\.google\\.(android\\.gms|android\\.odml):.*" },
     { "moduleLicense": "ML Kit Terms of Service", "moduleName": "com\\.google\\.(android\\.gms|mlkit):.*" },
-    { "moduleLicense": "AICore Terms of Service", "moduleName": "com\\.google\\.ai\\.edge\\.aicore:.*" }
+    { "moduleLicense": "AICore Terms of Service", "moduleName": "com\\.google\\.ai\\.edge\\.aicore:.*" },
+
+    { "_comment": "AUDIT FIX 2026-09-15, lane LC-license — same silent-drop bug Studio's hygiene wave found (see core-engine/build.gradle.kts's licenseScanAttrs comment), fixed by pinning BuildTypeAttr there. That widened scan surfaced three real first-party deps the report can't read a POM license for, because they resolve through this repo's own includeBuild composite substitutions (settings.gradle.kts) rather than a published Maven artifact: dev.aarso:hyle (mbaliga/Hyle-Design-System) and dev.aarso:crash-recovery / dev.aarso:interaction-mode (both mbaliga/Shared-Libraries-asoc, at ./shared-libraries). Verified by hand, not inferred from a POM: LICENSE and shared-libraries/LICENSE are both Apache-2.0, so crash-recovery and interaction-mode are Apache-2.0 same as this repo; hyle-design-system carries no repo-level LICENSE file at all (flagged, not fixed here — out of this lane's scope, and not this repo's to fix). Moved here as moduleName-only allow-rules (no moduleLicense — none exists to match against) rather than silently dropped or blanket-allowed, so the allowlist stays an honest record of why each entry is here. project(':sdengine'), this module's fourth composited edge, deliberately has NO entry here: it's a plain same-build subproject (not an includeBuild substitution), so it never gets synthesized module coordinates and never appears as a scan entry at all — see the build.gradle.kts comment for why that's a separate, non-bug property, not something this allowlist needs to cover." },
+    { "moduleName": "dev\\.aarso:hyle" },
+    { "moduleName": "dev\\.aarso:crash-recovery" },
+    { "moduleName": "dev\\.aarso:interaction-mode" }
   ]
 }
