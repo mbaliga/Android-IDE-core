@@ -124,6 +124,26 @@ class TaskStoreTest {
         assertEquals("audit-item-7", task.sourceRef)
     }
 
+    @Test
+    fun `createFrom persists notes so a converted turn keeps its body`() = runTest {
+        val store = store()
+        store.createFrom(
+            title = "answer from chat",
+            source = TaskSource.CHAT,
+            sourceRef = "node.abc123",
+            notes = "full turn text, markdown intact",
+            now = 1L,
+        )
+        assertEquals("full turn text, markdown intact", store.tasks.first().single().notes)
+    }
+
+    @Test
+    fun `createFrom defaults notes to empty when the caller supplies none`() = runTest {
+        val store = store()
+        store.createFrom(title = "bare", source = TaskSource.AUDIT, sourceRef = null, now = 1L)
+        assertEquals("", store.tasks.first().single().notes)
+    }
+
     // ── setSpan (Waterfall writer, docs/P5_INVENTORY.md §2) ────────────────────────────────
 
     @Test
