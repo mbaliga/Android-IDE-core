@@ -175,6 +175,14 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   Also fixed then: both native jobs' swapfile is now sized to real free disk — newer ubuntu-latest
   images broke the old fixed `fallocate -l 12G` with ENOSPC at setup. The canary's actual signal
   is healthy: the full native cross-compile went green in CI that day, ~14 min with swap.)*
+  *(Third infra class, found + fixed 2026-09-15: a red run that dies at the "Set up Android
+  SDK" step — before Gradle ever starts — with `Warning: Failed to find package 'tools'` and
+  sdkmanager exit 1 is `android-actions/setup-android@v3` requesting the legacy `tools`
+  package, which Google's repository no longer serves on newer runner images. Fixed by
+  bumping to `setup-android@v4` (which installs no legacy packages; our own sdkmanager step
+  installs the pinned platforms/build-tools/NDK/CMake) in ci.yml (both jobs),
+  release-play.yml, and Studio's ci.yml. If CI ever reds at SDK setup pre-Gradle again,
+  check for this signature before suspecting code.)*
 
 ## Environment honesty
 The container compiles everything but has **no device, emulator, board, or SSH host**. All
