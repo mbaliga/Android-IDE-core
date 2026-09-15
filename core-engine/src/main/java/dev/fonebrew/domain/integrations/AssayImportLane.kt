@@ -22,6 +22,13 @@ import java.time.Instant
  * duplicate record pointing at the prior receipt) or new (every parsed SARIF result becomes a new
  * record) -- Assay's model has no per-finding "changed" concept across runs, since a run's
  * findings are an immutable batch tied to its `runId`.
+ *
+ * Package note, `domain.integrations` (PARKED, 2026-09-15): this file, [CsAppImportLane],
+ * [SarifResults], and [ImportReceiptBuilder] are all built + JVM-tested with zero consumers
+ * anywhere in this repo (not just no `ui/` import — nothing in `data/`/`domain/` constructs or
+ * calls into any of them either). They await the import-pipeline UI (a repo-connect action that
+ * drives validate → preview → import for an Assay/CSApp source) that would actually drive this
+ * lane end to end. See docs/STATE.md's "Parked substrate" section.
  */
 object AssayImportLane {
 

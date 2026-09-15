@@ -32,6 +32,14 @@ import java.time.Instant
  * content digest (SHA-256 hex via [dev.fonebrew.domain.contracts.Digest]), not an mtime -- two writes
  * landing within the same filesystem timestamp granularity must not be able to defeat the
  * conflict check the way an mtime-only revision could.
+ *
+ * Package note, `domain.workspace` (PARKED, 2026-09-15): the whole Workspace Kernel — this class,
+ * [RoomWorkspaceJournal][dev.fonebrew.data.RoomWorkspaceJournal], [WorkspaceProviderMachine],
+ * [DocumentBufferMachine], [BufferReplay], [AgentEditJournalAdapter] — is built + JVM-tested with
+ * no `ui/` file importing it and no reader anywhere (see the `workspaceJournal`/
+ * `localWorkspaceProvider` PARKED notes in [dev.fonebrew.di.AppContainer]). It awaits the
+ * Develop-tab workspace surface (an in-app file browser/editor over an open repo) that would
+ * actually open buffers through this provider. See docs/STATE.md's "Parked substrate" section.
  */
 class LocalWorkspaceProvider(private val root: File) : dev.fonebrew.contracts.workspace.WorkspaceProvider {
 

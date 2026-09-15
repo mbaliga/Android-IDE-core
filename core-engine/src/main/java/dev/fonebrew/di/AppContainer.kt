@@ -63,25 +63,44 @@ class AppContainer(context: Context) {
     /** Fonebrew handoff-pack WP-3: Workspace Kernel journal (FB-RAT-WS-003/005) + the LOCAL
      *  provider (FB-RAT-WS-002/004). No consumer wired in yet -- WP-3 is the domain/data layer;
      *  wiring into the live IDE surfaces (Develop tab, RepoWorkLoop) is a later work package's
-     *  job per docs/ratified/WORKSPACE_KERNEL_SPEC.md's own scope note. */
-    val workspaceJournal: dev.fonebrew.data.RoomWorkspaceJournal =
+     *  job per docs/ratified/WORKSPACE_KERNEL_SPEC.md's own scope note.
+     *
+     *  PARKED (2026-09-15): re-verified still unread — built + JVM-tested, no reader anywhere in
+     *  the app. Awaits the Develop-tab workspace surface that would open buffers through this
+     *  journal/provider pair. Both are lazy now so a plain chat session never pays for Room DAOs
+     *  / filesDir it never touches (their constructors are side-effect-free — verified against
+     *  [dev.fonebrew.data.RoomWorkspaceJournal] / [dev.fonebrew.domain.workspace.LocalWorkspaceProvider]
+     *  themselves). See docs/STATE.md's "Parked substrate" section. */
+    val workspaceJournal: dev.fonebrew.data.RoomWorkspaceJournal by lazy {
         dev.fonebrew.data.RoomWorkspaceJournal(
             journalDao = database.bufferJournalDao(),
             snapshotDao = database.recoverySnapshotDao(),
             registryDao = database.bufferRegistryDao(),
         )
+    }
 
-    val localWorkspaceProvider: dev.fonebrew.domain.workspace.LocalWorkspaceProvider =
+    val localWorkspaceProvider: dev.fonebrew.domain.workspace.LocalWorkspaceProvider by lazy {
         dev.fonebrew.domain.workspace.LocalWorkspaceProvider(context.applicationContext.filesDir)
+    }
 
     /** Fonebrew handoff-pack WP-6: workspace-buffer lexical search, wiring the existing real
      *  LexicalSearch engine (already used for conversation search, data/search/) into the
      *  Workspace Kernel via WorkspaceSearchProjector. Deliberately in-memory, not a new
      *  SQLDelight table -- see WorkspaceSearchIndex's own doc comment. No consumer wired in yet;
      *  a future Develop-tab search surface calls .index()/.search() as buffers open/save. The
-     *  semantic stage stays the real, honest default (disabled) until an embedder ships. */
-    val workspaceSearchIndex: dev.fonebrew.domain.search.WorkspaceSearchIndex =
+     *  semantic stage stays the real, honest default (disabled) until an embedder ships.
+     *
+     *  PARKED (2026-09-15): re-verified still unread. [workspaceSearchIndex] is lazy now — its
+     *  constructor is side-effect-free (a bare `ConcurrentHashMap`), so nothing is indexed until
+     *  a Develop-tab search surface exists to call it. [semanticSearchProvider] stays a plain val,
+     *  not lazy: [dev.fonebrew.domain.search.DisabledSemanticSearchProvider] is a Kotlin `object`
+     *  reference (no construction to defer), and it stays placeholder-blocked on the real
+     *  on-device embedder replacing [dev.fonebrew.embedding.PlaceholderEmbedder]
+     *  (owner-blocked, docs/STATE.md §4) regardless. See docs/STATE.md's "Parked substrate"
+     *  section. */
+    val workspaceSearchIndex: dev.fonebrew.domain.search.WorkspaceSearchIndex by lazy {
         dev.fonebrew.domain.search.WorkspaceSearchIndex()
+    }
     val semanticSearchProvider: dev.fonebrew.domain.search.SemanticSearchProvider =
         dev.fonebrew.domain.search.DisabledSemanticSearchProvider
 
@@ -115,9 +134,19 @@ class AppContainer(context: Context) {
     ).also { principalStore.add(it) }
 
     /** WP-4: reference (non-Keystore) secret-handle broker -- see that class's own doc comment
-     *  for why a real Keystore-backed implementation is owner-verified, not built here. */
-    val secretHandleBroker: dev.fonebrew.domain.authority.InMemorySecretHandleBroker =
+     *  for why a real Keystore-backed implementation is owner-verified, not built here.
+     *
+     *  PARKED (2026-09-15): re-verified still unread — the live Develop -> Run authority chain
+     *  below ([authorityEngine] / [grantStore] / [localExecutionProvider] / [runSessionDriver])
+     *  never reaches into this broker, it only exists as the WP-4 reference implementation.
+     *  Lazy so an unused empty map isn't allocated on every app start (constructor is
+     *  side-effect-free). Awaits a real `security/KeystoreSecret.kt`-backed
+     *  [dev.fonebrew.domain.authority.SecretHandleBroker] swapped in here once a caller needs
+     *  purpose-bound secret resolution (binding rule 5). See docs/STATE.md's "Parked substrate"
+     *  section. */
+    val secretHandleBroker: dev.fonebrew.domain.authority.InMemorySecretHandleBroker by lazy {
         dev.fonebrew.domain.authority.InMemorySecretHandleBroker(emptyMap())
+    }
 
     /** WP-4/WP-5: the LOCAL_ANDROID/SSH_HOST/CI ExecutionProviders. Consumed by
      *  [runSessionDriver] below (Develop -> Run facet) -- the "no consumer wired in yet" note
@@ -199,9 +228,15 @@ class AppContainer(context: Context) {
 
     /** Conversations room source (Doc 02): folds the tree + session (stars/projects/opens) +
      *  ledger into the room's row model. Implements [dev.fonebrew.ui.state.ConversationsSource];
-     *  consumed by a [dev.fonebrew.ui.state.ConversationsViewModel] once the room is mounted. */
-    val conversationsSource: dev.fonebrew.data.ConversationsStore =
+     *  consumed by a [dev.fonebrew.ui.state.ConversationsViewModel] once the room is mounted.
+     *
+     *  PARKED (2026-09-15): re-verified still unread — that ViewModel/room still doesn't exist.
+     *  Lazy so it costs nothing until the Conversations room actually mounts (constructor just
+     *  stores its three collaborators, no side effects). See docs/STATE.md's "Parked substrate"
+     *  section. */
+    val conversationsSource: dev.fonebrew.data.ConversationsStore by lazy {
         dev.fonebrew.data.ConversationsStore(repository, sessionStore, ledgerStore)
+    }
 
     /** User-set per-model prices (Cost epic G1/P2). Reads price a finished cloud turn. */
     val pricingStore: dev.fonebrew.data.PricingStore = dev.fonebrew.data.PricingStore(context)
@@ -278,8 +313,15 @@ class AppContainer(context: Context) {
      *  download entries for chat GGUFs and SD checkpoints alike. Aarso no longer hand-maintains
      *  its own model list. */
     val modelCatalogStore: dev.fonebrew.data.ModelCatalogStore = dev.fonebrew.data.ModelCatalogStore(context)
-    /** Consented online refresh of the model catalog (never automatic without opt-in). */
-    val modelCatalogUpdater: dev.fonebrew.data.ModelCatalogUpdater = dev.fonebrew.data.ModelCatalogUpdater(context)
+    /** Consented online refresh of the model catalog (never automatic without opt-in).
+     *
+     *  PARKED (2026-09-15): re-verified still unread — see the MERGE-NOTE at the top of
+     *  [dev.fonebrew.ui.rooms.ModelsRoom] for the full history (the launch-line redesign removed
+     *  this class's only UI trigger, a "check for updates" button) and the still-open owner
+     *  decision on where that control resurfaces. Lazy so the `OkHttpClient()` this class
+     *  defaults to isn't allocated on every app start. See docs/STATE.md's "Parked substrate"
+     *  section. */
+    val modelCatalogUpdater: dev.fonebrew.data.ModelCatalogUpdater by lazy { dev.fonebrew.data.ModelCatalogUpdater(context) }
 
     /** Saved Loops (visual-editor definitions as BPMN + lifecycle envelope). */
     val loopStore: dev.fonebrew.data.LoopStore = dev.fonebrew.data.LoopStore(context)
@@ -306,11 +348,21 @@ class AppContainer(context: Context) {
     /** Push/pull loop .bpmn files to the user's Git host (P6 made real). */
     val loopSyncRepo: dev.fonebrew.data.LoopSyncRepo =
         dev.fonebrew.data.LoopSyncRepo(gitTransport, gitHostStore, loopStore)
-    val issueBoardRepo: dev.fonebrew.data.IssueBoardRepo =
+    /** PARKED (2026-09-15): re-verified still unread — the Project-room Kanban board over a Git
+     *  host's issues (domain/pm/IssueBoard.kt) is built + JVM-tested but has no UI reader yet,
+     *  awaiting the board surface docs/design/project-management.md names. Lazy so it costs
+     *  nothing until that surface mounts. See docs/STATE.md's "Parked substrate" section. */
+    val issueBoardRepo: dev.fonebrew.data.IssueBoardRepo by lazy {
         dev.fonebrew.data.IssueBoardRepo(gitTransport, gitHostStore)
-    /** IDE last mile: create a repo + push a scaffold. Side-effectful — gate the UI. */
-    val scaffoldPublishRepo: dev.fonebrew.data.ScaffoldPublishRepo =
+    }
+    /** IDE last mile: create a repo + push a scaffold. Side-effectful — gate the UI.
+     *
+     *  PARKED (2026-09-15): re-verified still unread — no UI reader exists yet for this
+     *  confirm-before-network action. Lazy so it costs nothing until that action exists. See
+     *  docs/STATE.md's "Parked substrate" section. */
+    val scaffoldPublishRepo: dev.fonebrew.data.ScaffoldPublishRepo by lazy {
         dev.fonebrew.data.ScaffoldPublishRepo(gitTransport, gitHostStore)
+    }
     val apkInstaller: ApkInstaller = ApkInstaller(context.applicationContext)
 
     /** SSH remotes (the remote-exec spine): host configs + trust pins + Keystore-encrypted

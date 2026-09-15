@@ -15,6 +15,21 @@ import java.util.UUID
  *
  * Pure orchestration over three seams (a reader, a proposer, a committer), so the whole flow is
  * JVM-testable with fakes. Real Git/CI calls live behind the seams and are owner-verified (📱).
+ *
+ * PARKED-PENDING-UNIFICATION (2026-09-15): this class still has no live production caller (grep
+ * confirms only its own test constructs one — see [RepoWorkResult.commitAnchor]'s own KDoc below
+ * for the honest gap this file already self-documented). The live agentic-repo path today is
+ * [dev.fonebrew.data.AgentRepoRunner] (Develop → Agent, reachable from
+ * [dev.fonebrew.ui.develop.DevelopRoom]) — a separate, already-wired implementation of the same
+ * "read → propose ChangeSet → review → commit" shape. Reconciling the two (either this becomes
+ * AgentRepoRunner's engine, or it is retired in favour of it) is a named follow-up, never a silent
+ * duplicate. See docs/STATE.md's "Parked substrate" section. No code change here.
+ *
+ * Package note, `domain.ide` (2026-09-15): no `ui/` file imports this package directly. Within
+ * it, [CommitAnchor] is live (minted by [dev.fonebrew.data.AgentRepoRunner] on every agent
+ * commit); [RepoWorkLoop] itself is parked as above; [ProjectScaffold]/[ScaffoldPublishApi] await
+ * the confirm-before-network "publish scaffold" UI action [dev.fonebrew.data.ScaffoldPublishRepo]'s
+ * own KDoc already requires (see that class's PARKED note in [dev.fonebrew.di.AppContainer]).
  */
 
 /** Reads a file's current contents from the repo. Returns null when the path doesn't exist. */

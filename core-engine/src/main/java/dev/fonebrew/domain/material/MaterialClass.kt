@@ -18,6 +18,11 @@ import dev.fonebrew.domain.model.ModelSpec
  * [MaterialClass] into specular vs emission lives in the design system and is *fed*
  * this; keeping the hue out here is deliberate (the radiant hue is still open). Pure
  * and JVM-tested.
+ *
+ * PARKED (2026-09-15): no reader anywhere in the app yet — the Hyle side (reflective/radiant
+ * rendering) hasn't been fed this seam. Awaits the Hyle component that consumes
+ * [MaterialClass]/[Provenance] per docs/design/material-language.md and feeds it to a
+ * per-surface render. See docs/STATE.md's "Parked substrate" section.
  */
 enum class MaterialClass {
     /** Local, of-here, yours — only reflects light. On-device models; user turns. */

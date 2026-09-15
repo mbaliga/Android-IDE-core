@@ -24,6 +24,15 @@ import java.time.Instant
  * pass IS that work package) and the "no consumer yet" pattern this build-out has left for every
  * comparable new piece since WP-2; a Room-backed registry is a natural follow-up once a real UI
  * surface needs broker state to survive process death.
+ *
+ * Package note, `domain.device.broker` (2026-09-15): mixed, not uniformly parked. Direct-USB
+ * flashing is real and live today ("This phone USB", agentic-ide #4) — [WrongBoardPreflight] is
+ * used by [dev.fonebrew.data.device.UsbFlasher] from [dev.fonebrew.ui.develop.DevelopRoom]. This
+ * class ([DeviceBroker]), [DeviceConnectionMachine], and [FlashOperationDriver] are built +
+ * JVM-tested but have no caller anywhere yet — [DeviceOperationMachine] is referenced only from
+ * [dev.fonebrew.domain.object3d.Object3dJob]'s doc comments, not actual code. All three PARKED
+ * pieces await the reference-board conformance pass docs/DEVICE_GATE_CHECKLIST.md names (owner-run,
+ * no device/board in this build environment). See docs/STATE.md's "Parked substrate" section.
  */
 class DeviceBroker(
     private val idGenerator: () -> String = { "lock_" + IdGenerator.generate() },

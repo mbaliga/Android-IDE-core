@@ -10,6 +10,13 @@ import dev.fonebrew.contracts.language.LspCapability
  * per `CLAUDE.md`), fail-closed in the same style as every other state machine this build-out has
  * written (`DocumentBufferMachine`, `TouchConnectionGrammar`, ...): anything not an explicit
  * table row is [Result.Rejected].
+ *
+ * Package note, `domain.language` (PARKED, 2026-09-15): this file, [DapSessionMachine],
+ * [DiagnosticsOwnership], [LanguageUriMapper], and [ToolchainDeliveryLegality] are all built +
+ * JVM-tested with zero consumers anywhere in this repo. Language lanes (LSP/DAP sessions,
+ * diagnostics, toolchain delivery) await an owner decision on which LSP host to run against on
+ * a phone (no reference client exists in this codebase yet). See docs/STATE.md's "Parked
+ * substrate" section.
  */
 enum class LspSessionState { NOT_STARTED, STARTING, NEGOTIATING, READY, DEGRADED, CRASHED, RESTARTING, STOPPED }
 

@@ -293,3 +293,69 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),
   `handoff/hyle-extraction.md`, **this file**.
 - `apk-dist` branch — the installable `aarso-sd.apk`.
+
+---
+
+## 11. Parked substrate (dated)
+Built + JVM-tested code with no caller yet, per the owner's standing decision: **park with
+honesty, do not cut.** Re-verified 2026-09-15 against `core-engine/src/main/java/dev/fonebrew/`;
+each item's KDoc carries the same date and names the same awaited driver. When a later lane wires
+one of these up, update its KDoc (drop the PARKED line) instead of leaving it stale here.
+
+**`di/AppContainer.kt` seams (lazy `by lazy`, unread by anything outside the container):**
+- `workspaceJournal` / `localWorkspaceProvider` — Workspace Kernel (WP-3). Awaits a Develop-tab
+  workspace surface (file browser/editor over an open repo).
+- `workspaceSearchIndex` — Workspace Kernel lexical search (WP-6). Awaits the same surface.
+- `semanticSearchProvider` — stays `DisabledSemanticSearchProvider` (an `object`, not lazified —
+  no construction to defer). Awaits the real on-device embedder replacing `PlaceholderEmbedder`
+  (owner-blocked, §4 below).
+- `secretHandleBroker` — WP-4 reference (non-Keystore) broker. Awaits a real
+  `security/KeystoreSecret.kt`-backed `SecretHandleBroker`.
+- `conversationsSource` — Conversations room source (Doc 02). Awaits a
+  `ConversationsViewModel`/room mount.
+- `modelCatalogUpdater` — awaits an owner decision on where the "check for updated model list"
+  control resurfaces (its only UI trigger was removed in the launch-line `ModelsRoom` redesign —
+  see the MERGE-NOTE at the top of that file).
+- `issueBoardRepo` — awaits the Project-room Kanban board surface (`docs/design/
+  project-management.md`).
+- `scaffoldPublishRepo` — awaits the IDE-last-mile "publish scaffold" confirm-before-network
+  action.
+
+**Whole/partial domain packages:**
+- `domain.material` — fully parked (`MaterialClass`/`Provenance`). Awaits the Hyle
+  reflective/radiant renderer that consumes it.
+- `domain.pm` — fully parked (`IssueBoard.kt`/`IssueBoardApi.kt`). Same Kanban-board surface as
+  `issueBoardRepo` above; `RepoWorkLoop`'s use of `BoardCard` doesn't count as live (see below).
+- `domain.integrations` — fully parked (`AssayImportLane`, `CsAppImportLane`, `SarifResults`,
+  `ImportReceiptBuilder`). Zero consumers anywhere in this repo, not just no UI. Awaits an
+  import-pipeline UI (validate → preview → import) for an Assay/CSApp source.
+- `domain.language` — fully parked (`DapSessionMachine`, `DiagnosticsOwnership`,
+  `LanguageUriMapper`, `LspSessionMachine`, `ToolchainDeliveryLegality`). Awaits an owner decision
+  on which LSP host to run against on a phone.
+- `domain.workspace` — parked (see the Workspace Kernel seams above); its members only
+  cross-reference each other, no `ui/` or external `data/` reader.
+- `domain.ide` — **mixed**: `CommitAnchor` is live (minted by `data/AgentRepoRunner.kt` on every
+  agent commit, reachable from `ui/develop/DevelopRoom.kt`). `RepoWorkLoop` is parked-pending-
+  unification — it self-documents having no live caller (own KDoc + `RepoWorkResult.commitAnchor`
+  doc); the live agentic-repo path is `data/AgentRepoRunner.kt`, doing the same
+  read→propose→review→commit shape as a separate, already-wired implementation. Reconciling the
+  two is a named follow-up. `ProjectScaffold`/`ScaffoldPublishApi` are parked with
+  `scaffoldPublishRepo` above.
+- `domain.authority` — **mixed**: `AuthorityEngine`/`AuditedAuthorityEngine`/`CapabilityRegistry`
+  are live — no `ui/` file imports `domain.authority` directly, but they're reached via
+  `data/execution/RunSessionDriver.kt` (built from `AppContainer`'s `grantStore`/
+  `authorityEngine`/`localExecutionProvider`/`localUserPrincipal`), called from
+  `ui/develop/RunFacet.kt` — the Develop → Run authority gate is real. `SecretHandleBroker`/
+  `InMemorySecretHandleBroker` (see `secretHandleBroker` above) and `SecretRedactionScanner`
+  remain genuinely parked.
+- `domain.device.broker` — **mixed**: `WrongBoardPreflight` is live (Direct-USB flashing,
+  "This phone USB", agentic-ide #4 — used by `data/device/UsbFlasher.kt` from
+  `ui/develop/DevelopRoom.kt`). `DeviceBroker`, `DeviceConnectionMachine`, and
+  `FlashOperationDriver` are parked, awaiting the reference-board conformance pass
+  `docs/DEVICE_GATE_CHECKLIST.md` names (owner-run; no device/board in this build environment).
+
+**Audit correction (2026-09-15):** an earlier pass flagged `domain.net` (`OperationWorker`) and
+the `localExecutionProvider`/`localUserPrincipal`/`principalStore` `AppContainer` seams as unread.
+Re-verified: `OperationWorker` is live via `ui/loops/LoopRoom.kt`'s Loop-push retry queue, and the
+authority trio is live via the same `RunSessionDriver`/`RunFacet` chain as `domain.authority`
+above. None of the four are parked; nothing was changed for them here.

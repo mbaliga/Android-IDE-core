@@ -8,6 +8,20 @@ import dev.fonebrew.contracts.authority.ResourceScope
 import dev.fonebrew.domain.contracts.IdGenerator
 import java.time.Instant
 
+/*
+ * Package note, `domain.authority` (2026-09-15): mixed, not uniformly parked. No `ui/` file
+ * imports this package directly, but [AuthorityEngine]/[AuditedAuthorityEngine]/
+ * [CapabilityRegistry] ARE live today, reached indirectly via
+ * [dev.fonebrew.data.execution.RunSessionDriver] (constructed from [GrantStore]/[PrincipalStore]
+ * wired in [dev.fonebrew.di.AppContainer]), itself called from
+ * [dev.fonebrew.ui.develop.RunFacet] — the Develop -> Run authority gate is real, not parked.
+ * [SecretHandleBroker]/[InMemorySecretHandleBroker] and [SecretRedactionScanner] remain genuinely
+ * unconsumed: the former awaits a `security/KeystoreSecret.kt`-backed implementation (see the
+ * `secretHandleBroker` PARKED note in [dev.fonebrew.di.AppContainer]); the latter awaits whichever
+ * caller first needs to prove a log/receipt is leak-free. See docs/STATE.md's "Parked substrate"
+ * section.
+ */
+
 /** Read seam over wherever [Grant]s are actually stored -- this domain does not prescribe Room vs. in-memory. */
 fun interface GrantStore {
     fun grantsForPrincipal(principalId: String): List<Grant>

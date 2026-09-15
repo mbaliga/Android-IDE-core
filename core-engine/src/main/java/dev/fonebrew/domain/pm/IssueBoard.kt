@@ -14,6 +14,13 @@ package dev.fonebrew.domain.pm
  *
  * Pure domain (no Android, no network). [IssueBoardApi] builds the REST requests and
  * parses host JSON; this file is the model + the column logic, JVM-tested.
+ *
+ * PARKED (2026-09-15): no `ui/` file imports `domain.pm`, and its only caller,
+ * [dev.fonebrew.data.IssueBoardRepo], has no UI reader either (see that seam's PARKED note in
+ * [dev.fonebrew.di.AppContainer]). [dev.fonebrew.domain.ide.RepoWorkLoop] also depends on
+ * [BoardCard] via [dev.fonebrew.domain.cost.CardDecision], but that class is itself parked
+ * (see its own KDoc). Awaits the Project-room Kanban board surface this file's header describes.
+ * See docs/STATE.md's "Parked substrate" section.
  */
 data class BoardCard(
     val id: String,
