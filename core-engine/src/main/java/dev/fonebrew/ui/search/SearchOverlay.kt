@@ -1,7 +1,9 @@
 package dev.fonebrew.ui.search
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,19 +57,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.fonebrew.domain.scope.ContextAssembly.AssemblyMode
 import dev.fonebrew.domain.search.ExplainField
+import dev.fonebrew.domain.search.GraphAdjacentRecall
 import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.SearchKind
 import dev.fonebrew.domain.search.query.Diagnostic
 import dev.fonebrew.domain.search.query.unbackedReason
+import dev.fonebrew.domain.thread.ThreadGraph
+import dev.fonebrew.ui.components.GraphRecallCitationRow
 import dev.fonebrew.ui.components.SlashCommand
 import dev.fonebrew.ui.components.SlashCommandPopup
+import dev.fonebrew.ui.components.reason
+import dev.fonebrew.ui.components.uiLabel
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleChip
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.hyle.component.HyleField as DesktopHyleField
 import dev.aarso.hyle.theme.LocalHyleColors
+import kotlinx.coroutines.launch
 
 /**
  * S1's dormant entry pill: sits above [dev.fonebrew.ui.rooms.ChatsRoom]'s tab row, opens
@@ -122,11 +134,44 @@ fun SearchOverlay(
      *  scrolled to and highlighting that task (`dev.fonebrew.ui.rooms.ProductRoomFree`'s
      *  `highlightTaskId`). */
     onOpenTask: (taskId: String) -> Unit = {},
+    /**
+     * Lane A1: obtains a fresh [ThreadGraph] snapshot for the "Related context" action —
+     * [dev.fonebrew.ui.ChatViewModel.loadThreadGraph], the exact projector path
+     * `ui/graph/GraphRoom.kt` already uses, wired in by [dev.fonebrew.ui.spatial.SpatialRoot]
+     * (which already holds the `ChatViewModel` this Dialog itself has no reason to depend on).
+     * Never called eagerly — only when a row's "Related context" affordance is actually used, so
+     * opening the search overlay itself never pays a graph-projection cost.
+     */
+    onLoadThreadGraph: suspend () -> ThreadGraph,
     onDismiss: () -> Unit,
 ) {
     val c = LocalHyleColors.current
     val state by viewModel.uiState.collectAsState()
     var saveDialogOpen by remember { mutableStateOf(false) }
+    // Lane A1's "Related context" sheet: which row it's for (null = closed) plus its own small
+    // load/error/result state. Local Compose state, same idiom `GraphRoom`'s own Observations
+    // panel uses for `observerRemarks` — a transient, on-demand UI concern, not something
+    // SearchViewModel needs to own (it never touches the repository/database SearchViewModel is
+    // scoped to; the graph snapshot comes from ChatViewModel via [onLoadThreadGraph] instead).
+    var relatedContextRow by remember { mutableStateOf<SearchResultsPresenter.ResultRow?>(null) }
+    var relatedContextState by remember { mutableStateOf(RelatedContextUiState()) }
+    val relatedContextScope = rememberCoroutineScope()
+    val openRelatedContext: (SearchResultsPresenter.ResultRow) -> Unit = { row ->
+        relatedContextRow = row
+        relatedContextState = RelatedContextUiState(loading = true)
+        relatedContextScope.launch {
+            val outcome = runCatching {
+                val graph = onLoadThreadGraph()
+                val seeds = GraphAdjacentRecallPresenter.seedsFor(row)
+                val recall = GraphAdjacentRecall.expand(seeds, graph, cap = GraphAdjacentRecallPresenter.DEFAULT_CAP)
+                GraphAdjacentRecallPresenter.present(recall, graph)
+            }
+            relatedContextState = outcome.fold(
+                onSuccess = { sheet -> RelatedContextUiState(sheet = sheet) },
+                onFailure = { e -> RelatedContextUiState(error = e.message ?: "Couldn't load related context") },
+            )
+        }
+    }
     // Both exits are wrapped so the ViewModel sees the two moments a search is actually
     // committed — a result opened, or the overlay closed on a query that found something. That
     // is what fills `search_history` (and therefore the Recent list) without logging keystrokes.
@@ -141,6 +186,16 @@ fun SearchOverlay(
             SearchKind.TASK -> onOpenTask(row.convId)
             SearchKind.TEXT, SearchKind.IMAGE, SearchKind.MIXED -> onOpenConversation(row.convId, state.findText)
         }
+    }
+    // A recalled graph node is always a conversation-tree node (MESSAGE/FORK_ROOT/SPAWN_ROOT/
+    // RUN_ROOT/DECISION/…, never LOOP/TASK — those aren't part of ThreadGraph at all), so jumping
+    // to one only ever needs the conversation half of [openResult]'s own dispatch — reusing
+    // exactly that path (same `onOpenConversation` call, same current find text) rather than a
+    // second, parallel "how do I open a thing" implementation.
+    val jumpToRecalledNode: (rootId: String) -> Unit = { rootId ->
+        viewModel.onResultOpened(rootId)
+        onOpenConversation(rootId, state.findText)
+        relatedContextRow = null
     }
     // Scoped hardware-keyboard shortcuts (§11.1's reachable-pre-M5 subset, WP13): Esc closes,
     // Ctrl+S saves the current query, Ctrl+Enter opens the top result. Kept local to this
@@ -273,7 +328,7 @@ fun SearchOverlay(
                         onClearRecent = viewModel::clearRecentSearches,
                     )
                     state.isNoResults -> NoResults(state = state, onDropFacets = viewModel::dropFacets)
-                    else -> ResultsList(state, viewModel::toggleExplain, openResult)
+                    else -> ResultsList(state, viewModel::toggleExplain, openResult, openRelatedContext)
                 }
 
                 if (!state.isZeroState) {
@@ -294,6 +349,151 @@ fun SearchOverlay(
             onSave = { name -> viewModel.saveCurrentQuery(name); saveDialogOpen = false },
         )
     }
+
+    relatedContextRow?.let { row ->
+        RelatedContextSheet(
+            forRow = row,
+            state = relatedContextState,
+            onJump = jumpToRecalledNode,
+            onDismiss = { relatedContextRow = null },
+        )
+    }
+}
+
+/** Lane A1's "Related context" sheet state: which of the three mutually-exclusive readings is
+ *  live right now — never a [sheet] alongside a stale [error], or vice versa. */
+private data class RelatedContextUiState(
+    val loading: Boolean = false,
+    val error: String? = null,
+    val sheet: GraphAdjacentRecallPresenter.SheetState? = null,
+)
+
+/**
+ * Lane A1 — the graph-adjacent recall's real UI call site: a "Related context" tap on a search
+ * result opens this, showing every node [GraphAdjacentRecall.expand] found one hop away, each
+ * with every citable reason it was reached ([GraphRecallCitationRow] — edge `because` + matched
+ * query term, verbatim, never synthesized), the cap surfaced honestly when it actually cut
+ * something, and a tap to jump straight to it via [onJump] (the same conversation-jump path a
+ * plain search-result tap already uses — S9 continuity, same find-bar text).
+ *
+ * The header reuses [AssemblyMode.GraphAdjacent]'s own [uiLabel]/[reason] text — the exact words
+ * [dev.fonebrew.ui.components.ScopeInspector] would show for this mode — so this sheet and that
+ * inspector never describe graph-adjacent recall two different ways.
+ */
+@Composable
+private fun RelatedContextSheet(
+    forRow: SearchResultsPresenter.ResultRow,
+    state: RelatedContextUiState,
+    onJump: (rootId: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = LocalHyleColors.current
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+            Column(
+                Modifier
+                    .padding(16.dp)
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            AssemblyMode.GraphAdjacent.uiLabel().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "for “${forRow.title}”",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = c.textMid,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Box(
+                        Modifier.size(32.dp).clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("✕", style = MaterialTheme.typography.titleMedium, color = c.textMid)
+                    }
+                }
+                Text(
+                    AssemblyMode.GraphAdjacent.reason(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.textMid,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                HorizontalDivider(color = c.hairline, modifier = Modifier.padding(vertical = 8.dp))
+
+                when {
+                    // Not CenteredMessage: that composable fills the whole dialog window by
+                    // design (it's used for the top-level overlay's own zero/indexing states),
+                    // which would fight this sheet's bounded, scrollable Column. A plain Row is
+                    // enough for a sheet this size.
+                    state.loading -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 24.dp)) {
+                        CircularProgressIndicator(color = c.violet, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Expanding the graph…", style = MaterialTheme.typography.bodyMedium, color = c.textMid)
+                    }
+                    state.error != null -> Text(
+                        state.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.error,
+                    )
+                    state.sheet == null || state.sheet.rows.isEmpty() -> Text(
+                        "Nothing recorded one hop away from this result.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textMid,
+                    )
+                    else -> {
+                        val sheet = state.sheet
+                        // The cap, surfaced when it actually hit — never a silent truncation
+                        // (mirrors GraphAdjacentRecall.Result's own contract).
+                        Text(
+                            "${sheet.rows.size} of ${sheet.consideredCount} shown (cap ${sheet.cap})" +
+                                (if (sheet.truncated) " · ${sheet.cutCount} left out by the cap" else ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = c.textMid,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        sheet.rows.forEach { row -> RelatedContextRow(row, onJump = onJump) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One [GraphAdjacentRecallPresenter.RecalledRow]: the node's own graph label when the projector
+ *  minted one (falling back to its bare id — never a fabricated title), tappable to jump straight
+ *  to it via [onJump] when [GraphAdjacentRecallPresenter.RecalledRow.jumpRootId] is non-null, and
+ *  every citation underneath via the shared [GraphRecallCitationRow]. */
+@Composable
+private fun RelatedContextRow(row: GraphAdjacentRecallPresenter.RecalledRow, onJump: (String) -> Unit) {
+    val c = LocalHyleColors.current
+    val jumpTarget = row.jumpRootId
+    val title = row.label?.takeIf { it.isNotBlank() } ?: row.nodeId
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .let { if (jumpTarget != null) it.clickable { onJump(jumpTarget) } else it }
+            .semantics {
+                contentDescription = title + (if (jumpTarget != null) ", tap to open" else "")
+            },
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (jumpTarget != null) c.violet else c.textHigh,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        row.citations.forEach { citation ->
+            GraphRecallCitationRow(citation, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+        }
+    }
+    HorizontalDivider(color = c.hairline)
 }
 
 /** The whole of the operator help's standing presence: one glyph at the field's trailing edge,
@@ -492,6 +692,7 @@ private fun ResultsList(
     state: SearchPresenter.UiState,
     onToggleExplain: (String) -> Unit,
     onOpenResult: (SearchResultsPresenter.ResultRow) -> Unit,
+    onRelatedContext: (SearchResultsPresenter.ResultRow) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -503,22 +704,41 @@ private fun ResultsList(
                 expanded = state.expandedResultId == row.convId,
                 onOpen = { onOpenResult(row) },
                 onToggleExplain = { onToggleExplain(row.convId) },
+                onRelatedContext = { onRelatedContext(row) },
             )
             HorizontalDivider(color = LocalHyleColors.current.hairline)
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResultRowView(
     row: SearchResultsPresenter.ResultRow,
     expanded: Boolean,
     onOpen: () -> Unit,
     onToggleExplain: () -> Unit,
+    /** Lane A1's "Related context" action (graph-adjacent recall's real UI call site) — wired to
+     *  both this row's long-press (below) and its own visible affordance (bottom of this
+     *  Column), tap-plus-long-press parity so it's reachable without discovering the gesture. */
+    onRelatedContext: () -> Unit,
 ) {
     val c = LocalHyleColors.current
+    // Graph-adjacent recall only ever walks ThreadGraph — conversation nodes — so it has nothing
+    // honest to say about a LOOP/TASK hit (kindLabel(row.kind) != null for exactly those two;
+    // see that function's own KDoc). Rather than open a sheet that can only ever say "nothing
+    // recorded" for those kinds, the affordance (both the long-press and its visible twin below)
+    // is simply absent for them.
+    val graphEligible = kindLabel(row.kind) == null
     Column(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onOpen,
+                onLongClick = if (graphEligible) onRelatedContext else null,
+                onLongClickLabel = if (graphEligible) "Related context" else null,
+            )
+            .padding(vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Legibility over convenience (this app's own design thesis, CLAUDE.md's north
@@ -558,6 +778,19 @@ private fun ResultRowView(
                 modifier = Modifier.padding(top = 4.dp).clickable(onClick = onToggleExplain),
             )
             if (expanded) ExplanationPanel(row.explanation)
+        }
+        // Lane A1: the visible row affordance for graph-adjacent recall — the tappable twin of
+        // this row's own long-press above (tap-plus-long-press parity; never long-press-only).
+        if (graphEligible) {
+            Text(
+                "Related context",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.violet,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clickable(onClick = onRelatedContext)
+                    .semantics { contentDescription = "Show related context for ${row.title}" },
+            )
         }
     }
 }

@@ -48,7 +48,15 @@ object ContextAssembly {
      * - [GraphAdjacent]         — graph-wave lane C: non-semantic recall by expanding lexical
      *   search hits through recorded [ThreadGraph] structure ([GraphAdjacentRecall]). Implemented
      *   — see [assembleGraphAdjacent] — and deliberately **not** selected by [assemble]; a caller
-     *   opts into it explicitly (e.g. the user ran a search for this turn).
+     *   opts into it explicitly (e.g. the user ran a search for this turn). Lane A1's real UI
+     *   caller for [GraphAdjacentRecall] — [dev.fonebrew.ui.search.SearchOverlay]'s "Related
+     *   context" action — calls [GraphAdjacentRecall.expand] directly rather than
+     *   [assembleGraphAdjacent] (no turn-budget/[CorpusPiece] shape exists for a search-driven
+     *   browsing sheet to honestly supply — see [dev.fonebrew.ui.search.
+     *   GraphAdjacentRecallPresenter]'s own KDoc), so no live caller constructs an [Assembled]
+     *   carrying this mode yet and [assembleGraphAdjacent] stays test-only — that sheet reuses
+     *   only this enum value's own [dev.fonebrew.ui.components.uiLabel] wording, not an
+     *   [Assembled] instance.
      * - [Recall]                — reserved for the embedder-driven semantic-retrieval
      *   layer. **Not implemented here** (the floor ships without an embedder). The case
      *   exists so the type is complete and call sites can switch on it once Recall lands.

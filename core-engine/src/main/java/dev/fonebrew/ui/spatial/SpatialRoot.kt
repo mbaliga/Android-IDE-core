@@ -598,6 +598,10 @@ fun SpatialRoot() {
                     searchOpen = false
                     controller.open(SpatialTarget.PROJECT)
                 },
+                // Lane A1: the "Related context" sheet's graph snapshot — the exact same
+                // ThreadGraphProjector path `ui/graph/GraphRoom.kt` already uses via this same
+                // chatViewModel, never a second/diverging projection.
+                onLoadThreadGraph = { chatViewModel.loadThreadGraph() },
                 onDismiss = { searchOpen = false },
             )
         }

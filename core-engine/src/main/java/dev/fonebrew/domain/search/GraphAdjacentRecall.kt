@@ -28,6 +28,22 @@ import dev.fonebrew.domain.thread.ThreadGraphEdge
  * `dev.fonebrew.embedding.PlaceholderEmbedder` are untouched by this file and stay exactly as
  * blocked as before.
  *
+ * ### Real UI call site (lane A1)
+ * Through graph-wave lane C this type was complete and tested but **callerless outside tests** —
+ * its only consumer, [dev.fonebrew.domain.scope.ContextAssembly.assembleGraphAdjacent], was
+ * itself test-only, and no UI ever built a [Seed] list or ran [expand]. Lane A1 closes that gap:
+ * [dev.fonebrew.ui.search.SearchOverlay]'s **"Related context"** action (a search result row's
+ * own tap/long-press affordance) is the first real caller — a [Seed] built from the tapped hit
+ * ([seedsFrom]'s own two-field shape, read off the presented row rather than the raw hit; see
+ * [dev.fonebrew.ui.search.GraphAdjacentRecallPresenter.seedsFor]'s KDoc), [expand] over a
+ * [ThreadGraph] snapshot obtained through
+ * [dev.fonebrew.ui.ChatViewModel.loadThreadGraph] (the same projector path `ui/graph/
+ * GraphRoom.kt` already uses), presented in a sheet via
+ * [dev.fonebrew.ui.search.GraphAdjacentRecallPresenter]. That sheet calls [expand] directly, not
+ * `assembleGraphAdjacent` — see the presenter's own KDoc for why — so `assembleGraphAdjacent`
+ * itself remains exactly as test-only as before; this lane gives [GraphAdjacentRecall] a real
+ * caller, not that wrapper.
+ *
  * ### Issue #2 boundary (descriptive only)
  * Every [Citation] carries structure, never judgment: a recorded edge and its own truthful
  * `because` text (verbatim — this file never rewrites or re-interprets it), plus the literal

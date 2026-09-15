@@ -27,6 +27,7 @@ import dev.fonebrew.domain.scope.ContextAssembly.AssemblyMode
 import dev.fonebrew.domain.scope.CorpusPiece
 import dev.fonebrew.domain.scope.CorpusSource
 import dev.fonebrew.domain.scope.Scope
+import dev.fonebrew.domain.search.GraphAdjacentRecall
 
 /**
  * Presentational Compose components for the **knowledge-scoping** surfaces (Doc 01 §3.4 /
@@ -53,8 +54,17 @@ import dev.fonebrew.domain.scope.Scope
  * wireframe-fidelity to match the surrounding `ui/` surfaces.
  */
 
-/** Human label for an [AssemblyMode] — the three words the UI uses for *how* context was built. */
-private fun AssemblyMode.uiLabel(): String = when (this) {
+/**
+ * Human label for an [AssemblyMode] — the three words the UI uses for *how* context was built.
+ *
+ * `internal`, not `private` (lane A1): [dev.fonebrew.ui.search.SearchOverlay]'s "Related
+ * context" sheet reuses this exact text for its own header, the same words [ScopeInspector]
+ * would show for this mode — one label, not two that could drift. Until lane A1, nothing in the
+ * running app ever produced an [AssemblyMode.GraphAdjacent] value, so that branch below was
+ * unreachable outside a unit test; the sheet's own [AssemblyMode.GraphAdjacent] literal now
+ * executes it for real.
+ */
+internal fun AssemblyMode.uiLabel(): String = when (this) {
     AssemblyMode.Verbatim -> "verbatim"
     AssemblyMode.PrioritizedTruncation -> "prioritized"
     AssemblyMode.GraphAdjacent -> "graph recall"
@@ -66,8 +76,10 @@ private fun AssemblyMode.uiLabel(): String = when (this) {
  * to the mode, so the choice is legible rather than mysterious. Mirrors the floor's rule in
  * [dev.fonebrew.domain.scope.ContextAssembly]: everything fit (verbatim) vs over budget, included by
  * explicit priority (prioritized); recall is the reserved embedder layer.
+ *
+ * `internal`, not `private` — see [uiLabel]'s own KDoc; same reuse, same reason.
  */
-private fun AssemblyMode.reason(): String = when (this) {
+internal fun AssemblyMode.reason(): String = when (this) {
     AssemblyMode.Verbatim -> "the whole scoped corpus fit the budget — nothing was cut"
     AssemblyMode.PrioritizedTruncation ->
         "over budget — included by explicit priority (pinned, then most recent); the rest cut"
@@ -75,6 +87,22 @@ private fun AssemblyMode.reason(): String = when (this) {
         "graph recall — search hits expanded through recorded graph edges (parent/children/" +
             "branches/lineage/decisions), each one citable; no embedder"
     AssemblyMode.Recall -> "semantic recall (embedder-driven retrieval)"
+}
+
+/**
+ * Human label for a [GraphAdjacentRecall.Relation] — lane A1. Shared by [ScopeInspector]'s own
+ * graph-recall citation block (below) and [dev.fonebrew.ui.search.SearchOverlay]'s "Related
+ * context" sheet, so the six relations read the same way everywhere they're shown, not two
+ * independently-drifting vocabularies. Mirrors [GraphAdjacentRecall.Relation]'s own KDoc
+ * wording — never a softer or vaguer gloss than what that object itself documents.
+ */
+internal fun GraphAdjacentRecall.Relation.uiLabel(): String = when (this) {
+    GraphAdjacentRecall.Relation.PARENT -> "Parent"
+    GraphAdjacentRecall.Relation.CHILDREN -> "Reply"
+    GraphAdjacentRecall.Relation.ALTERNATIVES -> "Alternative branch"
+    GraphAdjacentRecall.Relation.LINEAGE_SOURCE -> "Forked/spawned from"
+    GraphAdjacentRecall.Relation.DECISION_ANCHOR -> "Decision"
+    GraphAdjacentRecall.Relation.BRIDGE -> "Spawn bridge"
 }
 
 /** A short, human-facing description of a [CorpusSource] — its provenance kind, for the ledger. */
@@ -269,6 +297,36 @@ fun ScopeInspector(
                 CorpusRow(piece, included = false)
             }
         }
+
+        // 4c — lane A1: graph-adjacent recall's own citation trail, shown only when [assembled]
+        // actually carries one ([Assembled.graphRecall] is null for every other mode/call site —
+        // see that property's own KDoc). Every pre-existing caller of this composable (the
+        // Instruments panel, fed only by [dev.fonebrew.domain.instrument.InstrumentsAssembly]'s
+        // Verbatim/PrioritizedTruncation-only [dev.fonebrew.domain.scope.ContextAssembly.assemble])
+        // always passes `graphRecall = null`, so this block is invisible there today — it exists
+        // so this, the app's one canonical "what does the model know" surface, is honest and
+        // complete for [AssemblyMode.GraphAdjacent] the moment any caller does feed it one, not
+        // just the two modes that shipped first. The search overlay's own "Related context" sheet
+        // (the mode's first real caller, lane A1) renders these same citations directly rather
+        // than through this composable — it has recalled *graph nodes*, not [CorpusPiece]s, so
+        // there is no [Assembled] for it to hand this Dialog in the first place; see
+        // [dev.fonebrew.ui.search.GraphAdjacentRecallPresenter]'s own KDoc for why.
+        assembled.graphRecall?.let { recall ->
+            Spacer(Modifier.height(14.dp))
+            Text("Why (graph recall)", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${recall.included.size} of ${recall.consideredCount} shown (cap ${recall.cap})" +
+                    (if (recall.truncated) " · ${recall.cut.size} left out by the cap" else ""),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            recall.included.forEach { item ->
+                Spacer(Modifier.height(6.dp))
+                Text(item.nodeId, style = MaterialTheme.typography.labelMedium)
+                item.citations.forEach { citation -> GraphRecallCitationRow(citation) }
+            }
+        }
     }
 }
 
@@ -304,5 +362,46 @@ private fun CorpusRow(piece: CorpusPiece, included: Boolean) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Lane A1 — one [GraphAdjacentRecall.Citation] as a legibility row: the relation that connected
+ * it ([GraphAdjacentRecall.Relation.uiLabel]), the recorded edge's own truthful `because`
+ * (verbatim — never paraphrased here, per [GraphAdjacentRecall]'s own Issue #2 boundary), and the
+ * query term(s) that made the originating hit match, when any were recorded. Shared by
+ * [ScopeInspector]'s own graph-recall block above and
+ * [dev.fonebrew.ui.search.SearchOverlay]'s "Related context" sheet, so one citation reads
+ * identically everywhere it's shown. A spoken `contentDescription` folds all three parts into one
+ * TalkBack-readable sentence.
+ */
+@Composable
+fun GraphRecallCitationRow(citation: GraphAdjacentRecall.Citation, modifier: Modifier = Modifier) {
+    val terms = citation.matchedQueryTerms
+    val spoken = "${citation.relation.uiLabel()}: ${citation.because}" +
+        (if (terms.isNotEmpty()) ", matched ${terms.joinToString(", ")}" else "")
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .semantics { contentDescription = spoken },
+    ) {
+        Text(
+            citation.relation.uiLabel(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            citation.because,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (terms.isNotEmpty()) {
+            Text(
+                "matched: " + terms.joinToString(", "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
