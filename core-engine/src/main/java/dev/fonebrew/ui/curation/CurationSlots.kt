@@ -28,6 +28,10 @@ data class RoundtableRequest(
  * actual class): Compose snapshot state ([mutableStateOf], not a plain `var`) with a
  * private-set backing field and an `install`-only mutator, so a mid-session Studio-entitlement
  * unlock recomposes in place rather than needing a restart.
+ *
+ * Consumed at `ChatScreen.kt`'s `TurnActionsSheet`: a "Re-run with…" row, present only when
+ * [isInstalled], opens the installed content full-screen (a `Dialog` core owns, same chrome as
+ * `ParticipantsScreen`'s) with a [RoundtableRequest] built from the long-pressed turn.
  */
 object RoundtableSlot {
     /** Installed by the Studio layer; null in the bare open core. */
@@ -50,6 +54,11 @@ object RoundtableSlot {
  * path is core, always available.
  *
  * Same [ProjectRoomSlot]-modeled shape as [RoundtableSlot].
+ *
+ * Consumed at `ChatScreen.kt`'s `TurnActionsSheet`, mounted directly beneath the manual "Mark
+ * branch as Version…" row it complements, passed the long-pressed turn's node id as
+ * [branchTipMsgId] — see that call site's own KDoc for why "adjacent to the manual action" was
+ * chosen over this slot's "above the composer" framing.
  */
 object VersionSuggestSlot {
     /** Installed by the Studio layer; null in the bare open core. [branchTipMsgId] is the tip the host is currently rendering, so the installed content can decide per-tip whether a chip is warranted. */

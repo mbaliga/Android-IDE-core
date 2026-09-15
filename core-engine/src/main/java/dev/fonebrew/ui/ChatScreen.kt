@@ -131,6 +131,9 @@ import dev.fonebrew.ui.components.applyMention
 import dev.fonebrew.ui.components.isShellEscape
 import dev.fonebrew.ui.components.matchMentions
 import dev.fonebrew.ui.components.matchSlashCommands
+import dev.fonebrew.ui.curation.RoundtableRequest
+import dev.fonebrew.ui.curation.RoundtableSlot
+import dev.fonebrew.ui.curation.VersionSuggestSlot
 import dev.fonebrew.ui.develop.TerminalFacet
 import dev.fonebrew.ui.search.InChatFindBar
 import dev.fonebrew.ui.search.InChatFindPresenter
@@ -223,6 +226,10 @@ fun ChatScreen(
     // session-start needs no name prompt, it fires straight from the sheet.
     var chapterNameStep by remember { mutableStateOf<PathView.Step?>(null) }
     var chapterNameInput by remember { mutableStateOf("") }
+    // S-new seam (STUDIO_UX_SPEC.md §5.3/§13 S14): the race TurnActionsSheet's "Re-run with…"
+    // row hands off to, when a paid layer has installed RoundtableSlot — see its KDoc. Null in
+    // the bare open core, where that row is never even shown (see TurnActionsSheet below).
+    var roundtableRequest by remember { mutableStateOf<RoundtableRequest?>(null) }
     // D1: dismissible "Connect your repos" home card (session-scoped dismissal).
     var connectDismissed by remember { mutableStateOf(false) }
     // THREAD_TOPOLOGY_PLAN.md WP7: the Instruments panel — entry from the expanded
@@ -1083,6 +1090,12 @@ fun ChatScreen(
             // via the same contract CompactionEngine uses, and preserves it.
             onToggleMustInclude = { viewModel.toggleMustInclude(step.node.id) },
             onRewind = { viewModel.rewindFrom(step.node.id); actionStep = null },
+            // S-new seam: only ever reachable when RoundtableSlot.isInstalled (the row itself is
+            // absent otherwise — see TurnActionsSheet), so this is safe to wire unconditionally.
+            // candidateModelIds left empty — RoundtableRequest's own KDoc: an empty list means
+            // "let the installed layer pick its own default set," which core has no basis to
+            // choose (it has no concept of what Roundtable considers a good pairing).
+            onReRunWithModels = { roundtableRequest = RoundtableRequest(originMsgId = step.node.id); actionStep = null },
             onMarkChapter = { chapterNameInput = ""; chapterNameStep = step; actionStep = null },
             onStartSessionHere = { viewModel.markSessionStart(step.node.id); actionStep = null },
             onFork = { viewModel.forkFrom(step.node.id); actionStep = null },
@@ -1094,6 +1107,25 @@ fun ChatScreen(
             onQuote = { input = ComposerQuote.quote(input, step.node.content); actionStep = null },
             onReply = { input = ComposerQuote.reply(input, step.node.content); actionStep = null },
         )
+    }
+
+    // S-new seam (STUDIO_UX_SPEC.md §5.3/§13 S14): full-screen, same Dialog(usePlatformDefaultWidth
+    // = false) + fillMaxSize Surface wrapping as showParticipants above — RoundtableSlot's
+    // installed content (like ParticipantsScreen) is plain content, not a self-wrapping screen, so
+    // core owns the chrome. `content` is re-read (not captured once) so a mid-session entitlement
+    // unlock while this exact dialog is already open would still resolve — belt-and-braces, since
+    // roundtableRequest is only ever set from a row that itself checked isInstalled first.
+    roundtableRequest?.let { request ->
+        RoundtableSlot.content?.let { installed ->
+            Dialog(
+                onDismissRequest = { roundtableRequest = null },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    installed(request) { roundtableRequest = null }
+                }
+            }
+        }
     }
 
     // THREAD_TOPOLOGY_PLAN.md WP2: "Compare alternatives" — stacked cards for every sibling at a
@@ -1917,10 +1949,25 @@ private fun ModelRow(m: ModelOption, active: Boolean, onSelect: (String) -> Unit
  * pre-existing branch/copy/flag actions, and — since THREAD_TOPOLOGY_PLAN.md WP4 — the tappable
  * parity for the pull-left/pull-right drags ([onReply]/[onQuote]). "Raw view" (below "Copy
  * text") added 2026-09-15 (asoc-reachability audit item 6) — a plain dialog of the turn's exact
- * stored content, no markdown rendering, no L4 view needed for that. Still not built this pass
- * (flagged, not silently skipped, since the plumbing genuinely doesn't exist yet): "Re-run
- * with…" (needs Roundtable, PC-B, not built), "Convert → Task/Incident" (the spec marks this
- * item "(Studio)"), "Read aloud."
+ * stored content, no markdown rendering, no L4 view needed for that.
+ *
+ * "Re-run with…" (asoc-reachability audit item, 2026-09-15) is now built: right below "Rewind
+ * from here" — see the `if (RoundtableSlot.isInstalled)` guard around its row below — it hands
+ * off to whatever a paid Studio layer installed into [dev.fonebrew.ui.curation.RoundtableSlot]
+ * (the race/blind-mode/consensus UI itself is entirely Studio-side; core only owns the row, the
+ * [dev.fonebrew.ui.curation.RoundtableRequest] it builds from this turn, and the full-screen
+ * Dialog chrome it hands the installed content — see the `roundtableRequest` handling in
+ * [ChatScreen]). Free core / not-entitled: `RoundtableSlot.content` is null, so the row is
+ * **absent**, not a disabled placeholder — same rule [dev.fonebrew.ui.rooms.SettingsEntitlementSlot]
+ * already follows, so there is no dead tappable to repeat the pitch-tab defect. No radial/drag
+ * twin was added alongside it: unlike Branch/Fork/Spawn (which the gesture layer,
+ * [dev.fonebrew.domain.gesture.MessageDragLogic], already models as drag intents this sheet's
+ * rows mirror), there is no re-run drag gesture defined anywhere in this app, so there is no
+ * existing tappable-parity contract to extend — same shape as "Rewind"/"Compact from here",
+ * sheet-only rows with no gesture twin either.
+ *
+ * Still not built this pass (flagged, not silently skipped, since the plumbing genuinely doesn't
+ * exist yet): "Convert → Task/Incident" (the spec marks this item "(Studio)"), "Read aloud."
  */
 @Composable
 private fun TurnActionsSheet(
@@ -1935,6 +1982,9 @@ private fun TurnActionsSheet(
     onSetFidelity: (dev.fonebrew.domain.curation.Fidelity) -> Unit = {},
     onToggleMustInclude: () -> Unit = {},
     onRewind: () -> Unit = {},
+    /** S-new seam: only invoked from a row that is present at all when [RoundtableSlot.isInstalled]
+     *  — see this function's own KDoc above. */
+    onReRunWithModels: () -> Unit = {},
     onMarkChapter: () -> Unit = {},
     onStartSessionHere: () -> Unit = {},
     /** THREAD_TOPOLOGY_PLAN.md WP2: "Fork from here" — full-fidelity copy into a new,
@@ -1967,6 +2017,17 @@ private fun TurnActionsSheet(
             TextButton(onClick = onMarkVersion, modifier = Modifier.fillMaxWidth()) {
                 Text("Mark branch as Version…")
             }
+            // S-new seam (STUDIO_UX_SPEC.md §4.4/§13 S13): mounted directly beneath the manual
+            // action it complements, rather than the Studio content's own "above the composer"
+            // framing (see VersionSuggestChip's file KDoc, Studio repo, read-only) — this sheet
+            // already opens per-turn with the exact branchTipMsgId (this step's node id) the
+            // manual action above operates on, so "adjacent to Mark branch as Version…" reads
+            // literally here, and it keeps this seam's only core-side touch inside the one file/
+            // function this lane already owns rather than the always-visible composer row (a
+            // wider, riskier surface a different lane may also be touching). Renders nothing
+            // when unentitled ([VersionSuggestSlot.content] null) or when the installed engine
+            // itself has no trigger for this tip — see that composable's own early return.
+            VersionSuggestSlot.content?.let { installed -> installed(step.node.id) }
             TextButton(onClick = onMarkChapter, modifier = Modifier.fillMaxWidth()) {
                 Text("Mark chapter here…")
             }
@@ -2015,6 +2076,14 @@ private fun TurnActionsSheet(
             TextButton(onClick = onRewind, modifier = Modifier.fillMaxWidth()) {
                 Text("Rewind from here")
             }
+            // S-new seam (STUDIO_UX_SPEC.md §5.3/§13 S14): present only when a paid layer has
+            // installed RoundtableSlot — absent, not a disabled placeholder, in the bare open
+            // core (see this function's own KDoc above for the full rationale).
+            if (RoundtableSlot.isInstalled) {
+                TextButton(onClick = onReRunWithModels, modifier = Modifier.fillMaxWidth()) {
+                    Text("Re-run with…")
+                }
+            }
             TextButton(onClick = onBranch, modifier = Modifier.fillMaxWidth()) {
                 Text("Branch from here — try a different route")
             }
@@ -2040,11 +2109,11 @@ private fun TurnActionsSheet(
             ) {
                 Text("Copy text")
             }
-            // asoc-reachability audit (2026-09-15) item 6: the one named-but-missing
-            // TurnActionsSheet row this lane can actually build — the turn's exact stored
-            // content, verbatim, no markdown rendering. Re-run with…/Convert→Task-Incident/Read
-            // aloud stay named in the KDoc above rather than faked here; they need plumbing
-            // (Roundtable, task/incident write paths, TTS) this lane doesn't own.
+            // asoc-reachability audit (2026-09-15) item 6: the turn's exact stored content,
+            // verbatim, no markdown rendering. Convert→Task-Incident/Read aloud stay named in the
+            // KDoc above rather than faked here; they need plumbing (task/incident write paths,
+            // TTS) this lane doesn't own. ("Re-run with…" above this row was the third item in
+            // that same not-built list — it's wired now, see the KDoc above TurnActionsSheet.)
             TextButton(onClick = { showRawView = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("Raw view")
             }
