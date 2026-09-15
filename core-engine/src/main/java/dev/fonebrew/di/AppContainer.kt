@@ -173,8 +173,29 @@ class AppContainer(context: Context) {
     /** Content routed in from share / process-text / assist (§7). */
     val sharedIntake: SharedIntake = SharedIntake()
 
+    /** The shared Regular/asoc interaction-mode choice (2026-09-15 ruling; `dev.aarso:
+     *  interaction-mode`, composited exactly like `:crash-recovery` above — see
+     *  settings.gradle.kts). `legacySignal` is read directly off [SessionStore]'s own prefs file
+     *  via [SessionStore.legacySignal] (a static helper, not a full [SessionStore] instance) —
+     *  [sessionStore] itself is constructed just below and needs the resolved mode back, for its
+     *  own mode-aware gesture-toggle defaults (see that constructor's KDoc). */
+    val interactionModeStore: dev.aarso.interactionmode.InteractionModeStore =
+        dev.aarso.interactionmode.PrefsInteractionModeStore(
+            prefs = context.applicationContext.getSharedPreferences("aarso.interaction_mode", Context.MODE_PRIVATE),
+            legacySignal = SessionStore.legacySignal(context.applicationContext),
+        )
+
+    /** Compose-observable wrapper over [interactionModeStore] — see
+     *  [dev.fonebrew.data.InteractionModeBridge]'s own KDoc for why this exists on top of a
+     *  store the shared module deliberately ships without a `Flow`. [dev.fonebrew.ui.AppRoot]
+     *  reads this to branch ASOC → [dev.fonebrew.ui.spatial.SpatialRoot] / REGULAR →
+     *  [dev.fonebrew.ui.regular.RegularShell], recomposing immediately when Settings → General's
+     *  "Interaction style" picker calls [dev.fonebrew.data.InteractionModeBridge.setMode]. */
+    val interactionMode: dev.fonebrew.data.InteractionModeBridge =
+        dev.fonebrew.data.InteractionModeBridge(interactionModeStore)
+
     /** Where the user was (leaf/model) + small UI prefs — survives process death. */
-    val sessionStore: SessionStore = SessionStore(context)
+    val sessionStore: SessionStore = SessionStore(context, modeProvider = { interactionMode.mode.value })
 
     /** Conversations room source (Doc 02): folds the tree + session (stars/projects/opens) +
      *  ledger into the room's row model. Implements [dev.fonebrew.ui.state.ConversationsSource];

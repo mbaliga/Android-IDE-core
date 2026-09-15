@@ -628,6 +628,34 @@ private fun GeneralSettings(
             )
         }
     }
+    // Bifurcation wave 1 (owner ruling 2026-09-15): the Regular/asoc choice, changeable any
+    // time — same shared HyleModePicker + copy the onboarding mode-choice page uses (see
+    // dev.fonebrew.ui.mode.InteractionModeOptions's KDoc), opened in a bottom sheet here rather
+    // than this room's own full-screen [overlay] slot since it's a small, self-dismissing pick.
+    var showModePicker by remember { mutableStateOf(false) }
+    val currentInteractionMode by container.interactionMode.mode.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Interaction style", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                if (currentInteractionMode == dev.aarso.interactionmode.InteractionMode.ASOC) {
+                    "asoc — the spatial rooms + gesture grammar"
+                } else {
+                    "Regular — familiar tabs and buttons"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = { showModePicker = true }) { Text("Change") }
+    }
+    if (showModePicker) {
+        InteractionModePickerSheet(onDismiss = { showModePicker = false })
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -718,14 +746,17 @@ private fun GeneralSettings(
     }
     HorizontalDivider()
 
-    // THREAD_TOPOLOGY_PLAN.md WP9 — the graph observer, off by default (owner decision 5). No
-    // graph room reads this yet (WP10); the switch exists so the substrate's inert-by-default
-    // contract is real and testable ahead of that surface, not a dead control.
-    Text("Observer (inert)", style = MaterialTheme.typography.titleMedium)
+    // THREAD_TOPOLOGY_PLAN.md WP9 — the graph observer, off by default (owner decision 5).
+    // CORRECTED 2026-09-15 (bifurcation wave 1 / lane R audit): this comment used to claim "no
+    // graph room reads this yet (WP10)" — stale since WP10 landed. dev.fonebrew.ui.graph.
+    // GraphRoom.kt DOES read it (its Observations panel renders only while this is on; while
+    // off it shows a plain "turn it on in Settings" line instead) — this switch is a real gate
+    // on a shipped surface now, not a dead control ahead of one.
+    Text("Observer", style = MaterialTheme.typography.titleMedium)
     Text(
         "Lets a local pass describe your conversation topology structurally — message/fork/" +
-            "marker/delegation counts, nothing interpreted. Off by default; no graph surface " +
-            "reads this yet.",
+            "marker/delegation counts, nothing interpreted. Off by default; the Tree room's " +
+            "Graph tab reads this and shows an Observations panel once it's on.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -754,6 +785,40 @@ private fun GeneralSettings(
     if (extraGlobalRows.isNotEmpty()) {
         HorizontalDivider()
         for (row in extraGlobalRows) row()
+    }
+}
+
+/**
+ * The "Interaction style" row's picker (bifurcation wave 1, owner ruling 2026-09-15) — the same
+ * [HyleModePicker] + [dev.fonebrew.ui.mode.InteractionModeOptions] copy the onboarding
+ * mode-choice page uses (see that file's KDoc), in a [ModalBottomSheet] rather than this room's
+ * own full-screen `overlay` slot (matches [GitHostActionsSheet]'s idiom below — a small,
+ * self-dismissing pick doesn't need the room-root overlay). Switching updates live: [onDismiss]
+ * fires on selection, and [dev.fonebrew.data.InteractionModeBridge.setMode] recomposes
+ * [dev.fonebrew.ui.AppRoot]'s shell choice on the next frame — no restart.
+ */
+@Composable
+private fun InteractionModePickerSheet(onDismiss: () -> Unit) {
+    val container = (LocalContext.current.applicationContext as dev.fonebrew.FonebrewApp).container
+    val currentMode by container.interactionMode.mode.collectAsState()
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text("Interaction style", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "You can change this any time.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            dev.aarso.hyle.cells.HyleModePicker(
+                selected = if (container.interactionMode.hasExplicitChoice) currentMode.name else null,
+                options = dev.fonebrew.ui.mode.InteractionModeOptions,
+                onSelect = { id ->
+                    container.interactionMode.setMode(dev.aarso.interactionmode.InteractionMode.valueOf(id))
+                    onDismiss()
+                },
+            )
+        }
     }
 }
 

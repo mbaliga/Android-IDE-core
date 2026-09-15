@@ -168,6 +168,11 @@ dependencies {
     // makes "Continue" actually relaunch the app, plus the non-destructive quarantine/salvage
     // reset (see that repo's crash-recovery/build.gradle.kts changelog comment).
     implementation("dev.aarso:crash-recovery:1.5.0")
+    // Shared Regular/asoc interaction-mode choice (2026-09-15 ruling) — composited exactly
+    // like :crash-recovery above, same shared-libraries submodule, own coordinate/project.
+    // InteractionMode enum + InteractionModeStore/PrefsInteractionModeStore + the pure
+    // ModeDefaults policy; deliberately no UI (the picker is Hyle's HyleModePicker).
+    implementation("dev.aarso:interaction-mode:0.1.0")
     // On-device Gemini Nano via Android's AICore system service — an experimental preview SDK
     // (0.0.1-exp01) that only runs on a narrow device set (Pixel 8+/9 class, a Galaxy S24
     // subset); AiCoreEngine/AiCoreAvailability gate and fail closed everywhere else.

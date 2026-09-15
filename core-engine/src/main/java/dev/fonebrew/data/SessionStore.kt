@@ -1,6 +1,9 @@
 package dev.fonebrew.data
 
 import android.content.Context
+import dev.aarso.interactionmode.InteractionMode
+import dev.fonebrew.domain.mode.GestureModeDefaults
+import dev.fonebrew.domain.mode.ModeLegacySignal
 import dev.fonebrew.domain.tree.Bookmarks
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,8 +17,21 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * SharedPreferences, mirroring [ProviderStore]'s shape: synchronous load,
  * StateFlow cache, write-through setters. Everything stays on-device.
+ *
+ * [modeProvider] is [dev.fonebrew.di.AppContainer]'s current [InteractionMode] (via
+ * [dev.fonebrew.data.InteractionModeBridge]), read ONCE here at construction to resolve the
+ * three gesture toggles' mode-aware default (see [GestureModeDefaults]) before any explicit
+ * per-gesture choice exists. NAMED FOLLOW-UP, not a silent gap: if the interaction mode changes
+ * later in the same process (Settings → General → "Interaction style") while a gesture toggle
+ * is STILL unset, that toggle's default does not recompute live — it keeps whatever this
+ * construction-time read resolved. A real consumer for that edge is rare (mode is normally
+ * chosen once, in onboarding, before anyone visits Gestures) and reactive recomputation would
+ * need a coroutine scope this store doesn't otherwise carry; wiring one is a natural follow-up,
+ * not built ahead of that need. Defaults to ASOC (== the toggles' pre-bifurcation hardcoded
+ * default) so every other construction site — tests included — keeps today's behaviour
+ * unchanged unless it explicitly wires a real mode.
  */
-class SessionStore(context: Context) {
+class SessionStore(context: Context, private val modeProvider: () -> InteractionMode = { InteractionMode.ASOC }) {
 
     private val prefs = context.applicationContext
         .getSharedPreferences("aarso.session", Context.MODE_PRIVATE)
@@ -318,15 +334,38 @@ class SessionStore(context: Context) {
 
     // THREAD_TOPOLOGY_PLAN.md WP4: Settings → Gestures — three independent disable toggles
     // (binding constraint 4: "an entry in Settings → Gestures where it can be disabled"), one per
-    // channel the drag detector arbitrates. Default ON (the gesture ships as the primary path;
-    // every channel's tappable equivalent stays available regardless of these switches).
-    private val _gestureVerdictDragEnabled = MutableStateFlow(prefs.getBoolean(KEY_GESTURE_VERDICT, true))
+    // channel the drag detector arbitrates. Every channel's tappable equivalent stays available
+    // regardless of these switches. Bifurcation wave 1 / lane R: the *default* before any
+    // explicit choice is mode-aware (GestureModeDefaults) rather than the flat hardcoded `true`
+    // this used to read — REGULAR mode starts these OFF (the tappable parity surfaces are
+    // primary there), ASOC starts them ON (unchanged). `prefs.contains(KEY)` is the honest
+    // "has this been explicitly set" signal — [setGestureVerdictDragEnabled] etc. below always
+    // write the key, so one write is all it takes to leave the mode-aware default for good.
+    private val _gestureVerdictDragEnabled = MutableStateFlow(
+        GestureModeDefaults.resolve(
+            hasExplicitChoice = prefs.contains(KEY_GESTURE_VERDICT),
+            explicitValue = prefs.getBoolean(KEY_GESTURE_VERDICT, true),
+            mode = modeProvider(),
+        ),
+    )
     val gestureVerdictDragEnabled: StateFlow<Boolean> = _gestureVerdictDragEnabled.asStateFlow()
 
-    private val _gestureQuoteReplyEnabled = MutableStateFlow(prefs.getBoolean(KEY_GESTURE_QUOTE_REPLY, true))
+    private val _gestureQuoteReplyEnabled = MutableStateFlow(
+        GestureModeDefaults.resolve(
+            hasExplicitChoice = prefs.contains(KEY_GESTURE_QUOTE_REPLY),
+            explicitValue = prefs.getBoolean(KEY_GESTURE_QUOTE_REPLY, true),
+            mode = modeProvider(),
+        ),
+    )
     val gestureQuoteReplyEnabled: StateFlow<Boolean> = _gestureQuoteReplyEnabled.asStateFlow()
 
-    private val _gestureRadialFanEnabled = MutableStateFlow(prefs.getBoolean(KEY_GESTURE_RADIAL, true))
+    private val _gestureRadialFanEnabled = MutableStateFlow(
+        GestureModeDefaults.resolve(
+            hasExplicitChoice = prefs.contains(KEY_GESTURE_RADIAL),
+            explicitValue = prefs.getBoolean(KEY_GESTURE_RADIAL, true),
+            mode = modeProvider(),
+        ),
+    )
     val gestureRadialFanEnabled: StateFlow<Boolean> = _gestureRadialFanEnabled.asStateFlow()
 
     fun setGestureVerdictDragEnabled(on: Boolean) {
@@ -371,6 +410,21 @@ class SessionStore(context: Context) {
     }
 
     companion object {
+        /**
+         * Reads the pre-bifurcation legacy signal ([ModeLegacySignal]) directly off this store's
+         * own SharedPreferences file, WITHOUT constructing a full [SessionStore] — used by
+         * [dev.fonebrew.di.AppContainer] to resolve `dev.aarso:interaction-mode`'s `legacySignal`
+         * before [SessionStore] itself exists (that constructor, in turn, needs the resolved mode
+         * back, for [GestureModeDefaults] — see its own KDoc for why the two are ordered this way).
+         */
+        fun legacySignal(context: Context): Boolean {
+            val prefs = context.applicationContext.getSharedPreferences("aarso.session", Context.MODE_PRIVATE)
+            return ModeLegacySignal.resolve(
+                onboardingDone = prefs.getBoolean(KEY_ONBOARDED, false),
+                spatialMapSeen = prefs.getBoolean(KEY_SPATIAL_MAP, false),
+            )
+        }
+
         // A clean, generic blue (a shipped, AA-verified preset) — neutral default in place of
         // the Aeon violet, which stays available as a preset.
         const val DEFAULT_ACCENT = "#4DA3FF"

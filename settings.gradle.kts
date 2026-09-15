@@ -47,6 +47,12 @@ dependencyResolutionManagement {
 includeBuild("shared-libraries") {
     dependencySubstitution {
         substitute(module("dev.aarso:crash-recovery")).using(project(":crash-recovery"))
+        // :interaction-mode — the shared Regular/asoc choice (2026-09-15 ruling). Same
+        // composited-module idiom as :crash-recovery above: a plain SharedPreferences-backed
+        // store + the pure ModeDefaults policy, no UI (the picker is HyleModePicker, in the
+        // hyle-design-system includeBuild below). Update the pin with:
+        //   git -C shared-libraries fetch && git -C shared-libraries checkout <sha> && git add shared-libraries
+        substitute(module("dev.aarso:interaction-mode")).using(project(":interaction-mode"))
     }
 }
 

@@ -62,8 +62,12 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
     inference/              InferenceEngine; LlamaCppEngine (JNI), Echo (dev), EngineGenerator,
                             cloud/ (Anthropic, OpenAI-compat, Gemini — SSE), image/
     service/                GenerationService (FGS), OverlayService, ScreenCapture (+OCR), Voice
-    ui/                     AppRoot + SpatialRoot (room model, NOT bottom nav); rooms/, loops/,
-                            develop/, codelens/, ide/ (ReviewSheet), remote/, theme/
+    ui/                     AppRoot branches on the Regular/asoc interaction-mode choice
+                            (docs/design/interaction-modes.md, owner ruling 2026-09-15):
+                            spatial/SpatialRoot (asoc — room model, edge drags + pinch, NOT
+                            bottom nav) vs regular/RegularShell (Regular — bottom-tab Scaffold
+                            over the same room composables); mode/ (shared HyleModePicker copy);
+                            rooms/, loops/, develop/, codelens/, ide/ (ReviewSheet), remote/, theme/
                             (theme/ is now app-side theming ONLY — ThemeMode, FonebrewTheme,
                             ThemePicker, Texture. The palette + every Hyle component moved
                             to the :hyle library; see below.)

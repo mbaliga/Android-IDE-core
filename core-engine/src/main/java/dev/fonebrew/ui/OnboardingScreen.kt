@@ -37,27 +37,40 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleCard
+import dev.aarso.hyle.cells.HyleModePicker
 import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.hyle.theme.LocalHyleColors
+import dev.aarso.interactionmode.InteractionMode
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.DeviceInfo
 import dev.fonebrew.domain.catalog.ModelCatalogMapper
 import dev.fonebrew.domain.device.FitVerdict
 import dev.fonebrew.domain.device.ModelFit
 import dev.fonebrew.flavor.InvocationFeatures
+import dev.fonebrew.ui.mode.InteractionModeOptions
 import dev.fonebrew.ui.onboarding.AiCoreAvailability
 import kotlinx.coroutines.launch
 
 /**
- * First-run wizard: two stance screens, then model setup. Ends with either on-device Gemini
- * Nano confirmed available, or a real GGUF download already started in the background (the
- * same [dev.fonebrew.data.DownloadCenter] job [ChatScreen]'s setup card reads) — never a bare
- * "figure it out later" that would leave a fresh install with nothing to chat against.
+ * First-run wizard: two stance screens, a mode choice, then model setup. Ends with either
+ * on-device Gemini Nano confirmed available, or a real GGUF download already started in the
+ * background (the same [dev.fonebrew.data.DownloadCenter] job [ChatScreen]'s setup card reads)
+ * — never a bare "figure it out later" that would leave a fresh install with nothing to chat
+ * against.
+ *
+ * Page 2 (bifurcation wave 1, owner ruling 2026-09-15) is the Regular/asoc mode choice — see
+ * [ModeChoicePage]. Skipping the wizard entirely, or reaching model setup without ever picking a
+ * mode there, leaves no explicit choice recorded, so [dev.fonebrew.di.AppContainer.interactionMode]
+ * keeps reporting its default: REGULAR for every fresh install (no legacy signal is possible —
+ * onboarding, by definition, hasn't completed yet; see [dev.fonebrew.domain.mode.ModeLegacySignal]).
  */
 @Composable
 fun OnboardingScreen(onDone: () -> Unit) {
-    val pager = rememberPagerState { 3 }
+    val pager = rememberPagerState { 4 }
     val scope = rememberCoroutineScope()
+    // The final page index — kept as one val rather than repeating the page count everywhere
+    // below, so inserting/removing a page later only ever touches rememberPagerState's count.
+    val lastPage = 3
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
@@ -76,6 +89,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                             "Every conversation is a tree: every fork, retry, and model switch " +
                             "stays visible and reversible.",
                     )
+                    2 -> ModeChoicePage()
                     else -> ModelSetupPage(onReady = onDone)
                 }
             }
@@ -86,7 +100,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    repeat(3) { i ->
+                    repeat(4) { i ->
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
@@ -104,29 +118,73 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 // Reserve this row's space on every page (rather than including/excluding the
                 // buttons outright) so the dot row never shifts vertically as the user swipes —
-                // on page 2 (model setup) it goes invisible/disabled because that page draws its
-                // own Begin/Skip further down inside ModelSetupPage.
+                // on the final page (model setup) it goes invisible/disabled because that page
+                // draws its own Begin/Skip further down inside ModelSetupPage.
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.alpha(if (pager.currentPage < 2) 1f else 0f),
+                    modifier = Modifier.alpha(if (pager.currentPage < lastPage) 1f else 0f),
                 ) {
                     HyleButton(
                         "Skip",
                         secondary = true,
-                        enabled = pager.currentPage < 2,
-                        // Skip on page 1 or 2 must still land on model setup (page 3) — a fresh
-                        // install must never end onboarding with no model confirmed or
-                        // downloading. Only that final page's own Skip actually exits.
-                        onClick = { scope.launch { pager.animateScrollToPage(2) } },
+                        enabled = pager.currentPage < lastPage,
+                        // Skip on any earlier page must still land on model setup (the final
+                        // page) — a fresh install must never end onboarding with no model
+                        // confirmed or downloading. Only that final page's own Skip actually
+                        // exits. Skipping from page 2 leaves the mode choice unmade, same as
+                        // never visiting it — the REGULAR default holds (see this file's KDoc).
+                        onClick = { scope.launch { pager.animateScrollToPage(lastPage) } },
                     )
                     HyleButton(
                         "Continue",
-                        enabled = pager.currentPage < 2,
+                        enabled = pager.currentPage < lastPage,
                         onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * Page 2: the Regular/asoc interaction-mode choice (owner ruling 2026-09-15), via the shared
+ * [HyleModePicker] + [InteractionModeOptions] copy (also used by Settings → General's
+ * "Interaction style" picker — see that file's KDoc). Selecting asoc also primes
+ * [dev.fonebrew.ui.spatial.SpatialMapOverlay] to show on first entry, by explicitly clearing
+ * `spatialMapSeen` — defensive against it somehow already being true (it can't be, on a truly
+ * fresh install, since that overlay only lives inside [dev.fonebrew.ui.spatial.SpatialRoot],
+ * which onboarding gates), so the teaching still plays the first time this install actually
+ * lands in the spatial shell. Either selection calls
+ * [dev.fonebrew.data.InteractionModeBridge.setMode], recording an explicit choice; not selecting
+ * anything here (swipe/skip past this page) leaves no explicit choice, so the wizard finishing
+ * without a pick keeps the REGULAR default intact — see [OnboardingScreen]'s own KDoc.
+ */
+@Composable
+private fun ModeChoicePage() {
+    val context = LocalContext.current
+    val container = (context.applicationContext as FonebrewApp).container
+    val currentMode by container.interactionMode.mode.collectAsState()
+    val hasExplicitChoice = container.interactionMode.hasExplicitChoice
+
+    Column(Modifier.fillMaxSize()) {
+        HyleTitle("How do you want to move around?")
+        Text(
+            "You can always change this later, in Settings.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(16.dp))
+        HyleModePicker(
+            selected = if (hasExplicitChoice) currentMode.name else null,
+            options = InteractionModeOptions,
+            onSelect = { id ->
+                val mode = InteractionMode.valueOf(id)
+                container.interactionMode.setMode(mode)
+                if (mode == InteractionMode.ASOC) {
+                    container.sessionStore.setSpatialMapSeen(false)
+                }
+            },
+        )
     }
 }
 
