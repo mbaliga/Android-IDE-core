@@ -61,16 +61,40 @@ private sealed interface ImportStage {
  * node's requested model id, `LoopImportReview.modelBindingSlots`) are resolved to a locally
  * available model before Install enables. Rejection (unsafe/incompatible) short-circuits before
  * this screen ever renders — [LoopPackageCodec.decode] runs first.
+ *
+ * [initialBytes] (asoc-reachability audit item 5, 2026-09-15): LoopRoom's "Templates" browse
+ * sheet ([LoopTemplatesDialog]) hands a bundled asset's bytes straight in, skipping only the SAF
+ * picker — decode, scan, the full authority-review screen and [LoopImportPresenter] itself are
+ * identical either way, so a bundled template gets exactly the same review a user-picked file
+ * does, never a trust shortcut around it.
  */
 @Composable
 fun ImportLoopPackageDialog(
     localModels: List<ModelSpec>,
     onDismiss: () -> Unit,
     onImported: (graph: BpmnGraph, objective: String, provenanceExt: Map<String, String>) -> Unit,
+    initialBytes: ByteArray? = null,
+    /** [dev.fonebrew.contracts.loops.TransferEnvelope.sourceDescription] — shown in the
+     *  installed loop's own import provenance. */
+    sourceDescription: String = "SAF document",
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var stage by remember { mutableStateOf<ImportStage>(ImportStage.PickingFile) }
+    var stage by remember {
+        mutableStateOf<ImportStage>(
+            if (initialBytes != null) {
+                try {
+                    val decoded = LoopPackageCodec.decode(initialBytes)
+                    val findings = LoopPackageCodec.scan(initialBytes)
+                    ImportStage.Reviewing(initialBytes, LoopImportReview.buildPreview(decoded, findings))
+                } catch (e: LoopPackageCodec.UnsafePackageException) {
+                    ImportStage.Rejected(e.message ?: "Package rejected.", e.findings)
+                }
+            } else {
+                ImportStage.PickingFile
+            },
+        )
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) { onDismiss(); return@rememberLauncherForActivityResult }
@@ -84,7 +108,8 @@ fun ImportLoopPackageDialog(
             stage = ImportStage.Rejected(e.message ?: "Package rejected.", e.findings)
         }
     }
-    LaunchedEffect(Unit) { picker.launch(arrayOf("*/*")) }
+    // A Templates pick already has its bytes — only the SAF flow needs the picker launched.
+    LaunchedEffect(Unit) { if (initialBytes == null) picker.launch(arrayOf("*/*")) }
 
     when (val s = stage) {
         is ImportStage.PickingFile -> {}
@@ -96,7 +121,7 @@ fun ImportLoopPackageDialog(
                 stage = ImportStage.Installing
                 scope.launch {
                     val outcome = LoopImportPresenter().run(
-                        packageBytes = s.bytes, sourceDescription = "SAF document",
+                        packageBytes = s.bytes, sourceDescription = sourceDescription,
                         chooseModelBinding = { slot -> bindings[slot.slotId] },
                         decideAuthority = { AuthorityDecision(approvedCapIds, simulationGapAcknowledged = true) },
                     )

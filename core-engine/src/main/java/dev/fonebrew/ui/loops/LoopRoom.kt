@@ -242,11 +242,15 @@ fun LoopRoom(
     initialLoopId: String? = null,
     onInitialLoopConsumed: () -> Unit = {},
 ) {
-    val container = (LocalContext.current.applicationContext as FonebrewApp).container
+    val context = LocalContext.current
+    val container = (context.applicationContext as FonebrewApp).container
     val runnable = remember { container.modelRegistry.allSpecs().filter { container.engineProvider.isRunnable(it) } }
     val density = LocalDensity.current.density
     val store = container.loopStore
     val savedLoops by store.loops.collectAsState()
+    // Excludes the UI-private autosave slot (AUTOSAVE_LOOP_ID) — see LoopEmptyStatePresenter's
+    // KDoc for why that reservation must never count as "the user has saved a loop."
+    val visibleLoopCount = savedLoops.count { it.id != AUTOSAVE_LOOP_ID }
 
     val nodes = remember {
         mutableStateListOf(
@@ -295,6 +299,14 @@ fun LoopRoom(
     var showExportPackage by remember { mutableStateOf(false) }
     var showImportPackage by remember { mutableStateOf(false) }
     var packageNote by remember { mutableStateOf<String?>(null) }
+    // asoc-reachability audit (2026-09-15) item 5: LoopTemplateAssets had a loader with no
+    // caller — showTemplates browses LoopTemplateCatalog; picking one loads its bytes into
+    // templateImportBytes, which opens the SAME ImportLoopPackageDialog a SAF-picked file uses
+    // (see applyImportedPackage below). templatesError surfaces an unreadable bundled asset
+    // honestly instead of failing silently.
+    var showTemplates by remember { mutableStateOf(false) }
+    var templateImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var templatesError by remember { mutableStateOf<String?>(null) }
 
     // §3 five-view IA: Intent | Stage | Graph, Stage default (§3.2).
     var view by remember { mutableStateOf(LoopEditorView.STAGE) }
@@ -330,6 +342,22 @@ fun LoopRoom(
 
     val scope = rememberCoroutineScope()
     val colors = LocalHyleColors.current
+
+    // Shared by both import entry points (SAF-picked and Templates-picked, see showImportPackage
+    // and templateImportBytes below) — the review/decode/scan path they run through is already
+    // one ImportLoopPackageDialog; this keeps what happens AFTER approval one path too, so the
+    // two entry points can't silently drift apart.
+    fun applyImportedPackage(graph: BpmnGraph, importedObjective: String, provenanceExt: Map<String, String>) {
+        nodes.clear(); nodes.addAll(fromBpmnNodes(graph))
+        edges.clear(); edges.addAll(fromBpmnEdges(graph))
+        // Merge import provenance into the start event, same carrier distillation uses.
+        val startIdx = nodes.indexOfFirst { it.kind == BpmnNodeKind.START_EVENT }
+        if (startIdx >= 0) nodes[startIdx] = nodes[startIdx].copy(provenanceExt = nodes[startIdx].provenanceExt + provenanceExt)
+        objective = importedObjective
+        loopId = null // a fresh local draft — Save mints this device's own id, per LOOP_IMPORT_ACTIVATION_CONTRACT.md §8 (installed vs. locally edited are distinct)
+        loopName = graph.name.ifBlank { "Imported loop" }
+        packageNote = "Imported “${provenanceExt["importedLoopId"]}” — review and Save to keep it."
+    }
 
     fun loadLoop(loop: Loop) {
         loop.bpmnXml?.let { xml ->
@@ -647,6 +675,9 @@ fun LoopRoom(
                     Text(loopName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showLoad = true }) { Text("Loops") }
+                        // asoc-reachability audit item 5: the one predictable entry point to the
+                        // bundled loop-package template(s) — see LoopTemplateCatalog/showTemplates.
+                        TextButton(onClick = { showTemplates = true }) { Text("Templates") }
                         TextButton(onClick = { showDistill = true }, enabled = runnable.isNotEmpty()) { Text("Distill…") }
                         TextButton(onClick = { showImportPackage = true }) { Text("Import…") }
                         TextButton(onClick = { showExportPackage = true }, enabled = nodes.isNotEmpty()) { Text("Export…") }
@@ -677,6 +708,11 @@ fun LoopRoom(
                 }
                 packageNote?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 12.dp))
+                }
+                // Glyph-led, not color-alone (owner is red/green colorblind) — same "⚠ " idiom
+                // stopLabel()/UsbFlashPanel already use for a failure elsewhere in this app.
+                templatesError?.let {
+                    Text("⚠ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 12.dp))
                 }
                 // Import provenance (mirrors the distillation banner below): an imported package's
                 // identity travels in the start event's ext map — the same carrier distillation
@@ -799,6 +835,18 @@ fun LoopRoom(
                             color = if (running || graphResult != null || connectingFrom != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                         )
+
+                        // First-run empty state (asoc-reachability audit item 4, 2026-09-15):
+                        // the caption line above is easy to miss and says nothing about WHY the
+                        // canvas is bare. Shown only per LoopEmptyStatePresenter — no saved loop
+                        // AND no node on the canvas — and gone the instant either stops being
+                        // true, so it's onboarding, not a nag.
+                        if (dev.fonebrew.domain.loop.LoopEmptyStatePresenter.shouldShow(visibleLoopCount, nodes.size)) {
+                            LoopEmptyStateCard(
+                                onBrowseTemplates = { showTemplates = true },
+                                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                            )
+                        }
 
                         // Radial fans, anchored at the point that was actually long-pressed —
                         // in THIS Box, the same coordinate space LoopCanvas measures node
@@ -1156,18 +1204,66 @@ fun LoopRoom(
             localModels = runnable,
             onDismiss = { showImportPackage = false },
             onImported = { graph, importedObjective, provenanceExt ->
-                nodes.clear(); nodes.addAll(fromBpmnNodes(graph))
-                edges.clear(); edges.addAll(fromBpmnEdges(graph))
-                // Merge import provenance into the start event, same carrier distillation uses.
-                val startIdx = nodes.indexOfFirst { it.kind == BpmnNodeKind.START_EVENT }
-                if (startIdx >= 0) nodes[startIdx] = nodes[startIdx].copy(provenanceExt = nodes[startIdx].provenanceExt + provenanceExt)
-                objective = importedObjective
-                loopId = null // a fresh local draft — Save mints this device's own id, per LOOP_IMPORT_ACTIVATION_CONTRACT.md §8 (installed vs. locally edited are distinct)
-                loopName = graph.name.ifBlank { "Imported loop" }
-                packageNote = "Imported “${provenanceExt["importedLoopId"]}” — review and Save to keep it."
+                applyImportedPackage(graph, importedObjective, provenanceExt)
                 showImportPackage = false
             },
         )
+    }
+
+    // asoc-reachability audit item 5: browse LoopTemplateCatalog, then feed the chosen bundled
+    // asset's bytes through the SAME ImportLoopPackageDialog (decode/scan/authority-review) a
+    // SAF-picked file gets — see that dialog's `initialBytes` KDoc for why this isn't a
+    // trust-shortcut around the review.
+    if (showTemplates) {
+        LoopTemplatesDialog(
+            templates = dev.fonebrew.domain.loop.LoopTemplateCatalog.ALL,
+            onDismiss = { showTemplates = false },
+            onPick = { template ->
+                showTemplates = false
+                runCatching { dev.fonebrew.data.LoopTemplateAssets(context).read(template.assetName) }.fold(
+                    onSuccess = { bytes -> templatesError = null; templateImportBytes = bytes },
+                    onFailure = { e -> templatesError = "Couldn't read “${template.displayName}” — ${e.message}" },
+                )
+            },
+        )
+    }
+    templateImportBytes?.let { bytes ->
+        ImportLoopPackageDialog(
+            localModels = runnable,
+            initialBytes = bytes,
+            sourceDescription = "bundled template",
+            onDismiss = { templateImportBytes = null },
+            onImported = { graph, importedObjective, provenanceExt ->
+                applyImportedPackage(graph, importedObjective, provenanceExt)
+                templateImportBytes = null
+            },
+        )
+    }
+}
+
+/**
+ * First-run empty state for the Graph canvas — see [dev.fonebrew.domain.loop.LoopEmptyStatePresenter]
+ * for the visibility rule. Says what a loop is and names both ways to start; nothing here is a
+ * dead end — "Browse templates" opens the exact same [LoopTemplatesDialog] the toolbar's
+ * "Templates" button does, and long-press-to-add-a-node needs no affordance of its own since the
+ * canvas underneath already listens for it.
+ */
+@Composable
+private fun LoopEmptyStateCard(onBrowseTemplates: () -> Unit, modifier: Modifier = Modifier) {
+    HyleCard(modifier = modifier.width(300.dp)) {
+        Text("Nothing here yet", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "A loop chains models and steps into a repeatable graph — a proposer/critic pass, a " +
+                "translation pipeline, anything GraphRunner can walk.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text("Two ways to start:", style = MaterialTheme.typography.labelMedium)
+        Text("• Long-press this canvas to add your first node.", style = MaterialTheme.typography.bodySmall)
+        Text("• Browse a bundled template below.", style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(10.dp))
+        HyleButton("Browse templates", onClick = onBrowseTemplates, modifier = Modifier.fillMaxWidth())
     }
 }
 

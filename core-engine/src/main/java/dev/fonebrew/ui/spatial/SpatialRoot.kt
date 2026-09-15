@@ -406,7 +406,12 @@ fun SpatialRoot() {
                     .offset { IntOffset(0, (hgt * (1f + vProgress)).roundToInt()) }
                     .padding(top = 72.dp),
             ) {
-                dev.fonebrew.ui.develop.DevelopRoom(onClose = { controller.closeAll() })
+                dev.fonebrew.ui.develop.DevelopRoom(
+                    onClose = { controller.closeAll() },
+                    // asoc-reachability audit (2026-09-15) item 1c: Loops has no edge/pinch of
+                    // its own reachable from here — this is its one predictable entry point.
+                    onOpenLoops = { controller.open(SpatialTarget.LOOPS) },
+                )
             }
         }
 
@@ -441,6 +446,10 @@ fun SpatialRoot() {
                 onOpenModels = { controller.open(SpatialTarget.SETTINGS) },
                 onOpenChats = { controller.open(SpatialTarget.CHATS) },
                 onOpenSettings = { controller.open(SpatialTarget.SETTINGS) },
+                // asoc-reachability audit (2026-09-15) item 1b: the Tree had no tappable entry
+                // at all (pinch-in only) — a visible header affordance, same open() the pinch
+                // settles on.
+                onOpenTree = { controller.open(SpatialTarget.TREE) },
                 findRequest = pendingFind,
                 onFindRequestConsumed = { pendingFind = null },
                 onSearchAllChats = { query ->
@@ -538,13 +547,19 @@ fun SpatialRoot() {
         // banner (below) docks at the same top edge with a higher zIndex and would
         // draw straight over it. The banner is strictly more informative when both
         // would otherwise show, so suppress the hint pill while it's up.
+        //
+        // asoc-reachability audit (2026-09-15) item 1a: these were plain, non-clickable
+        // slivers — edge drags were the ONLY way into Project/Develop (and, redundantly for
+        // Chats/Settings, into rooms that also have header buttons). Each now calls the same
+        // controller.open(...) a completed drag lands on, so a tap works exactly like the
+        // drag it stands in for.
         if (controller.atHome) {
-            EdgePeek(alignment = Alignment.CenterStart)
-            EdgePeek(alignment = Alignment.CenterEnd)
+            EdgePeek(alignment = Alignment.CenterStart, contentDescription = "Open chats", onTap = { controller.open(SpatialTarget.CHATS) })
+            EdgePeek(alignment = Alignment.CenterEnd, contentDescription = "Open settings", onTap = { controller.open(SpatialTarget.SETTINGS) })
             if (!downloadBannerShowing) {
-                EdgePeek(alignment = Alignment.TopCenter, vertical = true)
+                EdgePeek(alignment = Alignment.TopCenter, vertical = true, contentDescription = "Open project", onTap = { controller.open(SpatialTarget.PROJECT) })
             }
-            EdgePeek(alignment = Alignment.BottomCenter, vertical = true)
+            EdgePeek(alignment = Alignment.BottomCenter, vertical = true, contentDescription = "Open develop", onTap = { controller.open(SpatialTarget.DEVELOP) })
         }
 
         // ── Docked download strip: top edge, every room, tap → Models (in Settings) ──
@@ -594,22 +609,51 @@ fun SpatialRoot() {
  * in the user's chosen **accent** (owner-set — the swipe affordances and the buttons share
  * the accent). Flush and opaque, not an inset ghost: it is the only standing evidence that
  * there is somewhere to drag to, so it reads as part of the frame rather than decoration.
+ *
+ * The VISUAL sliver stays exactly 3dp (the flush-frame cue is deliberate) — but the whole
+ * affordance is now also tappable, per the 2026-09-15 asoc-reachability audit, and a 3dp hit
+ * target would fail on touch alone, so the touchable [Box] is padded out to >= 48dp on the
+ * cross-axis (Android's own minimum-touch-target guidance) while the drawn bar inside it stays
+ * the original hairline.
  */
 @Composable
-private fun BoxScope.EdgePeek(alignment: Alignment, vertical: Boolean = false) {
+private fun BoxScope.EdgePeek(
+    alignment: Alignment,
+    vertical: Boolean = false,
+    contentDescription: String,
+    onTap: () -> Unit,
+) {
     val ac = LocalHyleColors.current
+    // Captured under a distinct name before entering `.semantics { }` — that lambda's own
+    // SemanticsPropertyReceiver.contentDescription would otherwise shadow this parameter of
+    // the same name for an unqualified read, per Kotlin's implicit-receiver-first resolution.
+    val a11yLabel = contentDescription
     Box(
         modifier = Modifier
             .align(alignment)
             .then(
                 if (vertical) {
-                    Modifier.size(width = 64.dp, height = 3.dp)
+                    Modifier.size(width = 64.dp, height = 48.dp)
                 } else {
-                    Modifier.size(width = 3.dp, height = 64.dp)
+                    Modifier.size(width = 48.dp, height = 64.dp)
                 },
             )
-            .background(ac.violet, RoundedCornerShape(2.dp)),
-    )
+            .clickable(onClickLabel = a11yLabel, onClick = onTap)
+            .semantics { this.contentDescription = a11yLabel },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .then(
+                    if (vertical) {
+                        Modifier.size(width = 64.dp, height = 3.dp)
+                    } else {
+                        Modifier.size(width = 3.dp, height = 64.dp)
+                    },
+                )
+                .background(ac.violet, RoundedCornerShape(2.dp)),
+        )
+    }
 }
 
 /**

@@ -258,7 +258,16 @@ fun TreeRoom(
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        HyleTitle("Tree")
+        // asoc-reachability audit (2026-09-15) item 2: no visible exit from this room — only
+        // the pinch-in-reverse / return-drag on the parked home card. Follows DevelopRoom's own
+        // "‹ Close" idiom (DevelopRoom.kt:115). Reuses [onNodeChosen]: it already means "return
+        // to the thread" (SpatialRoot wires it to controller.closeAll()) whether or not a node
+        // was actually tapped, so a plain Close does exactly the same thing without a second,
+        // parallel "onClose" param for the identical effect.
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            HyleTitle("Tree", modifier = Modifier.weight(1f))
+            HyleButton("‹ Close", onClick = onNodeChosen, secondary = true, modifier = Modifier.padding(end = 20.dp))
+        }
         Text(
             "Every turn is a node; every fork stays visible. Tap a node to continue " +
                 "from it — pinch out to return.",

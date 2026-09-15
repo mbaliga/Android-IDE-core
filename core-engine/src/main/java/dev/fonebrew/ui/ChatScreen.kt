@@ -155,6 +155,11 @@ fun ChatScreen(
     onOpenModels: () -> Unit = {},
     onOpenChats: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    /** asoc-reachability audit (2026-09-15) item 1b: the Tree (pinch-in only, no tappable
+     *  entry) — a header affordance beside the existing Chats/Settings corner buttons. Defaults
+     *  to a no-op so ChatScreen stays usable stand-alone (previews, tests) without a controller,
+     *  same as [onOpenChats]/[onOpenSettings] above. */
+    onOpenTree: () -> Unit = {},
     /** S9 continuity: text carried in from an app-wide search result. Opens the find bar
      *  pre-filled and scrolls to the first hit. Consumed once, via [onFindRequestConsumed], so
      *  reopening the bar later doesn't resurrect a stale query. */
@@ -464,6 +469,7 @@ fun ChatScreen(
                 onTitleClick = { showParticipants = true },
                 onOpenChats = onOpenChats,
                 onOpenSettings = onOpenSettings,
+                onOpenTree = onOpenTree,
             )
             when (chatTab) {
                 ChatTab.TERMINAL -> Column(
@@ -1242,6 +1248,7 @@ private fun HomeHeader(
     onTitleClick: () -> Unit,
     onOpenChats: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenTree: () -> Unit,
 ) {
     val c = LocalHyleColors.current
     Row(
@@ -1270,6 +1277,18 @@ private fun HomeHeader(
         // fixed Me·Myself·I avatar shortcut — that screen stays reachable from Settings, this
         // slot now shows whatever single fact the user opted into seeing at a glance, or nothing.
         HeaderIndicator(state)
+        // asoc-reachability audit (2026-09-15) item 1b: the Tree was pinch-in ONLY — no tappable
+        // entry anywhere in the app. [HyleHeaderButton]'s glyph enum lives in the Hyle submodule
+        // (dev.aarso:hyle) and adding a case there is out of this lane's scope, so this reuses
+        // [dev.aarso.hyle.cells.HyleNavChip] instead — the same header-chip idiom (slant-edged,
+        // accent-adjacent, already carries its own contentDescription param), already exported
+        // by Hyle and otherwise unused in this app.
+        dev.aarso.hyle.cells.HyleNavChip(
+            label = "Tree",
+            onClick = onOpenTree,
+            contentDescription = "Conversation tree",
+            slantLeft = true,
+        )
         HyleHeaderButton(
             glyph = HeaderGlyph.SETTINGS,
             onClick = onOpenSettings,
@@ -1896,10 +1915,12 @@ private fun ModelRow(m: ModelOption, active: Boolean, onSelect: (String) -> Unit
  * Long-press actions for one turn (STUDIO_UX_SPEC.md §4.6's curation sheet, thumb-ordered):
  * bookmark, mark-as-version, compaction directive (must-include + fidelity dial), rewind, the
  * pre-existing branch/copy/flag actions, and — since THREAD_TOPOLOGY_PLAN.md WP4 — the tappable
- * parity for the pull-left/pull-right drags ([onReply]/[onQuote]). Not built this pass (flagged,
- * not silently skipped): "Re-run with…" (needs Roundtable, PC-B, not built), "Convert →
- * Task/Incident" (the spec marks this item "(Studio)"), "Read aloud," "Raw view" (no L4 view
- * exists yet).
+ * parity for the pull-left/pull-right drags ([onReply]/[onQuote]). "Raw view" (below "Copy
+ * text") added 2026-09-15 (asoc-reachability audit item 6) — a plain dialog of the turn's exact
+ * stored content, no markdown rendering, no L4 view needed for that. Still not built this pass
+ * (flagged, not silently skipped, since the plumbing genuinely doesn't exist yet): "Re-run
+ * with…" (needs Roundtable, PC-B, not built), "Convert → Task/Incident" (the spec marks this
+ * item "(Studio)"), "Read aloud."
  */
 @Composable
 private fun TurnActionsSheet(
@@ -1931,6 +1952,7 @@ private fun TurnActionsSheet(
     onReply: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
+    var showRawView by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             Text(
@@ -2018,12 +2040,36 @@ private fun TurnActionsSheet(
             ) {
                 Text("Copy text")
             }
+            // asoc-reachability audit (2026-09-15) item 6: the one named-but-missing
+            // TurnActionsSheet row this lane can actually build — the turn's exact stored
+            // content, verbatim, no markdown rendering. Re-run with…/Convert→Task-Incident/Read
+            // aloud stay named in the KDoc above rather than faked here; they need plumbing
+            // (Roundtable, task/incident write paths, TTS) this lane doesn't own.
+            TextButton(onClick = { showRawView = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Raw view")
+            }
             if (InvocationFeatures.FLAG_OUTPUT_ENABLED && step.node.role == Role.ASSISTANT) {
                 TextButton(onClick = onFlag, modifier = Modifier.fillMaxWidth()) {
                     Text("Flag this output…")
                 }
             }
         }
+    }
+    if (showRawView) {
+        AlertDialog(
+            onDismissRequest = { showRawView = false },
+            title = { Text("Raw view") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text(
+                        step.node.content,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { showRawView = false }) { Text("Close") } },
+        )
     }
 }
 

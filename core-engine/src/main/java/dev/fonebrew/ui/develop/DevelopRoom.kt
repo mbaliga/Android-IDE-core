@@ -51,25 +51,32 @@ import kotlinx.coroutines.launch
  *
  *  - **Hardware** → supported boards + detect/troubleshoot + the four control paths
  *                   (Pi/Arduino/ESP/on-phone USB flash)
- *  - **Files**    → review changes to your repo per-hunk and commit (the agentic-coding
- *                   review path; there is no separate "Agent" mode)
+ *  - **Agent**    → review changes to your repo per-hunk and commit (the agentic-coding
+ *                   review path — this tab was labelled "Files" through 2026-09-15; renamed
+ *                   per the asoc-reachability audit's item 3, since it's the Agent review flow,
+ *                   not a file browser. Content/function name ([FilesFacet]) unchanged.)
  *  - **Terminal** → run a shell command over SSH on your homelab runner
  *  - **Audit**    → a to-do list of checks; "Run" fires a prompt that runs the test
  *
- * Builds moved to the Tree (§6.1) and Cost to Loops (§6.2), so neither is a tab here.
+ * Builds moved to the Tree (§6.1) and Cost to Loops (§6.2), so neither is a tab here. Loops
+ * itself isn't a tab either — it's a full spatial room (z-axis pinch-out), reached from here via
+ * [onOpenLoops] (asoc-reachability audit item 1c) rather than swapped into the tab content the
+ * way Hardware/Agent/Terminal/Audit are.
  *
  * The paid Studio layer contributes **Launch** (store-publish) through the [DevelopTabs]
  * seam (S2; see StudioDevelopFacets), so core never references that code directly.
  * Presented full-screen from Settings (like the Loop room). [onClose] returns.
  */
 @Composable
-fun DevelopRoom(onClose: () -> Unit) {
+fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
     BackHandler(onBack = onClose)
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
-    // Brief §7: Develop's tabs are exactly Hardware / Files / Terminal / Audit.
+    // Brief §7: Develop's tabs are exactly Hardware / Agent / Terminal / Audit (the brief itself
+    // still names the third one "Files" — the tab was relabelled "Agent" 2026-09-15, content
+    // unchanged; see the class KDoc above).
     //  - Cost moved to Loops (a per-loop budget boundary, §6.2) — no Cost tab here.
     //  - Builds moved to the Tree (§6.1) — the Tree's Builds tab owns build history.
-    //  - "Agent" is gone: agentic changes are reviewed in the Files explorer (§7.2).
+    //  - There's no tab separate from Agent for agentic changes — reviewing them IS this tab.
     var tab by remember { mutableStateOf(0) }
     // The paid Studio tab (Launch / store-publish) is contributed via DevelopTabs (S2 seam),
     // so core never references it directly.
@@ -79,7 +86,10 @@ fun DevelopRoom(onClose: () -> Unit) {
     // know Studio's icon set.
     val tabSpecs = listOf(
         dev.aarso.hyle.cells.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
-        dev.aarso.hyle.cells.HyleTabSpec("Files") { tint -> filesTabGlyph(tint) },
+        // Shipping-copy fix (asoc-reachability audit item 3, 2026-09-15): this tab shows the
+        // agentic repo-review flow — labelling it "Files" read as a plain file browser. Content
+        // unchanged; see [FilesFacet] below.
+        dev.aarso.hyle.cells.HyleTabSpec("Agent") { tint -> filesTabGlyph(tint) },
         dev.aarso.hyle.cells.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
         dev.aarso.hyle.cells.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
     ) + studioTabs.map { st -> dev.aarso.hyle.cells.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
@@ -114,7 +124,11 @@ fun DevelopRoom(onClose: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             dev.aarso.hyle.cells.HyleButton("‹ Close", onClick = onClose, secondary = true)
             Spacer(Modifier.width(12.dp))
-            Text("Develop", style = MaterialTheme.typography.headlineSmall)
+            Text("Develop", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            // asoc-reachability audit (2026-09-15) item 1c: Loops' one predictable entry point —
+            // it's a full spatial room (z-axis), not something that fits this room's own
+            // content-swapping tab row (see the class KDoc above).
+            dev.aarso.hyle.cells.HyleButton("Loops ▸", onClick = onOpenLoops, secondary = true)
         }
         Spacer(Modifier.height(12.dp))
 

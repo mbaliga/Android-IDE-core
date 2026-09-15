@@ -239,7 +239,14 @@ fun ChatsRoom(
 
     Box(Modifier.fillMaxSize().background(c.ink)) {
         Column(Modifier.fillMaxSize()) {
-            HyleTitle("Chats")
+            // asoc-reachability audit (2026-09-15) item 2: no visible exit from this room —
+            // only the spatial return-drag on the parked home card. Follows DevelopRoom's own
+            // "‹ Close" idiom (DevelopRoom.kt:115); reuses [onClose], the same callback the
+            // parked-card tap/drag already calls.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HyleTitle("Chats", modifier = Modifier.weight(1f))
+                HyleButton("‹ Close", onClick = onClose, secondary = true, modifier = Modifier.padding(end = 20.dp))
+            }
             SearchEntryPill(onClick = onOpenSearch)
             if (tabBarPosition == "BOTTOM") {
                 Box(Modifier.weight(1f)) { contentBlock() }
