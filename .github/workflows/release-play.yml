@@ -95,6 +95,12 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools'
+          # package, which Google's repository no longer serves (sdkmanager exit 1
+          # before Gradle ever runs - 2026-09-15). Only platform-tools here; the
+          # pinned platforms/build-tools/NDK/CMake install in our own step below.
+          packages: platform-tools
 
       - name: Install pinned NDK + CMake
         run: |

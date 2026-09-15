@@ -179,8 +179,10 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   SDK" step — before Gradle ever starts — with `Warning: Failed to find package 'tools'` and
   sdkmanager exit 1 is `android-actions/setup-android@v3` requesting the legacy `tools`
   package, which Google's repository no longer serves on newer runner images. Fixed by
-  bumping to `setup-android@v4` (which installs no legacy packages; our own sdkmanager step
-  installs the pinned platforms/build-tools/NDK/CMake) in ci.yml (both jobs),
+  bumping to `setup-android@v4` **with an explicit `packages: platform-tools` input — the
+  version bump alone is NOT enough: v4's DEFAULT packages input still requests the legacy
+  `tools` package and dies identically** (verified on run 34946532189); our own sdkmanager
+  step installs the pinned platforms/build-tools/NDK/CMake. Applied in ci.yml (both jobs),
   release-play.yml, and Studio's ci.yml. If CI ever reds at SDK setup pre-Gradle again,
   check for this signature before suspecting code.)*
 

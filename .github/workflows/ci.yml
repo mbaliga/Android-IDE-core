@@ -66,6 +66,12 @@ jobs:
         # Puts cmdline-tools (sdkmanager) on PATH — it is installed on ubuntu-latest
         # but not exported by default, which is why a bare `sdkmanager` is not found.
         uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools'
+          # package, which Google's repository no longer serves (sdkmanager exit 1
+          # before Gradle ever runs - 2026-09-15). Only platform-tools here; the
+          # pinned platforms/build-tools/NDK/CMake install in our own step below.
+          packages: platform-tools
 
       - name: Install pinned NDK + CMake
         # ndkVersion / cmake version are pinned in app/build.gradle.kts; AGP needs
@@ -146,6 +152,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools'
+          # package, which Google's repository no longer serves (sdkmanager exit 1
+          # before Gradle ever runs - 2026-09-15). Only platform-tools here; the
+          # pinned platforms/build-tools/NDK/CMake install in our own step below.
+          packages: platform-tools
       - name: Install pinned NDK + CMake
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
