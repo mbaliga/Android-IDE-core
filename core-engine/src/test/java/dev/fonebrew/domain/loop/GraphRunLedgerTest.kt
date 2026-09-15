@@ -1,7 +1,14 @@
 package dev.fonebrew.domain.loop
 
+import dev.fonebrew.domain.bpmn.BpmnEdge
+import dev.fonebrew.domain.bpmn.BpmnGraph
+import dev.fonebrew.domain.bpmn.BpmnNode
+import dev.fonebrew.domain.bpmn.BpmnNodeKind
+import dev.fonebrew.domain.council.Generator
 import dev.fonebrew.domain.cost.PricingBook
 import dev.fonebrew.domain.cost.UsagePricing
+import dev.fonebrew.domain.ledger.Tier
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -155,5 +162,79 @@ class GraphRunLedgerTest {
         val entries = GraphRunLedger.toEntries(result(), treeNodes(), loopId = null, runId = "run-1", projectId = null, timestampMillis = 1L)
         assertTrue(entries.all { it.loopId == null })
         assertNull(entries.first().loopId)
+    }
+
+    // ── tokenCounter wiring closes the loop (asoc-reachability audit, 2026-09-15): these run a
+    // REAL GraphRunner with a tokenCounter shaped exactly like LoopRoom.kt's real one — a
+    // provider-authoritative StepTokens for a "cloud" step, null (the engine truly reported
+    // nothing) for an "on-device"/engine-silent step — then feed the actual GraphRunResult
+    // through GraphRunLedger, pinning that the two honesty paths a chat turn already gets
+    // (ChatViewModel.kt's CloudEngine.lastUsage vs. countTokens pattern) now also hold for a loop
+    // run end to end, not just at the GraphStep/GraphRunLedger unit boundary above. ─────────────
+
+    private fun twoStepGraph() = BpmnGraph(
+        id = "g2",
+        nodes = listOf(
+            BpmnNode("start", BpmnNodeKind.START_EVENT),
+            BpmnNode("silent", BpmnNodeKind.TASK, "Silent", ext = mapOf("model" to "local-gguf")),
+            BpmnNode("counted", BpmnNodeKind.TASK, "Counted", ext = mapOf("model" to "claude")),
+            BpmnNode("end", BpmnNodeKind.END_EVENT),
+        ),
+        edges = listOf(
+            BpmnEdge("e1", "start", "silent"),
+            BpmnEdge("e2", "silent", "counted"),
+            BpmnEdge("e3", "counted", "end"),
+        ),
+    )
+
+    @Test fun `a real run's engine-silent step stays estimated with zero cost, and its real-counts step prices correctly`() = runTest {
+        // The stateful wrapper LoopRoom.kt's real wiring uses: generatorFor sets which node is
+        // "current" the instant it resolves a generator, tokenCounter reads it right after —
+        // safe because GraphRunner walks one step at a time, never concurrently. "silent" stands
+        // in for an on-device/engine-silent step (tokenCounter reports null — the engine truly
+        // has nothing); "counted" stands in for a cloud step whose engine reported a real,
+        // provider-authoritative count.
+        var currentNodeId: String? = null
+        val result = GraphRunner(
+            generatorFor = { node -> currentNodeId = node.id; Generator { _, _ -> if (node.id == "silent") "local draft" else "APPROVE, ship it" } },
+            tokenCounter = { _, _, _ ->
+                if (currentNodeId == "counted") StepTokens(inputTokens = 22, outputTokens = 6, estimated = false) else null
+            },
+        ).run(twoStepGraph(), objective = "make it airtight")
+
+        assertTrue(result.reachedEnd)
+        assertEquals(2, result.steps.size)
+
+        val silentStep = result.steps.single { it.nodeId == "silent" }
+        assertNull(silentStep.tokensIn); assertNull(silentStep.tokensOut); assertTrue(silentStep.estimated)
+
+        val countedStep = result.steps.single { it.nodeId == "counted" }
+        assertEquals(22L, countedStep.tokensIn); assertEquals(6L, countedStep.tokensOut); assertTrue(!countedStep.estimated)
+
+        val runId = "run-2"
+        val nodes = GraphRunLog.toNodes(
+            objective = "make it airtight", result = result, loopRunId = runId, loopId = "loop-9",
+            now = 1000L, idGen = { "n${nextId++}" },
+        )
+        nextId = 0
+        val book = PricingBook().with("cloud:claude-x", UsagePricing(centsPer1kInput = 300, centsPer1kOutput = 1500))
+        val entries = GraphRunLedger.toEntries(
+            result, nodes, loopId = "loop-9", runId = runId, projectId = null, timestampMillis = 5000L,
+            pricingBook = book,
+            resolveTokenizerId = { id -> if (id == "claude") "cloud:claude-x" else id },
+        )
+        val silentEntry = entries.first { it.model == "local-gguf" }
+        assertEquals(Tier.ON_DEVICE, silentEntry.tier)
+        assertTrue(silentEntry.estimated)
+        assertEquals(0L, silentEntry.inputTokens); assertEquals(0L, silentEntry.outputTokens)
+        assertEquals(0L, silentEntry.estCostMinor)
+
+        val countedEntry = entries.first { it.model == "claude" }
+        assertEquals(Tier.CLOUD, countedEntry.tier)
+        assertTrue(!countedEntry.estimated)
+        assertEquals(22L, countedEntry.inputTokens); assertEquals(6L, countedEntry.outputTokens)
+        // 22*300/1000 (=6) + 6*1500/1000 (=9) = 15, the same math as the fixture-based pricing
+        // test above — now derived from a real GraphRunner run instead of a hand-built GraphStep.
+        assertEquals(15L, countedEntry.estCostMinor)
     }
 }

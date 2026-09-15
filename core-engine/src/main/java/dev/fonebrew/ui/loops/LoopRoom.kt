@@ -72,11 +72,14 @@ import dev.fonebrew.domain.loop.LoopBudget
 import dev.fonebrew.domain.loop.LoopParams
 import dev.fonebrew.domain.loop.LoopState
 import dev.fonebrew.domain.loop.RecordingGatewayPolicy
+import dev.fonebrew.domain.loop.StepTokens
+import dev.fonebrew.domain.loop.authoring.ConnectionDraftState
 import dev.fonebrew.domain.loop.authoring.DraftLifecycleMachine
 import dev.fonebrew.domain.loop.authoring.DraftLifecycleState
 import dev.fonebrew.domain.loop.authoring.DraftEditJournal
 import dev.fonebrew.domain.loop.authoring.contentIdempotencyKey
 import dev.fonebrew.domain.loop.authoring.shouldShowRecoveryBanner
+import dev.fonebrew.domain.loop.authoring.GatewayConditionPresenter
 import dev.fonebrew.domain.loop.authoring.RunViewAction
 import dev.fonebrew.domain.loop.authoring.RunViewStateClass
 import dev.fonebrew.domain.loop.authoring.TouchConnectionGrammar
@@ -146,8 +149,13 @@ private data class LoopNode(
     val provenanceExt: Map<String, String> = emptyMap(),
 )
 
-/** A connector; [label] drives gateway branching ("approve" / "refine" / "else"). */
-private data class LoopEdge(val from: String, val to: String, val label: String? = null) {
+/** A connector; [label] drives gateway branching ("approve" / "refine" / "else" by name — see
+ *  [dev.fonebrew.domain.loop.ConditionGatewayPolicy]). [condition] is the gateway condition
+ *  editor's free-form condition text (`GatewayConditionPresenter`/`TouchConnectionGrammar`);
+ *  it round-trips honestly as a BPMN `conditionExpression` but only actually drives branching
+ *  when it's literally "approved"/"!approved" — [ConditionGatewayPolicy] has no expression
+ *  evaluator, so anything else is authored for legibility, not evaluated. */
+private data class LoopEdge(val from: String, val to: String, val label: String? = null, val condition: String? = null) {
     val accent: Boolean get() = label != null && !label.equals("else", ignoreCase = true)
 }
 
@@ -207,7 +215,7 @@ private fun toBpmnGraph(id: String, name: String, nodes: List<LoopNode>, edges: 
                 },
             )
         },
-        edges = edges.mapIndexed { i, e -> BpmnEdge(id = "edge-$i", sourceId = e.from, targetId = e.to, name = e.label) },
+        edges = edges.mapIndexed { i, e -> BpmnEdge(id = "edge-$i", sourceId = e.from, targetId = e.to, name = e.label, condition = e.condition) },
     )
 
 private fun fromBpmnNodes(g: BpmnGraph): List<LoopNode> = g.nodes.map { b ->
@@ -220,7 +228,7 @@ private fun fromBpmnNodes(g: BpmnGraph): List<LoopNode> = g.nodes.map { b ->
 }
 
 private fun fromBpmnEdges(g: BpmnGraph): List<LoopEdge> =
-    g.edges.map { LoopEdge(it.sourceId, it.targetId, it.name) }
+    g.edges.map { LoopEdge(it.sourceId, it.targetId, it.name, it.condition) }
 
 /**
  * The Loop editor: a free-form **graph** editor on a dot-grid canvas (docs/design/workflow-builder.md).
@@ -423,11 +431,11 @@ fun LoopRoom(
         nodes.removeAll { it.id == id }
         edges.removeAll { it.from == id || it.to == id }
     }
-    fun addEdge(from: String, to: String, label: String? = null) {
+    fun addEdge(from: String, to: String, label: String? = null, condition: String? = null) {
         if (from == to) return
         guardEdit()
         if (edges.any { it.from == from && it.to == to }) return
-        edges.add(LoopEdge(from, to, label))
+        edges.add(LoopEdge(from, to, label, condition))
     }
     // The one place a source+destination pair becomes either a direct edge or a label prompt --
     // a gateway source needs a branch label (approve/refine/else) before the edge exists,
@@ -484,7 +492,7 @@ fun LoopRoom(
         val anchor = nodeById(anchorId)
         val dx = if (position == StagePresenter.InsertPosition.AFTER) 90f * density else -90f * density
         nodes.add(LoopNode(newId, BpmnNodeKind.TASK, "Task", xPx = (anchor?.xPx ?: 40f * density) + dx, yPx = (anchor?.yPx ?: 150f * density) + 50f * density))
-        edges.clear(); edges.addAll(newEdges.map { LoopEdge(it.sourceId, it.targetId, it.name) })
+        edges.clear(); edges.addAll(newEdges.map { LoopEdge(it.sourceId, it.targetId, it.name, it.condition) })
         stageActionNote = null
         configNodeId = newId
     }
@@ -496,7 +504,7 @@ fun LoopRoom(
         val outcome = StagePresenter.reorderAdjacent(currentGraph(), nodeId, direction)
         val newEdges = outcome.edges
         if (newEdges == null) { stageActionNote = outcome.blockedReason; return }
-        edges.clear(); edges.addAll(newEdges.map { LoopEdge(it.sourceId, it.targetId, it.name) })
+        edges.clear(); edges.addAll(newEdges.map { LoopEdge(it.sourceId, it.targetId, it.name, it.condition) })
         stageActionNote = null
     }
 
@@ -591,9 +599,15 @@ fun LoopRoom(
         runJob = scope.launch {
             val jobId = container.backgroundJobs.start(loopName.ifBlank { "Loop" }, "loop")
             runCatching {
+                // Both caches key on spec.id and are populated exactly once per spec per run, so
+                // `engineFor(spec)` (a fresh CloudEngine instance on every call — EngineProvider.kt)
+                // is only ever invoked once for a given spec; genFor's EngineGenerator always wraps
+                // THAT cached instance, never a second one tokenCounter below couldn't see.
+                val engineCache = HashMap<String, dev.fonebrew.inference.InferenceEngine>()
+                fun engineForSpec(spec: ModelSpec) = engineCache.getOrPut(spec.id) { container.engineProvider.engineFor(spec)!! }
                 val cache = HashMap<String, EngineGenerator>()
                 fun genFor(spec: ModelSpec) = cache.getOrPut(spec.id) {
-                    EngineGenerator(container.engineProvider.engineFor(spec)!!, spec.modelPath)
+                    EngineGenerator(engineForSpec(spec), spec.modelPath)
                 }
                 val fallback = runnable.first()
                 val graph = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
@@ -601,12 +615,44 @@ fun LoopRoom(
                 // (owner decision 2's GATEWAY_AUTO surface) — see RecordingGatewayPolicy's KDoc
                 // for why persisting happens below, after the run, rather than mid-choose.
                 val recordingPolicy = RecordingGatewayPolicy()
+                // P3 gap closed (docs/HANDOFF-CURRENT.md, asoc-reachability audit 2026-09-15): a
+                // real tokenCounter, wired the SAME honesty rule ChatViewModel.send() already
+                // applies to a chat turn (~ChatViewModel.kt:962-980) — a cloud engine's own
+                // provider-reported usage (CloudEngine.lastUsage, authoritative -> estimated =
+                // false) when it has one, else the executing engine's OWN tokenizer
+                // (InferenceEngine.countTokens — real per-model counts, on-device or cloud-coarse
+                // alike, never a value this app invents) flagged estimated = true, exactly like an
+                // on-device chat turn's ledger row. `currentStepEngine` is set by `generatorFor`
+                // the instant it resolves a step's engine, immediately before that engine's
+                // `.complete()` call runs; GraphRunner invokes `tokenCounter` right after that
+                // same step completes and walks one step at a time (never concurrently), so the
+                // var still names the right engine when tokenCounter reads it.
+                var currentStepEngine: dev.fonebrew.inference.InferenceEngine? = null
                 GraphRunner(
                     generatorFor = { bn ->
                         val spec = bn.ext["model"]?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback
+                        currentStepEngine = engineForSpec(spec)
                         genFor(spec)
                     },
                     gatewayPolicy = recordingPolicy,
+                    tokenCounter = { system, user, output ->
+                        val engine = currentStepEngine
+                        val cloudEngine = engine as? dev.fonebrew.inference.cloud.CloudEngine
+                        val cloudUsage = cloudEngine?.lastUsage?.takeIf { it.totalTokens > 0 }
+                        when {
+                            engine == null -> null
+                            cloudUsage != null -> StepTokens(cloudUsage.inputTokens, cloudUsage.outputTokens, estimated = false)
+                            else -> {
+                                val inCount = runCatching { engine.countTokens("$system\n$user") }.getOrNull()
+                                val outCount = runCatching { engine.countTokens(output) }.getOrNull()
+                                if (inCount != null && outCount != null) {
+                                    StepTokens(inCount.toLong(), outCount.toLong(), estimated = true)
+                                } else {
+                                    null // the engine truly reported nothing — never invent a count
+                                }
+                            }
+                        }
+                    },
                 ).run(
                     graph = graph,
                     objective = objective,
@@ -1052,11 +1098,19 @@ fun LoopRoom(
         )
     }
 
-    // ── Edge label for a gateway branch ───────────────────────────────────────
+    // ── Gateway condition editor (asoc-reachability audit, 2026-09-15) ─────────────────────
+    // The tap-connect / drag-a-wire gestures end at connectNodes finding a gateway source; this
+    // is the ONE place their outcome becomes a real edge, driven through
+    // TouchConnectionGrammar/GatewayConditionPresenter — never a direct addEdge bypassing it.
     pendingEdge?.let { (from, to) ->
-        EdgeLabelDialog(
+        GatewayConditionEditorDialog(
+            sourceNodeId = from,
+            destinationNodeId = to,
+            existingEdges = edges.filter { it.from == from }.map {
+                GatewayConditionPresenter.CandidateEdge(key = "${it.from}->${it.to}", label = it.label, condition = it.condition)
+            },
             onDismiss = { pendingEdge = null },
-            onPick = { label -> addEdge(from, to, label); pendingEdge = null },
+            onCommit = { label, condition -> addEdge(from, to, label, condition); pendingEdge = null },
         )
     }
 
@@ -1065,9 +1119,13 @@ fun LoopRoom(
         val node = nodeById(id) ?: return@let
         // §3.4 "ports and connections shown read-only" — this editor's node model has no typed
         // ports, so its honest equivalent is the node's real incoming/outgoing edges.
+        fun edgeSuffix(e: LoopEdge) = buildString {
+            e.label?.let { append(" ($it)") }
+            e.condition?.let { append(" [if: $it]") }
+        }
         val connections = buildList {
-            edges.filter { it.to == id }.forEach { e -> add("← ${nodeById(e.from)?.label ?: e.from}${e.label?.let { " ($it)" } ?: ""}") }
-            edges.filter { it.from == id }.forEach { e -> add("→ ${nodeById(e.to)?.label ?: e.to}${e.label?.let { " ($it)" } ?: ""}") }
+            edges.filter { it.to == id }.forEach { e -> add("← ${nodeById(e.from)?.label ?: e.from}${edgeSuffix(e)}") }
+            edges.filter { it.from == id }.forEach { e -> add("→ ${nodeById(e.to)?.label ?: e.to}${edgeSuffix(e)}") }
         }
         NodeConfigDialog(
             node = node,
@@ -1635,18 +1693,134 @@ private fun statusColor(status: NodeStatus): Color? {
     }
 }
 
+/**
+ * The gateway condition editor (`LOOP_PHONE_AUTHORING_SPEC.md` §5/§7): the surface
+ * [connectNodes]/`pendingEdge` opens when a new edge's source is a gateway. Every mutation is a
+ * real [TouchConnectionGrammar] transition, via [GatewayConditionPresenter] — this composable
+ * holds no parallel legality logic; [onCommit] only fires once the grammar itself reaches
+ * `COMMITTED` (asoc-reachability audit, 2026-09-15: before this, a gateway edge was created by
+ * `addEdge` directly from a hardcoded three-literal picker, never through the grammar at all).
+ *
+ * Two stages, both real grammar states: choosing a label plus an optional free-form condition at
+ * [ConnectionDraftState.DESTINATION_CHOSEN], then a live preview at
+ * [ConnectionDraftState.PREVIEWING] of which outgoing edge [dev.fonebrew.domain.loop
+ * .ConditionGatewayPolicy] — the SAME policy a real run matches with, via
+ * [GatewayConditionPresenter.previewFor] — would actually take for an editable sample output.
+ * The preview list is glyph/label-coded (✓/○ plus " — taken"), never color alone (owner is
+ * red-green colorblind, §1.4).
+ */
 @Composable
-private fun EdgeLabelDialog(onDismiss: () -> Unit, onPick: (String?) -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
+private fun GatewayConditionEditorDialog(
+    sourceNodeId: String,
+    destinationNodeId: String,
+    /** This gateway's other outgoing edges, so the preview shows which one a sample output would
+     *  actually hit — the edge being authored here is never the only candidate on a gateway that
+     *  already branches. */
+    existingEdges: List<GatewayConditionPresenter.CandidateEdge>,
+    onDismiss: () -> Unit,
+    onCommit: (label: String?, condition: String?) -> Unit,
+) {
+    var draft by remember { mutableStateOf(GatewayConditionPresenter.start(sourceNodeId, destinationNodeId)) }
+    var conditionText by remember { mutableStateOf("") }
+    var sampleOutput by remember { mutableStateOf("") }
+    var errorNote by remember { mutableStateOf<String?>(null) }
+
+    fun rejectionNote(result: TouchConnectionGrammar.Result): String =
+        "⚠ " + ((result as? TouchConnectionGrammar.Result.Rejected)?.reason ?: "not legal from this state")
+
+    // Drives ChooseLabel -> (DefineCondition, only when a condition was actually typed) ->
+    // RequestPreview as one gesture, matching what a single tap on a quick-label button means to
+    // the author — the grammar itself still sees every intermediate event, nothing is skipped.
+    fun chooseLabelAndPreview(label: String) {
+        errorNote = null
+        val labelResult = GatewayConditionPresenter.chooseLabel(draft, label, conditionText.ifBlank { null })
+        if (labelResult !is TouchConnectionGrammar.Result.Advanced) { errorNote = rejectionNote(labelResult); return }
+        var next = labelResult.draft
+        if (next.gatewayRequiresCondition) {
+            val condResult = GatewayConditionPresenter.defineCondition(next, conditionText)
+            if (condResult !is TouchConnectionGrammar.Result.Advanced) { errorNote = rejectionNote(condResult); return }
+            next = condResult.draft
+        }
+        val previewResult = GatewayConditionPresenter.requestPreview(next)
+        if (previewResult !is TouchConnectionGrammar.Result.Advanced) { errorNote = rejectionNote(previewResult); return }
+        draft = previewResult.draft
+    }
+
+    fun backToLabel() {
+        GatewayConditionPresenter.cancel(draft) // PREVIEWING has committed no edge yet -> a pure discard
+        draft = GatewayConditionPresenter.start(sourceNodeId, destinationNodeId)
+        errorNote = null
+    }
+
+    Dialog(onDismissRequest = { GatewayConditionPresenter.cancel(draft); onDismiss() }) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Branch label", style = MaterialTheme.typography.titleMedium)
-                Text("When this gateway is reached, which output takes this edge?", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                HyleButton("approve — when the last step begins APPROVE", onClick = { onPick("approve") })
-                HyleButton("refine — otherwise", onClick = { onPick("refine") })
-                HyleButton("else — default branch", onClick = { onPick("else") })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+            Column(
+                Modifier.padding(16.dp).fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (draft.state == ConnectionDraftState.PREVIEWING) {
+                    Text("Preview branch", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "The runner treats an output starting with “APPROVE” as approved; anything else counts as not-approved.",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    HyleField(sampleOutput, { sampleOutput = it }, label = "Sample output to test", modifier = Modifier.fillMaxWidth())
+                    val trialOutput = sampleOutput.ifBlank { "APPROVE looks good" }
+                    val preview = GatewayConditionPresenter.previewFor(draft, existingEdges, trialOutput)
+                    val draftEntry = GatewayConditionPresenter.CandidateEdge(GatewayConditionPresenter.DRAFT_KEY, draft.label, draft.conditionExpression)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        for (c in existingEdges + draftEntry) {
+                            val chosen = c.key == preview.chosenKey
+                            val isDraft = c.key == GatewayConditionPresenter.DRAFT_KEY
+                            val glyph = if (chosen) "✓" else "○"
+                            val name = c.label ?: c.condition ?: "(unconditioned)"
+                            Text(
+                                "$glyph $name" + (if (isDraft) " — this edge" else "") + (if (chosen) " — taken" else ""),
+                                style = if (chosen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                                color = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    val cond = draft.conditionExpression
+                    if (cond != null && cond.trim().lowercase() != "approved" && cond.trim().lowercase() != "!approved") {
+                        Text(
+                            "This condition isn't one the runner evaluates — only exactly “approved”/“!approved” drive branching. " +
+                                "It's saved on the edge for readability; the preview above shows how it actually behaves (the default branch).",
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    errorNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { backToLabel() }) { Text("‹ Edit label") }
+                        Row {
+                            TextButton(onClick = { GatewayConditionPresenter.cancel(draft); onDismiss() }) { Text("Cancel") }
+                            Spacer(Modifier.width(8.dp))
+                            HyleButton("Commit", onClick = {
+                                val committed = GatewayConditionPresenter.commit(draft)
+                                if (committed is TouchConnectionGrammar.Result.Advanced) {
+                                    onCommit(draft.label, draft.conditionExpression)
+                                } else {
+                                    errorNote = rejectionNote(committed)
+                                }
+                            })
+                        }
+                    }
+                } else {
+                    Text("Branch label", style = MaterialTheme.typography.titleMedium)
+                    Text("When this gateway is reached, which output takes this edge?", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HyleButton("approve — when the last step begins APPROVE", onClick = { chooseLabelAndPreview("approve") })
+                    HyleButton("refine — otherwise", onClick = { chooseLabelAndPreview("refine") })
+                    HyleButton("else — default branch", onClick = { chooseLabelAndPreview("else") })
+                    HyleField(conditionText, { conditionText = it }, label = "Condition (advanced, optional)", modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "Only exactly “approved”/“!approved” actually drive branching today — anything else is saved for " +
+                            "readability and behaves as the default branch (the next screen's Preview shows which).",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    errorNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { GatewayConditionPresenter.cancel(draft); onDismiss() }) { Text("Cancel") }
+                    }
                 }
             }
         }

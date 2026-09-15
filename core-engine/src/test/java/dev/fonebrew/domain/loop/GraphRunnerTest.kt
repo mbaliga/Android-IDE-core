@@ -6,6 +6,8 @@ import dev.fonebrew.domain.bpmn.BpmnGraph
 import dev.fonebrew.domain.bpmn.BpmnNode
 import dev.fonebrew.domain.bpmn.BpmnNodeKind
 import dev.fonebrew.domain.council.Generator
+import dev.fonebrew.domain.loop.authoring.GatewayConditionPresenter
+import dev.fonebrew.domain.loop.authoring.TouchConnectionGrammar
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -259,5 +261,52 @@ class GraphRunnerTest {
             .run(sequentialGraph(steps = 3), objective = "x")
         assertTrue(result.steps.all { it.durationMs == 100L })
         assertEquals(300L, result.elapsedMs)
+    }
+
+    // ── Gateway condition editor (asoc-reachability audit, 2026-09-15): an edge authored
+    // through GatewayConditionPresenter/TouchConnectionGrammar — not hand-typed — must actually
+    // route a real run, the same way LoopRoom.kt's toBpmnGraph turns a COMMITTED draft into a
+    // BpmnEdge (name = draft.label, condition = draft.conditionExpression). ─────────────────────
+
+    @Test fun `an edge condition committed through GatewayConditionPresenter actually routes a real run`() = runTest {
+        var draft = GatewayConditionPresenter.start("gate", "end")
+        draft = (GatewayConditionPresenter.chooseLabel(draft, "approve", condition = "approved") as TouchConnectionGrammar.Result.Advanced).draft
+        draft = (GatewayConditionPresenter.defineCondition(draft, "approved") as TouchConnectionGrammar.Result.Advanced).draft
+        draft = (GatewayConditionPresenter.requestPreview(draft) as TouchConnectionGrammar.Result.Advanced).draft
+        draft = (GatewayConditionPresenter.commit(draft) as TouchConnectionGrammar.Result.Advanced).draft
+        assertEquals(dev.fonebrew.domain.loop.authoring.ConnectionDraftState.COMMITTED, draft.state)
+
+        // Exactly how LoopRoom.kt's toBpmnGraph builds every other edge — no special-cased path
+        // for an authored-through-the-grammar one.
+        val editedEdge = BpmnEdge(
+            id = "edited", sourceId = draft.sourceNodeId!!, targetId = draft.destinationNodeId!!,
+            name = draft.label, condition = draft.conditionExpression,
+        )
+
+        val graph = BpmnGraph(
+            id = "g",
+            nodes = listOf(
+                BpmnNode("start", BpmnNodeKind.START_EVENT),
+                BpmnNode("crit", BpmnNodeKind.TASK, "Critic"),
+                BpmnNode("gate", BpmnNodeKind.EXCLUSIVE_GATEWAY, "Choice"),
+                BpmnNode("end", BpmnNodeKind.END_EVENT),
+                // A wrongly-routed run would step onto this TASK next (it has no outgoing edge,
+                // so it would then stop with "no outgoing edge" instead of reaching "end") — an
+                // externally observable difference between the two branches, not just an internal
+                // policy-match assertion.
+                BpmnNode("decoy", BpmnNodeKind.TASK, "Decoy"),
+            ),
+            edges = listOf(
+                BpmnEdge("e1", "start", "crit"),
+                BpmnEdge("e2", "crit", "gate"),
+                editedEdge, // gate -> end, condition "approved" (authored via the presenter)
+                BpmnEdge("e4", "gate", "decoy", name = "refine", condition = "!approved"),
+            ),
+        )
+        val result = GraphRunner({ Generator { _, _ -> "APPROVE, ship it" } }).run(graph, objective = "x")
+        assertTrue(result.reachedEnd)
+        assertEquals("reached end", result.stoppedBecause)
+        assertEquals(1, result.steps.size) // only "crit" ran; "decoy" never did
+        assertEquals("crit", result.steps.single().nodeId)
     }
 }

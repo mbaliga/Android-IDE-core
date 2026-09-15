@@ -88,6 +88,35 @@
 > **owner-verify:** the run sheet's feel, the live step stream/Stop control, the totals bar
 > render, and the v4→v5 Room bump (same `fallbackToDestructiveMigration()` caveat as every prior
 > bump).
+>
+> **tokenCounter wired + gateway condition editor landed (lane A2-loops, 2026-09-15), the P3
+> honesty note above superseded:** `LoopRoom.kt`'s `startRun` now wires a real `tokenCounter` —
+> the same honesty rule `ChatViewModel.send()` already applies to a chat turn: a cloud engine's
+> own `CloudEngine.lastUsage` (provider-authoritative) when it has one, else the executing
+> engine's own `InferenceEngine.countTokens` (real per-model counts, flagged `estimated = true`,
+> same as an on-device chat turn's ledger row), `null` only when the engine truly reports nothing
+> — never an invented count. The run sheet's token budget field is still not wired (unchanged
+> scope, tracked separately); what changed is that a live run's `GraphStep`s now genuinely carry
+> `estimated = false` counts when the executing engine backs them, so `GraphRunLedger` prices a
+> cloud loop step for real instead of always folding to on-device/estimated. Also: the
+> `TouchConnectionGrammar` gap the P3 landing note didn't cover — `Event.ChooseLabel`/
+> `DefineCondition`/`RequestPreview` had zero production senders, a gateway edge's label was
+> written by `LoopRoom.kt`'s edge dialog straight to the graph, bypassing the grammar entirely —
+> is closed: a new `GatewayConditionPresenter` (`domain/loop/authoring/`) drives every event
+> through the grammar for real, and `LoopRoom.kt`'s `GatewayConditionEditorDialog` (replacing the
+> old three-literal `EdgeLabelDialog`) offers the existing quick labels *and* a free-form
+> condition field, with a live preview (reusing `ConditionGatewayPolicy` itself, so it can't show
+> a branch the runner wouldn't actually take) before committing. **verified-JVM:** `GraphRunnerTest`
+> pins an edge authored through the presenter actually routing a real run;
+> `GatewayConditionPresenterTest` is exhaustive over every event path incl. cancel from each
+> reachable state; `GraphRunLedgerTest` gained an end-to-end case (real `GraphRunner` +
+> `tokenCounter` → `GraphRunLedger`) pinning an engine-silent step staying estimated/zero-cost
+> alongside a real-counts step pricing correctly. **owner-verify:** the editor's touch feel, the
+> preview's legibility on-device (glyph/label-coded per §1.4 — never red/green hue alone), and
+> that a live loop run against a real cloud/on-device engine actually reports the counts this
+> wiring claims (JVM tests exercise the wiring shape with fake engines/counters, not a real
+> `InferenceEngine` — that boundary stays owner-verified same as every other on-device/network
+> fact in this file).
 
 ---
 

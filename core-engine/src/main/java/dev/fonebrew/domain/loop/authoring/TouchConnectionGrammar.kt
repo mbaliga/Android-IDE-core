@@ -18,11 +18,33 @@ enum class ConnectionDraftState {
 object TouchConnectionGrammar {
 
     sealed interface Event {
+        /** Sent by [WireDragGesture.begin] (collapsed with [ConnectFromHere]) and by
+         *  [dev.fonebrew.domain.loop.authoring.GatewayConditionPresenter.start] (rebuilding the
+         *  tap-flow's implied SelectSource/ConnectFromHere/ChooseDestination as real transitions,
+         *  not a hand-built draft). */
         data class SelectSource(val sourceNodeId: String) : Event
         object ConnectFromHere : Event
+        /** Sent by [WireDragGesture.release] and by [GatewayConditionPresenter.start]. */
         data class ChooseDestination(val destinationNodeId: String, val isNewNode: Boolean = false) : Event
+        /** Sent by [GatewayConditionPresenter.chooseLabel] — the gateway condition editor's
+         *  quick-label buttons ("approve"/"refine"/"else") or any other typed label; production
+         *  sender since the asoc-reachability audit (2026-09-15) closed this gap — previously
+         *  this event had no caller at all, and a gateway edge's label was written straight to
+         *  the graph by `LoopRoom.kt`'s edge dialog, bypassing this grammar entirely. */
         data class ChooseLabel(val outputPort: String?, val label: String) : Event
+        /** Sent by [GatewayConditionPresenter.defineCondition] when the editor's free-form
+         *  condition field is non-blank ([ConnectionDraft.gatewayRequiresCondition] true).
+         *  Production sender since 2026-09-15 (see [ChooseLabel]'s note) — [expression] is saved
+         *  onto the edge for legibility even when [dev.fonebrew.domain.loop.ConditionGatewayPolicy]
+         *  won't actually evaluate it (it only recognises literally "approved"/"!approved"); the
+         *  editor's preview step is what keeps that gap honest to the author, not this event. */
         data class DefineCondition(val conditionExpression: String) : Event
+        /** Sent by [GatewayConditionPresenter.requestPreview]. Production sender since
+         *  2026-09-15 (see [ChooseLabel]'s note) — the editor's preview screen reads
+         *  [GatewayConditionPresenter.previewFor] (reusing
+         *  [dev.fonebrew.domain.loop.ConditionGatewayPolicy] itself, the exact policy a real run
+         *  matches with) to show which outgoing edge a sample output would actually take, before
+         *  [Commit] makes the edge real. */
         object RequestPreview : Event
         object Commit : Event
         object Cancel : Event
