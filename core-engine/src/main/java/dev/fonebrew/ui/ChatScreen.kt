@@ -59,6 +59,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -163,6 +164,16 @@ fun ChatScreen(
      *  to a no-op so ChatScreen stays usable stand-alone (previews, tests) without a controller,
      *  same as [onOpenChats]/[onOpenSettings] above. */
     onOpenTree: () -> Unit = {},
+    /** TurnActionsSheet's "Convert → Task" confirmation snackbar's "Open" affordance (lane A3):
+     *  [taskId] is the just-created task's id, meant to flow into
+     *  [dev.fonebrew.ui.rooms.ProductRoomFree]'s `highlightTaskId` exactly the way a search
+     *  hit's "open" action already does — see that room's own KDoc. Defaults to a no-op, same
+     *  as [onOpenChats]/[onOpenSettings]/[onOpenTree] above, so ChatScreen stays usable
+     *  stand-alone; wiring it to the Projects room from the spatial/Regular shells is a named
+     *  follow-up for whichever lane next touches those room-host files — outside this lane's
+     *  disjoint-files scope this pass, not a silent fake (the callback fires with the real id
+     *  either way). */
+    onOpenProjects: (taskId: String?) -> Unit = {},
     /** S9 continuity: text carried in from an app-wide search result. Opens the find bar
      *  pre-filled and scrolls to the first hit. Consumed once, via [onFindRequestConsumed], so
      *  reopening the bar later doesn't resurrect a stale query. */
@@ -226,6 +237,11 @@ fun ChatScreen(
     // session-start needs no name prompt, it fires straight from the sheet.
     var chapterNameStep by remember { mutableStateOf<PathView.Step?>(null) }
     var chapterNameInput by remember { mutableStateOf("") }
+    // Lane A3 (TurnActionsSheet parity): "Read aloud" — the id of the turn currently being
+    // spoken, or null when nothing is. Drives the sheet row's toggle to "Stop reading" and its
+    // visible stop affordance for exactly the turn that's actually playing (see the
+    // OnDeviceReadAloud engine + DisposableEffect below, once ctx0 exists).
+    var speakingStepId by remember { mutableStateOf<String?>(null) }
     // S-new seam (STUDIO_UX_SPEC.md §5.3/§13 S14): the race TurnActionsSheet's "Re-run with…"
     // row hands off to, when a paid layer has installed RoundtableSlot — see its KDoc. Null in
     // the bare open core, where that row is never even shown (see TurnActionsSheet below).
@@ -266,6 +282,19 @@ fun ChatScreen(
     val container0 = (ctx0.applicationContext as dev.fonebrew.FonebrewApp).container
     val gitHosts by container0.gitHostStore.hosts.collectAsState()
     val findScrollPrefix = if (!connectDismissed && gitHosts.isEmpty()) 1 else 0
+
+    // Lane A3: "Read aloud" — on-device TextToSpeech only (binding rule 2, no network TTS; see
+    // OnDeviceReadAloud's own KDoc). One engine for this screen's whole lifetime; `ttsAvailable`
+    // starts `null` ("not known yet") and resolves to true/false from the engine's own one-shot
+    // init callback — TurnActionsSheet reads it to decide disabled-with-reason vs enabled (never
+    // guesses true so a genuinely-absent engine looks like a silent no-op tap).
+    var ttsAvailable by remember { mutableStateOf<Boolean?>(null) }
+    val readAloud = remember {
+        dev.fonebrew.service.OnDeviceReadAloud(ctx0) { available -> ttsAvailable = available }
+    }
+    DisposableEffect(Unit) {
+        onDispose { readAloud.destroy() }
+    }
 
     // docs/design/objects-3d.md §1's "3D file…" SAF import — the picker itself lives here
     // (ChatScreen owns activity-result launchers); the read/store/mint work is ChatViewModel's.
@@ -1106,6 +1135,37 @@ fun ChatScreen(
             // ComposerQuote transform the drag callbacks use.
             onQuote = { input = ComposerQuote.quote(input, step.node.content); actionStep = null },
             onReply = { input = ComposerQuote.reply(input, step.node.content); actionStep = null },
+            // Lane A3: "Read aloud" — SpeechText does the markdown->plain work; this engine only
+            // speaks the result. `readAloudAvailable` defaults true while `ttsAvailable` is still
+            // `null` (init callback hasn't landed yet) rather than guessing false, since the
+            // common case is init finishing well before a long-press even opens this sheet.
+            readingAloud = speakingStepId == step.node.id,
+            readAloudAvailable = ttsAvailable != false,
+            onReadAloud = {
+                val text = dev.fonebrew.domain.markdown.SpeechText.plain(step.node.content)
+                if (text.isBlank() || !readAloud.isAvailable()) {
+                    scope.launch { snackbar.showSnackbar("Nothing to read, or no on-device voice available.") }
+                } else {
+                    speakingStepId = step.node.id
+                    readAloud.speak(text) { if (speakingStepId == step.node.id) speakingStepId = null }
+                }
+            },
+            onStopReadAloud = {
+                readAloud.stop()
+                speakingStepId = null
+            },
+            // Lane A3: "Convert → Task" — TaskFromTurn (pure, tested) derives title/notes/
+            // sourceRef; ChatViewModel.convertToTask only wires that to TaskStore. Incident
+            // conversion stays the named Studio-side follow-up this sheet's own KDoc names —
+            // not offered here, never faked.
+            onConvertToTask = {
+                scope.launch {
+                    val created = viewModel.convertToTask(step.node.id, step.node.content)
+                    actionStep = null
+                    val result = snackbar.showSnackbar(message = "Added to Projects", actionLabel = "Open")
+                    if (result == SnackbarResult.ActionPerformed) onOpenProjects(created.id)
+                }
+            },
         )
     }
 
@@ -1966,8 +2026,21 @@ private fun ModelRow(m: ModelOption, active: Boolean, onSelect: (String) -> Unit
  * existing tappable-parity contract to extend — same shape as "Rewind"/"Compact from here",
  * sheet-only rows with no gesture twin either.
  *
- * Still not built this pass (flagged, not silently skipped, since the plumbing genuinely doesn't
- * exist yet): "Convert → Task/Incident" (the spec marks this item "(Studio)"), "Read aloud."
+ * "Read aloud" and "Convert → Task" (lane A3, this KDoc's own former "still not built" list) are
+ * now both built. "Read aloud" speaks [dev.fonebrew.domain.markdown.SpeechText.plain]'s
+ * markdown-stripped rendering of the turn through [dev.fonebrew.service.OnDeviceReadAloud] —
+ * on-device platform `TextToSpeech` only (binding rule 2: never a network fallback); the row
+ * shows [readAloudAvailable] false as disabled-with-a-reason (same idiom `ModelRow` uses for an
+ * unrunnable model), never a silently-absent or silently-inert tap, and flips to "Stop reading"
+ * — the required visible stop affordance — for exactly the turn [readingAloud] names. Playback
+ * is lifecycle-scoped to *this sheet*: [ChatScreen]'s own `DisposableEffect` below stops it the
+ * instant the sheet leaves composition, by any dismissal path, not only the explicit
+ * [onDismiss] callback — see that `DisposableEffect`'s own comment. "Convert → Task" promotes
+ * the turn into the free-floor `TaskStore` via [dev.fonebrew.domain.tasks.TaskFromTurn]'s pure
+ * title/notes/source-reference derivation ([dev.fonebrew.ui.ChatViewModel.convertToTask]); its
+ * sibling "Convert → Incident" is **not** offered — Incidents are Studio-side (owner call), so
+ * that half of the spec's original "(Studio)"-tagged item stays a named follow-up rather than a
+ * fake local promotion.
  */
 @Composable
 private fun TurnActionsSheet(
@@ -2000,9 +2073,29 @@ private fun TurnActionsSheet(
     onQuote: () -> Unit = {},
     /** WP4: tappable parity for the pull-left/release drag ([dev.fonebrew.domain.gesture.MessageDragLogic.Intent.Reply]). */
     onReply: () -> Unit = {},
+    /** Lane A3: true while *this* turn is the one currently being spoken — see this function's
+     *  own KDoc. Any other value (including another turn speaking) renders the row as "Read
+     *  aloud," never a stale "Stop reading" for the wrong turn. */
+    readingAloud: Boolean = false,
+    /** Lane A3: false only once the on-device TTS engine's own init callback has reported no
+     *  engine — see [dev.fonebrew.service.OnDeviceReadAloud]'s KDoc for why this can't be known
+     *  synchronously. Renders the row disabled-with-a-reason rather than hiding it. */
+    readAloudAvailable: Boolean = true,
+    onReadAloud: () -> Unit = {},
+    onStopReadAloud: () -> Unit = {},
+    /** Lane A3: [dev.fonebrew.ui.ChatViewModel.convertToTask] via TaskFromTurn — see this
+     *  function's own KDoc. */
+    onConvertToTask: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
     var showRawView by remember { mutableStateOf(false) }
+    // Lane A3: whatever dismissal path closes this sheet — the explicit [onDismiss] callback,
+    // the system back gesture, a tap outside, or a swipe-down — this sheet leaving composition
+    // always stops any speech it started, so "Read aloud" never keeps talking after its own
+    // control surface is gone (the "lifecycle-safe … sheet … dispose" requirement).
+    DisposableEffect(Unit) {
+        onDispose { onStopReadAloud() }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             Text(
@@ -2109,11 +2202,38 @@ private fun TurnActionsSheet(
             ) {
                 Text("Copy text")
             }
+            // Lane A3: "Read aloud" — disabled-with-a-reason (never silently absent or a
+            // silently-inert tap) when the on-device TTS engine's init callback reported no
+            // engine at all; see this function's own KDoc + readAloudAvailable's KDoc.
+            if (readAloudAvailable) {
+                TextButton(
+                    onClick = if (readingAloud) onStopReadAloud else onReadAloud,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (readingAloud) "Stop reading" else "Read aloud")
+                }
+            } else {
+                TextButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Text("Read aloud")
+                        Text(
+                            "No on-device voice engine on this phone",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            // Lane A3: "Convert → Task" — its "Convert → Incident" sibling from the original
+            // spec item is deliberately absent, not disabled: Incidents are Studio-side (owner
+            // call), so that half stays a named follow-up rather than a fake local promotion.
+            TextButton(onClick = onConvertToTask, modifier = Modifier.fillMaxWidth()) {
+                Text("Convert → Task")
+            }
             // asoc-reachability audit (2026-09-15) item 6: the turn's exact stored content,
-            // verbatim, no markdown rendering. Convert→Task-Incident/Read aloud stay named in the
-            // KDoc above rather than faked here; they need plumbing (task/incident write paths,
-            // TTS) this lane doesn't own. ("Re-run with…" above this row was the third item in
-            // that same not-built list — it's wired now, see the KDoc above TurnActionsSheet.)
+            // verbatim, no markdown rendering. ("Re-run with…" above this row was the third item
+            // in this sheet's original not-built list — wired earlier, see the KDoc above
+            // TurnActionsSheet; "Read aloud"/"Convert → Task" above are lane A3's own, same KDoc.)
             TextButton(onClick = { showRawView = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("Raw view")
             }

@@ -148,12 +148,17 @@ class TaskStore(private val dao: TaskDao) {
 
     suspend fun delete(task: TaskEntity) = dao.delete(task)
 
-    /** Paid-layer seed insert (task templates, audit/incident promotion, §5.3/§8.4) —
-     *  free UI never calls this directly, but the store is the same either way. */
+    /** Seed insert carrying explicit [TaskSource]/[sourceRef] provenance — task templates,
+     *  audit/incident promotion (§5.3/§8.4), and, since lane A3, the free floor's own
+     *  TurnActionsSheet "Convert → Task" row ([TaskSource.CHAT] via
+     *  [dev.fonebrew.domain.tasks.TaskFromTurn]) all go through this one writer; the plain
+     *  [create] above stays the manual-entry path ([TaskSource.MANUAL], no provenance to mint).
+     *  Same table either way (§5.1 — unlock migrates nothing). */
     suspend fun createFrom(
         title: String,
         source: TaskSource,
         sourceRef: String?,
+        notes: String = "",
         projectId: String? = null,
         tags: List<String> = emptyList(),
         now: Long = System.currentTimeMillis(),
@@ -162,6 +167,7 @@ class TaskStore(private val dao: TaskDao) {
             id = UUID.randomUUID().toString(),
             projectId = projectId,
             title = title,
+            notes = notes,
             orderKey = TaskOrdering.keyForAppend(dao.maxOrderKey()),
             source = source,
             sourceRef = sourceRef,

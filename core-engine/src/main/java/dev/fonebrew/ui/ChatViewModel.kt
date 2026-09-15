@@ -263,6 +263,7 @@ class ChatViewModel(
     private val receiptStore: dev.fonebrew.data.ReceiptStore,
     private val aarsoEventLog: dev.fonebrew.domain.mirror.AarsoEventLog,
     private val threadObserver: dev.fonebrew.data.ThreadObserver,
+    private val taskStore: dev.fonebrew.data.TaskStore,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -2328,6 +2329,27 @@ class ChatViewModel(
      *  request only (a tap in GraphRoom), never pushed, per THREAD_TOPOLOGY_PLAN.md's ObserverScript note. */
     suspend fun observerRemarks(): List<String> = threadObserver.remarks()
 
+    /**
+     * TurnActionsSheet's "Convert → Task" row (lane A3's honest missing-list update): promotes
+     * one turn into a free-floor task. Title/notes/source-reference are all derived by the pure,
+     * tested [dev.fonebrew.domain.tasks.TaskFromTurn] — this method only wires that derivation
+     * to [taskStore], the same "presenter decides, store just writes" split every other action on
+     * this ViewModel already follows. Incident conversion is **not** offered here — see
+     * TurnActionsSheet's own KDoc: it stays a named Studio-side follow-up, never faked as a Task.
+     *
+     * @return the created [dev.fonebrew.data.entity.TaskEntity] so the caller's confirmation
+     * snackbar can offer a "jump straight to *this* task" affordance (the same
+     * `highlightTaskId` mechanism `SearchOverlay`'s "open" action already uses on
+     * [dev.fonebrew.ui.rooms.ProductRoomFree]) rather than a bare "opened Projects."
+     */
+    suspend fun convertToTask(nodeId: String, content: String): dev.fonebrew.data.entity.TaskEntity =
+        taskStore.createFrom(
+            title = dev.fonebrew.domain.tasks.TaskFromTurn.title(content),
+            source = dev.fonebrew.domain.tasks.TaskSource.CHAT,
+            sourceRef = dev.fonebrew.domain.tasks.TaskFromTurn.sourceRef(nodeId),
+            notes = dev.fonebrew.domain.tasks.TaskFromTurn.notes(content, nodeId),
+        )
+
     companion object {
         /** Longest-edge cap for a pending photo attachment before it's stored (W1) — bounds
          *  token cost across providers; Anthropic's high-res tier takes more but at ~3x image
@@ -2377,6 +2399,7 @@ class ChatViewModel(
                     c.receiptStore,
                     c.aarsoEventLog,
                     c.threadObserver,
+                    c.taskStore,
                     app.applicationContext,
                 )
             }
