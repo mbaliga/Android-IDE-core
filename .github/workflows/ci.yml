@@ -53,6 +53,8 @@ jobs:
 
       - name: Set up Gradle (with build cache)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Set up Android SDK
         # Puts cmdline-tools (sdkmanager) on PATH — it is installed on ubuntu-latest
@@ -128,6 +130,8 @@ jobs:
           java-version: "17"
       - name: Set up Gradle (with build cache)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
       - name: Install pinned NDK + CMake
