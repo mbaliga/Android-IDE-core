@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-package-signature.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/loop-package-signature.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopPackageSignature = the detached record under a .floop package's signatures/ directory (floop-container-format.v1.json requiredTopLevelLayout). Signature suite is Ed25519 over the release-identity tuple, per canonicalization.v1.json's fb-loop-canon-1 profile (the bytes signed are the JCS-canonicalized releaseIdentity object below, forbidding IEEE-754 doubles like every other canonical payload in this corpus) and LOOP_PACKAGE_SPEC.md §11 (FB-RAT-PKG-005): 'A release signature MUST bind exactly: loopId, semanticVersion, packageContentDigest, canonicalizationVersion, the publisher's key fingerprint, and the release channel.'",
   "title": "LoopPackageSignature",
   "description": "loop-package-signature.v1 — an Ed25519 detached signature over a LoopPackage release identity. keyProvenance distinguishes a phone Keystore/StrongBox-signed publisher key from the browser-side soft-key unlisted-draft tier (LOOP_WEB_STUDIO_SPEC.md §13's phone-signing correction — WebAuthn cannot produce a detached signature over an arbitrary caller-supplied digest, so publisher signing for marketplace publication happens on the phone; a soft key is a lower-trust, unlisted-drafts-only tier that MUST NOT be presented as equivalent).",

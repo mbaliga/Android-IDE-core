@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  FileProvider paths for ApkInstaller (full flavor).
-  Covers Context.cacheDir/apk-install/ where downloaded APKs are staged before
-  the system install intent. The play flavor never reaches this provider.
+  Paths exposed by the single app-wide FileProvider (AndroidManifest.xml,
+  authority "${applicationId}.fileprovider"). Each entry is scoped to one
+  narrow subdirectory only — never the bare filesDir/cacheDir root — so a
+  granted content:// URI can't be used to enumerate more than intended.
+
+  - apk_install: Context.cacheDir/apk-install/, staged APKs for ApkInstaller
+    (full flavor). The play flavor never reaches this provider.
+  - attachments: Context.filesDir/attachments/, where AttachmentStore
+    (mirrors ImageStore's filesDir/images/ shape) saves camera captures for
+    W1 vision input — TakePicture needs a content:// Uri to write full-res
+    photos to.
 -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="apk_install" path="apk-install/" />
+    <files-path name="attachments" path="attachments/" />
 </paths>

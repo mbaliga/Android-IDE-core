@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0.0",
+  "id": "01J9M0000000000000000SS2",
+  "rootId": "01J8Z0000000000000000RT1",
+  "anchorMsgId": null,
+  "kind": "SESSION_START",
+  "at": "2026-08-11T07:02:00Z",
+  "source": "USER",
+  "unknownFields": {}
+}

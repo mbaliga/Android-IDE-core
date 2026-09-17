@@ -33,16 +33,16 @@
 // wanted them to — there is no constructor path to a "bucket" field carrying an unbucketed value.
 //
 // Cross-package reuse: none beyond what same-package files already provide (this file adds no
-// new dev.aarso.contracts.common import).
+// new dev.fonebrew.contracts.common import).
 //
-// Same-PACKAGE reuse (no import needed — dev.aarso.contracts.loops spans seven files):
+// Same-PACKAGE reuse (no import needed — dev.fonebrew.contracts.loops spans seven files):
 // [ReleaseIdentity] (LoopPackageContracts.kt), [LicenseRef] (LoopDefinitionContracts.kt),
 // [ActorClass], [PerCapabilityAuthorityDelta], [AuthorityDeltaDirection], [LicenseChangeFinding]
 // (LoopAuthoringContracts.kt), [DurableObjectRef] (LoopActivationContracts.kt),
 // [TerminalRunState] (LoopDefinitionContracts.kt), [TerminalReason]/[NodeAttemptOutcome]
 // (LoopRuntimeContracts.kt, same package, same work package). None of these are redefined here.
 // This file's own [CapabilityCategory] and [VerificationClaim] are, in turn, reused BY NAME (same-
-// package visibility) from LoopRuntimeContracts.kt's [dev.aarso.contracts.loops.LoopRunSummary] —
+// package visibility) from LoopRuntimeContracts.kt's [dev.fonebrew.contracts.loops.LoopRunSummary] —
 // see that file's own header for the reverse direction of this cross-file dependency note. Two
 // Kotlin files sharing one package and referencing each other's types in both directions is not a
 // circular-import problem in Kotlin (unlike some languages) — the compiler resolves the whole
@@ -81,7 +81,7 @@
 // re-encoding of either table itself as a Kotlin sealed hierarchy. This matches
 // LoopMarketplaceContracts.kt's identical reasoning for its own moderation-lifecycle table.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
 import java.time.Instant
 
@@ -188,7 +188,7 @@ enum class CapabilityCategory(val wireValue: String) {
     }
 }
 
-/** §4: node-state counts and stable public node IDs "where permitted" (gated on [publishedLoop], same rule as [dev.aarso.contracts.loops.NodeStateSummary]), with per-node counts now BUCKETED — this is [LoopResultShare]'s stage. */
+/** §4: node-state counts and stable public node IDs "where permitted" (gated on [publishedLoop], same rule as [dev.fonebrew.contracts.loops.NodeStateSummary]), with per-node counts now BUCKETED — this is [LoopResultShare]'s stage. */
 data class SharedNodeStateSummary(
     val publishedLoop: Boolean,
     val totalNodeCountBucket: NodeCountBucket,
@@ -212,7 +212,7 @@ data class SharedNodeStateSummary(
  * The final, redacted, bucketed, previewed, consented, optionally-signed artifact a user's
  * explicit Share Result action produces and that MAY leave the phone (§1-§7). Realizes
  * LOOP_ENGINEERING_SPEC_V2.1 §2.8's `SharedResult` concept. Built only from a
- * [dev.aarso.contracts.loops.LoopRunSummary], never constructed directly from live run state.
+ * [dev.fonebrew.contracts.loops.LoopRunSummary], never constructed directly from live run state.
  *
  * DEFAULT-EXCLUDED FIELDS (FB-RAT-RES-003) intentionally have NO corresponding constructor
  * parameter anywhere on this type — prompt/response content, repo/file/branch/org names, source
@@ -359,7 +359,7 @@ data class AuthorshipContribution(
  * upstream changes, authorship, attribution, and license (LOOP_FORK_LINEAGE_CONTRACT.md,
  * FB-RAT-LIN-001..006; LIN-007 DEFERRED). Realizes LOOP_ENGINEERING_SPEC_V2.1 §2.9's `ForkLineage`
  * concept. `lastComparedAgainstUpstream` points at a
- * [dev.aarso.contracts.loops.LoopSemanticDiff] (LoopAuthoringContracts.kt) — "exactly where
+ * [dev.fonebrew.contracts.loops.LoopSemanticDiff] (LoopAuthoringContracts.kt) — "exactly where
  * FB-RAT-LIN-004's per-category diff and FB-RAT-LIN-005's independent authority diff get
  * consumed," per this work package's task brief — never re-embedded here.
  * `authorityDiffSinceFork` is the narrower, standalone [AuthorityDiff]: a capability-only

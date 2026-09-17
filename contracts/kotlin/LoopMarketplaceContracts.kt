@@ -29,10 +29,10 @@
 // environment — this file has been written carefully (balanced braces, matched types, no
 // typos attempted) but has NOT been compiled. Do not report it as compiling; that is for the
 // next session with Gradle available to confirm. This file depends on
-// contracts/kotlin/CommonContracts.kt (package dev.aarso.contracts.common) being compiled in
+// contracts/kotlin/CommonContracts.kt (package dev.fonebrew.contracts.common) being compiled in
 // the same module/source set, for IntegrityRef — reused as-is rather than redefined, matching
 // LoopPackageContracts.kt's own precedent for importing IntegrityRef/ProducerRef from
-// dev.aarso.contracts.common rather than redeclaring it. This is the OPPOSITE convention from
+// dev.fonebrew.contracts.common rather than redeclaring it. This is the OPPOSITE convention from
 // this same work package's JSON Schema files, which duplicate IntegrityRef locally as a
 // $defs entry in every schema so each one validates standalone — the standalone-file
 // requirement is a JSON Schema authoring constraint (no cross-file $ref), not a Kotlin one.
@@ -55,9 +55,9 @@
 // same reason CommonContracts.kt's ConformanceTestClass and LoopPackageContracts.kt's
 // PackageFileClassification are: it maps 1:1 onto a JSON Schema `enum`.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
-import dev.aarso.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.IntegrityRef
 import java.time.Instant
 
 private val SEMVER_REGEX = Regex("^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$")
@@ -99,7 +99,7 @@ data class SignatureAssetRef(
  * this schema's adversarial/identity-digest-mutation-attempt fixture for the case this leaves
  * open); the field name "packageDigest" (not "packageContentDigest") matches §14's own literal
  * wording — see that same $comment for the naming-drift note against
- * [dev.aarso.contracts.loops.ReleaseIdentity]'s "packageContentDigest" field in
+ * [dev.fonebrew.contracts.loops.ReleaseIdentity]'s "packageContentDigest" field in
  * LoopPackageContracts.kt, the same underlying SHA-256 digest under a different sibling-document
  * spelling.
  *
@@ -243,7 +243,7 @@ data class LoopListing(
  * release-specific (LOOP_MARKETPLACE_CONTRACT.md §8: "declares: release identity (never a
  * listing or a loopId alone — reviews are release-specific, §4)... a review of 1.2.0 says
  * nothing about 1.3.0 unless the service explicitly carries it forward with that fact
- * visible."). Named distinctly from [dev.aarso.contracts.loops.ReleaseIdentity]
+ * visible."). Named distinctly from [dev.fonebrew.contracts.loops.ReleaseIdentity]
  * (LoopPackageContracts.kt, which carries "packageContentDigest") to avoid a same-package name
  * collision and because this type's field is literally "packageDigest" — see [LoopRelease]'s
  * KDoc for the naming-drift note.

@@ -24,18 +24,18 @@
 // for this domain, matching contracts/kotlin/AuthorityContracts.kt's precedent for a
 // data-shapes-only domain rather than a streaming-provider domain like ExecutionContracts.kt).
 // This file's small shared sub-shapes (AuthorityRung, ExecutionTargetType) are duplicated
-// locally rather than imported from dev.aarso.contracts.authority/execution — this repo's own
+// locally rather than imported from dev.fonebrew.contracts.authority/execution — this repo's own
 // convention, established at the JSON Schema layer (schemas/loops/loop-definition.v2.schema.json
 // duplicates the same two enums locally rather than cross-file $ref-ing authority/grant.schema
 // .json or execution/target.schema.json) and carried through here for the same reason: only
-// dev.aarso.contracts.common is a sanctioned cross-domain import for this work package.
+// dev.fonebrew.contracts.common is a sanctioned cross-domain import for this work package.
 //
 // COMPILATION STATUS: UNVERIFIED. kotlinc/Gradle are not available in this build environment —
 // this file has been written carefully (balanced braces, matched types, no typos attempted) but
 // has NOT been compiled. Do not report it as compiling; that is for the next session with
 // Gradle available to confirm. This file depends on contracts/kotlin/CommonContracts.kt (package
-// dev.aarso.contracts.common) being compiled in the same module/source set, and
-// contracts/kotlin/LoopAuthoringContracts.kt (same package as this file, dev.aarso.contracts
+// dev.fonebrew.contracts.common) being compiled in the same module/source set, and
+// contracts/kotlin/LoopAuthoringContracts.kt (same package as this file, dev.fonebrew.contracts
 // .loops) reaches back into several types declared here (AuthorityRung, ExecutionTargetType,
 // TerminalRunState, LicenseRef) via ordinary same-package visibility, no import needed.
 //
@@ -50,7 +50,7 @@
 // there is no constructor path to it. This is strictly stronger than LOOP-VERIFY-001's schema
 // operationalization, not merely a restatement of it.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
 import java.time.Instant
 

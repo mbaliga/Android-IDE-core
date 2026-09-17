@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/thread/thread-graph.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ThreadGraph is a forward pointer to THREAD_TOPOLOGY_PLAN.md WP9's 'pure ThreadGraph/ThreadGraphProjector (plain-snapshot inputs; extraction-ready)' — fixed here, WP0-first, per that plan's own 'contracts first' Definition of Ready, exactly as schemas/workspace/*.schema.json fixed shapes for WP-3's later implementation. Binding constraint 3 (Issue #2) applies in advance: ThreadGraphProjector reads Room stores, never dev.fonebrew.domain.mirror.AarsoEventLog — this schema's `nodes`/`edges` are a plain structural snapshot, carrying no drift/idiolect interpretation. 1.1.0 (2026-08-29 audit): added the DECISION node kind (a curation MessageBookmark(kind=DECISION), not just ThreadMarker) + DECISION_ANCHOR edge kind; the RUN_ROOT node kind (a loop-run's detached-subtree root, identified by the RunLog/GraphRunLog `loopRunId` tag already written into the tree — never a new store); node.outcome (DELEGATION's DelegationOutcomes.correlate verdict, already computed, previously dropped on the floor before the graph); node.confidence (an optional 0..1 per-message aggregate over InferenceEngine's per-token entropy, captured only at generation time — never backfilled for an older message that never captured it). 1.2.0 (graph-wave lane A): every edge gains `derivation` (EXTRACTED|INFERRED) + `because` — an explicit, honest adaptation of the Graphify codebase-knowledge-graph tool's own EXTRACTED-vs-INFERRED edge tagging (every edge there is tagged as either restating a fact explicit in the source, or a relationship the tool derived, and every edge carries its own explanation) to the thread graph, because that shape matches this constellation's own legibility thesis and Issue #2 boundary: recorded structure vs. derived structure, always labelled, never interpreted. `derivation`/`because` ship OPTIONAL (nullable, not added to either $def's `required` list) for the exact reason node.outcome/node.confidence did in 1.1.0 — a 1.0.x/1.1.x edge predates the field and MUST keep decoding, not be treated as malformed; a 1.2.0+ PRODUCER (ThreadGraphProjector, and any future analysis layer) is the one place that SHOULD always populate both, never the wire contract itself. The one shape rule this version DOES enforce structurally: `derivation` and `because` are a pair — an edge MUST carry both or neither (see `allOf` below) — because a `because` with no `derivation` (or vice versa) is a half-written provenance claim, not a legitimately-old edge. ThreadGraphProjector emits `derivation: EXTRACTED` + a truthful `because` on every edge it produces (it projects recorded facts only — it invents no INFERRED edge); the INFERRED value ships so a future analysis layer can emit derived edges honestly labelled as such, per binding constraint 3 (Issue #2) — structure, never interpretation. Also 1.2.0: the COMMIT node kind + COMMIT_ANCHOR edge kind (commit-anchor vocabulary) — schema only in 1.2.0; nothing minted or projected a COMMIT node until graph-wave lane D, which wired both ends: AgentRepoRunner.commit / RepoWorkLoop.run mint `run.commit.sha`/`run.commit.repo` insert-time metadata (dev.fonebrew.domain.ide.CommitAnchor) on a new node the moment an agent commit succeeds, and ThreadGraphProjector projects a COMMIT node + COMMIT_ANCHOR edge from it whenever that metadata is present — absent for every node minted before lane D, honestly, never fabricated. No wire-shape change and no version bump for lane D: 1.2.0/1.3.0 already fixed this shape in advance of a producer, per this corpus's own contracts-first discipline. 1.3.0 (graph-wave lane B): adds the HOT_PATH edge kind — the one edge kind `ThreadGraphProjector` never emits and `dev.fonebrew.domain.thread.ThreadGraphAnalytics` (the first real INFERRED-edge producer this corpus's own adversarial fixture anticipated) is the only current source of: a structural, purely-count-based link between two sibling continuations of a branch point the recorded tree shows was revisited (branched) more than once. Always `derivation: INFERRED` in practice (nothing in this schema forces that pairing structurally — kind and derivation are independent enums — but `ThreadGraphAnalytics`'s own contract, exercised by `fixtures/thread/adversarial/thread-graph-hot-path-extracted-derivation.adversarial.json`, never emits HOT_PATH any other way) with a `because` naming the shared branch point and its recorded continuation count only (e.g. \"shares a branch point (msg-42) recorded with 3 continuations\") — never a claim about why the user branched.",
+  "title": "ThreadGraph",
+  "description": "A snapshot of the conversation topology as a graph: messages, fork/spawn roots, markers, and delegations as nodes; replies/forks/spawns/lineage/anchors as edges. Carried as a ContractEnvelope<ThreadGraph> payload (FB-RAT-COM-011).",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAtUtc", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR (FB-RAT-COM-003)."
+    },
+    "generatedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this snapshot was projected (FB-RAT-COM-004). A ThreadGraph is a point-in-time projection, not a live subscription — a fresh one is produced on request (WP9's ThreadGraphProjector), never streamed."
+    },
+    "nodes": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/ThreadGraphNode" },
+      "description": "One entry per message, fork/spawn root, marker, or delegation this snapshot includes. Node ids MUST be unique within one ThreadGraph (not structurally enforced — JSON Schema 2020-12 has no cross-item uniqueness-by-subfield keyword without `$data`; a future ThreadGraphProjector test MUST assert it, matching this corpus's established pattern for the same class of gap, e.g. loop-fork-lineage.schema.json's identical caveat)."
+    },
+    "edges": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/ThreadGraphEdge" },
+      "description": "Directed relationships between two node ids in `nodes`. This schema does not structurally verify `from`/`to` resolve to an actual node in the same document — same class of gap as `nodes`' uniqueness caveat above."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip (FB-RAT-COM-003)."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "ThreadGraphNode": {
+      "type": "object",
+      "required": ["id", "kind", "rootId", "at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "The underlying object's own id (a MessageNode.id, ThreadMarker.id, or DelegationEvent.id) — a ThreadGraph node never mints a new identity, it references one that already exists (FB-RAT-COM-002)." },
+        "kind": {
+          "type": "string",
+          "enum": ["MESSAGE", "FORK_ROOT", "SPAWN_ROOT", "RUN_ROOT", "MARKER", "DECISION", "DELEGATION", "COMMIT"],
+          "description": "MESSAGE for an ordinary tree node; FORK_ROOT/SPAWN_ROOT for a conversation root that carries `lineage.kind` insert-time metadata (THREAD_TOPOLOGY_PLAN.md Data model); RUN_ROOT for a loop run's detached-subtree root (a tree root tagged with RunLog/GraphRunLog's `loopRunId` metadata — 1.1.0); MARKER for a ThreadMarker; DECISION for a curation MessageBookmark with kind=DECISION (1.1.0 — distinct from MARKER: a decision is a curation-domain fact, not a ThreadMarker row); DELEGATION for a DelegationEvent; COMMIT (1.2.0) for a git commit a message/run node's agent action minted — see `sha`/`repoRef` below. Schema-only through 1.2.0/1.3.0; graph-wave lane D landed the producer — ThreadGraphProjector now projects one from `run.commit.sha`/`run.commit.repo` insert-time metadata (dev.fonebrew.domain.ide.CommitAnchor), minted by AgentRepoRunner.commit / RepoWorkLoop.run on a successful agent commit."
+        },
+        "rootId": { "type": "string", "minLength": 1, "description": "The conversation root this node belongs to (for a FORK_ROOT/SPAWN_ROOT/RUN_ROOT node, its own id)." },
+        "parentId": { "type": ["string", "null"], "default": null, "description": "The node this one is directly attached to in the graph (a message's parent node id, a marker's or decision's anchor node id, a fork/spawn root's source node id). Null for a conversation root with no parent (including a RUN_ROOT — a loop run is a wholly new detached subtree, not forked/spawned from anywhere)." },
+        "at": { "type": "string", "format": "date-time", "description": "UTC instant of the underlying fact (message creation, marker placement, delegation creation) — FB-RAT-COM-004." },
+        "label": { "type": ["string", "null"], "default": null, "description": "Optional short display label (a chapter name, a delegation kind), for a renderer that wants one without a second lookup." },
+        "outcome": {
+          "oneOf": [{ "$ref": "#/$defs/DelegationOutcome" }, { "type": "null" }],
+          "default": null,
+          "description": "1.1.0. DELEGATION only: the DelegationEvent's current DelegationOutcomes.correlate verdict (PENDING/KEPT/REVERTED), carried onto the node so the graph itself shows it. Null for every other kind — never fabricated. Tracked descriptively only, per owner decision 2 / binding constraint 3."
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "default": null,
+          "description": "1.1.0. MESSAGE only, and only when captured at generation time: a 0..1 aggregate over this turn's per-token entropy (InferenceEngine.supportsLogprobs). Null when the engine reported no entropy (a cloud turn, the Echo engine) or the message predates this field — never backfilled, never guessed."
+        },
+        "sha": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null,
+          "description": "1.2.0. COMMIT only, required non-blank for that kind (see `allOf` below): the git commit's own sha this node records. This IS the node's stable identity fact (FB-RAT-COM-002) — `id` need not literally equal `sha` (a future minter may prefix/namespace it to keep node ids unique alongside other id spaces), but `sha` is always the raw, unprefixed commit hash. Null for every other kind — never fabricated."
+        },
+        "repoRef": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "1.2.0. COMMIT only, optional: a short human-readable label naming the repo/ref the commit belongs to (e.g. \"owner/repo@main\") — display convenience, not a stable-identity field (`sha` is). Null when not resolvable (e.g. no Git host is connected) or for every other kind."
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": { "required": ["kind"], "properties": { "kind": { "const": "COMMIT" } } },
+          "then": { "required": ["sha"], "properties": { "sha": { "type": "string", "minLength": 1 } } }
+        }
+      ]
+    },
+    "ThreadGraphEdge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["REPLY", "FORK", "SPAWN", "LINEAGE", "MARKER_ANCHOR", "DECISION_ANCHOR", "DELEGATION_ANCHOR", "COMMIT_ANCHOR", "HOT_PATH"],
+          "description": "REPLY: ordinary parent->child message edge. FORK/SPAWN: a conversation root's edge back to its source node (THREAD_TOPOLOGY_PLAN.md's ForkLineage-style provenance, TreeFork.copySubtree/SpawnBridge — WP2). LINEAGE: a broader lineage-source pointer (a LINEAGE_SRC marker's edge). MARKER_ANCHOR/DECISION_ANCHOR/DELEGATION_ANCHOR: a marker, decision, or delegation's edge to the message it anchors to (DECISION_ANCHOR added 1.1.0, alongside the DECISION node kind). COMMIT_ANCHOR (1.2.0): a message/run node's edge to the COMMIT node its agent action minted — `from` is the message/run node, `to` is the COMMIT node, deliberately the REVERSE direction of the three *_ANCHOR kinds above (those point FROM the annotation TO the message they describe; a commit is instead the forward, causal OUTCOME of the message/run's own action, so the edge points the other way). Schema-only through 1.2.0/1.3.0; graph-wave lane D landed the producer alongside COMMIT's own. HOT_PATH (1.3.0): a `dev.fonebrew.domain.thread.ThreadGraphAnalytics`-derived link between two sibling continuations of a branch point the recorded tree shows was revisited more than once — `from`/`to` order is a deterministic (sorted-id) pick between undirected siblings, not a causal direction claim. The only edge kind a real INFERRED-edge producer emits in this repo today."
+        },
+        "derivation": {
+          "oneOf": [{ "$ref": "#/$defs/EdgeDerivation" }, { "type": "null" }],
+          "default": null,
+          "description": "1.2.0, adapted from the Graphify codebase-knowledge-graph tool's own edge tagging (see this schema's top-level `$comment`): EXTRACTED when this edge restates a fact already recorded in the tree/Room stores (a reply's parent-child pointer, a fork/spawn's lineage metadata, a marker/decision/delegation/commit's own anchor field); INFERRED when a future analysis layer computed the relationship rather than reading it off an existing record. Optional/nullable — an edge from a 1.0.x/1.1.x snapshot predates this field and decodes with `derivation: null`, never rejected for lacking it. ThreadGraphProjector (this version) emits ONLY EXTRACTED; nothing in this repo emits INFERRED yet — the value ships so a future analysis layer can, always honestly labelled, never presented as a recorded fact (binding constraint 3 / Issue #2)."
+        },
+        "because": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null,
+          "description": "1.2.0: a short, human-readable, PURELY STRUCTURAL explanation of why this edge exists (e.g. \"parent-child reply recorded in the message tree\") — non-blank when present. MUST NEVER interpret the user's phrasing, tone, or intent (binding constraint 3 / Issue #2 — the same rule schemas/thread/thread-marker.schema.json's SYSTEM-sourced `note`/`label` are held to); see fixtures/thread/adversarial for a worked example of the line this crosses. Optional/nullable for the same backward-compatibility reason `derivation` is — see `allOf` below for the one shape rule enforced: `derivation` and `because` are always both present or both absent, never half-populated."
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": { "required": ["derivation"] },
+          "then": { "required": ["because"], "properties": { "because": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "if": { "required": ["because"] },
+          "then": { "required": ["derivation"], "properties": { "derivation": { "$ref": "#/$defs/EdgeDerivation" } } },
+          "$comment": "Together with the clause above, this makes derivation/because a true pair: present together or absent together, never one without the other."
+        }
+      ]
+    },
+    "DelegationOutcome": {
+      "type": "string",
+      "enum": ["PENDING", "KEPT", "REVERTED"],
+      "description": "Same three-value set as schemas/thread/thread-event.schema.json's own DelegationOutcome def (duplicated here, not $ref'd across files, matching this corpus's existing per-file $defs convention)."
+    },
+    "EdgeDerivation": {
+      "type": "string",
+      "enum": ["EXTRACTED", "INFERRED"],
+      "description": "1.2.0. EXTRACTED: this edge restates a fact already recorded in the tree/Room stores. INFERRED: a future analysis layer derived this relationship rather than reading it off an existing record. Adapted from the Graphify codebase-knowledge-graph tool's own EXTRACTED/INFERRED edge tagging (this schema's top-level `$comment`) — never interpretation, always a labelled provenance fact (binding constraint 3 / Issue #2)."
+    }
+  }
+}

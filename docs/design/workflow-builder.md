@@ -30,7 +30,7 @@ Git host ("discard the shell"). Built:
   call activity, sub-process, exclusive/parallel/inclusive gateways — the owner's
   Bricks set), `BpmnEdge(id, source, target, name, condition)`.
 - `domain/bpmn/BpmnArchive.kt` — write/read **BPMN 2.0 XML** (dependency-light:
-  hand-built XML out, `javax.xml` DOM in). Aarso-specific data (assigned **model**,
+  hand-built XML out, `javax.xml` DOM in). Fonebrew-specific data (assigned **model**,
   council **role**, **watched**-cloud, cost **budget**, **macro** marker) rides in
   a single `<aarso:meta …/>` **extension element** per node, so the file stays
   valid-standard. Node positions ride in **BPMN-DI** (`dc:Bounds`), so the canvas

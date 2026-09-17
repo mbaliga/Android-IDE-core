@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/project.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/project.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Project per FB-RAT-WS-001 (Workspace Kernel is authoritative for projects). Typically carried as the `payload` of a ContractEnvelope<Project> (see schemas/common/envelope.schema.json); `projectId` below is this object's own FB-RAT-COM-002 stable ID. `resourceUri`'s ResourceUri shape ($defs below) mirrors resource-uri.schema.json — duplicated locally rather than cross-file $ref'd, same standalone-file tradeoff COMMON_CONVENTIONS.md documents for IntegrityRef; the two copies MUST be kept in sync by hand.",
   "title": "Project",
   "type": "object",

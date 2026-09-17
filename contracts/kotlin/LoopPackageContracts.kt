@@ -26,11 +26,11 @@
 // environment — this file has been written carefully (balanced braces, matched types, no
 // typos attempted) but has NOT been compiled. Do not report it as compiling; that is for
 // the next session with Gradle available to confirm. This file depends on
-// contracts/kotlin/CommonContracts.kt (package dev.aarso.contracts.common) being compiled
+// contracts/kotlin/CommonContracts.kt (package dev.fonebrew.contracts.common) being compiled
 // in the same module/source set, for IntegrityRef and ProducerRef — reused as-is rather
 // than redefined, per the WP-1L task brief's "first-party import, not a third-party
 // dependency" allowance (matches ExecutionContracts.kt's own precedent of importing
-// ArtifactRef/CapabilityManifest/ProducerRef from dev.aarso.contracts.common). Note this is
+// ArtifactRef/CapabilityManifest/ProducerRef from dev.fonebrew.contracts.common). Note this is
 // the OPPOSITE convention from this same work package's JSON Schema files, which duplicate
 // IntegrityRef locally as a $defs entry in every schema so each one validates standalone —
 // the standalone-file requirement is a JSON Schema authoring constraint (no cross-file
@@ -51,10 +51,10 @@
 // own init block (exactly 10 entries, position N's stepNumber == N+1), not by a
 // sealed-interface transition graph.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
-import dev.aarso.contracts.common.IntegrityRef
-import dev.aarso.contracts.common.ProducerRef
+import dev.fonebrew.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.ProducerRef
 import java.time.Instant
 
 private val SEMVER_REGEX = Regex("^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$")
@@ -226,7 +226,7 @@ enum class TransferChannel { FILE, SHARE_SHEET, HTTPS_URL, QR, GIT }
  * §21): "Transfer moves inert bytes. It does not grant authority, resolve secrets, or start
  * execution... Every transfer is represented by a user-initiated envelope containing expected
  * media type and digest." Typically carried as the `payload` of a
- * `ContractEnvelope<TransferEnvelope>` (dev.aarso.contracts.common), inheriting
+ * `ContractEnvelope<TransferEnvelope>` (dev.fonebrew.contracts.common), inheriting
  * objectId/createdAtUtc/producer from that outer envelope.
  *
  * @param initiatedByUser MUST-level invariant (FB-RAT-IMP-002): defaults to, and is validated
@@ -429,7 +429,7 @@ data class BuildStepRecord(
 }
 
 // ValidationFinding and its severity enum (FindingSeverity) are declared once, in
-// LoopAuthoringContracts.kt, and reused here — both files share the dev.aarso.contracts.loops
+// LoopAuthoringContracts.kt, and reused here — both files share the dev.fonebrew.contracts.loops
 // package. A real Gradle compile of this module (WP-2) caught a duplicate declaration here
 // (identical shape minus a `remediation` field, plus a redundant severity enum with the same
 // three values as FindingSeverity) that no earlier structural/lexical check could see, since

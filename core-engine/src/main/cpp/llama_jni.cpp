@@ -34,7 +34,7 @@ namespace {
 std::once_flag g_backend_once;
 void ensure_backend() { std::call_once(g_backend_once, [] { llama_backend_init(); }); }
 
-struct AarsoCtx {
+struct FonebrewCtx {
     llama_model* model = nullptr;
     llama_context* ctx = nullptr;
     std::atomic<bool> stop{false};
@@ -82,7 +82,7 @@ size_t utf8_complete_prefix(const std::string& s) {
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_dev_aarso_inference_LlamaCppEngine_nativeLoadModel(
+Java_dev_fonebrew_inference_LlamaCppEngine_nativeLoadModel(
         JNIEnv* env, jobject, jstring modelPath, jint contextSize) {
     ensure_backend();
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
@@ -113,14 +113,14 @@ Java_dev_aarso_inference_LlamaCppEngine_nativeLoadModel(
         return 0;
     }
 
-    auto* h = new AarsoCtx{model, ctx};
+    auto* h = new FonebrewCtx{model, ctx};
     LOGI("model loaded, n_ctx=%u", cp.n_ctx);
     return reinterpret_cast<jlong>(h);
 }
 
 JNIEXPORT void JNICALL
-Java_dev_aarso_inference_LlamaCppEngine_nativeFree(JNIEnv*, jobject, jlong handle) {
-    auto* h = reinterpret_cast<AarsoCtx*>(handle);
+Java_dev_fonebrew_inference_LlamaCppEngine_nativeFree(JNIEnv*, jobject, jlong handle) {
+    auto* h = reinterpret_cast<FonebrewCtx*>(handle);
     if (h == nullptr) return;
     if (h->ctx) llama_free(h->ctx);
     if (h->model) llama_model_free(h->model);
@@ -128,9 +128,9 @@ Java_dev_aarso_inference_LlamaCppEngine_nativeFree(JNIEnv*, jobject, jlong handl
 }
 
 JNIEXPORT jint JNICALL
-Java_dev_aarso_inference_LlamaCppEngine_nativeCountTokens(
+Java_dev_fonebrew_inference_LlamaCppEngine_nativeCountTokens(
         JNIEnv* env, jobject, jlong handle, jbyteArray utf8) {
-    auto* h = reinterpret_cast<AarsoCtx*>(handle);
+    auto* h = reinterpret_cast<FonebrewCtx*>(handle);
     if (h == nullptr) return 0;
     const llama_vocab* vocab = llama_model_get_vocab(h->model);
     // Text crosses as real UTF-8 bytes: jstring would arrive as Modified UTF-8
@@ -144,11 +144,11 @@ Java_dev_aarso_inference_LlamaCppEngine_nativeCountTokens(
 }
 
 JNIEXPORT void JNICALL
-Java_dev_aarso_inference_LlamaCppEngine_nativeGenerate(
+Java_dev_fonebrew_inference_LlamaCppEngine_nativeGenerate(
         JNIEnv* env, jobject, jlong handle, jobjectArray roles, jobjectArray contents,
         jfloatArray samplingArgs, jobject sink,
         jstring sessionLoadPath, jstring sessionSavePath) {
-    auto* h = reinterpret_cast<AarsoCtx*>(handle);
+    auto* h = reinterpret_cast<FonebrewCtx*>(handle);
 
     jclass sinkClass = env->GetObjectClass(sink);
     // Token text crosses as a byte[] of real UTF-8: NewStringUTF aborts the whole
@@ -376,8 +376,8 @@ Java_dev_aarso_inference_LlamaCppEngine_nativeGenerate(
 }
 
 JNIEXPORT void JNICALL
-Java_dev_aarso_inference_LlamaCppEngine_nativeRequestStop(JNIEnv*, jobject, jlong handle) {
-    auto* h = reinterpret_cast<AarsoCtx*>(handle);
+Java_dev_fonebrew_inference_LlamaCppEngine_nativeRequestStop(JNIEnv*, jobject, jlong handle) {
+    auto* h = reinterpret_cast<FonebrewCtx*>(handle);
     if (h) h->stop.store(true);
 }
 

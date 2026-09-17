@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/common/envelope.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/common/envelope.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ContractEnvelope<T> per FB-RAT-COM-011 (common envelope shared concept). This document IS major version 1 of the ContractEnvelope contract; the schemaVersion pattern below pins to '1.x.x' on purpose so an envelope declaring an unsupported major (e.g. '2.0.0') is a structural validation failure, operationalizing FB-RAT-COM-003's 'readers reject unknown MAJOR' rule rather than leaving it as unchecked prose.",
   "title": "ContractEnvelope",
   "description": "Generic wrapper every serialized contract in the constellation carries its payload in (FB-RAT-COM-011). schemaVersion+producerVersion per FB-RAT-COM-003; objectId per FB-RAT-COM-002; createdAtUtc/sourceTimezone/sequence per FB-RAT-COM-004; integrity per FB-RAT-COM-005; idempotencyKey per FB-RAT-COM-006. `unknownFields` exists so a decoder that meets a MINOR-newer envelope than it knows about can still round-trip the fields it does not understand instead of dropping them (FB-RAT-COM-003).",

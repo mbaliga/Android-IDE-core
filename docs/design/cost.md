@@ -65,8 +65,50 @@ is standard, but the parameters are the user's.
 - **LLM usage.** Token I/O (and, later, provider-reported usage) feeds `adviceCost`, so
   every recommendation can carry "and this cost N tokens / ₹X to produce."
 
-## UI (open — see `open-ux-decisions.md`, item G)
+## UI (RESOLVED — owner, 2026-09-06 — see `open-ux-decisions.md`, item G)
 
 A wireframe **Cost facet** in the Develop room lets you enter a decision and read the
 forecast. Whether Cost should also attach inline to a chat turn ("this advice cost X;
-acting on it risks Y") is the open call.
+acting on it risks Y") **was** the open call — the owner ruled **G1-MODIFIED**: yes, but
+only behind an intentional, **default-OFF** Settings toggle, not unconditionally on
+(verbatim: *"Cost always visible has to be a toggle turned on intentionally as it takes up
+screen space and will make the interface look more cluttered"*).
+
+**2026-09-01 — accounting pipeline, last mile landed.** The Provider-pricing settings form
+(per provider/model input+output rates + a fallback rate + a display-currency preference, all
+over the already-wired `PricingStore`) now has UI, so a price shown anywhere is either
+something the user actually typed or clearly labelled a placeholder — never invented, never
+silently one or the other. `showCost` is on at all three mounted ledger-view call sites (the
+chat Instruments panel, both Me·Myself·I usage cards), and a loop run's cloud steps price
+through the same `PricingBook` path a chat turn uses (`GraphRunLedger`). **2026-09-01 correction:**
+the sentence this note originally carried here overclaimed — it said this closed the
+`estCostMinor = 0` hole "that used to swallow every loop's real spend." It didn't: a node with no
+per-node model override (`LoopRoom`'s default authoring state) still executed on the run's
+fallback model but priced through a resolver that returned `null` for it, so that step was
+recorded as `UsagePricing.ON_DEVICE` regardless of real spend. That specific gap is now closed —
+the resolver wired at `LoopRoom.kt` mirrors the same `?: fallback` resolution the generator itself
+uses, pinned by `GraphRunLedgerTest`. The **honest remainder**: `LoopRoom`'s real run still does
+not wire a `tokenCounter` into `GraphRunner` (see `docs/HANDOFF-CURRENT.md`'s P3 honesty note), so
+every step today reports `estimated = true` no matter which model ran it — a live loop run's
+ledger rows are still all `Tier.ON_DEVICE` / `estCostMinor = 0` in practice, until that counter
+lands. This wave fixed the pricing *math* (`GraphRunLedger` + its resolver), not that remaining
+plumbing gap. **Item G was still open at the time** — that wave was the facet + ledger-view
+accounting getting real numbers, not a decision on whether a chat turn should carry its own
+inline cost line.
+
+**2026-09-06 — item G resolved (G1-MODIFIED), Lane G landed.** The owner ruled: an inline
+per-turn cost line ships, but only behind an intentional, **default-OFF** Settings toggle
+("Per-turn cost in chat," Settings → Text, next to the Provider-pricing form) — never
+unconditionally visible, per the owner's own screen-space/clutter concern quoted above. With the
+toggle on, a **CLOUD** turn carrying recorded `costMinor`/`tokensIn`/`tokensOut` metadata
+(`ChatViewModel.kt` around :963-980) shows a small, quiet footnote line under its bubble — amount
+via the existing display-currency preference, token counts alongside, label/typography only (no
+hue-only semantics; the owner is red-green colorblind). On-device turns never show one (they cost
+nothing), and a turn with no recorded metadata stays silent too — this still never estimates a
+number at render time. The toggle-x-provenance-x-metadata decision lives in one pure, exhaustively
+JVM-tested presenter, `dev.fonebrew.ui.state.CostLinePresenter` (`resolve` + its `TurnProvenance`/
+`TurnCostMetadata` types) — `ChatScreen.kt`'s `MessageBubble`/`MessageTurn` composables just render
+whatever it returns. The Cost facet and every ledger view (chat Instruments, both Me·Myself·I
+usage cards) are untouched by this toggle; only the inline chat footnote is gated. G3 (decisions
+as first-class tree nodes) was not adopted — out of scope for this ruling. See
+`open-ux-decisions.md` item G for the ruling's own text.

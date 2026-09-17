@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/common/error.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/common/error.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ErrorEnvelope per FB-RAT-COM-007 (stable code, severity, retryability, side-effect state, technical detail, recovery action) and FB-RAT-COM-009 (accessibility semantics — `userMessage` is the textual-semantics carrier so an error state is legible without color/icon/haptic). Typically carried as the `payload` of a ContractEnvelope<ErrorEnvelope> (see envelope.schema.json) — it does not repeat schemaVersion/objectId/createdAtUtc/producer, which it inherits from that outer envelope.",
   "title": "ErrorEnvelope",
   "type": "object",

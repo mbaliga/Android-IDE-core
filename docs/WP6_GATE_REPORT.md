@@ -24,7 +24,7 @@ WP-2 — `./gradlew :core-engine:testFullDebugUnitTest`.
   execution domain's cooperative-cancellation posture without importing that domain's
   request/handle machinery), `ResultProvenance`, `QueryGrammarRef` (a citation to the real,
   already-tested grammar at `domain/search/query/*` — not redefined), and
-  `SemanticUnavailableReason`. Does **not** redefine an embedder interface — `dev.aarso.embedding.
+  `SemanticUnavailableReason`. Does **not** redefine an embedder interface — `dev.fonebrew.embedding.
   Embedder` already exists and already satisfies the brief's "embedder provider interface"
   requirement (checked before writing anything, to avoid a duplicate competing interface).
 - **`domain/search/WorkspaceSearchProjector.kt`** — maps a WP-3 `BufferSnapshotEntry` (+ its
@@ -92,7 +92,7 @@ fabricated empty-but-claimed-successful result set — the difference matters: a
 `Unavailable` cannot be confused for either. A real ASOM-routed implementation
 (`CAPABILITY_AUTHORITY_MODEL.md` §10.2's `127.0.0.1:11435` local routing) is a follow-up, not
 invented speculatively here — there is no real embedding index anywhere in this codebase yet
-(`dev.aarso.embedding.PlaceholderEmbedder` is itself still a placeholder, per its own file).
+(`dev.fonebrew.embedding.PlaceholderEmbedder` is itself still a placeholder, per its own file).
 
 ## 5. What's still genuinely unverified / honestly out of scope this pass
 

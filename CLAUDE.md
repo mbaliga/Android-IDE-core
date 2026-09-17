@@ -1,14 +1,14 @@
-# CLAUDE.md — Aarso / Workbench build handoff
+# CLAUDE.md — Fonebrew (formerly "Aarso/Workbench") build handoff
 
-**Aarso** (*mirror*; package `dev.aarso`) is a local-first Android app for working with multiple
+**Aarso** (*mirror*; package `dev.fonebrew`) is a local-first Android app for working with multiple
 AI models. Its design thesis is **legibility + cognitive sovereignty** — a *tool-as-argument*
 artifact, not a generic chat client. Where a fork exists, prefer the option that makes
 routing/influence visible and keeps the user in the loop, even at some cost to convenience.
 
 > **Read `docs/STATE.md` first.** It is the living index of *what's done / pending / the end
 > goal* across the whole constellation. This file is the **build rules + how-to-continue**;
-> `docs/STATE.md` and  are the current state + business. When they
-> disagree, STATE.md is newer.
+> `docs/STATE.md` is the current engineering state. When they disagree, STATE.md is newer.
+> Business/monetization planning is tracked privately, not in this repo.
 
 ## North star + naming split
 The product is a **post-desktop, touch-native computing environment** that makes the phone a
@@ -16,11 +16,16 @@ The product is a **post-desktop, touch-native computing environment** that makes
 effortless. The agent is what lets you do real computing work without desktop fluency.
 
 Two names, two scopes (do not conflate):
-- **Workbench** — *placeholder* for the **host app** (the computing environment). Not final; the
-  naming brief is owner-decided. Everything that isn't the lens is Workbench.
+- **Fonebrew** — the **host app** (the computing environment) — **owner-decided, final** (was the
+  placeholder "Workbench"; that name is retired, don't reintroduce it). Everything that isn't the
+  lens is Fonebrew. The launcher label (`core-engine/src/main/res/values/strings.xml` /
+  `src/full/…`) reads "Fonebrew" — **do not revert it to "Aarso."**
 - **Aarso** (*mirror*) — the **within-axis self-reflection lens** only. Bounded `domain/mirror/`
   seam, ships **inert**, carries **no §5b/§5c metric logic** — ⛔ blocked on Issue #2 (rule 4).
-  Package rename (`dev.aarso` → host name) is decoupled, deferred to a late "Sprint R".
+  Package name (`dev.fonebrew`), class names (`FonebrewApp`, `Theme.Aarso`), and repo names are
+  **unchanged for now** — the rename is decoupled from the app-facing name above, deferred to a
+  late "Sprint R." Don't let that stale internal naming pull the *user-facing* label back to
+  "Aarso"; the two are independent axes.
 
 ## Binding rules (owner-set, do not relax)
 1. **No telemetry, analytics, or phoning home. Ever.** Zero such dependencies.
@@ -38,7 +43,7 @@ Two names, two scopes (do not conflate):
    behaviour works — the build env has no device/emulator; the owner tests on the phone.
 
 ## Target device & conventions
-- Naming register: follow the codebase (e.g. *Aarso*, *Hyle*).
+- Naming register: follow the codebase (e.g. *Fonebrew*, *Hyle*).
 - Target: **a high-end arm64-v8a Android phone** (large unified RAM, recent Android). `minSdk 31`,
   `targetSdk/compileSdk 36`, single ABI `arm64-v8a`.
 
@@ -57,15 +62,36 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
     inference/              InferenceEngine; LlamaCppEngine (JNI), Echo (dev), EngineGenerator,
                             cloud/ (Anthropic, OpenAI-compat, Gemini — SSE), image/
     service/                GenerationService (FGS), OverlayService, ScreenCapture (+OCR), Voice
-    ui/                     AppRoot + SpatialRoot (room model, NOT bottom nav); rooms/, loops/,
-                            develop/, codelens/, ide/ (ReviewSheet), remote/, theme/, aeon/
+    ui/                     AppRoot branches on the Regular/asoc interaction-mode choice
+                            (docs/design/interaction-modes.md, owner ruling 2026-09-15):
+                            spatial/SpatialRoot (asoc — room model, edge drags + pinch, NOT
+                            bottom nav) vs regular/RegularShell (Regular — bottom-tab Scaffold
+                            over the same room composables); mode/ (shared HyleModePicker copy);
+                            rooms/, loops/, develop/, codelens/, ide/ (ReviewSheet), remote/, theme/
+                            (theme/ is now app-side theming ONLY — ThemeMode, FonebrewTheme,
+                            ThemePicker, Texture. The palette + every Hyle component moved
+                            to the :hyle library; see below.)
     security/               KeystoreSecret (AES-GCM key encryption)
   src/main/cpp/             llama_jni.cpp + CMake + llama.cpp submodule → libaarso_llama.so
   src/test/                 400+ JVM unit tests (domain/ + data-layer) — keep green
 sdengine/                   stable-diffusion.cpp submodule + sd_jni.cpp → libaarso_sd.so
 hyle-design-system/         git submodule (mbaliga/Hyle-Design-System) — the SINGLE source of
                             dev.aarso:hyle:0.2.0, composited via includeBuild (settings.gradle.kts).
-                            No vendored :hyle module here anymore.
+                            No vendored :hyle module here anymore. Hyle ships COMPONENTS, not just
+                            tokens: dev.aarso.hyle.cells (HyleField, HyleButton, HyleCard,
+                            HyleTabBar, HyleChip, HyleWellToggle, …), dev.aarso.hyle.theme
+                            (HyleColors/LocalHyleColors/accent ramp), and dev.aarso.hyle.component
+                            (the desktop-class kit). Do not re-add app-local copies — 0.1.0
+                            shipped from three divergent copies; single-sourcing exists to
+                            prevent that. Change components in the submodule.
+                            **Hyle now ships COMPONENTS, not just tokens** — it is a real
+                            dependency, not a mirror. `dev.aarso.hyle.cells` (HyleField,
+                            HyleButton, HyleCard, HyleTabBar, HyleChip, HyleWellToggle, …) and
+                            `dev.aarso.hyle.theme` (HyleColors, LocalHyleColors, the accent
+                            ramp) live there and NOWHERE else. Do not re-add an app-local copy:
+                            0.1.0 shipped from three divergent copies, which is what
+                            single-sourcing exists to prevent. Change a component in the
+                            submodule, not in app/.
 hyle-probe/                 on-device render harness app for Hyle (depends on dev.aarso:hyle)
 ```
 
@@ -86,10 +112,28 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
 ## Building
 - JDK 17 auto-provisioned (foojay resolver). `git submodule update --init --recursive`.
 - Android SDK/NDK: `scripts/setup-android-sdk.sh` (NDK `28.2.13676358`, CMake `3.31.6`; r28 emits
-  16 KB-page-aligned libs).
+  16 KB-page-aligned libs). Note the script's own `NDK=` pin is the *older* r27 — pass the r28
+  version above to `sdkmanager` directly, since both native modules declare `ndkVersion` r28.
+- **Native platform level is pinned explicitly (do not remove):** `:core-engine` and `:sdengine`
+  each pass `-DANDROID_PLATFORM=android-31` via `defaultConfig.externalNativeBuild.cmake.arguments`.
+  Left implicit, AGP configures CMake at **android-22** (`--target=aarch64-none-linux-android22`)
+  despite `minSdk = 31`, and bionic guards `POSIX_MADV_*` behind `__ANDROID_API__ >= 23` — so
+  `llama.cpp/src/llama-mmap.cpp` fails with *"use of undeclared identifier
+  'POSIX_MADV_WILLNEED'"*. This is a build-config bug, not an upstream llama.cpp one.
+- **Run gates unpiped.** `./gradlew … | tail` reports *tail's* exit code, so a failed build looks
+  green. Redirect to a file and check `$?` (`./gradlew … > log 2>&1; echo $?`).
+- **Set a UTF-8 locale before the JVM gate** (`export LANG=C.UTF-8 LC_ALL=C.UTF-8`). Under the
+  container's default POSIX locale, Kotlin can't write test classes whose names contain non-ASCII
+  (several tests use an em-dash), failing with `InvalidPathException: Malformed input`.
 - Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.aarso.full`, default) /
   **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.aarso`).
-- Gate: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest` (keep green). Hyle's own
+- Gate: `./gradlew :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest
+  :core-engine:checkLicense` (keep green — this is exactly what CI runs, `.github/workflows/
+  ci.yml:91`; not the pre-de-fork `:app:test*` tasks this line used to name — test + license
+  tasks moved from `:app` to `:core-engine` in the de-fork, `:app` is now a thin shell with no
+  test sources of its own to scan). For the current test/failure counts, don't trust a number
+  frozen in this file — it goes stale the moment the suite grows; **`HANDOFF_STATE.md` is the
+  live baseline** the next session should reproduce and keep green. Hyle's own
   `:hyle:test` now runs in the Hyle repo's CI; core consumes Hyle via the includeBuild'd submodule
   (`git submodule update --init --recursive` first, so the composite build resolves `dev.aarso:hyle`).
 - `./gradlew :app:assembleFullDebug` → sideload APK (slow native cross-compile).
@@ -109,15 +153,42 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   Compose **Foundation 1.8** (`BasicText`'s `TextAutoSize`). `composeBom = 2025.05.01` (Foundation
   1.8.2) satisfies it. Pinning an older BoM → runtime `NoSuchMethodError` on every markdown turn
   (this was the launch/send crash). Keep BoM ≥ 1.8 or downgrade the renderer in lockstep.
-- **APK delivery:** push the APK as `aarso-sd.apk` on the **orphan branch `apk-dist`** (`--force`).
+- **APK delivery:** push the APK as `fonebrew-sd.apk` on the **orphan branch `apk-dist`**
+  (`--force`).
 - **CI caveat:** the workflow runs the JVM gate only — the native assemble is `if: false` (it OOMs
   the runner), so **CI never launches the app**. A device-only launch/render crash passes CI. The
-  in-app **crash-recovery harness** exists precisely because of this. **Red `build-test` is a
-  GitHub-Actions billing/minutes block, not a code or 403 flake** (corrected 2026-06-30): every run
-  dies in 3–6s with no runner assigned (job never starts) — the signature of exhausted Actions
-  minutes / spending limit on a private repo. The gate itself is green (reproduced locally: 868
-  tests, 0 failures). Fix is account-level (top up minutes / raise the limit) or rely on public
-  repos (unlimited free Actions). "Re-run to clear" does nothing — see `docs/STATE.md` §9.
+  in-app **crash-recovery harness** exists precisely because of this. **Actions are WORKING again
+  (verified 2026-08-21):** `build-test` runs for real (~6.5 min) and passes — so treat red CI as a
+  real signal again, not noise. *(Historical note, kept so the symptom stays recognizable: from
+  ~2026-06-30 to 2026-08 every run died in 3–6s with no runner assigned — exhausted Actions
+  minutes / spending limit on the private repo, fixed at the account level, never by re-running.
+  If that 3–6s-death signature ever returns, it's billing again — see `docs/STATE.md` §9.)*
+  **Second infra false-negative (found + fixed 2026-08-27):** a red `build-test` whose log shows
+  the Gradle step itself passing (`BUILD SUCCESSFUL`, real test/license tasks all green) but the
+  job still fails afterward, at "Upload test reports" — `actions/upload-artifact@v4` erroring
+  `"Failed to CreateArtifact: Artifact storage quota has been hit."` — is the account-level
+  Actions *artifact storage* quota, not a code regression (distinct from the Actions-*minutes*
+  exhaustion above; same false-negative shape). That upload is diagnostic only (test reports for
+  debugging a failure), not part of the gate's pass/fail contract, so it now carries
+  `continue-on-error: true` in `.github/workflows/ci.yml`. If red CI ever shows a passing Gradle
+  step again, check the job log for this exact quota message before assuming a real regression —
+  and don't remove `continue-on-error` from that step to "clean it up." *(Recurred 2026-08-31 on
+  `native-assemble`'s APK upload — the ~130MB artifact exceeds remaining quota even when small
+  uploads fit. Same treatment: the upload is convenience-only, `apk-dist` is the real delivery
+  channel, so it carries `continue-on-error` behind a separate hard-failing path-exists guard.
+  Also fixed then: both native jobs' swapfile is now sized to real free disk — newer ubuntu-latest
+  images broke the old fixed `fallocate -l 12G` with ENOSPC at setup. The canary's actual signal
+  is healthy: the full native cross-compile went green in CI that day, ~14 min with swap.)*
+  *(Third infra class, found + fixed 2026-09-15: a red run that dies at the "Set up Android
+  SDK" step — before Gradle ever starts — with `Warning: Failed to find package 'tools'` and
+  sdkmanager exit 1 is `android-actions/setup-android@v3` requesting the legacy `tools`
+  package, which Google's repository no longer serves on newer runner images. Fixed by
+  bumping to `setup-android@v4` **with an explicit `packages: platform-tools` input — the
+  version bump alone is NOT enough: v4's DEFAULT packages input still requests the legacy
+  `tools` package and dies identically** (verified on run 34946532189); our own sdkmanager
+  step installs the pinned platforms/build-tools/NDK/CMake. Applied in ci.yml (both jobs),
+  release-play.yml, and Studio's ci.yml. If CI ever reds at SDK setup pre-Gradle again,
+  check for this signature before suspecting code.)*
 
 ## Environment honesty
 The container compiles everything but has **no device, emulator, board, or SSH host**. All
@@ -128,19 +199,20 @@ machine-verified parts. Never report on-device behaviour as confirmed.
 ---
 
 ## The constellation (multi-repo / multi-app)
-A family of cooperating apps, not a monolith. Dependency direction sinks toward the routing engine.
+A family of cooperating apps, not a monolith.
 
 | Component | What | Source | Status |
 |---|---|---|---|
-| **Aarso/Workbench** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
+| **Fonebrew** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
 | **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
-| **PM + authoring** | a companion project-management surface | not in this repo | repo pending owner; code in main, to carve out |
+| **PM + authoring** | a companion project-management surface | not in this repo | code lives elsewhere |
 | **Sound & haptics** | companion authoring app | **open** | not started |
+| **Routing engine** | on-device + cloud LLM router (any app) | not in this repo | not started here |
 
-Integration rule: the routing engine needs a **stable public API** from day one. See `docs/STATE.md`
-intelligence, never hold others' keys).
+Integration rule: the routing engine needs a **stable public API** from day one. Business/licensing
+decisions for these components are tracked privately, not in this repo.
 
-## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `aarso-sd.apk`)
+## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `fonebrew-sd.apk`)
 Everything below compiled + JVM-tested + assembled; **device behaviour is owner-verified.** Full
 detail in `docs/STATE.md`.
 
@@ -162,15 +234,16 @@ detail in `docs/STATE.md`.
   never bricks; used across the constellation, not just here — see that repo's README);
   **fixed the launch/send crash** (Compose BoM → Foundation 1.8). **Preview the recovery
   screen without a real crash:** Settings → Global → About, long-press the version line
-  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Aarso")`.
+  (debug builds only) — calls `CrashRecovery.previewIntent(context, "Fonebrew")`.
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
   (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
 - Versions this stage: v0.9.0 IA → v0.13.0 (current). See STATE.md §3 for the per-version list.
 
 **PLANNED / PENDING**
-- *Owner-blocked (need an owner action):* create the **PM/authoring**, **sound/haptics**,
-  **routing-engine** repos + grant access; then carve them out. (**Hyle is done** — its own repo
+- *Owner-blocked (need an owner action):* create the **sound/haptics** repo + grant access.
+  (**Hyle is done** — its own repo `mbaliga/Hyle-Design-System`, consumed via submodule +
+  includeBuild. PM/authoring and the routing engine are tracked outside this repo.)
 - *Engineering follow-ups:* Chat §B4 per-member **files** (needs file→context plumbing); **live
   per-step streaming in the graph Loop run** (`GraphRunner` progress callback); **video/3D**
   engines; **AI-assisted config** (parked); **drag-a-wire** Loop connect; **USB** on-device verify
@@ -179,11 +252,12 @@ detail in `docs/STATE.md`.
   (replace `PlaceholderEmbedder`); §5a base-vs-instruct diff; acceleration (Vulkan/NPU —
   benchmark, never assume); Google Play publication mechanics (AAB/signing/data-safety/screens).
 
-
-## Open owner decisions
-1. Create the new repos + grant access (PM / sound-haptics / routing engine). *(Hyle done — `mbaliga/Hyle-Design-System`.)*
-5. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, Devices/SSH
+## Open owner decisions (engineering-scoped)
+1. Create the sound/haptics repo + grant access.
+2. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, Devices/SSH
    flows, USB flash with a real board.
+
+Business/monetization decisions are tracked privately, not in this repo.
 
 ## How to continue (for the next chat)
 1. Read **`docs/STATE.md`** (the living index), then this file's binding rules + building.
@@ -191,5 +265,14 @@ detail in `docs/STATE.md`.
    (`agentic-ide.md`, `information-architecture.md`, `workflow-builder.md`); `docs/handoff/
    hyle-extraction.md` — the split plan, now **executed** (Hyle lives in `mbaliga/Hyle-Design-System`;
    kept as historical record).
-3. Keep the gate green, ship small legible PRs to `main`, refresh `aarso-sd.apk` on `apk-dist`,
-   and be honest that on-device behaviour is owner-verified.
+3. Keep the gate green, ship small legible PRs to `main`, refresh `fonebrew-sd.apk` on
+   `apk-dist`, and be honest that on-device behaviour is owner-verified.
+
+## Reunification note (2026-08-21)
+The launch line (`fix/models-carousel-and-terminal`, 45 commits: vision input W1, web search W2,
+PTY terminal with @mentions/sigils/! escape, models carousel, onboarding wizard incl. opt-in
+AiCore/Gemini Nano, launch branding + `brand_logo` adaptive icon, Watch feature REMOVED — owner
+call, moving to Studio) was merged back into the development line (thread topology WP0–11, 3D
+objects, desktop-class kit, dev.fonebrew rename). Version spine continues the launch reset:
+0.2.0, but versionCode stays monotonic past the interim dev sideloads (18+). The launch line's
+styling and copy win where the two conflicted; the de-fork (:core-engine) architecture stands.

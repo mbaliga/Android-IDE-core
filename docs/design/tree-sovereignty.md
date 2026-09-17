@@ -4,15 +4,15 @@
 > round-trippable `TreeArchive` exist (`domain/sync/TreeArchive.kt`, JVM-tested);
 > the Git-host transport and UI are next. This is the purest expression of the
 > "Sovereignty of Attention" thesis: the user's whole history is portable plain
-> text in a repo they own — Aarso becomes the *glass*, not the *vault*.
+> text in a repo they own — Fonebrew becomes the *glass*, not the *vault*.
 
 ## The idea
 
-Aarso's message tree (`domain/MessageNode.kt`) is append-only, multi-root, with
+Fonebrew's message tree (`domain/MessageNode.kt`) is append-only, multi-root, with
 branch/restore as git-like operations — it is *already a git DAG*. Today it lives
 in private SQLite. This feature **mirrors it into a Git repository the user owns**
 (GitHub, Gitea, self-hosted) as diff-friendly files, so the user can **move freely
-across platforms, devices, models and tools — and discard the shell of Aarso
+across platforms, devices, models and tools — and discard the shell of Fonebrew
 entirely without losing anything.**
 
 ## How it works
@@ -63,7 +63,7 @@ a **watched object**.
 If the format is open and stable, your entire intellectual history — every prompt,
 every model's reply, every fork, with model attribution and timestamps — is
 readable by *any* tool: an editor, a git client, a script, a different client.
-You can leave Aarso and lose nothing. Move the repo between devices/installs →
+You can leave Fonebrew and lose nothing. Move the repo between devices/installs →
 identical history. Resume a thread on a different model on a different device. It
 makes the user's data agency total and *verifiable*.
 
@@ -103,9 +103,9 @@ remote's privacy properties are surfaced unmissably in the UI.
 Orthogonal but both touch Git, and they **share the Git-host connection layer**
 (host abstraction, PAT-in-Keystore, identity — build once, serve both):
 
-- **Tree-sovereignty**: Aarso's *own* data → your repo (portability of your
+- **Tree-sovereignty**: Fonebrew's *own* data → your repo (portability of your
   conversations).
-- **Coding-assistant** (`coding-assistant.md`): Aarso operates on your *other*
+- **Coding-assistant** (`coding-assistant.md`): Fonebrew operates on your *other*
   repos (code) as a tool.
 
 Both reinforce sovereignty — data ownership and tool freedom.

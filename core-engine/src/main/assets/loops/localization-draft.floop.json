@@ -1,0 +1,108 @@
+{
+  "packageFormatVersion": "1.0.0",
+  "definitionBpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:aarso=\"https://aarso.dev/bpmn\" id=\"defs_localization-draft\" targetNamespace=\"https://aarso.dev/loops\">\n  <bpmn:process id=\"localization-draft\" name=\"Localization draft\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"start\" name=\"Start\">\n      <bpmn:outgoing>e0<\/bpmn:outgoing>\n    <\/bpmn:startEvent>\n    <bpmn:task id=\"translate\" name=\"Translate\">\n      <bpmn:extensionElements><aarso:meta role=\"translator\" systemPrompt=\"You are a professional localization translator. Translate the field &quot;${fieldKey}&quot; into ${locale}, preserving any placeholders, tags, or formatting exactly as they appear in the source. Return only the translated text \u2014 no commentary, no surrounding quotes, no explanation.\n\nSource text:\n${sourceText}\"/><\/bpmn:extensionElements>\n      <bpmn:incoming>e0<\/bpmn:incoming>\n      <bpmn:outgoing>e1<\/bpmn:outgoing>\n    <\/bpmn:task>\n    <bpmn:endEvent id=\"end\" name=\"End\">\n      <bpmn:incoming>e1<\/bpmn:incoming>\n    <\/bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"e0\" sourceRef=\"start\" targetRef=\"translate\"/>\n    <bpmn:sequenceFlow id=\"e1\" sourceRef=\"translate\" targetRef=\"end\"/>\n  <\/bpmn:process>\n  <bpmndi:BPMNDiagram id=\"diagram_localization-draft\">\n    <bpmndi:BPMNPlane id=\"plane_localization-draft\" bpmnElement=\"localization-draft\">\n      <bpmndi:BPMNShape id=\"shape_start\" bpmnElement=\"start\">\n        <dc:Bounds x=\"0.0\" y=\"0.0\" width=\"130.0\" height=\"64.0\"/>\n      <\/bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"shape_translate\" bpmnElement=\"translate\">\n        <dc:Bounds x=\"160.0\" y=\"0.0\" width=\"130.0\" height=\"64.0\"/>\n      <\/bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"shape_end\" bpmnElement=\"end\">\n        <dc:Bounds x=\"320.0\" y=\"0.0\" width=\"130.0\" height=\"64.0\"/>\n      <\/bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"edge_e0\" bpmnElement=\"e0\"/>\n      <bpmndi:BPMNEdge id=\"edge_e1\" bpmnElement=\"e1\"/>\n    <\/bpmndi:BPMNPlane>\n  <\/bpmndi:BPMNDiagram>\n<\/bpmn:definitions>\n",
+  "manifest": {
+    "packageContentDigest": {
+      "byteLength": 240,
+      "digestHex": "691dca0ec1587878a89101ba6a93b98795348d2b5a37e2e05ae2692a971fd1f1",
+      "algorithm": "SHA-256"
+    },
+    "license": "Apache-2.0",
+    "schemaVersion": "1.0.0",
+    "provenance": {
+      "sourceDraftRevision": null,
+      "authorName": "Fonebrew",
+      "createdAtUtc": "2026-09-01T07:04:39.334164966Z",
+      "producer": {
+        "instanceId": null,
+        "name": "Fonebrew",
+        "version": "0.2.7"
+      }
+    },
+    "compatibilityDeclaration": {"engineVersionRange": ">=1.0.0 <2.0.0"},
+    "capabilityRequests": [],
+    "packageInventory": [
+      {
+        "path": "definition.json",
+        "sha256": "07a1a53a96d75f666d78d7bbd651efa6a5e6b0c8345cffe4b47c918f95109660",
+        "byteLength": 957,
+        "classification": "semanticFile"
+      },
+      {
+        "path": "definition.bpmn",
+        "sha256": "25ccc30d88549afcadee1c2d1512382a1dceec7ebd220b7846eb54f847a0391a",
+        "byteLength": 2239,
+        "classification": "derivedFile"
+      },
+      {
+        "path": "docs/README.md",
+        "sha256": "ffd1b49c0ffd43d9fdeea6c97369bc09512b8b4e0bb9ab489cc1e9a3ca1650b3",
+        "byteLength": 784,
+        "classification": "semanticFile"
+      }
+    ],
+    "signatureRef": null,
+    "packageIdentity": {
+      "loopId": "fonebrew.oss.localization-draft",
+      "semanticVersion": "1.0.0"
+    }
+  },
+  "packageFormat": "fonebrew-loop-package-document",
+  "definition": {
+    "nodes": [
+      {
+        "ext": {},
+        "kind": "START_EVENT",
+        "name": "Start",
+        "x": 0,
+        "width": 130,
+        "y": 0,
+        "id": "start",
+        "height": 64
+      },
+      {
+        "ext": {
+          "systemPrompt": "You are a professional localization translator. Translate the field \"${fieldKey}\" into ${locale}, preserving any placeholders, tags, or formatting exactly as they appear in the source. Return only the translated text \u2014 no commentary, no surrounding quotes, no explanation.\n\nSource text:\n${sourceText}",
+          "role": "translator"
+        },
+        "kind": "TASK",
+        "name": "Translate",
+        "x": 160,
+        "width": 130,
+        "y": 0,
+        "id": "translate",
+        "height": 64
+      },
+      {
+        "ext": {},
+        "kind": "END_EVENT",
+        "name": "End",
+        "x": 320,
+        "width": 130,
+        "y": 0,
+        "id": "end",
+        "height": 64
+      }
+    ],
+    "name": "Localization draft",
+    "edges": [
+      {
+        "sourceId": "start",
+        "condition": null,
+        "targetId": "translate",
+        "name": null,
+        "id": "e0"
+      },
+      {
+        "sourceId": "translate",
+        "condition": null,
+        "targetId": "end",
+        "name": null,
+        "id": "e1"
+      }
+    ],
+    "id": "localization-draft",
+    "objective": "Produce a translation draft for field \"${fieldKey}\" into ${locale}."
+  },
+  "readme": "Localization draft (OSS template)\n\nOne params-driven step: given a source string, its field key, and a target locale, produces a first-pass translation draft for a human reviewer \u2014 it never writes anything back on its own. Ships in core as an open, forkable starting point (Studio P8's content-localization surface runs this template; anyone is free to fork or replace it with their own).\n\nParams (filled in at run time, same `${key}` mechanism every loop uses):\n- locale \u2014 the target locale, e.g. \"es-MX\" or \"fr-FR\"\n- fieldKey \u2014 the string-table key or field name being localized\n- sourceText \u2014 the source-locale text to translate\n\nOutput: the translated draft text (single step, no built-in critic pass \u2014 duplicate-and-extend this loop with a review node for stricter QA)."
+}

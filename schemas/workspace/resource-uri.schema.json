@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/resource-uri.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/resource-uri.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ResourceUri per FB-RAT-WS-002: provider-qualified; local/SAF/SSH/snapshot/virtual MUST NOT share ambiguous raw paths. The `raw` field is the single authoritative identity string for a resource — it embeds its own scheme prefix so two resources from different providers can never collide even if their provider-local path text happens to look alike. `displayPath`, when present, is explicitly NON-authoritative (UI-only) — a consumer MUST NOT use it for equality/dedup/identity, only `(provider, raw)` together may be used for that (see fixtures/workspace/adversarial/resource-uri-cross-provider-ambiguity.adversarial.json for the fixture this guards against).",
   "title": "ResourceUri",
   "description": "A single resource location, provider-qualified per FB-RAT-WS-002. Embedded (duplicated as local $defs, not cross-file $ref'd — same standalone-file tradeoff COMMON_CONVENTIONS.md §3 documents for IntegrityRef) inside project.schema.json, document-buffer.schema.json, recovery-snapshot.schema.json, and buffer-journal-entry.schema.json wherever a resource location is needed.",

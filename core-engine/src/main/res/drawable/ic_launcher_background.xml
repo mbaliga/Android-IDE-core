@@ -4,5 +4,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#14171D" android:pathData="M0,0 h108 v108 h-108 z" />
+    <!-- Matches the app's current dark-mode base surface (dev.aarso.hyle.theme.Ink,
+         #0E0F12) — was #14171D, a shade this icon predates; brought back in lockstep
+         while replacing the foreground glyph below. -->
+    <path android:fillColor="#0E0F12" android:pathData="M0,0 h108 v108 h-108 z" />
 </vector>

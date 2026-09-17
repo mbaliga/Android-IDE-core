@@ -28,7 +28,7 @@
 // environment — this file has been written carefully (balanced braces, matched types, no
 // typos attempted) but has NOT been compiled. Do not report it as compiling; that is for
 // the next session with Gradle available to confirm. This file also depends on
-// contracts/kotlin/CommonContracts.kt (package dev.aarso.contracts.common) being compiled
+// contracts/kotlin/CommonContracts.kt (package dev.fonebrew.contracts.common) being compiled
 // in the same module/source set for the shared envelope this domain's types are typically
 // carried inside, though no type from that file is imported directly below (this domain's
 // three shapes are self-contained).
@@ -49,7 +49,7 @@
 // exhaustive `when` over this sealed interface is a compile-time guarantee every variant has
 // handling, mirroring `ExecutionLifecycleState`'s rationale in ExecutionContracts.kt.
 
-package dev.aarso.contracts.authority
+package dev.fonebrew.contracts.authority
 
 import java.time.Instant
 
@@ -77,7 +77,7 @@ enum class PrincipalStatus { ACTIVE, REVOKED, EXPIRED }
  * principal MUST declare who spawned it, enforced below by the same rule
  * schemas/authority/principal.schema.json encodes structurally via if/then.
  *
- * Typically carried as the `payload` of a `dev.aarso.contracts.common.ContractEnvelope<Principal>`.
+ * Typically carried as the `payload` of a `dev.fonebrew.contracts.common.ContractEnvelope<Principal>`.
  *
  * @param principalId Globally unique stable ID (FB-RAT-COM-002), independent of displayName.
  * @param parentPrincipalId The principal that spawned/configured this one. MUST be null for
@@ -140,7 +140,7 @@ enum class ResourceKind { WORKSPACE_ROOT, FILE_GLOB, REPOSITORY, EXECUTION_TARGE
  * schemas/authority/grant.schema.json's $defs/ResourceScope for the full per-kind mapping.
  * For SECRET, `locator` is a handle id — NEVER a raw secret value (binding rule: API keys are
  * never logged; see the parallel obligation on ErrorEnvelope.detail in
- * dev.aarso.contracts.common.ErrorEnvelope).
+ * dev.fonebrew.contracts.common.ErrorEnvelope).
  */
 data class ResourceScope(
     val kind: ResourceKind,
@@ -216,7 +216,7 @@ data class DelegationRule(
  * `authorityGrant.grantId` field references (FB-RAT-COM-012 "no contract bypass") — see
  * docs/ratified/CAPABILITY_AUTHORITY_MODEL.md §11 for that cross-domain correlation.
  *
- * Typically carried as the `payload` of a `dev.aarso.contracts.common.ContractEnvelope<Grant>`.
+ * Typically carried as the `payload` of a `dev.fonebrew.contracts.common.ContractEnvelope<Grant>`.
  */
 data class Grant(
     val grantId: String,
@@ -270,7 +270,7 @@ data class RedactionOrSandboxDetail(
  * requestingPrincipalId, requestedCapabilityId, requestedResourceScope, reasonCode,
  * policyVersion, decidedAtUtc, evidenceLinks) plus whatever extra field(s) that specific
  * outcome requires — see each variant's own doc comment. Typically carried as the `payload` of
- * a `dev.aarso.contracts.common.ContractEnvelope<AuthorityDecision>`; decision records are
+ * a `dev.fonebrew.contracts.common.ContractEnvelope<AuthorityDecision>`; decision records are
  * append-only (FB-RAT-COM-006) — a re-evaluation is always a NEW instance, never a mutation.
  */
 sealed interface AuthorityDecision {

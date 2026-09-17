@@ -17,7 +17,7 @@
   "duplicates": [],
   "rejected": [
     {
-      "sourceLocation": "../../../../data/data/dev.aarso.full/files/../../../../etc/passwd",
+      "sourceLocation": "../../../../data/data/dev.fonebrew.full/files/../../../../etc/passwd",
       "errorCode": "IMPORT_INVALID_SOURCELOCATION",
       "detail": "Adversarial: rejected-record sourceLocation containing '..' segments, escaping the run's own runs/<runId>/ tree."
     }

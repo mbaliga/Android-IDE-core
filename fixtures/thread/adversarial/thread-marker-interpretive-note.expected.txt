@@ -1,0 +1,27 @@
+Structural validation result: PASSES schemas/thread/thread-marker.schema.json. `note`/`label` are
+only constrained to be non-blank strings when required — JSON Schema cannot see that this
+particular string's CONTENT is an idiolect/drift interpretation, so this fixture is adversarial at
+the semantic layer only.
+
+Required behavior from a real implementation (not just structural validation):
+  1. CLAUDE.md binding rule 4 / THREAD_TOPOLOGY_PLAN.md binding constraint 3 (Issue #2): "§5c
+     idiolect baseline is owner-only input — do not invent it. §5c self-observation + §5b drift
+     are blocked on GitHub Issue #2. The Me/Myself/I drift surface ships INERT." A `source: SYSTEM`
+     ThreadMarker (the only source a non-human writer can use) MUST NEVER be produced by content
+     that interprets the user's phrasing, tone, or psychological state — "drifts toward,"
+     "possible idiolect shift," "worth a self-observation pass" are exactly the class of
+     evaluative language this gate blocks, regardless of how plausible or well-intentioned it
+     reads.
+  2. A conformance ADVERSARIAL test for ThreadMarker MUST include a fixture exactly like this one
+     and assert any future SYSTEM-sourced marker producer (WP2's fork/spawn lineage writer, WP3's
+     compaction-run boundary writer — the only two SYSTEM producers this plan defines) REJECTS
+     writing a `label`/`note` that is anything other than a plain structural fact (a name, an id,
+     a boundary description) — never an interpretive judgment about the user.
+  3. `dev.fonebrew.domain.mirror.AarsoEventLog` stays write-only and `ThreadGraphProjector` (WP9)
+     reads Room stores only, never the event log (binding constraint 3) — this fixture's defect
+     would be exactly as severe if it appeared in a ThreadEvent instead of a ThreadMarker; it is
+     filed against ThreadMarker here because THAT is the shape a SYSTEM writer populates today
+     (WP1's ThreadMarkerStore), with no ThreadEvent producer wired in yet.
+  4. No SYSTEM-sourced marker producer exists yet in this session's scope (WP0/WP1 land the
+     contract + Room-store shapes only, both USER-sourced call sites) — this fixture documents
+     the obligation a later work package (WP2/WP3) implementation MUST satisfy.

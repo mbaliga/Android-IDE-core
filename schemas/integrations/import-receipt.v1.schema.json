@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/import-receipt.v1.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/integrations/import-receipt.v1.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ImportReceipt per INT-024 (docs/ratified/IMPORT_RECEIPT_V1.md) — step 6 ('Receipt') of the six-step manual import grammar (INT-011): source digest, decisions, resulting objects, errors, backlinks. Append-only (FB-RAT-COM-006) — a correction is a NEW receipt, never an in-place edit of an existing one. schemaVersion pinned to major 1, FB-RAT-COM-003.",
   "title": "ImportReceipt",
   "description": "The durable record of one confirmed import action, produced only after the user's explicit Confirm (step 5, INT-005/INT-011). `rejected` records here are FINAL rejections carried into the receipt (structural or record-level errors, or user-declined conflicts) — distinct from ImportPreview.rejectedRecords, which is the pre-mutation forecast of the same vocabulary.",

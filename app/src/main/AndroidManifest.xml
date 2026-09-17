@@ -9,10 +9,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:name="dev.aarso.AarsoApp"
+        android:name="dev.fonebrew.FonebrewApp"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
-        android:theme="@style/Theme.Aarso" />
+        android:theme="@style/Theme.Fonebrew" />
 
 </manifest>

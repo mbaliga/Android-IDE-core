@@ -9,27 +9,41 @@
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Push-to-talk dictation only, on-device recognizer only (docs/design/voice-input.md,
+         CLAUDE.md rule 1) — never the networked SpeechRecognizer, never ambient listening. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Keep the process alive while a local model loads/generates or downloads. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- §7 heavy tiers (overlay bubble, screen capture) live in the FULL flavor's
          manifest overlay — the play build ships without those permissions. -->
 
+    <!-- Package-visibility declaration (API 30+) for the composer's Camera row (W1 — vision
+         input): TakePicture launches the device's own camera app via this implicit intent; no
+         CAMERA permission is declared here since the system camera app owns the hardware, not
+         this app. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <!--
       No android:name/icon/theme/label here — this is a library manifest (namespace
-      dev.aarso.core_engine), merged into whichever thin :app declares android:name for the
-      real dev.aarso.AarsoApp (see that app's own AndroidManifest.xml). Every class reference
-      below is fully qualified (dev.aarso.*), not relative, because a relative name (".Foo")
-      would resolve against THIS module's namespace (dev.aarso.core_engine) — one level off
-      from where the actual moved classes still live (dev.aarso.*, unchanged by the move).
+      dev.fonebrew.core_engine), merged into whichever thin :app declares android:name for the
+      real dev.fonebrew.FonebrewApp (see that app's own AndroidManifest.xml). Every class reference
+      below is fully qualified (dev.fonebrew.*), not relative, because a relative name (".Foo")
+      would resolve against THIS module's namespace (dev.fonebrew.core_engine) — one level off
+      from where the actual moved classes still live (dev.fonebrew.*, unchanged by the move).
     -->
     <application android:allowBackup="false" android:supportsRtl="true">
 
         <activity
-            android:name="dev.aarso.ui.MainActivity"
+            android:name="dev.fonebrew.ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.Aarso">
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Fonebrew">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -45,7 +59,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-            <!-- §7: the text-selection action ("Aarso" in the selection menu). -->
+            <!-- §7: the text-selection action ("Fonebrew" in the selection menu). -->
             <intent-filter>
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -54,20 +68,20 @@
         </activity>
 
         <service
-            android:name="dev.aarso.service.GenerationService"
+            android:name="dev.fonebrew.service.GenerationService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <!-- Holds priority + shows progress while model downloads run. -->
         <service
-            android:name="dev.aarso.service.DownloadService"
+            android:name="dev.fonebrew.service.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- §7: device assistant (assist-gesture summon). Select Aarso under
+        <!-- §7: device assistant (assist-gesture summon). Select Fonebrew under
              Settings → Default apps → Digital assistant. -->
         <service
-            android:name="dev.aarso.service.AarsoInteractionService"
+            android:name="dev.fonebrew.service.FonebrewInteractionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter>
@@ -78,11 +92,11 @@
                 android:resource="@xml/interaction_service" />
         </service>
         <service
-            android:name="dev.aarso.service.AarsoInteractionSessionService"
+            android:name="dev.fonebrew.service.FonebrewInteractionSessionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
         <service
-            android:name="dev.aarso.service.AarsoRecognitionService"
+            android:name="dev.fonebrew.service.FonebrewRecognitionService"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />

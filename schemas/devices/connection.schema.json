@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/devices/connection.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/devices/connection.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceConnection per FB-RAT-DEV-002 (device object model) and FB-RAT-DEV-003 (device uncertainty represented explicitly). Typically carried as the `payload` of a ContractEnvelope<DeviceConnection> (see schemas/common/envelope.schema.json). `connectionId` is this object's own FB-RAT-COM-002 stable ID — distinct from `deviceIdentityId`, since one DeviceIdentity has exactly one live DeviceConnection at a time but goes through many DeviceConnection instances (one per connect/disconnect cycle) over its lifetime.",
   "title": "DeviceConnection",
   "description": "Live connection state for a DeviceIdentity: the FB-RAT-DEV-003 nine-state lifecycle (DISCOVERED -> PERMISSION_REQUIRED -> CONNECTING -> READY | BOOTLOADER | BUSY | DISCONNECTED | STATE_UNKNOWN | UNSUPPORTED), the Android USB-permission flag the flash contract's step 2 checks, and the FB-RAT-DEV-001 exclusive device-operation lock the single Device Broker arbitrates. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §3.",

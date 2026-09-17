@@ -24,14 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Native llama.cpp / stable-diffusion.cpp sources for assembleFullDebug.
+          # Native llama.cpp / stable-diffusion.cpp sources for assembleFullDebug, plus the
+          # hyle-design-system and shared-libraries includeBuild submodules. The latter two are
+          # private repos, so actions/checkout's default GITHUB_TOKEN (scoped to this repo only)
+          # can't clone them as submodules — auth with a fine-grained PAT instead (Contents:Read
+          # on Android-IDE-core + Hyle-Design-System + Shared-Libraries-asoc), stored as the
+          # CORE_SUBMODULE_TOKEN secret. Same fallback pattern Android-IDE-Studio's checkout uses.
           submodules: recursive
+          token: ${{ secrets.CORE_SUBMODULE_TOKEN || github.token }}
 
       - name: Submodule pointers resolve to real content
         # §7 FIX — the check that would have caught a silent-unbuildable carve. Every
         # push: fail loudly if any submodule pointer is uninitialized/dangling, and assert
-        # the includeBuild'd Hyle + the native sources actually landed. Cheap; runs before
-        # the SDK setup so a bad pointer fails fast.
+        # the includeBuild'd Hyle + shared-libraries + the native sources actually landed.
+        # Cheap; runs before the SDK setup so a bad pointer fails fast.
         run: |
           git submodule status --recursive || true
           if git submodule status --recursive | grep -qE '^-'; then
@@ -39,6 +45,8 @@ jobs:
           fi
           test -f hyle-design-system/settings.gradle.kts \
             || { echo "::error::hyle-design-system submodule is empty — includeBuild would fail"; exit 1; }
+          test -f shared-libraries/settings.gradle.kts \
+            || { echo "::error::shared-libraries submodule is empty — includeBuild would fail"; exit 1; }
           test -f core-engine/src/main/cpp/llama.cpp/CMakeLists.txt \
             || { echo "::error::llama.cpp submodule is empty — native build would fail"; exit 1; }
           test -f sdengine/src/main/cpp/stable-diffusion.cpp/CMakeLists.txt \
@@ -59,7 +67,13 @@ jobs:
       - name: Set up Android SDK
         # Puts cmdline-tools (sdkmanager) on PATH — it is installed on ubuntu-latest
         # but not exported by default, which is why a bare `sdkmanager` is not found.
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools'
+          # package, which Google's repository no longer serves (sdkmanager exit 1
+          # before Gradle ever runs - 2026-09-15). Only platform-tools here; the
+          # pinned platforms/build-tools/NDK/CMake install in our own step below.
+          packages: platform-tools
 
       - name: Install pinned NDK + CMake
         # ndkVersion / cmake version are pinned in app/build.gradle.kts; AGP needs
@@ -102,6 +116,13 @@ jobs:
 
       - name: Upload test reports
         if: always()
+        # continue-on-error: this upload is diagnostic (reports for debugging a failure),
+        # not part of the gate's pass/fail contract — the Gradle step above already is.
+        # Without this, a GitHub-account-level "Artifact storage quota has been hit" (a
+        # real failure seen 2026-08-27, see CLAUDE.md's CI caveat) reds the whole job even
+        # when every actual test passed, the same false-negative shape as the Actions-
+        # minutes exhaustion this file's sibling note already documents.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
@@ -123,6 +144,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ secrets.CORE_SUBMODULE_TOKEN || github.token }}
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -133,7 +155,13 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools'
+          # package, which Google's repository no longer serves (sdkmanager exit 1
+          # before Gradle ever runs - 2026-09-15). Only platform-tools here; the
+          # pinned platforms/build-tools/NDK/CMake install in our own step below.
+          packages: platform-tools
       - name: Install pinned NDK + CMake
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
@@ -146,18 +174,50 @@ jobs:
         # timeout) instead of the runner being killed mid-build. Ephemeral runner —
         # nothing to undo. If the build still OOMs, move this job to a larger runner.
         run: |
-          sudo fallocate -l 12G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=12288
-          sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
-          free -h
+          # Size the swapfile to the space that actually exists: newer ubuntu-latest
+          # images no longer guarantee 12G free on /mnt, and the old fixed
+          # `fallocate -l 12G` died with ENOSPC before the build even started
+          # (canary run 33337477090, 2026-08-30 — swap step failed at ~50s, the
+          # assemble never ran). Pick whichever of /mnt and / has more room, leave
+          # 4 GiB headroom for the build, cap at 12 GiB, and continue WITHOUT extra
+          # swap (warning, not failure) when nothing useful fits — a swapless
+          # attempt that OOMs later tells us more than a job that dies at setup.
+          TARGET=/mnt
+          AVAIL_MNT=$(df --output=avail -k /mnt 2>/dev/null | tail -1 || echo 0)
+          AVAIL_ROOT=$(df --output=avail -k / | tail -1)
+          if [ "${AVAIL_ROOT:-0}" -gt "${AVAIL_MNT:-0}" ]; then TARGET=/; fi
+          AVAIL_K=$(df --output=avail -k "$TARGET" | tail -1)
+          WANT_K=$(( AVAIL_K - 4*1024*1024 ))
+          MAX_K=$(( 12*1024*1024 ))
+          [ "$WANT_K" -gt "$MAX_K" ] && WANT_K=$MAX_K
+          if [ "$WANT_K" -lt $(( 2*1024*1024 )) ]; then
+            echo "::warning::only ${AVAIL_K}K free on $TARGET — continuing without extra swap"
+            free -h; df -h; exit 0
+          fi
+          SWAPFILE="${TARGET%/}/swapfile"
+          sudo fallocate -l "${WANT_K}K" "$SWAPFILE" \
+            || sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count=$(( WANT_K / 1024 ))
+          sudo chmod 600 "$SWAPFILE"
+          sudo mkswap "$SWAPFILE"
+          sudo swapon "$SWAPFILE"
+          free -h; df -h "$TARGET"
       - name: Assemble sideload APK (native)
         run: ./gradlew --no-daemon :app:assembleFullDebug
+      - name: APK exists at the expected path (gating)
+        # Path correctness stays a hard failure — a wrong output path must red the
+        # canary loudly. Split out from the upload step so the upload itself can be
+        # continue-on-error without masking a path regression.
+        run: |
+          ls app/build/outputs/apk/full/debug/*.apk \
+            || { echo "::error::no APK at app/build/outputs/apk/full/debug/ — output path regressed"; exit 1; }
       - name: Upload sideload APK (download this to install on a device)
-        # The installable artifact: `full` flavor + debug build → app-full-debug.apk
-        # (appId dev.aarso.full). Appears under "Artifacts" on the Actions run summary
-        # page. `error` on no-files so a wrong output path fails loudly instead of
-        # silently producing an empty artifact.
+        # Convenience artifact only — apk-dist is the real delivery channel. The
+        # account-level "Artifact storage quota has been hit" failure (canary run
+        # 33343574733, 2026-08-31: the ~130MB APK exceeded remaining quota while the
+        # tiny test reports fit) must not red a canary whose actual signal — the
+        # native compile — passed; same false-negative class as the test-reports
+        # upload in build-test, see CLAUDE.md's CI caveat.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: aarso-full-debug-apk

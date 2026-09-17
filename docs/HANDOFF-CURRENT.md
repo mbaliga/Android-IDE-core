@@ -6,12 +6,12 @@
 >
 > **Repo:** `mbaliga/android-ide-core` (public open core). **Branch:**
 > `claude/android-ide-studio-refactor-sa2uq9` → mirrored to `main`. **APK:** `apk-dist` branch as
-> `aarso-sd.apk` (`https://raw.githubusercontent.com/mbaliga/Android-IDE-core/apk-dist/aarso-sd.apk`).
+> `fonebrew-sd.apk` (`https://raw.githubusercontent.com/mbaliga/Android-IDE-core/apk-dist/fonebrew-sd.apk`).
 >
 > **Status legend:** ✅ done (gate-green; Compose compile-verified, device-owner-verified) ·
 > 🟡 partial/in-works · ⛔ pending/not-started · 🔒 owner-gated. **CI never launches the app** —
 > pure domain logic is JVM-tested; all runtime/render/gesture/hardware behaviour is **owner-verified
-> on the RedMagic**. Package `dev.aarso.*`; Kotlin + Compose; manual DI (`AppContainer`, no Hilt).
+> on the RedMagic**. Package `dev.fonebrew.*`; Kotlin + Compose; manual DI (`AppContainer`, no Hilt).
 >
 > **Studio Suite brief pointer (added P0-core, 2026-07-11):** the free-tier work driving this
 > repo's next phases (P1 Task substrate + free floor, P2 Watchlist, P3 loop-engine extension) is
@@ -22,7 +22,24 @@
 > as of this pointer** — it predates the brief and the Hyle single-source split; treat this file +
 > `docs/CORE_PHASES.md` as current, not `STATE.md`, until someone refreshes it.
 >
-> **P2 — Watchlist (added P2, 2026-07-12):** landed — `WatchedItemEntity`/`WatchDao`/`WatchStore`
+> **Brand supersedes "FoneBru" (2026-07-16):** the display brand is **"Fonebrew"** — owner legal
+> research found "Bru" is HUL-owned and litigious in India; "Fonebrew" (coffee-evocative) was
+> chosen instead, domains `fonebrew.dev` + `fonebrew.app` secured. This supersedes the "FoneBru"
+> ruling above and in `docs/CORE_PHASES.md` §Invariants 7. `applicationId`/package stay `dev.aarso`
+> (unaffected — display-only rename); this build establishes `dev.aarso` as canonical.
+>
+> **P2 — Watchlist — REMOVED (2026-07-17):** the Watch tab (`WatchedItemEntity`/`WatchDao`/
+> `WatchStore` substrate, `ProductRoomFree`'s Watch tab, `WatchKind`/`WatchDue`/`WatchSeeds`) has
+> been **pulled from this repo's free floor** — owner call, on-device testing surfaced a real
+> keyboard/list-collapse bug on the tab and the owner decided Watch belongs in Studio instead, not
+> the free core. All Watch source + tests deleted; `AppDatabase` bumped v5→v6 (drops the table,
+> rides `fallbackToDestructiveMigration()` like every prior bump). If/when Watch returns it will
+> land in the paid Studio layer, same pattern as the Council election. The paragraph below is kept
+> as historical record of what P2 shipped before removal.
+>
+> <details><summary>Original P2 — Watchlist landing note (2026-07-12, now superseded above)</summary>
+>
+> landed — `WatchedItemEntity`/`WatchDao`/`WatchStore`
 > substrate (`AppDatabase` v3→v4, `WatchKind` RENEWAL/EXPIRY/STATUS) plus `ProductRoomFree`'s new
 > Watch tab (kind glyph, days-remaining chip that scales toward due — never red —, seed
 > ghost-rows that insert only on tap, snooze/edit/delete in an inline overflow). Also added
@@ -34,6 +51,8 @@
 > render, the Watch tab's touch/expand feel, and the v3→v4 Room bump — it still rides
 > `fallbackToDestructiveMigration()` like every prior bump (no real `Migration` object exists in
 > this codebase; none of the JVM tests can exercise one).
+>
+> </details>
 >
 > **P3 — Engine extension + Loops run UI (added P3, 2026-07-12):** landed — `GraphRunner.run`
 > gains `${key}` **params** (`LoopParams` scans the graph, substitutes, and *refuses to
@@ -69,6 +88,35 @@
 > **owner-verify:** the run sheet's feel, the live step stream/Stop control, the totals bar
 > render, and the v4→v5 Room bump (same `fallbackToDestructiveMigration()` caveat as every prior
 > bump).
+>
+> **tokenCounter wired + gateway condition editor landed (lane A2-loops, 2026-09-15), the P3
+> honesty note above superseded:** `LoopRoom.kt`'s `startRun` now wires a real `tokenCounter` —
+> the same honesty rule `ChatViewModel.send()` already applies to a chat turn: a cloud engine's
+> own `CloudEngine.lastUsage` (provider-authoritative) when it has one, else the executing
+> engine's own `InferenceEngine.countTokens` (real per-model counts, flagged `estimated = true`,
+> same as an on-device chat turn's ledger row), `null` only when the engine truly reports nothing
+> — never an invented count. The run sheet's token budget field is still not wired (unchanged
+> scope, tracked separately); what changed is that a live run's `GraphStep`s now genuinely carry
+> `estimated = false` counts when the executing engine backs them, so `GraphRunLedger` prices a
+> cloud loop step for real instead of always folding to on-device/estimated. Also: the
+> `TouchConnectionGrammar` gap the P3 landing note didn't cover — `Event.ChooseLabel`/
+> `DefineCondition`/`RequestPreview` had zero production senders, a gateway edge's label was
+> written by `LoopRoom.kt`'s edge dialog straight to the graph, bypassing the grammar entirely —
+> is closed: a new `GatewayConditionPresenter` (`domain/loop/authoring/`) drives every event
+> through the grammar for real, and `LoopRoom.kt`'s `GatewayConditionEditorDialog` (replacing the
+> old three-literal `EdgeLabelDialog`) offers the existing quick labels *and* a free-form
+> condition field, with a live preview (reusing `ConditionGatewayPolicy` itself, so it can't show
+> a branch the runner wouldn't actually take) before committing. **verified-JVM:** `GraphRunnerTest`
+> pins an edge authored through the presenter actually routing a real run;
+> `GatewayConditionPresenterTest` is exhaustive over every event path incl. cancel from each
+> reachable state; `GraphRunLedgerTest` gained an end-to-end case (real `GraphRunner` +
+> `tokenCounter` → `GraphRunLedger`) pinning an engine-silent step staying estimated/zero-cost
+> alongside a real-counts step pricing correctly. **owner-verify:** the editor's touch feel, the
+> preview's legibility on-device (glyph/label-coded per §1.4 — never red/green hue alone), and
+> that a live loop run against a real cloud/on-device engine actually reports the counts this
+> wiring claims (JVM tests exercise the wiring shape with fake engines/counters, not a real
+> `InferenceEngine` — that boundary stays owner-verified same as every other on-device/network
+> fact in this file).
 
 ---
 
@@ -291,7 +339,7 @@ Five icon tabs **Global / Image / Text / Video / 3D**.
   cost**). ✅ Populates from the live ledger writer. **Global cost REMOVED (§9)** — cost is a
   per-loop boundary; cards render `showCost=false`. 🟡 by-model / counts / flaired interaction
   history / trends / reconciliation overlay: partial.
-- **I** — reflective self-observation (§5b/§5c drift) — 🔒 ships **inert** (Aarso repo, Issue #2);
+- **I** — reflective self-observation (§5b/§5c drift) — 🔒 ships **inert** (Fonebrew repo, Issue #2);
   fabricates nothing.
 - 🟡 Every chart needs a data-table + spoken-summary equivalent — partial.
 
@@ -339,10 +387,12 @@ Currently the core shows the **locked placeholder**; the paid Studio installs th
 
 ## 12. Owner decisions / blockers (🔒)
 - Publish Hyle + core as artifacts (registry/token) so Studio depends on published core; set the
-  **Aarso** repo default branch (no `main` base → no PR yet).
+  **Fonebrew** repo default branch (no `main` base → no PR yet).
 - §5c/§5b mirror baseline (Issue #2) — owner-only input.
 - Device verification of every Compose surface on the RedMagic.
 - CI minutes on the private Studio repo (red `build-test` = billing, not code).
+
+Business/monetization decisions are tracked privately, not in this repo.
 
 ---
 _Old `docs/HANDOFF.md` (2026-06-21) is stale (pre-split) and can be deleted or replaced by this._

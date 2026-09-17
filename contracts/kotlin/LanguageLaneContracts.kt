@@ -28,7 +28,7 @@
 // (:core-engine:compileFullDebugKotlin / :core-engine:testFullDebugUnitTest) during WP-9
 // (2026-08-07).
 
-package dev.aarso.contracts.language
+package dev.fonebrew.contracts.language
 
 private val LANGUAGE_ID_PATTERN = Regex("^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 private val SEMVER_PATTERN = Regex("^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z-.]+)?(\\+[0-9A-Za-z-.]+)?$")
@@ -69,7 +69,7 @@ enum class ToolchainDeliveryMechanism {
     REMOTE,
 }
 
-/** Local duplication of `dev.aarso.contracts.loops.DistFlavor`'s wire values, not an import — this repo's established convention for small enums shared only nominally across domain boundaries (see e.g. `AuthorityContracts.kt`'s own `AuthorityRung` header note). */
+/** Local duplication of `dev.fonebrew.contracts.loops.DistFlavor`'s wire values, not an import — this repo's established convention for small enums shared only nominally across domain boundaries (see e.g. `AuthorityContracts.kt`'s own `AuthorityRung` header note). */
 enum class DeliveryFlavor(val wireValue: String) { FULL("full"), PLAY("play") }
 
 /**
@@ -163,8 +163,8 @@ data class LaunchConfiguration(
 /**
  * §9's TypeScript/Python "interpreter lane" fixtures, wired "as far as JVM-verifiable" (WP-9
  * brief) — and one REMOTE-only fixture apiece for Rust/C++, "contract + REMOTE-mechanism only
- * in this pass." Concrete instances, not abstract shapes, so [dev.aarso.domain.language.
- * DiagnosticsOwnership] and [dev.aarso.domain.language.ToolchainDeliveryLegality] have something
+ * in this pass." Concrete instances, not abstract shapes, so [dev.fonebrew.domain.language.
+ * DiagnosticsOwnership] and [dev.fonebrew.domain.language.ToolchainDeliveryLegality] have something
  * real to check against rather than only hand-built test fixtures.
  */
 object BuiltInLanguagePacks {

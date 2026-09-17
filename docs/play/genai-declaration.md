@@ -1,7 +1,7 @@
 # Generative AI declaration notes (play flavor)
 
 > **Scope (FAQ):** Play's GenAI declaration is about the app's **function** —
-> Aarso uses generative AI to produce content for users (text + images) — and the
+> Fonebrew uses generative AI to produce content for users (text + images) — and the
 > **safeguards** shipped (the in-app output reporting below). It is **NOT** a
 > disclosure that the app's source code was written with AI. Google requires no
 > such "AI-authored code" declaration. Answer the questionnaire as "uses GenAI as

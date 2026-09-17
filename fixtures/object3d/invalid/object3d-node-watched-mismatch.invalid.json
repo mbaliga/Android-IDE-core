@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-invalid-0002",
+  "file": {
+    "relativePath": "objects3d/f00dcafedeadbeef.glb",
+    "sizeBytes": 51200,
+    "digest": null
+  },
+  "format": "GLB",
+  "source": "CLOUD_GENERATED",
+  "provider": "TRIPO",
+  "prompt": "a spinning top toy",
+  "generation": null,
+  "provenanceState": "CLOUD",
+  "watched": false,
+  "createdAtUtc": "2026-08-15T15:20:00Z",
+  "unknownFields": {}
+}

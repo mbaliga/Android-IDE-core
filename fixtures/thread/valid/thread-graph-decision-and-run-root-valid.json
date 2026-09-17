@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.1.0",
+  "generatedAtUtc": "2026-08-29T00:00:00Z",
+  "nodes": [
+    { "id": "01J8Z0000000000000000RT1", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": null, "at": "2026-08-09T10:00:00Z", "label": null },
+    { "id": "01J8Z00000000000000MSG42", "kind": "MESSAGE", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z0000000000000000RT1", "at": "2026-08-09T10:05:00Z", "label": null },
+    { "id": "01J9D0000000000000DEC01", "kind": "DECISION", "rootId": "01J8Z0000000000000000RT1", "parentId": "01J8Z00000000000000MSG42", "at": "2026-08-10T09:14:31Z", "label": "Use SQLDelight for FTS5" },
+    { "id": "01J9R0000000000000RUN01", "kind": "RUN_ROOT", "rootId": "01J9R0000000000000RUN01", "parentId": null, "at": "2026-08-11T08:00:00Z", "label": "Refine the search ranking prompt" }
+  ],
+  "edges": [
+    { "from": "01J8Z0000000000000000RT1", "to": "01J8Z00000000000000MSG42", "kind": "REPLY" },
+    { "from": "01J9D0000000000000DEC01", "to": "01J8Z00000000000000MSG42", "kind": "DECISION_ANCHOR" }
+  ],
+  "unknownFields": {}
+}

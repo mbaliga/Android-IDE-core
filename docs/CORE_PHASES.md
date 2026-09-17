@@ -1,3 +1,5 @@
+> **MERGE-NOTE (2026-08-21):** the launch line (`fix/models-carousel-and-terminal`) carries its own parallel history of this doc; this copy kept the dev line's version wholesale during reunification — reconcile when next editing.
+
 # CORE PHASES — free-tier work items (public-safe excerpt of the Studio Suite brief v1.4)
 
 **Scope:** this file drives Claude Code sessions running on **android-ide-core only**. It contains the free-tier phases (P0-core, P1, P2, P3) verbatim in intent, with the paid layer's internals omitted — core is a public repo. Where this doc says "the Studio layer," that means whatever an above-core layer installs into the existing seams (`ProjectRoomSlot` S6, `DevelopTabs` S2); its contents are not core's concern. If a session needs paid-surface detail, stop — that work belongs in the private repo.

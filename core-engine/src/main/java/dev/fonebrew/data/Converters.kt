@@ -1,0 +1,134 @@
+package dev.fonebrew.data
+
+import androidx.room.TypeConverter
+import dev.fonebrew.domain.curation.BookmarkKind
+import dev.fonebrew.domain.curation.Fidelity
+import dev.fonebrew.domain.curation.GhostReason
+import dev.fonebrew.domain.tasks.TaskSource
+import dev.fonebrew.domain.tasks.TaskState
+import dev.fonebrew.domain.thread.DelegationKind
+import dev.fonebrew.domain.thread.DelegationOutcome
+import dev.fonebrew.domain.thread.ThreadMarkerKind
+import dev.fonebrew.domain.thread.ThreadMarkerSource
+import org.json.JSONArray
+import org.json.JSONObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+/**
+ * Room type converters. Kept dependency-light on purpose (org.json ships with
+ * Android; no extra serialization library) to honour the local-first, minimal-
+ * surface stance.
+ */
+class Converters {
+
+    /** metadata map <-> JSON object string. Only a genuinely null map converts to null — an
+     *  empty map still needs a real value ("{}"), or a NOT NULL column (a non-nullable Kotlin
+     *  Map property, e.g. Task.dependsOn/tags) fails its constraint on every insert. */
+    @TypeConverter
+    fun fromMetadata(map: Map<String, String>?): String? {
+        if (map == null) return null
+        val obj = JSONObject()
+        for ((k, v) in map) obj.put(k, v)
+        return obj.toString()
+    }
+
+    @TypeConverter
+    fun toMetadata(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        val obj = JSONObject(json)
+        val out = LinkedHashMap<String, String>()
+        for (key in obj.keys()) out[key] = obj.getString(key)
+        return out
+    }
+
+    /** String list <-> JSON array string (Task's [dependsOn]/[tags]). Only a genuinely null list
+     *  converts to null — an empty list still needs a real value ("[]"), or a NOT NULL column
+     *  (dependsOn/tags are non-nullable `List<String>`, default emptyList()) fails its
+     *  constraint on every insert of a task with no dependencies/tags — i.e. every task. */
+    @TypeConverter
+    fun fromStringList(values: List<String>?): String? {
+        if (values == null) return null
+        val arr = JSONArray()
+        for (v in values) arr.put(v)
+        return arr.toString()
+    }
+
+    @TypeConverter
+    fun toStringList(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        val arr = JSONArray(json)
+        return List(arr.length()) { arr.getString(it) }
+    }
+
+    @TypeConverter
+    fun fromTaskState(state: TaskState): String = state.name
+
+    @TypeConverter
+    fun toTaskState(name: String): TaskState = TaskState.valueOf(name)
+
+    @TypeConverter
+    fun fromTaskSource(source: TaskSource): String = source.name
+
+    @TypeConverter
+    fun toTaskSource(name: String): TaskSource = TaskSource.valueOf(name)
+
+    @TypeConverter
+    fun fromBookmarkKind(kind: BookmarkKind): String = kind.name
+
+    @TypeConverter
+    fun toBookmarkKind(name: String): BookmarkKind = BookmarkKind.valueOf(name)
+
+    @TypeConverter
+    fun fromFidelity(fidelity: Fidelity): String = fidelity.name
+
+    @TypeConverter
+    fun toFidelity(name: String): Fidelity = Fidelity.valueOf(name)
+
+    @TypeConverter
+    fun fromGhostReason(reason: GhostReason): String = reason.name
+
+    @TypeConverter
+    fun toGhostReason(name: String): GhostReason = GhostReason.valueOf(name)
+
+    @TypeConverter
+    fun fromThreadMarkerKind(kind: ThreadMarkerKind): String = kind.name
+
+    @TypeConverter
+    fun toThreadMarkerKind(name: String): ThreadMarkerKind = ThreadMarkerKind.valueOf(name)
+
+    @TypeConverter
+    fun fromThreadMarkerSource(source: ThreadMarkerSource): String = source.name
+
+    @TypeConverter
+    fun toThreadMarkerSource(name: String): ThreadMarkerSource = ThreadMarkerSource.valueOf(name)
+
+    @TypeConverter
+    fun fromDelegationKind(kind: DelegationKind): String = kind.name
+
+    @TypeConverter
+    fun toDelegationKind(name: String): DelegationKind = DelegationKind.valueOf(name)
+
+    @TypeConverter
+    fun fromDelegationOutcome(outcome: DelegationOutcome): String = outcome.name
+
+    @TypeConverter
+    fun toDelegationOutcome(name: String): DelegationOutcome = DelegationOutcome.valueOf(name)
+
+    companion object {
+        /** float32 array -> little-endian BLOB, for embedding vectors. */
+        fun floatsToBytes(values: FloatArray): ByteArray {
+            val buf = ByteBuffer.allocate(values.size * Float.SIZE_BYTES)
+                .order(ByteOrder.LITTLE_ENDIAN)
+            for (v in values) buf.putFloat(v)
+            return buf.array()
+        }
+
+        fun bytesToFloats(bytes: ByteArray): FloatArray {
+            val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            val out = FloatArray(bytes.size / Float.SIZE_BYTES)
+            for (i in out.indices) out[i] = buf.float
+            return out
+        }
+    }
+}

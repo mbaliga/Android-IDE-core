@@ -457,13 +457,13 @@ this ledger's own scope (`AMENDMENTS.md` only, per this work package's instructi
   `schemas/loops/`, none of which carries a `.v1.` segment) and flagged the discrepancy inline via
   `$comment`, not silently reconciled. No action needed unless a future pass wants filenames to
   carry an explicit version segment corpus-wide — a naming-convention decision, not a semantic one.
-- **`dev.aarso.contracts.loops.ValidationFinding` declared twice.** `LoopAuthoringContracts.kt`
+- **`dev.fonebrew.contracts.loops.ValidationFinding` declared twice.** `LoopAuthoringContracts.kt`
   (`severity: FindingSeverity`) and `LoopPackageContracts.kt` (`severity: LoopValidationSeverity`)
   each declare their own, different, top-level `data class ValidationFinding` in the same package —
   a genuine redeclaration the package will not compile with as-is. Both the activation-compatibility
   and marketplace Kotlin groups found this, avoided adding a third conflicting name (`activation`'s
   own finding type is `ValidationReportFinding`), and left the pre-existing collision for whichever
-  session next runs a real compiler across the full `dev.aarso.contracts.loops` package to resolve
+  session next runs a real compiler across the full `dev.fonebrew.contracts.loops` package to resolve
   — not fixed here, since it requires editing two files this ledger does not own.
 - **Two stale forward pointers to `docs/release-gates/LOOP_P0_P1_RELEASE_GATES.md`.**
   `LOOP_DUAL_SURFACE_ARCHITECTURE.md` §12 and `LOOP_PHONE_AUTHORING_SPEC.md` §15 (via its

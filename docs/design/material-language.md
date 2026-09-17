@@ -9,7 +9,7 @@
 
 ## The thesis
 
-Aarso's surfaces should be made of **materials that behave honestly** — and the
+Fonebrew's surfaces should be made of **materials that behave honestly** — and the
 plural is the whole point. Not one signature material applied as a uniform skin,
 but a *vocabulary* of substances, each chosen because its real-world physics
 **says something** the user needs to know. A material is not a look; it is a
@@ -111,7 +111,7 @@ timer, and a recent-history marker) without a single label.
 The damp stain points at a deeper property worth designing *toward*: **materials
 have memory.** Stone stains. Metal takes a patina and wears a groove where a thumb
 returns again and again. Sand holds a footprint until something disturbs it. A
-surface that ages under use is a surface that records its own history — and Aarso
+surface that ages under use is a surface that records its own history — and Fonebrew
 already has a thesis about recorded history: the **append-only message tree** never
 forgets a turn.
 
@@ -175,7 +175,7 @@ Open questions.)
 - **Assets stay local.** Grain, normal maps, any material texture are bundled and
   procedural; nothing is ever fetched (binding rule #1).
 
-## Relationship to Aeon and to the rest of Aarso
+## Relationship to Aeon and to the rest of Fonebrew
 
 `Aeon` (the current dark-metal/ferrofluid palette + atoms) isn't discarded — it
 becomes **one material world inside the larger language**: the dark-metal body.

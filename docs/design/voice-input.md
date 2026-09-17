@@ -1,12 +1,23 @@
-# Design: Voice input — on-device, deferred
+# Design: Voice input — on-device, push-to-talk
 
-> Status: **design** (deferred). The owner wants workflow authoring by **text +
-> voice, per user preference**. Decision this round: **text-first, voice later.**
+> Status: **built** (2026-07-27), first surface only — the Distill intake (Loop editor →
+> "Distill a loop"). `service/OnDeviceDictation.kt` wraps
+> `SpeechRecognizer.createOnDeviceSpeechRecognizer` — **never** the networked recognizer, no
+> fallback — behind a push-to-talk mic button next to "Choose a file…" in `DistillDialog.kt`.
+> Holding it transcribes speech into the same `source` field paste/URL/file-pick already feed, so
+> distillation itself needed no new code path — voice is purely a new *intake modality* for the
+> existing text pipeline, exactly as sketched below. The mic control only renders where
+> `OnDeviceDictation.isAvailable(context)` is true; where it isn't, voice is simply absent, no
+> dead button, no cloud fallback. RECORD_AUDIO is requested in context, on first press, via a
+> normal Android permission dialog — not up front at install/launch.
+>
+> Original design (below) still holds for anywhere voice input expands next — e.g. dictating a
+> node's system prompt in the Loop editor's node-config panel, or a chat composer's `+` menu.
 
 ## Why deferred, and why on-device
 
-Aarso has **no speech recognition today, by design**:
-`service/AarsoRecognitionService.kt` is a deliberate stub that returns
+Fonebrew has **no speech recognition today, by design**:
+`service/FonebrewRecognitionService.kt` is a deliberate stub that returns
 `ERROR_CLIENT` — the app is summoned by *gesture*, not a wake-word, and does no
 listening. Adding voice is therefore net-new and runs straight into the binding
 rule:
@@ -42,5 +53,9 @@ rule:
 ## Open questions for the owner
 
 - On-device `SpeechRecognizer` (light, OS-provided) vs a bundled Whisper-class
-  model (heavier, fully ours) — preference?
-- Languages beyond English (the owner's locale register matters).
+  model (heavier, fully ours) — preference? **Decided for now**: shipped with the OS-provided
+  on-device recognizer (no new native engine, no model download) — revisit only if a phone in
+  practice reports `isOnDeviceRecognitionAvailable() == false` often enough to matter, or if
+  language coverage turns out too thin.
+- Languages beyond English (the owner's locale register matters) — the recognizer follows
+  whatever the phone's own configured input language is; no explicit language picker built yet.

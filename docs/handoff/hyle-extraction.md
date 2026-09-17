@@ -1,3 +1,5 @@
+> **MERGE-NOTE (2026-08-21):** the launch line (`fix/models-carousel-and-terminal`) carries its own parallel history of this doc; this copy kept the dev line's version wholesale during reunification — reconcile when next editing.
+
 # Handoff — extract **Hyle** into its own repository
 
 > Goal: move the Hyle design system out of the app monorepo into a standalone repo
@@ -12,8 +14,8 @@ Three things wear the name; the extraction must keep them straight.
 | Piece | Where | What it is | Goes to new repo? |
 |---|---|---|---|
 | `:hyle` module (`dev.aarso.hyle`) | `hyle/` | **Render-side tokens + contract** — `Finish`, `Pulse`, `RadiantHues`. Pure data, JVM-tested (`FinishTest`). Android library, no Compose. | **Yes — core** |
-| `:hyle-probe` app (`dev.aarso.hyleprobe`) | `hyle-probe/` | Standalone **render harness** APK: `FerrofluidProbe`, `AeonAtomsProbe`, `LensProbe`, `RadiantGlowProbe`, `GlassSandProbe`. The device-verification surface for the look. | **Yes — the gallery** |
-| Compose components | app `ui/aeon/Aeon.kt`, `ui/theme/*`, `ui/wire/*` | The actual `Hyle*` widgets (`HyleButton`, `HyleChip`, `HyleField`, `HyleDropdownField`, `HyleTitle`, `HyleNavChip`), `AeonColors`/`AarsoTheme`/`ThemePicker`, the wire primitives. | **Phased** — see §4 |
+| `:hyle-probe` app (`dev.fonebrew.hyleprobe`) | `hyle-probe/` | Standalone **render harness** APK: `FerrofluidProbe`, `AeonAtomsProbe`, `LensProbe`, `RadiantGlowProbe`, `GlassSandProbe`. The device-verification surface for the look. | **Yes — the gallery** |
+| Compose components | app `ui/aeon/Aeon.kt`, `ui/theme/*`, `ui/wire/*` | The actual `Hyle*` widgets (`HyleButton`, `HyleChip`, `HyleField`, `HyleDropdownField`, `HyleTitle`, `HyleNavChip`), `AeonColors`/`FonebrewTheme`/`ThemePicker`, the wire primitives. | **Phased** — see §4 |
 | The **semantic** | app `domain/material` + `material-language.md` | "local vs from-elsewhere" meaning (a watched object reads differently). App-specific policy, **not** render. | **No — stays in app** |
 
 Consumers/wiring today: `settings.gradle.kts` `include(":hyle")`, `include(":hyle-probe")`;
@@ -71,7 +73,7 @@ header says so). Two-phase:
    repo as `hyle/` and `probe/`. Preserves authorship/blame.
 2. **New repo scaffolding:** copy `gradle/`, `gradlew`, `settings.gradle.kts` (foojay resolver +
    the two includes), and a trimmed `libs.versions.toml` (only what Hyle/probe reference).
-3. **Add `maven-publish`** to `hyle/build.gradle.kts` (groupId `dev.aarso`, artifactId `hyle`,
+3. **Add `maven-publish`** to `hyle/build.gradle.kts` (groupId `dev.fonebrew`, artifactId `hyle`,
    version from a `gradle.properties`). Wire a `publishToMavenLocal` smoke test.
 4. **CI in the new repo:** `./gradlew :hyle:test` (JVM) on every push; `:probe:assembleDebug` to
    prove the harness still builds; optionally publish on tag.

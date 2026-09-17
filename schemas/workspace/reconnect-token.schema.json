@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/reconnect-token.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/reconnect-token.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ReconnectToken: named but never specified in the source pack — designed here per the WP-1 task brief's explicit instruction. Used by a WorkspaceProvider (SSH/SAF-backed most concretely) to resume a connection from AUTH_REQUIRED or DISCONNECTED (WorkspaceProviderState, WORKSPACE_KERNEL_SPEC.md §6) without a full re-authentication round trip, while the token is still within its validity window. `tokenBytes` is OPAQUE — this schema cannot and does not attempt to verify it is not accidentally plaintext credential material; binding rule 5 (API keys encrypted at rest, never logged) applies to it exactly as to any other secret (see fixtures/workspace/adversarial/reconnect-token-plaintext-secret-leak.adversarial.json).",
   "title": "ReconnectToken",
   "type": "object",

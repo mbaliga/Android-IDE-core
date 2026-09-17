@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/buffer-journal-entry.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/buffer-journal-entry.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. BufferJournalEntry: named but never specified in the source pack — designed here per the WP-1 task brief's explicit instruction, under the common envelope conventions (FB-RAT-COM-002 identity is deliberately NOT re-declared per-entry; identity for an append-only log entry is its (bufferId, sequence) pair, not a separate objectId — see WORKSPACE_KERNEL_SPEC.md §7). This is WorkspaceJournal.append()'s parameter shape (FB-RAT-WS-005: human and agent edits share ONE transaction/journal/review/undo/conflict model — `originKind` is how that single stream stays legible about which lane produced a given entry, not a second write path).",
   "title": "BufferJournalEntry",
   "type": "object",

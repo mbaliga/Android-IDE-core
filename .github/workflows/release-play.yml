@@ -1,0 +1,174 @@
+name: Release (Play AAB)
+
+# Builds a SIGNED Play bundle — the `play` flavor AAB (appId dev.aarso) — for upload
+# to the Google Play Console. The upload key lives ENTIRELY in repository Secrets and
+# is decoded to an ephemeral file at build time; it is never committed and never lands
+# in an artifact. Google's Play App Signing holds the real app-signing key — this key
+# only signs the upload artifact.
+#
+# ── Required repository secrets ────────────────────────────────────────────────
+#   Settings → Secrets and variables → Actions → New repository secret
+#     FONEBREW_KEYSTORE_BASE64     base64 of the upload keystore file
+#                               (generate: base64 -w0 fonebrew-upload.keystore)
+#     FONEBREW_KEYSTORE_PASSWORD   keystore (store) password
+#     FONEBREW_KEYSTORE_ALIAS      key alias (e.g. fonebrew-upload)
+#     FONEBREW_KEY_PASSWORD        key password
+#   app/build.gradle.kts reads FONEBREW_KEYSTORE_FILE/_PASSWORD/_ALIAS + FONEBREW_KEY_PASSWORD
+#   as env vars (signingValue()); we point _FILE at the decoded keystore below.
+#
+# ── How to release ─────────────────────────────────────────────────────────────
+#   1. Bump versionCode (+1) and versionName in app/build.gradle.kts, commit.
+#   2. Tag it:  git tag v0.1.0 && git push origin v0.1.0     (or run manually below).
+#   3. Download the `app-play-release-aab` artifact from the run summary.
+#   4. Upload it in the Play Console → closed testing (see docs/play/release-process.md).
+#   Automated Play upload (a service-account JSON + r0adkll/upload-google-play) is
+#   deliberately NOT wired yet — no Play service account exists; add it when it does.
+#
+# ── Known infra constraints (honest) ───────────────────────────────────────────
+#   • The native llama.cpp + stable-diffusion.cpp cross-compile is memory-heavy and
+#     OOMs a bare ubuntu-latest — this job adds 12 GB swap (same trick as CI's
+#     native-assemble canary) so it finishes inside the timeout. Move to a larger
+#     runner if it still OOMs.
+#   • This is a PRIVATE repo. If Actions minutes / the spending limit are exhausted,
+#     runs die in ~3-6s with no runner assigned (job never starts) — that is an
+#     account-level billing block, not a code error. Top up minutes or raise the
+#     limit before expecting this to run. See docs/STATE.md §9.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this manual release build (note only)"
+        required: false
+
+concurrency:
+  group: release-play-${{ github.ref }}
+  cancel-in-progress: false # never cancel a release build mid-flight
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Fail fast if signing secrets are missing
+        env:
+          KS: ${{ secrets.FONEBREW_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS" ]; then
+            echo "::error::FONEBREW_KEYSTORE_BASE64 is not set — add the upload-key secrets before releasing (see docs/play/release-process.md)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          # Native sources + the includeBuild'd Hyle and shared-libraries submodules are needed
+          # for the AAB. The latter two are private repos — auth with the same fine-grained PAT
+          # fallback ci.yml uses (Contents:Read on Android-IDE-core + Hyle-Design-System +
+          # Shared-Libraries-asoc), stored as the CORE_SUBMODULE_TOKEN secret.
+          submodules: recursive
+          token: ${{ secrets.CORE_SUBMODULE_TOKEN || github.token }}
+
+      - name: Submodule pointers resolve to real content
+        run: |
+          if git submodule status --recursive | grep -qE '^-'; then
+            echo "::error::a submodule pointer is uninitialized/dangling (see 'git submodule status')"; exit 1
+          fi
+          test -f hyle-design-system/settings.gradle.kts \
+            || { echo "::error::hyle-design-system submodule is empty — includeBuild would fail"; exit 1; }
+          test -f shared-libraries/settings.gradle.kts \
+            || { echo "::error::shared-libraries submodule is empty — includeBuild would fail"; exit 1; }
+          test -f core-engine/src/main/cpp/llama.cpp/CMakeLists.txt \
+            || { echo "::error::llama.cpp submodule is empty — native build would fail"; exit 1; }
+          test -f sdengine/src/main/cpp/stable-diffusion.cpp/CMakeLists.txt \
+            || { echo "::error::stable-diffusion.cpp submodule is empty"; exit 1; }
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with build cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools'
+          # package, which Google's repository no longer serves (sdkmanager exit 1
+          # before Gradle ever runs - 2026-09-15). Only platform-tools here; the
+          # pinned platforms/build-tools/NDK/CMake install in our own step below.
+          packages: platform-tools
+
+      - name: Install pinned NDK + CMake
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" \
+                     "ndk;28.2.13676358" "cmake;3.31.6"
+
+      - name: Decode upload keystore from secret
+        # Written under RUNNER_TEMP (outside the workspace) so it can never be captured
+        # by an upload-artifact glob or accidentally committed. Ephemeral runner anyway.
+        run: |
+          echo "${{ secrets.FONEBREW_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/fonebrew-upload.keystore"
+          echo "keystore decoded ($(stat -c%s "$RUNNER_TEMP/fonebrew-upload.keystore") bytes)"
+
+      - name: Add swap space (native cross-compile is memory-heavy)
+        # Sized to real free space, not a fixed 12G: newer ubuntu-latest images broke
+        # the fixed allocation with ENOSPC before the build started (see ci.yml's
+        # native-assemble swap step, same fix, canary run 33337477090 2026-08-30).
+        run: |
+          TARGET=/mnt
+          AVAIL_MNT=$(df --output=avail -k /mnt 2>/dev/null | tail -1 || echo 0)
+          AVAIL_ROOT=$(df --output=avail -k / | tail -1)
+          if [ "${AVAIL_ROOT:-0}" -gt "${AVAIL_MNT:-0}" ]; then TARGET=/; fi
+          AVAIL_K=$(df --output=avail -k "$TARGET" | tail -1)
+          WANT_K=$(( AVAIL_K - 4*1024*1024 ))
+          MAX_K=$(( 12*1024*1024 ))
+          [ "$WANT_K" -gt "$MAX_K" ] && WANT_K=$MAX_K
+          if [ "$WANT_K" -lt $(( 2*1024*1024 )) ]; then
+            echo "::warning::only ${AVAIL_K}K free on $TARGET — continuing without extra swap"
+            free -h; df -h; exit 0
+          fi
+          SWAPFILE="${TARGET%/}/swapfile"
+          sudo fallocate -l "${WANT_K}K" "$SWAPFILE" \
+            || sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count=$(( WANT_K / 1024 ))
+          sudo chmod 600 "$SWAPFILE"
+          sudo mkswap "$SWAPFILE"
+          sudo swapon "$SWAPFILE"
+          free -h; df -h "$TARGET"
+
+      - name: Unit-test gate (both flavors) + license
+        run: ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :app:checkLicense
+
+      - name: Build signed Play bundle (AAB)
+        env:
+          FONEBREW_KEYSTORE_FILE: ${{ runner.temp }}/fonebrew-upload.keystore
+          FONEBREW_KEYSTORE_PASSWORD: ${{ secrets.FONEBREW_KEYSTORE_PASSWORD }}
+          FONEBREW_KEYSTORE_ALIAS: ${{ secrets.FONEBREW_KEYSTORE_ALIAS }}
+          FONEBREW_KEY_PASSWORD: ${{ secrets.FONEBREW_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :app:bundlePlayRelease
+
+      - name: Verify the bundle is actually signed
+        # If the signing config had silently failed to apply, bundleRelease would emit an
+        # UNSIGNED AAB (Gradle does not fail) — Play would then reject it at upload. Catch
+        # that here instead. An AAB is a JAR-signed zip, so jarsigner is the right tool.
+        run: |
+          AAB=app/build/outputs/bundle/playRelease/app-play-release.aab
+          test -f "$AAB" || { echo "::error::AAB not produced at $AAB"; exit 1; }
+          if jarsigner -verify "$AAB" | grep -q "jar verified"; then
+            echo "AAB is signed ✓"
+          else
+            echo "::error::AAB is NOT signed — check the FONEBREW_KEYSTORE_* secrets"; exit 1
+          fi
+
+      - name: Upload AAB artifact
+        # Download this from the run summary → Artifacts, then upload in the Play Console.
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-play-release-aab
+          path: app/build/outputs/bundle/playRelease/app-play-release.aab
+          if-no-files-found: error
+          retention-days: 14
