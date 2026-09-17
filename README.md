@@ -1,4 +1,4 @@
-# Phonebrew — the open core (android-ide-core)
+# Fonebrew — the open core (android-ide-core)
 
 **Phonebrew** is a **sovereign, post-desktop computing environment on the phone** — an
 open, on-device "Claude Code with loop engineering" that grows into a real **agentic IDE**:
