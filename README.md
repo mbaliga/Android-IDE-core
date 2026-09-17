@@ -1,6 +1,6 @@
 # Fonebrew — the open core (android-ide-core)
 
-**Phonebrew** is a **sovereign, post-desktop computing environment on the phone** — an
+**Fonebrew** is a **sovereign, post-desktop computing environment on the phone** — an
 open, on-device "Claude Code with loop engineering" that grows into a real **agentic IDE**:
 chat with any model (on-device GGUF + cloud), a git-like message **tree**, a **Council**
 of models, a free-form **Loop** graph engine (GraphRunner + BPMN 2.0), the agentic **repo
