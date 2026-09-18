@@ -1,0 +1,6 @@
+The loop editor is now a full free-form graph editor: add, move, connect and
+delete nodes, set a model per node, run it, and save to standard BPMN 2.0.
+
+Editable council participants, each with their own model and memory. Per-hunk
+review before any agent commit. On-device full-text search across your history.
+Crash recovery that shows you the trace instead of losing your work.

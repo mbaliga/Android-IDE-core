@@ -102,6 +102,13 @@ jobs:
 
       - name: Upload test reports
         if: always()
+        # continue-on-error: this upload is diagnostic (reports for debugging a failure),
+        # not part of the gate's pass/fail contract — the Gradle step above already is.
+        # Without this, a GitHub-account-level "Artifact storage quota has been hit" (a
+        # real failure seen 2026-08-27, see CLAUDE.md's CI caveat) reds the whole job even
+        # when every actual test passed, the same false-negative shape as the Actions-
+        # minutes exhaustion this file's sibling note already documents.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
