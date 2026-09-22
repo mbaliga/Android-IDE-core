@@ -234,6 +234,20 @@ class AppContainer(context: Context) {
     fun newSshTransport(): dev.aarso.domain.remote.RemoteTransport =
         dev.aarso.data.remote.SshjTransport(secretProvider = { remoteHostStore.secret(it) })
 
+    /**
+     * Provider-neutral execution fabric. The catalogue is recomputed on every resolution so
+     * connection state (trusted SSH hosts / configured CI hosts) is current rather than captured
+     * at startup. Local Linux/JVM/browser, Windows compatibility and isolated-VM providers remain
+     * NEEDS_SETUP until a concrete provider is installed and probed.
+     */
+    val runtimeBroker: dev.aarso.domain.runtime.RuntimeBroker =
+        dev.aarso.domain.runtime.RuntimeBroker {
+            dev.aarso.domain.runtime.RuntimeCatalog.baseline(
+                hasTrustedSshHost = remoteHostStore.hosts.value.isNotEmpty(),
+                hasCiHost = gitHostStore.hosts.value.isNotEmpty(),
+            )
+        }
+
     /** Durable, retrying queue for network journeys so they survive the subway (P5). The worker
      *  drains it against per-kind handlers; a permanent error (auth/no-host) parks the op for the
      *  user instead of retrying forever. */
