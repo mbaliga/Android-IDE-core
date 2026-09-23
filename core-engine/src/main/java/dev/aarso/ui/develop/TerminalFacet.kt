@@ -1,5 +1,7 @@
 package dev.aarso.ui.develop
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -47,6 +49,31 @@ fun TerminalFacet() {
     var running by remember { mutableStateOf(false) }
     var probing by remember { mutableStateOf(false) }\n    var provisioning by remember { mutableStateOf(false) }
 
+    val workspacePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            val persisted = runCatching {
+                uiContext.contentResolver.takePersistableUriPermission(uri, flags)
+                true
+            }.getOrDefault(false)
+            val grant = uiContext.contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri }
+            val readOnly = grant?.isWritePermission != true
+            container.workspaceHandoffStore.set(
+                dev.aarso.domain.runtime.FylzWorkspaceRef(
+                    treeUri = uri.toString(),
+                    displayName = null,
+                    readOnly = readOnly,
+                )
+            )
+            if (!persisted) {
+                output += "\n[workspace selected for this session; provider did not persist the grant]\n"
+            }
+        }
+    }
+
     fun identityFor(host: dev.aarso.domain.remote.RemoteHost): dev.aarso.domain.remote.Identity {
         val ref = store.hostSecret(host.alias)
         return when {
@@ -91,6 +118,16 @@ fun TerminalFacet() {
                     running = false
                 }
             }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+
+    if (activeWorkspace == null) {
+        WireBox {
+            Text("Workspace", style = MaterialTheme.typography.labelMedium)
+            Hint("No Fylz/SAF workspace connected.")
+            Spacer(Modifier.height(6.dp))
+            WireButton("Choose workspace") { workspacePicker.launch(null) }
         }
         Spacer(Modifier.height(8.dp))
     }
