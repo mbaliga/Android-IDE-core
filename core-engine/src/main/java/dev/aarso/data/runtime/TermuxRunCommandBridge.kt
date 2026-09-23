@@ -108,10 +108,16 @@ class TermuxRunCommandBridge(private val context: Context) {
             timeoutMs = 5 * 60 * 1000L,
         )
         if (repo.exitCode != 0 || repo.internalErrorCode != Activity.RESULT_OK) return repo
-        return run(
+        val chromium = run(
             executable = "\$PREFIX/bin/pkg",
-            args = listOf("install", "-y", "chromium"),
+            args = listOf("install", "-y", "python", "chromium"),
             timeoutMs = 20 * 60 * 1000L,
+        )
+        if (chromium.exitCode != 0 || chromium.internalErrorCode != Activity.RESULT_OK) return chromium
+        return run(
+            executable = "\$PREFIX/bin/python",
+            args = listOf("-m", "pip", "install", "--upgrade", "selenium"),
+            timeoutMs = 10 * 60 * 1000L,
         )
     }
 
@@ -135,6 +141,7 @@ class TermuxRunCommandBridge(private val context: Context) {
                         "(command -v clang >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1) && printf 'native=1\\n'",
                         "(command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1) && printf 'browser=1\\n'",
                         "(command -v chromedriver >/dev/null 2>&1 || command -v geckodriver >/dev/null 2>&1) && printf 'webdriver=1\\n'",
+                        "python -c 'import selenium' >/dev/null 2>&1 && printf 'selenium_client=1\\n'",
                     ).joinToString("; "),
                 ),
                 timeoutMs = 30_000,
@@ -165,7 +172,9 @@ class TermuxRunCommandBridge(private val context: Context) {
         if ("node" in flags) capabilities += RuntimeCapability.NODE
         if ("native" in flags) capabilities += RuntimeCapability.NATIVE_TOOLCHAIN
         if ("browser" in flags) capabilities += RuntimeCapability.BROWSER_HEADLESS
-        if ("browser" in flags && "webdriver" in flags) capabilities += RuntimeCapability.SELENIUM
+        if ("browser" in flags && "webdriver" in flags && "selenium_client" in flags) {
+            capabilities += RuntimeCapability.SELENIUM
+        }
 
         val kinds = linkedSetOf(RuntimeKind.LINUX_USERSPACE)
         if (RuntimeCapability.JVM in capabilities) kinds += RuntimeKind.JVM
