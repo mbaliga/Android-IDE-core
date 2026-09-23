@@ -80,6 +80,31 @@ class TermuxRunCommandBridge(private val context: Context) {
         }
     }
 
+    suspend fun provisionCoreDevelopmentToolchain(): TermuxCommandResult =
+        run(
+            executable = "\$PREFIX/bin/pkg",
+            args = listOf(
+                "install", "-y",
+                "git", "openjdk-17", "gradle", "python", "nodejs",
+                "clang", "cmake", "ninja",
+            ),
+            timeoutMs = 20 * 60 * 1000L,
+        )
+
+    suspend fun provisionBrowserTestToolchain(): TermuxCommandResult {
+        val repo = run(
+            executable = "\$PREFIX/bin/pkg",
+            args = listOf("install", "-y", "x11-repo"),
+            timeoutMs = 5 * 60 * 1000L,
+        )
+        if (repo.exitCode != 0 || repo.internalErrorCode != Activity.RESULT_OK) return repo
+        return run(
+            executable = "\$PREFIX/bin/pkg",
+            args = listOf("install", "-y", "chromium"),
+            timeoutMs = 20 * 60 * 1000L,
+        )
+    }
+
     suspend fun probeProfile(): RuntimeProviderProfile {
         if (installationState() != RuntimeAvailability.READY) {
             return setupProfile()
