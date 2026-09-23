@@ -37,7 +37,7 @@ fun TerminalFacet() {
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
-    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()\n    val windowsProfile by container.runtimeProfileRegistry.windowsProfile.collectAsState()
+    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()\n    val windowsProfile by container.runtimeProfileRegistry.windowsProfile.collectAsState()\n    val activeWorkspace by container.workspaceHandoffStore.active.collectAsState()
     val scope = rememberCoroutineScope()
 
     var localSelected by remember { mutableStateOf(true) }
@@ -59,6 +59,41 @@ fun TerminalFacet() {
     Text("Terminal", style = MaterialTheme.typography.titleSmall)
     Hint("Run locally on this phone or on one of your trusted machines. Output is shown verbatim.")
     Spacer(Modifier.height(8.dp))
+
+    activeWorkspace?.let { workspace ->
+        WireBox {
+            Text("Workspace", style = MaterialTheme.typography.labelMedium)
+            Text(
+                workspace.displayName ?: "Fylz workspace",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Hint(if (workspace.readOnly) "Fylz · read-only grant" else "Fylz · read/write grant")
+            Spacer(Modifier.height(6.dp))
+            WireButton(
+                if (running) "Working…" else "Materialize locally",
+                enabled = !running && !provisioning,
+            ) {
+                running = true
+                scope.launch {
+                    runCatching {
+                        container.safTermuxWorkspaceMirror.materialize(
+                            treeUri = android.net.Uri.parse(workspace.treeUri),
+                            workspaceId = workspace.displayName ?: "workspace",
+                        )
+                    }.fold(
+                        onSuccess = { receipt ->
+                            output += "\n[workspace mirrored: ${receipt.filesCopied} files, ${receipt.bytesCopied} bytes -> ${receipt.termuxPath}]\n"
+                        },
+                        onFailure = { error ->
+                            output += "\n[workspace mirror failed: ${error.message}]\n"
+                        },
+                    )
+                    running = false
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
 
     Text("Runtime", style = MaterialTheme.typography.labelMedium)
     Row(
