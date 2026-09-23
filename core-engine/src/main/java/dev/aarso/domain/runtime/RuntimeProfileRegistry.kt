@@ -1,6 +1,6 @@
 package dev.aarso.domain.runtime
 
-import dev.aarso.data.runtime.TermuxRunCommandBridge
+import dev.aarso.data.runtime.TermuxRunCommandBridge\nimport dev.aarso.data.runtime.TermuxWindowsCompatBridge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,9 +12,23 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class RuntimeProfileRegistry(
     private val termux: TermuxRunCommandBridge,
+    private val windowsCompat: TermuxWindowsCompatBridge,
 ) {
     private val _termuxProfile = MutableStateFlow(termux.setupProfile())
     val termuxProfile: StateFlow<RuntimeProviderProfile> = _termuxProfile.asStateFlow()
+
+    private val _windowsProfile = MutableStateFlow(
+        RuntimeProviderProfile(
+            providerId = TermuxWindowsCompatBridge.PROVIDER_ID,
+            executionTargetType = dev.aarso.contracts.execution.ExecutionTargetType.LOCAL_ANDROID,
+            kinds = setOf(RuntimeKind.WINDOWS_COMPAT),
+            capabilities = emptySet(),
+            locality = RuntimeLocality.ON_DEVICE,
+            availability = RuntimeAvailability.NEEDS_SETUP,
+            setupHint = "Probe the local Wine/translation compatibility runtime.",
+        )
+    )
+    val windowsProfile: StateFlow<RuntimeProviderProfile> = _windowsProfile.asStateFlow()
 
     suspend fun refreshTermux(): RuntimeProviderProfile {
         val profile = termux.probeProfile()
@@ -22,5 +36,12 @@ class RuntimeProfileRegistry(
         return profile
     }
 
-    fun currentProfiles(): List<RuntimeProviderProfile> = listOf(_termuxProfile.value)
+    suspend fun refreshWindowsCompat(): RuntimeProviderProfile {
+        val (_, profile) = windowsCompat.probe()
+        _windowsProfile.value = profile
+        return profile
+    }
+
+    fun currentProfiles(): List<RuntimeProviderProfile> =
+        listOf(_termuxProfile.value, _windowsProfile.value)
 }
