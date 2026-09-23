@@ -53,10 +53,13 @@ fun TerminalFacet() {
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
         if (uri != null) {
-            val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            val readFlag = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            val writeFlag = android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             val persisted = runCatching {
-                uiContext.contentResolver.takePersistableUriPermission(uri, flags)
+                uiContext.contentResolver.takePersistableUriPermission(uri, readFlag or writeFlag)
+                true
+            }.recoverCatching {
+                uiContext.contentResolver.takePersistableUriPermission(uri, readFlag)
                 true
             }.getOrDefault(false)
             val grant = uiContext.contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri }
