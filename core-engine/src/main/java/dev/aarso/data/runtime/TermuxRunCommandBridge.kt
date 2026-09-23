@@ -22,7 +22,12 @@ data class TermuxCommandResult(
     val stderr: String,
     val internalErrorCode: Int,
     val internalErrorMessage: String,
-)
+    val stdoutOriginalLength: Long = stdout.length.toLong(),
+    val stderrOriginalLength: Long = stderr.length.toLong(),
+) {
+    val outputTruncated: Boolean
+        get() = stdoutOriginalLength > stdout.length || stderrOriginalLength > stderr.length
+}
 
 class TermuxRunCommandBridge(private val context: Context) {
 
