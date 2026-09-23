@@ -18,7 +18,7 @@ A runtime is selectable only when its profile is `READY`. Planned providers rema
 
 Ready today: Android-native orchestration substrate, SSH execution when a trusted host is configured, and CI dispatch when a Git/CI host is configured.
 
-Not yet a ready local runtime: Linux/JVM/browser capsule, Windows compatibility pack, isolated VM/AVF provider.
+Concrete local runtime: Termux RUN_COMMAND supplies the first Linux userspace provider. Fonebrew probes installed tools before advertising JVM/Gradle/Python/Node/native/browser/Selenium capabilities, exposes explicit provisioning actions, and mirrors user-granted SAF/Fylz workspaces into a bounded Termux execution workspace.\n\nStill not implemented: Windows compatibility pack and isolated VM/AVF provider.
 
 ## Next provider work
 
