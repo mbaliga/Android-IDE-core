@@ -243,6 +243,13 @@ class AppContainer(context: Context) {
         dev.aarso.data.runtime.SafTermuxWorkspaceMirror(context.applicationContext, termuxRuntimeBridge)
     val termuxBrowserHarness: dev.aarso.data.runtime.TermuxBrowserHarness =
         dev.aarso.data.runtime.TermuxBrowserHarness(termuxRuntimeBridge)
+    val localWorkspaceExecutionCoordinator: dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator by lazy {
+        dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator(
+            broker = runtimeBroker,
+            mirror = safTermuxWorkspaceMirror,
+            termuxProvider = termuxExecutionProvider,
+        )
+    }
     val runtimeProfileRegistry: dev.aarso.domain.runtime.RuntimeProfileRegistry =
         dev.aarso.domain.runtime.RuntimeProfileRegistry(termuxRuntimeBridge)
 
