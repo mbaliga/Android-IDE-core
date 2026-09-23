@@ -36,3 +36,14 @@ Concrete local runtime: Termux RUN_COMMAND supplies the first Linux userspace pr
 - remote/cloud location and data boundary stay visible;
 - a clean process exit is not equivalent to verified test evidence;
 - runtime/provider receipts remain append-only and attributable.
+
+## Workspace handoff
+
+Fylz can hand the currently open SAF tree to Fonebrew with `dev.aarso.action.OPEN_WORKSPACE`. Fonebrew persists the grant when the provider permits it and stores only the opaque `content://` capability. For local execution the tree is copied into a bounded Termux staging workspace; only declared artifacts are copied back.
+
+## Isolation and compatibility status
+
+- Termux Linux is the first concrete on-device execution provider.
+- Selenium browser capture is concrete once Chromium, Chromedriver and the Selenium client pass the probe.
+- Wine/translation support is probe-only: it becomes READY only when a working Wine executable is present; x64 translation is reported separately.
+- AVF support is detected through the Android virtualization-framework system feature, but Fonebrew does not advertise `VM_ISOLATION` until a permitted VM provider actually exists.
