@@ -37,7 +37,7 @@ fun TerminalFacet() {
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
-    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()
+    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()\n    val windowsProfile by container.runtimeProfileRegistry.windowsProfile.collectAsState()
     val scope = rememberCoroutineScope()
 
     var localSelected by remember { mutableStateOf(true) }
@@ -97,6 +97,12 @@ fun TerminalFacet() {
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Windows compatibility · " + windowsProfile.availability.name.lowercase(),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            windowsProfile.setupHint?.let { Hint(it) }
             termuxProfile.setupHint?.let { Hint(it) }
             if (container.termuxRuntimeBridge.isInstalled() &&
                 !container.termuxRuntimeBridge.hasRunCommandPermission()
@@ -170,6 +176,17 @@ fun TerminalFacet() {
                             onFailure = { output += "\n[browser toolchain install failed: ${it.message}]\n" },
                         )
                         provisioning = false
+                    }
+                }
+                WireButton(
+                    "Probe Windows",
+                    enabled = !probing && !running && !provisioning,
+                ) {
+                    probing = true
+                    scope.launch {
+                        val profile = container.runtimeProfileRegistry.refreshWindowsCompat()
+                        output += "\n[windows compatibility: ${profile.availability.name.lowercase()}]\n"
+                        probing = false
                     }
                 }
             }
