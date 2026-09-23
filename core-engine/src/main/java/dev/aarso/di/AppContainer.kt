@@ -234,18 +234,25 @@ class AppContainer(context: Context) {
     fun newSshTransport(): dev.aarso.domain.remote.RemoteTransport =
         dev.aarso.data.remote.SshjTransport(secretProvider = { remoteHostStore.secret(it) })
 
+    /** Concrete on-device Linux bridge via Termux RUN_COMMAND. */
+    val termuxRuntimeBridge: dev.aarso.data.runtime.TermuxRunCommandBridge =
+        dev.aarso.data.runtime.TermuxRunCommandBridge(context.applicationContext)
+    val termuxExecutionProvider: dev.aarso.domain.execution.TermuxExecutionProvider =
+        dev.aarso.domain.execution.TermuxExecutionProvider(termuxRuntimeBridge)
+    val runtimeProfileRegistry: dev.aarso.domain.runtime.RuntimeProfileRegistry =
+        dev.aarso.domain.runtime.RuntimeProfileRegistry(termuxRuntimeBridge)
+
     /**
      * Provider-neutral execution fabric. The catalogue is recomputed on every resolution so
-     * connection state (trusted SSH hosts / configured CI hosts) is current rather than captured
-     * at startup. Local Linux/JVM/browser, Windows compatibility and isolated-VM providers remain
-     * NEEDS_SETUP until a concrete provider is installed and probed.
+     * connection state and probed local capabilities remain current.
      */
     val runtimeBroker: dev.aarso.domain.runtime.RuntimeBroker =
         dev.aarso.domain.runtime.RuntimeBroker {
-            dev.aarso.domain.runtime.RuntimeCatalog.baseline(
+            val baseline = dev.aarso.domain.runtime.RuntimeCatalog.baseline(
                 hasTrustedSshHost = remoteHostStore.hosts.value.isNotEmpty(),
                 hasCiHost = gitHostStore.hosts.value.isNotEmpty(),
-            )
+            ).filterNot { it.providerId == "linux-capsule" }
+            baseline + runtimeProfileRegistry.currentProfiles()
         }
 
     /** Durable, retrying queue for network journeys so they survive the subway (P5). The worker
