@@ -239,6 +239,8 @@ class AppContainer(context: Context) {
         dev.aarso.data.runtime.TermuxRunCommandBridge(context.applicationContext)
     val termuxExecutionProvider: dev.aarso.domain.execution.TermuxExecutionProvider =
         dev.aarso.domain.execution.TermuxExecutionProvider(termuxRuntimeBridge)
+    val safTermuxWorkspaceMirror: dev.aarso.data.runtime.SafTermuxWorkspaceMirror =
+        dev.aarso.data.runtime.SafTermuxWorkspaceMirror(context.applicationContext, termuxRuntimeBridge)
     val runtimeProfileRegistry: dev.aarso.domain.runtime.RuntimeProfileRegistry =
         dev.aarso.domain.runtime.RuntimeProfileRegistry(termuxRuntimeBridge)
 
