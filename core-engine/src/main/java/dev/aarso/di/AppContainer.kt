@@ -243,6 +243,8 @@ class AppContainer(context: Context) {
         dev.aarso.data.runtime.SafTermuxWorkspaceMirror(context.applicationContext, termuxRuntimeBridge)
     val termuxBrowserHarness: dev.aarso.data.runtime.TermuxBrowserHarness =
         dev.aarso.data.runtime.TermuxBrowserHarness(termuxRuntimeBridge)
+    val termuxWindowsCompatBridge: dev.aarso.data.runtime.TermuxWindowsCompatBridge =
+        dev.aarso.data.runtime.TermuxWindowsCompatBridge(termuxRuntimeBridge)
     val localWorkspaceExecutionCoordinator: dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator by lazy {
         dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator(
             broker = runtimeBroker,
@@ -251,7 +253,7 @@ class AppContainer(context: Context) {
         )
     }
     val runtimeProfileRegistry: dev.aarso.domain.runtime.RuntimeProfileRegistry =
-        dev.aarso.domain.runtime.RuntimeProfileRegistry(termuxRuntimeBridge)
+        dev.aarso.domain.runtime.RuntimeProfileRegistry(termuxRuntimeBridge, termuxWindowsCompatBridge)
 
     /**
      * Provider-neutral execution fabric. The catalogue is recomputed on every resolution so
