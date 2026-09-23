@@ -235,6 +235,8 @@ class AppContainer(context: Context) {
         dev.aarso.data.remote.SshjTransport(secretProvider = { remoteHostStore.secret(it) })
 
     /** Concrete on-device Linux bridge via Termux RUN_COMMAND. */
+    val workspaceHandoffStore: dev.aarso.data.runtime.WorkspaceHandoffStore =
+        dev.aarso.data.runtime.WorkspaceHandoffStore(context.applicationContext)
     val termuxRuntimeBridge: dev.aarso.data.runtime.TermuxRunCommandBridge =
         dev.aarso.data.runtime.TermuxRunCommandBridge(context.applicationContext)
     val termuxExecutionProvider: dev.aarso.domain.execution.TermuxExecutionProvider =
