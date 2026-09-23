@@ -87,7 +87,7 @@ class TermuxRunCommandBridge(private val context: Context) {
 
         val probe = runCatching {
             run(
-                executable = "$PREFIX/bin/sh",
+                executable = "\\$PREFIX/bin/sh",
                 args = listOf(
                     "-lc",
                     listOf(
