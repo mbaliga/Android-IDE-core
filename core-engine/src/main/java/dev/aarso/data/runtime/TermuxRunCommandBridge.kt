@@ -26,15 +26,25 @@ data class TermuxCommandResult(
 
 class TermuxRunCommandBridge(private val context: Context) {
 
-    fun installationState(): RuntimeAvailability {
-        val installed = runCatching {
-            context.packageManager.getPackageInfo(TERMUX_PACKAGE, 0)
-        }.isSuccess
-        if (!installed) return RuntimeAvailability.NEEDS_SETUP
+    fun isInstalled(): Boolean = runCatching {
+        context.packageManager.getPackageInfo(TERMUX_PACKAGE, 0)
+    }.isSuccess
 
-        val permission = ContextCompat.checkSelfPermission(context, RUN_COMMAND_PERMISSION)
-        return if (permission == PackageManager.PERMISSION_GRANTED) RuntimeAvailability.READY
+    fun hasRunCommandPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, RUN_COMMAND_PERMISSION) == PackageManager.PERMISSION_GRANTED
+
+    fun installationState(): RuntimeAvailability {
+        if (!isInstalled()) return RuntimeAvailability.NEEDS_SETUP
+        return if (hasRunCommandPermission()) RuntimeAvailability.READY
         else RuntimeAvailability.NEEDS_SETUP
+    }
+
+    fun setupHint(): String = when {
+        !isInstalled() -> "Install Termux first."
+        !hasRunCommandPermission() ->
+            "Grant Fonebrew the Android 'Run commands in Termux environment' permission."
+        else ->
+            "In Termux set allow-external-apps=true in ~/.termux/termux.properties, then probe again."
     }
 
     suspend fun run(
@@ -180,7 +190,7 @@ class TermuxRunCommandBridge(private val context: Context) {
         locality = RuntimeLocality.ON_DEVICE,
         availability = RuntimeAvailability.NEEDS_SETUP,
         architectures = setOf("aarch64", "arm64-v8a"),
-        setupHint = hint ?: "Install Termux, set allow-external-apps=true, then grant Fonebrew the Run commands in Termux permission.",
+        setupHint = hint ?: setupHint(),
     )
 
     companion object {
