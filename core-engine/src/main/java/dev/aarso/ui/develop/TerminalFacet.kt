@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun TerminalFacet() {
-    val container = (LocalContext.current.applicationContext as AarsoApp).container
+    val uiContext = LocalContext.current\n    val container = (uiContext.applicationContext as AarsoApp).container
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
@@ -98,6 +98,30 @@ fun TerminalFacet() {
                 )
             }
             termuxProfile.setupHint?.let { Hint(it) }
+            if (container.termuxRuntimeBridge.isInstalled() &&
+                !container.termuxRuntimeBridge.hasRunCommandPermission()
+            ) {
+                Spacer(Modifier.height(6.dp))
+                WireButton("Grant Termux permission") {
+                    val activity = uiContext as? android.app.Activity
+                    if (activity != null) {
+                        androidx.core.app.ActivityCompat.requestPermissions(
+                            activity,
+                            arrayOf(dev.aarso.data.runtime.TermuxRunCommandBridge.RUN_COMMAND_PERMISSION),
+                            7341,
+                        )
+                    }
+                }
+            } else if (container.termuxRuntimeBridge.isInstalled() &&
+                termuxProfile.availability != RuntimeAvailability.READY
+            ) {
+                Spacer(Modifier.height(6.dp))
+                WireButton("Open Termux") {
+                    uiContext.packageManager.getLaunchIntentForPackage(
+                        dev.aarso.data.runtime.TermuxRunCommandBridge.TERMUX_PACKAGE,
+                    )?.let(uiContext::startActivity)
+                }
+            }
             Spacer(Modifier.height(6.dp))
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
