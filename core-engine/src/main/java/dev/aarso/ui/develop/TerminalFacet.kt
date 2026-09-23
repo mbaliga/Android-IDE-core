@@ -45,7 +45,7 @@ fun TerminalFacet() {
     var cmd by remember { mutableStateOf("uname -a") }
     var output by remember { mutableStateOf("") }
     var running by remember { mutableStateOf(false) }
-    var probing by remember { mutableStateOf(false) }
+    var probing by remember { mutableStateOf(false) }\n    var provisioning by remember { mutableStateOf(false) }
 
     fun identityFor(host: dev.aarso.domain.remote.RemoteHost): dev.aarso.domain.remote.Identity {
         val ref = store.hostSecret(host.alias)
@@ -99,15 +99,54 @@ fun TerminalFacet() {
             }
             termuxProfile.setupHint?.let { Hint(it) }
             Spacer(Modifier.height(6.dp))
-            WireButton(
-                if (probing) "Probing…" else "Probe toolchain",
-                enabled = !probing && !running,
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                probing = true
-                scope.launch {
-                    val profile = container.runtimeProfileRegistry.refreshTermux()
-                    output += "\n[runtime probe: ${profile.availability.name.lowercase()}]\n"
-                    probing = false
+                WireButton(
+                    if (probing) "Probing…" else "Probe toolchain",
+                    enabled = !probing && !running && !provisioning,
+                ) {
+                    probing = true
+                    scope.launch {
+                        val profile = container.runtimeProfileRegistry.refreshTermux()
+                        output += "\n[runtime probe: ${profile.availability.name.lowercase()}]\n"
+                        probing = false
+                    }
+                }
+                WireButton(
+                    if (provisioning) "Installing…" else "Install core dev",
+                    enabled = !probing && !running && !provisioning,
+                ) {
+                    provisioning = true
+                    scope.launch {
+                        val result = runCatching { container.termuxRuntimeBridge.provisionCoreDevelopmentToolchain() }
+                        result.fold(
+                            onSuccess = {
+                                output += "\n[core toolchain install exit ${it.exitCode}]\n" + it.stdout + it.stderr
+                                container.runtimeProfileRegistry.refreshTermux()
+                            },
+                            onFailure = { output += "\n[core toolchain install failed: ${it.message}]\n" },
+                        )
+                        provisioning = false
+                    }
+                }
+                WireButton(
+                    "Install browser test",
+                    enabled = !probing && !running && !provisioning,
+                ) {
+                    provisioning = true
+                    scope.launch {
+                        val result = runCatching { container.termuxRuntimeBridge.provisionBrowserTestToolchain() }
+                        result.fold(
+                            onSuccess = {
+                                output += "\n[browser toolchain install exit ${it.exitCode}]\n" + it.stdout + it.stderr
+                                container.runtimeProfileRegistry.refreshTermux()
+                            },
+                            onFailure = { output += "\n[browser toolchain install failed: ${it.message}]\n" },
+                        )
+                        provisioning = false
+                    }
                 }
             }
         }
