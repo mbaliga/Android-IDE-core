@@ -24,6 +24,8 @@ class TermuxResultService : Service() {
                 stderr = "",
                 internalErrorCode = 1,
                 internalErrorMessage = "Termux result bundle missing",
+                stdoutOriginalLength = 0,
+                stderrOriginalLength = 0,
             )
         } else {
             TermuxCommandResult(
@@ -32,6 +34,10 @@ class TermuxResultService : Service() {
                 stderr = bundle.getString(EXTRA_STDERR, "") ?: "",
                 internalErrorCode = bundle.getInt(EXTRA_ERR, 0),
                 internalErrorMessage = bundle.getString(EXTRA_ERRMSG, "") ?: "",
+                stdoutOriginalLength = bundle.getString(EXTRA_STDOUT_ORIGINAL_LENGTH)?.toLongOrNull()
+                    ?: bundle.getLong(EXTRA_STDOUT_ORIGINAL_LENGTH, (bundle.getString(EXTRA_STDOUT, "") ?: "").length.toLong()),
+                stderrOriginalLength = bundle.getString(EXTRA_STDERR_ORIGINAL_LENGTH)?.toLongOrNull()
+                    ?: bundle.getLong(EXTRA_STDERR_ORIGINAL_LENGTH, (bundle.getString(EXTRA_STDERR, "") ?: "").length.toLong()),
             )
         }
 
@@ -47,6 +53,8 @@ class TermuxResultService : Service() {
         private const val EXTRA_STDOUT = "stdout"
         private const val EXTRA_STDERR = "stderr"
         private const val EXTRA_EXIT_CODE = "exitCode"
+        private const val EXTRA_STDOUT_ORIGINAL_LENGTH = "stdout_original_length"
+        private const val EXTRA_STDERR_ORIGINAL_LENGTH = "stderr_original_length"
         private const val EXTRA_ERR = "err"
         private const val EXTRA_ERRMSG = "errmsg"
 
