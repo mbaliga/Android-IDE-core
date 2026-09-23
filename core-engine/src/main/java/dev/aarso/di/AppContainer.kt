@@ -247,6 +247,8 @@ class AppContainer(context: Context) {
         dev.aarso.data.runtime.TermuxBrowserHarness(termuxRuntimeBridge)
     val termuxWindowsCompatBridge: dev.aarso.data.runtime.TermuxWindowsCompatBridge =
         dev.aarso.data.runtime.TermuxWindowsCompatBridge(termuxRuntimeBridge)
+    val androidVirtualizationProbe: dev.aarso.data.runtime.AndroidVirtualizationProbe =
+        dev.aarso.data.runtime.AndroidVirtualizationProbe(context.applicationContext)
     val localWorkspaceExecutionCoordinator: dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator by lazy {
         dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator(
             broker = runtimeBroker,
