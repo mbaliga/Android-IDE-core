@@ -109,7 +109,7 @@ class TermuxExecutionProvider(
             handle = handle,
             queuedAt = prepared.preparedAtUtc,
             startedAt = startedAt,
-            events = MutableSharedFlow(extraBufferCapacity = 16),
+            events = MutableSharedFlow(replay = 8, extraBufferCapacity = 16),
         )
         runs[handleId] = run
         reconnect[reconnectToken] = handleId
