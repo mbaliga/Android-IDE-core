@@ -6,6 +6,12 @@ package dev.aarso.domain.runtime
  * Fonebrew must not reinterpret document IDs as filesystem paths or reimplement provider logic.
  * The URI is handed to Android's ContentResolver / workspace adapters as an opaque capability.
  */
+object WorkspaceHandoffContract {
+    const val ACTION_OPEN_WORKSPACE = "dev.aarso.action.OPEN_WORKSPACE"
+    const val EXTRA_DISPLAY_NAME = "dev.aarso.extra.WORKSPACE_DISPLAY_NAME"
+    const val EXTRA_READ_ONLY = "dev.aarso.extra.WORKSPACE_READ_ONLY"
+}
+
 data class FylzWorkspaceRef(
     val treeUri: String,
     val displayName: String? = null,
