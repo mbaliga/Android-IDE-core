@@ -2,7 +2,6 @@ package dev.aarso.ui.develop
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,15 +24,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.aarso.AarsoApp
+import dev.aarso.domain.runtime.RuntimeAvailability
 import kotlinx.coroutines.launch
 
 /**
- * The Develop room's **Terminal** tab — a plain shell prompt that runs one command at a time on
- * the user's homelab runner / machine over the SSH spine, mirroring [DevicesFacet]'s Raspberry-Pi
- * shell mode. The host's raw stdout/stderr is shown verbatim in a monospace pane (a **watched
- * object** — never paraphrased). Trust stays the user's: [dev.aarso.data.DeviceRepo.exec] only
- * proceeds on an already-pinned host (connect once in Settings). Owner-verified — there is no SSH
- * host in CI.
+ * Develop → Terminal. Commands can run either in the on-phone Linux userspace (Termux bridge)
+ * or on a trusted SSH machine. Output is always shown verbatim as a watched object.
  */
 @Composable
 fun TerminalFacet() {
@@ -41,23 +37,16 @@ fun TerminalFacet() {
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
+    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()
     val scope = rememberCoroutineScope()
 
-    if (hosts.isEmpty()) {
-        Hint(
-            "No machine connected. Add one in Settings → Global → your machines and connect once " +
-                "to trust it — then run commands on it here.",
-        )
-        return
-    }
-
-    var selected by remember { mutableStateOf(hosts.first().alias) }
+    var localSelected by remember { mutableStateOf(true) }
+    var selectedRemote by remember { mutableStateOf(hosts.firstOrNull()?.alias) }
     var cmd by remember { mutableStateOf("uname -a") }
     var output by remember { mutableStateOf("") }
     var running by remember { mutableStateOf(false) }
+    var probing by remember { mutableStateOf(false) }
 
-    // Same identity resolution as DevicesFacet: a pinned key/password secret if present, else the
-    // ssh-agent — the host's trust decision belongs to the Remote screen, not this action.
     fun identityFor(host: dev.aarso.domain.remote.RemoteHost): dev.aarso.domain.remote.Identity {
         val ref = store.hostSecret(host.alias)
         return when {
@@ -68,19 +57,65 @@ fun TerminalFacet() {
     }
 
     Text("Terminal", style = MaterialTheme.typography.titleSmall)
-    Hint("Run a shell command on your machine over SSH. Output is shown verbatim.")
+    Hint("Run locally on this phone or on one of your trusted machines. Output is shown verbatim.")
     Spacer(Modifier.height(8.dp))
 
-    Text("Machine", style = MaterialTheme.typography.labelMedium)
+    Text("Runtime", style = MaterialTheme.typography.labelMedium)
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        hosts.forEach { h ->
-            WireButton(h.alias, selected = h.alias == selected, onClick = { selected = h.alias })
+        WireButton("This phone", selected = localSelected, onClick = { localSelected = true })
+        hosts.forEach { host ->
+            WireButton(
+                host.alias,
+                selected = !localSelected && selectedRemote == host.alias,
+                onClick = {
+                    localSelected = false
+                    selectedRemote = host.alias
+                },
+            )
         }
     }
     Spacer(Modifier.height(8.dp))
+
+    if (localSelected) {
+        WireBox {
+            Text("Linux userspace", style = MaterialTheme.typography.labelMedium)
+            val readiness = when (termuxProfile.availability) {
+                RuntimeAvailability.READY -> "ready"
+                RuntimeAvailability.NEEDS_SETUP -> "needs setup"
+                RuntimeAvailability.UNSUPPORTED -> "unsupported"
+            }
+            Text(
+                "Termux bridge · $readiness",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (termuxProfile.capabilities.isNotEmpty()) {
+                Text(
+                    termuxProfile.capabilities.joinToString(" · ") { it.name.lowercase() },
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            termuxProfile.setupHint?.let { Hint(it) }
+            Spacer(Modifier.height(6.dp))
+            WireButton(
+                if (probing) "Probing…" else "Probe toolchain",
+                enabled = !probing && !running,
+            ) {
+                probing = true
+                scope.launch {
+                    val profile = container.runtimeProfileRegistry.refreshTermux()
+                    output += "\n[runtime probe: ${profile.availability.name.lowercase()}]\n"
+                    probing = false
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    } else if (hosts.isEmpty()) {
+        Hint("No SSH machine connected. Add one in Settings → Global → your machines.")
+        Spacer(Modifier.height(8.dp))
+    }
 
     OutlinedTextField(
         cmd,
@@ -90,25 +125,50 @@ fun TerminalFacet() {
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(6.dp))
-    WireButton(if (running) "Running…" else "Run", enabled = !running && cmd.isNotBlank(), onClick = {
-        val host = hosts.firstOrNull { it.alias == selected } ?: return@WireButton
+    WireButton(
+        if (running) "Running…" else "Run",
+        enabled = !running && cmd.isNotBlank(),
+    ) {
         val command = cmd.trim()
         running = true
         scope.launch {
-            output += (if (output.isEmpty()) "" else "\n") + "$ $command\n"
-            runCatching {
-                val recipe = dev.aarso.domain.device.recipe.DeviceRecipes.shell(
-                    dev.aarso.domain.device.DeployTarget.Remote(host),
-                    command,
+            output += (if (output.isEmpty()) "" else "\n") + "$ " + command + "\n"
+            if (localSelected) {
+                runCatching {
+                    container.termuxRuntimeBridge.run(
+                        executable = "\$PREFIX/bin/sh",
+                        args = listOf("-lc", command),
+                    )
+                }.fold(
+                    onSuccess = { result ->
+                        if (result.stdout.isNotBlank()) output += result.stdout
+                        if (result.stderr.isNotBlank()) output += result.stderr
+                        output += "\n[exit ${result.exitCode}]\n"
+                    },
+                    onFailure = { error ->
+                        output += "failed: ${error.message}\n"
+                    },
                 )
-                repo.exec(host, identityFor(host), store.knownHosts.value, recipe, { output += it }).fold(
-                    { code -> output += "\n[exit $code]\n" },
-                    { output += "\nfailed: ${it.message} — is the machine trusted? connect once in Settings → Global.\n" },
-                )
-            }.onFailure { output += "\nfailed: ${it.message}\n" }
+            } else {
+                val host = hosts.firstOrNull { it.alias == selectedRemote }
+                if (host == null) {
+                    output += "failed: no remote machine selected\n"
+                } else {
+                    runCatching {
+                        val recipe = dev.aarso.domain.device.recipe.DeviceRecipes.shell(
+                            dev.aarso.domain.device.DeployTarget.Remote(host),
+                            command,
+                        )
+                        repo.exec(host, identityFor(host), store.knownHosts.value, recipe, { output += it }).fold(
+                            { code -> output += "\n[exit $code]\n" },
+                            { output += "\nfailed: ${it.message} — is the machine trusted? connect once in Settings → Global.\n" },
+                        )
+                    }.onFailure { output += "\nfailed: ${it.message}\n" }
+                }
+            }
             running = false
         }
-    })
+    }
     Spacer(Modifier.height(8.dp))
 
     WireBox {
@@ -125,5 +185,5 @@ fun TerminalFacet() {
         )
     }
     Spacer(Modifier.height(6.dp))
-    Hint("☁ watched — runs on your machine over SSH; credentials stay in the Keystore.")
+    Hint(if (localSelected) "⌂ watched — runs in the on-phone Linux userspace." else "☁ watched — runs over SSH.")
 }
