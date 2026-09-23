@@ -37,10 +37,12 @@ class TermuxWindowsCompatBridge(
                 args = listOf(
                     "-lc",
                     """
-WINE_BIN="$(command -v wine64 || command -v wine || true)"
-if [ -n "$WINE_BIN" ]; then
+if command -v wine64 >/dev/null 2>&1; then
   printf 'wine=1\n'
-  "$WINE_BIN" --version 2>/dev/null | head -n 1 | sed 's/^/wine_version=/'
+  wine64 --version 2>/dev/null | head -n 1 | sed 's/^/wine_version=/'
+elif command -v wine >/dev/null 2>&1; then
+  printf 'wine=1\n'
+  wine --version 2>/dev/null | head -n 1 | sed 's/^/wine_version=/'
 fi
 if command -v box64 >/dev/null 2>&1; then
   printf 'translator=box64\n'
@@ -103,7 +105,7 @@ fi
             executable = "\$PREFIX/bin/sh",
             args = listOf(
                 "-lc",
-                "WINE_BIN=\"$(command -v wine64 || command -v wine)\"; exec \"$WINE_BIN\" \"$@\"" ,
+                "if command -v wine64 >/dev/null 2>&1; then exec wine64 \"\$@\"; else exec wine \"\$@\"; fi",
                 "_",
                 executablePath,
             ) + args,
