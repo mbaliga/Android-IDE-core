@@ -180,4 +180,8 @@ class SafTermuxWorkspaceMirror(
         require(parts.none { it.isBlank() || it == "." || it == ".." }) { "Unsafe artifact path." }
         return parts.joinToString("/")
     }
+
+    companion object {
+        private const val TERMUX_HOME = "/data/data/com.termux/files/home"
+    }
 }
