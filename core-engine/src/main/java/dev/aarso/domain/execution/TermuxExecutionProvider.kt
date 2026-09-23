@@ -163,6 +163,13 @@ class TermuxExecutionProvider(
         val state = if (success) ExecutionState.SUCCEEDED_UNVERIFIED else ExecutionState.FAILED_SAFE
         val exit = if (success) ExecutionExitState.SUCCEEDED_UNVERIFIED else ExecutionExitState.FAILED_SAFE
         val combined = buildString {
+            if (commandResult.outputTruncated) {
+                append(
+                    "[output truncated by Termux result transport; original stdout=" +
+                        commandResult.stdoutOriginalLength + " chars, stderr=" +
+                        commandResult.stderrOriginalLength + " chars]\n"
+                )
+            }
             if (commandResult.stdout.isNotBlank()) append(commandResult.stdout)
             if (commandResult.stderr.isNotBlank()) {
                 if (isNotEmpty()) append("\n")
