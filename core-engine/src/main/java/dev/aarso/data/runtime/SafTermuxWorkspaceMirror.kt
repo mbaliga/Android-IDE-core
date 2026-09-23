@@ -33,7 +33,7 @@ class SafTermuxWorkspaceMirror(
 
         val safeId = workspaceId.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
         require(safeId.isNotBlank()) { "workspaceId must contain at least one safe character." }
-        val destination = "~/fonebrew/workspaces/$safeId"
+        val destination = TERMUX_HOME + "/fonebrew/workspaces/" + safeId
 
         command("rm", listOf("-rf", destination))
         command("mkdir", listOf("-p", destination))
