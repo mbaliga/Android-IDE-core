@@ -138,6 +138,14 @@ fun TerminalFacet() {
                 style = MaterialTheme.typography.bodySmall,
             )
             windowsProfile.setupHint?.let { Hint(it) }
+            val virtualization = remember { container.androidVirtualizationProbe.inspect() }
+            Text(
+                "AVF isolation · " + if (virtualization.avfPresent) "device support detected" else "not exposed",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (virtualization.avfPresent) {
+                Hint("AVF is present; VM execution remains unavailable until Fonebrew has a permitted VM provider.")
+            }
             termuxProfile.setupHint?.let { Hint(it) }
             if (container.termuxRuntimeBridge.isInstalled() &&
                 !container.termuxRuntimeBridge.hasRunCommandPermission()
