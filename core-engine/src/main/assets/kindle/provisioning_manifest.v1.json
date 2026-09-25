@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": 2,
+  "generatedAtUtc": "2026-09-25T00:00:00Z",
+  "recipes": [
+    {
+      "id": "winterbreak-koa3-5.17.1.0.3",
+      "version": 1,
+      "supportedProfileIds": ["kindle-oasis-3-koa3"],
+      "supportedFirmware": [
+        {"minimumInclusive": "5.17.1.0.3", "maximumInclusive": "5.17.1.0.3"}
+      ],
+      "packages": [
+        {
+          "id": "winterbreak",
+          "version": "2.1.0",
+          "sourceUrl": "https://github.com/KindleModding/WinterBreak/releases/download/v2.1.0/WinterBreak.tar.gz",
+          "sha256": "dc04fff5fcb685834cba9f9e95d4818b473d4100b2d40b8bb7c598ad09eb850d",
+          "sizeBytes": 288883
+        }
+      ],
+      "instructions": [
+        {
+          "id": "airplane-reboot",
+          "kind": "USER_ACTION",
+          "title": "Enable Airplane mode and reboot",
+          "detail": "On the Kindle, enable Airplane mode and restart once before staging. Keep the Kindle registered; Fonebrew never requests or stores Amazon credentials."
+        },
+        {
+          "id": "stage-winterbreak",
+          "kind": "EXTRACT_PACKAGE",
+          "title": "Stage verified WinterBreak files",
+          "detail": "Fylz extracts the verified archive into the user-selected Kindle root, including hidden files, using checked temporary writes.",
+          "sourcePackageId": "winterbreak"
+        },
+        {
+          "id": "run-winterbreak",
+          "kind": "USER_ACTION",
+          "title": "Run WinterBreak on Kindle",
+          "detail": "Safely eject/disconnect USB. Open the Kindle Store. When prompted, choose Yes to turn off Airplane mode, then select WinterBreak. Wait for the UI to restart."
+        },
+        {
+          "id": "verify-homebrew",
+          "kind": "VERIFY",
+          "title": "Verify jailbreak and update protection",
+          "detail": "Reconnect and verify the jailbreak marker, KPM/homebrew availability, and OTA protection before installing Workdeck.",
+          "expectedState": "JAILBROKEN_KPM_OTA_PROTECTED"
+        }
+      ],
+      "expectedResultingStates": ["JAILBROKEN", "KPM_PRESENT", "OTA_PROTECTED"]
+    }
+  ]
+}

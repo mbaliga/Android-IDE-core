@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "kindle-oasis-3-koa3",
+      "family": "Kindle",
+      "model": "Kindle Oasis 3",
+      "generation": "10th gen",
+      "aliases": ["KOA3", "Kindle Oasis (10th Generation)"],
+      "serialPrefixes": ["G000WP04"],
+      "certifiedFirmware": ["5.17.1.0.3"],
+      "provisioningRanges": [
+        {"minimumInclusive": "5.17.1.0.3", "maximumInclusive": "5.17.1.0.3"}
+      ],
+      "display": {"width": 1264, "height": 1680},
+      "pageButtons": true
+    }
+  ]
+}
+

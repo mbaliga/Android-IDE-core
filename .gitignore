@@ -1,5 +1,6 @@
 # --- Android / Gradle ---
 *.iml
+kindle-client/build/
 .gradle/
 /local.properties
 .idea/

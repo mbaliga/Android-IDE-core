@@ -52,8 +52,10 @@ class RemoteHostStore(context: Context) {
 
     /** Save a host's secret (PEM key or password), encrypted, and index it by alias. */
     fun setHostSecret(alias: String, plaintext: String, isKey: Boolean) {
+        val previous = hostSecret(alias)?.id
         val id = putSecret(plaintext)
         prefs.edit().putString(hostSecKey(alias), "${if (isKey) "key" else "pwd"}:$id").apply()
+        if (previous != null && previous != id) removeSecret(previous)
     }
 
     /** The host's saved auth reference, or null (→ agent/none). */

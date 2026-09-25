@@ -33,6 +33,7 @@ data class LocalWorkspaceExecutionJob(
     val expectedArtifactPaths: List<String> = emptyList(),
     val authorityGrant: AuthorityGrantRef,
     val wallClockSeconds: Long = 300,
+    val retainMirrorAfterCompletion: Boolean = false,
 ) {
     init {
         require(id.isNotBlank()) { "job id must be non-blank" }
@@ -84,6 +85,7 @@ class LocalWorkspaceExecutionCoordinator(
             workspaceId = job.workspaceId,
         )
 
+        try {
         val request = ExecutionRequest(
             id = job.id,
             targetId = "termux-local",
@@ -142,5 +144,8 @@ class LocalWorkspaceExecutionCoordinator(
             receipt = receipt,
             artifactUris = artifactUris,
         )
+        } finally {
+            if (!job.retainMirrorAfterCompletion) mirror.cleanupWorkspace(job.workspaceId)
+        }
     }
 }

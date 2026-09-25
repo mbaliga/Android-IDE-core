@@ -14,6 +14,8 @@ class SafTermuxWorkspaceMirror(
         val maxFiles: Int = 10_000,
         val maxBytes: Long = 256L * 1024L * 1024L,
         val chunkBytes: Int = 160 * 1024,
+        val reserveFreeBytes: Long = 512L * 1024L * 1024L,
+        val staleAfterHours: Int = 24,
     )
 
     data class MirrorReceipt(
@@ -30,10 +32,17 @@ class SafTermuxWorkspaceMirror(
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: error("Unable to open workspace tree.")
         require(root.isDirectory) { "Workspace URI must identify a directory tree." }
+        require(policy.reserveFreeBytes >= 0 && policy.staleAfterHours in 1..(24 * 30))
 
         val safeId = workspaceId.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
         require(safeId.isNotBlank()) { "workspaceId must contain at least one safe character." }
         val destination = TERMUX_HOME + "/fonebrew/workspaces/" + safeId
+
+        cleanupStaleWorkspaces(policy.staleAfterHours)
+        val available = freeSpaceBytes()
+        check(available >= policy.reserveFreeBytes) {
+            "Termux workspace has only $available bytes free; ${policy.reserveFreeBytes} bytes are reserved."
+        }
 
         command("rm", listOf("-rf", destination))
         command("mkdir", listOf("-p", destination))
@@ -60,6 +69,9 @@ class SafTermuxWorkspaceMirror(
                 val length = child.length().coerceAtLeast(0L)
                 bytes += length
                 check(bytes <= policy.maxBytes) { "Workspace exceeds mirror byte limit (${policy.maxBytes})." }
+                check(bytes + policy.reserveFreeBytes <= available) {
+                    "Workspace mirror would exhaust reserved Termux free space."
+                }
 
                 command("mkdir", listOf("-p", childTarget.substringBeforeLast('/', destination)))
                 truncate(childTarget)
@@ -130,6 +142,27 @@ class SafTermuxWorkspaceMirror(
         return target.uri
     }
 
+    suspend fun cleanupWorkspace(workspaceId: String) {
+        val safeId = workspaceId.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+        require(safeId.isNotBlank())
+        command("rm", listOf("-rf", "--", "$WORKSPACE_ROOT/$safeId"))
+    }
+
+    suspend fun cleanupStaleWorkspaces(maxAgeHours: Int = 24) {
+        require(maxAgeHours in 1..(24 * 30))
+        val result = shell(
+            "mkdir -p \"\$1\" && find \"\$1\" -mindepth 1 -maxdepth 1 -type d -mmin +\"\$2\" -exec rm -rf -- {} +",
+            listOf(WORKSPACE_ROOT, (maxAgeHours * 60).toString()),
+        )
+        check(result.exitCode == 0) { "Unable to clean stale mirrored workspaces." }
+    }
+
+    private suspend fun freeSpaceBytes(): Long {
+        val result = shell("df -Pk \"\$1\" | awk 'NR==2 { print \$4 * 1024 }'", listOf(TERMUX_HOME))
+        check(result.exitCode == 0)
+        return result.stdout.trim().toLongOrNull() ?: error("Unable to determine Termux free space.")
+    }
+
     private suspend fun truncate(path: String) {
         val result = shell(": > \"\$1\"", listOf(path))
         check(result.exitCode == 0) { "Unable to create mirrored file." }
@@ -183,5 +216,6 @@ class SafTermuxWorkspaceMirror(
 
     companion object {
         private const val TERMUX_HOME = "/data/data/com.termux/files/home"
+        private const val WORKSPACE_ROOT = "$TERMUX_HOME/fonebrew/workspaces"
     }
 }

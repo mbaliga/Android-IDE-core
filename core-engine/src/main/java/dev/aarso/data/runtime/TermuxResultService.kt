@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.IBinder
 import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 class TermuxResultService : Service() {
 
@@ -13,12 +12,12 @@ class TermuxResultService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) return START_NOT_STICKY
-        val requestId = intent.getIntExtra(EXTRA_REQUEST_ID, -1)
-        if (requestId < 0) return START_NOT_STICKY
+        val requestId = intent.getStringExtra(EXTRA_REQUEST_ID) ?: return START_NOT_STICKY
 
         val bundle = intent.getBundleExtra(EXTRA_RESULT_BUNDLE)
         val result = if (bundle == null) {
             TermuxCommandResult(
+                requestId = requestId,
                 exitCode = -1,
                 stdout = "",
                 stderr = "",
@@ -29,6 +28,7 @@ class TermuxResultService : Service() {
             )
         } else {
             TermuxCommandResult(
+                requestId = requestId,
                 exitCode = bundle.getInt(EXTRA_EXIT_CODE, -1),
                 stdout = bundle.getString(EXTRA_STDOUT, "") ?: "",
                 stderr = bundle.getString(EXTRA_STDERR, "") ?: "",
@@ -41,6 +41,9 @@ class TermuxResultService : Service() {
             )
         }
 
+        // Persist before notifying the in-memory waiter: if the caller process was recreated,
+        // recoverResult(requestId) can still observe the terminal receipt.
+        TermuxResultStore(applicationContext).put(result)
         pending.remove(requestId)?.complete(result)
         stopSelf(startId)
         return START_NOT_STICKY
@@ -58,16 +61,13 @@ class TermuxResultService : Service() {
         private const val EXTRA_ERR = "err"
         private const val EXTRA_ERRMSG = "errmsg"
 
-        private val nextId = AtomicInteger(10_000)
-        private val pending = ConcurrentHashMap<Int, CompletableDeferred<TermuxCommandResult>>()
+        private val pending = ConcurrentHashMap<String, CompletableDeferred<TermuxCommandResult>>()
 
-        fun nextRequestId(): Int = nextId.incrementAndGet()
-
-        fun register(id: Int, result: CompletableDeferred<TermuxCommandResult>) {
+        fun register(id: String, result: CompletableDeferred<TermuxCommandResult>) {
             check(pending.putIfAbsent(id, result) == null) { "duplicate Termux request id $id" }
         }
 
-        fun unregister(id: Int) {
+        fun unregister(id: String) {
             pending.remove(id)
         }
     }

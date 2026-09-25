@@ -52,7 +52,7 @@ class TermuxExecutionProvider(
             manifestId = "cap_termux-linux-provider",
             subjectKind = CapabilitySubjectKind.EXECUTION,
             supportedOperations = listOf("ONE_SHOT_COMMAND", "BUILD"),
-            limits = mapOf("resultTransport" to "pending-intent-100kb"),
+            limits = mapOf("resultTransport" to "termux-file-channel-with-bounded-receipt"),
             versions = CapabilityVersions(subjectVersion = "1.0.0"),
         ),
     )
@@ -136,11 +136,12 @@ class TermuxExecutionProvider(
     private suspend fun execute(run: Run) {
         val request = run.request
         val result = runCatching {
-            bridge.run(
+            bridge.recoverFileBacked(request.id) ?: bridge.runFileBacked(
                 executable = request.operation.command,
                 args = request.operation.args,
                 workDir = request.operation.workingDirectory ?: "~/",
                 timeoutMs = request.budget.wallClockSeconds?.times(1000) ?: 120_000,
+                requestId = request.id,
             )
         }
         val finishedAt = now()
@@ -231,7 +232,9 @@ class TermuxExecutionProvider(
             ),
             exitState = exitState,
             logs = ExecutionLogs(redactionApplied = false, excerpt = output.take(4096)),
-            resourceSummary = dev.aarso.contracts.execution.ResourceSummary(),
+            resourceSummary = dev.aarso.contracts.execution.ResourceSummary(
+                wallClockSecondsUsed = java.time.Duration.between(run.startedAt, finishedAt).toMillis() / 1000.0,
+            ),
             outputs = emptyList(),
             sideEffects = emptyList(),
             verification = ReceiptVerification(state = VerificationState.NOT_PERFORMED),

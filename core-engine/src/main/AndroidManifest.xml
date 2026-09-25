@@ -11,9 +11,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- User-granted bridge into Termux RUN_COMMAND; Fonebrew never assumes it is granted. -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <!-- Signature-scoped bridge: Fylz owns all user-file and Kindle-storage operations. -->
+    <uses-permission android:name="io.github.mbaliga.fylz.permission.OPERATE" />
     <!-- Keep the process alive while a local model loads/generates or downloads. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- §7 heavy tiers (overlay bubble, screen capture) live in the FULL flavor's
          manifest overlay — the play build ships without those permissions. -->
 
@@ -27,6 +30,10 @@
     -->
     <queries>
         <package android:name="com.termux" />
+        <package android:name="io.github.mbaliga.fylz" />
+        <package android:name="io.github.mbaliga.foto_xplorr" />
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="rikka.shizuku" />
     </queries>
 
     <application android:allowBackup="false" android:supportsRtl="true">
@@ -64,6 +71,17 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="dev.aarso.ui.workdeck.WorkdeckControllerActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name="dev.aarso.ui.kindle.KindleSetupActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name="dev.aarso.service.GenerationService"
             android:exported="false"
@@ -74,6 +92,34 @@
             android:name="dev.aarso.service.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Receives Termux RUN_COMMAND PendingIntent results. Kept non-exported: the explicit
+             PendingIntent is the only authority Termux receives. -->
+        <service
+            android:name="dev.aarso.data.runtime.TermuxResultService"
+            android:exported="false" />
+
+        <service
+            android:name="dev.aarso.service.WorkdeckService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name="dev.aarso.service.WorkdeckAccessibilityService"
+            android:exported="true"
+            android:label="Fonebrew Workdeck input"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/workdeck_accessibility_service" />
+        </service>
+
+        <receiver
+            android:name="dev.aarso.data.kindle.FylzOperationResultReceiver"
+            android:exported="false" />
 
         <!-- §7: device assistant (assist-gesture summon). Select Aarso under
              Settings → Default apps → Digital assistant. -->

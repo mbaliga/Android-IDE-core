@@ -18,6 +18,9 @@ class RuntimeProfileRegistry(
     private val _termuxProfile = MutableStateFlow(termux.setupProfile())
     val termuxProfile: StateFlow<RuntimeProviderProfile> = _termuxProfile.asStateFlow()
 
+    private val _termuxReceipt = MutableStateFlow<RuntimeProbeReceipt?>(null)
+    val termuxReceipt: StateFlow<RuntimeProbeReceipt?> = _termuxReceipt.asStateFlow()
+
     private val _windowsProfile = MutableStateFlow(
         RuntimeProviderProfile(
             providerId = TermuxWindowsCompatBridge.PROVIDER_ID,
@@ -32,8 +35,9 @@ class RuntimeProfileRegistry(
     val windowsProfile: StateFlow<RuntimeProviderProfile> = _windowsProfile.asStateFlow()
 
     suspend fun refreshTermux(): RuntimeProviderProfile {
-        val profile = termux.probeProfile()
+        val (profile, receipt) = termux.probeRuntime()
         _termuxProfile.value = profile
+        _termuxReceipt.value = receipt
         return profile
     }
 
