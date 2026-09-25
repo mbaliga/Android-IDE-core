@@ -26,6 +26,16 @@ jobs:
       - name: Install ARM hard-float cross toolchain
         run: |
           sudo dpkg --add-architecture armhf
+          # GitHub's amd64 runner sources point at archive/security.ubuntu.com, which do not
+          # publish noble armhf indexes. Keep those sources amd64-only and use Ubuntu Ports for
+          # the one armhf development package needed by the static Kindle binary.
+          sudo sed -i '/^Components:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          echo 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe' \
+            | sudo tee /etc/apt/sources.list.d/ubuntu-armhf.list >/dev/null
+          echo 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe' \
+            | sudo tee -a /etc/apt/sources.list.d/ubuntu-armhf.list >/dev/null
+          echo 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main universe' \
+            | sudo tee -a /etc/apt/sources.list.d/ubuntu-armhf.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabihf libc6-dev-armhf-cross zlib1g-dev:armhf
       - name: Build static KOA3 client

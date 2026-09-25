@@ -35,11 +35,14 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun TerminalFacet() {
-    val uiContext = LocalContext.current\n    val container = (uiContext.applicationContext as AarsoApp).container
+    val uiContext = LocalContext.current
+    val container = (uiContext.applicationContext as AarsoApp).container
     val repo = container.deviceRepo
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
-    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()\n    val windowsProfile by container.runtimeProfileRegistry.windowsProfile.collectAsState()\n    val activeWorkspace by container.workspaceHandoffStore.active.collectAsState()
+    val termuxProfile by container.runtimeProfileRegistry.termuxProfile.collectAsState()
+    val windowsProfile by container.runtimeProfileRegistry.windowsProfile.collectAsState()
+    val activeWorkspace by container.workspaceHandoffStore.active.collectAsState()
     val scope = rememberCoroutineScope()
 
     var localSelected by remember { mutableStateOf(true) }
@@ -47,7 +50,8 @@ fun TerminalFacet() {
     var cmd by remember { mutableStateOf("uname -a") }
     var output by remember { mutableStateOf("") }
     var running by remember { mutableStateOf(false) }
-    var probing by remember { mutableStateOf(false) }\n    var provisioning by remember { mutableStateOf(false) }
+    var probing by remember { mutableStateOf(false) }
+    var provisioning by remember { mutableStateOf(false) }
 
     val workspacePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
