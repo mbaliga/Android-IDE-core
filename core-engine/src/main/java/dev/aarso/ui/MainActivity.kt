@@ -74,6 +74,31 @@ class MainActivity : ComponentActivity() {
                     container.sharedIntake.offer(Intake(text = text, source = "selection"))
                 }
             }
+            dev.aarso.domain.runtime.WorkspaceHandoffContract.ACTION_OPEN_WORKSPACE -> {
+                val uri = intent.data ?: return
+                if (uri.scheme != "content") return
+                val grantMask = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                val takeFlags = intent.flags and grantMask
+                if (takeFlags and Intent.FLAG_GRANT_READ_URI_PERMISSION == 0) return
+
+                runCatching {
+                    contentResolver.takePersistableUriPermission(uri, takeFlags)
+                }
+                val readOnly = intent.getBooleanExtra(
+                    dev.aarso.domain.runtime.WorkspaceHandoffContract.EXTRA_READ_ONLY,
+                    takeFlags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION == 0,
+                )
+                val displayName = intent.getStringExtra(
+                    dev.aarso.domain.runtime.WorkspaceHandoffContract.EXTRA_DISPLAY_NAME,
+                )
+                container.workspaceHandoffStore.set(
+                    dev.aarso.domain.runtime.FylzWorkspaceRef(
+                        treeUri = uri.toString(),
+                        displayName = displayName,
+                        readOnly = readOnly,
+                    )
+                )
+            }
         }
     }
 }

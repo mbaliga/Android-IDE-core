@@ -105,6 +105,12 @@ class SshjTransport(
                     }
                     emptyList()
                 }
+                is SftpOp.PutData -> {
+                    sftp.open(op.remotePath, setOf(OpenMode.WRITE, OpenMode.CREAT, OpenMode.TRUNC)).use { rf ->
+                        rf.write(0, op.bytes, 0, op.bytes.size)
+                    }
+                    emptyList()
+                }
             }
         }
     }

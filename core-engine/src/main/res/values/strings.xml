@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="workdeck_accessibility_description">Routes explicitly paired Kindle Workdeck touch and text into the app currently shown on this phone. Enable only when generic app control is wanted.</string>
     <!-- Aarso — "mirror"; the app renders the user's own interaction
          legible back to them (handoff §5c/§11). -->
     <string name="app_name">Aarso</string>

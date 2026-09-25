@@ -234,6 +234,44 @@ class AppContainer(context: Context) {
     fun newSshTransport(): dev.aarso.domain.remote.RemoteTransport =
         dev.aarso.data.remote.SshjTransport(secretProvider = { remoteHostStore.secret(it) })
 
+    /** Concrete on-device Linux bridge via Termux RUN_COMMAND. */
+    val workspaceHandoffStore: dev.aarso.data.runtime.WorkspaceHandoffStore =
+        dev.aarso.data.runtime.WorkspaceHandoffStore(context.applicationContext)
+    val termuxRuntimeBridge: dev.aarso.data.runtime.TermuxRunCommandBridge =
+        dev.aarso.data.runtime.TermuxRunCommandBridge(context.applicationContext)
+    val termuxExecutionProvider: dev.aarso.domain.execution.TermuxExecutionProvider =
+        dev.aarso.domain.execution.TermuxExecutionProvider(termuxRuntimeBridge)
+    val safTermuxWorkspaceMirror: dev.aarso.data.runtime.SafTermuxWorkspaceMirror =
+        dev.aarso.data.runtime.SafTermuxWorkspaceMirror(context.applicationContext, termuxRuntimeBridge)
+    val termuxBrowserHarness: dev.aarso.data.runtime.TermuxBrowserHarness =
+        dev.aarso.data.runtime.TermuxBrowserHarness(termuxRuntimeBridge)
+    val termuxWindowsCompatBridge: dev.aarso.data.runtime.TermuxWindowsCompatBridge =
+        dev.aarso.data.runtime.TermuxWindowsCompatBridge(termuxRuntimeBridge)
+    val androidVirtualizationProbe: dev.aarso.data.runtime.AndroidVirtualizationProbe =
+        dev.aarso.data.runtime.AndroidVirtualizationProbe(context.applicationContext)
+    val localWorkspaceExecutionCoordinator: dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator by lazy {
+        dev.aarso.domain.runtime.LocalWorkspaceExecutionCoordinator(
+            broker = runtimeBroker,
+            mirror = safTermuxWorkspaceMirror,
+            termuxProvider = termuxExecutionProvider,
+        )
+    }
+    val runtimeProfileRegistry: dev.aarso.domain.runtime.RuntimeProfileRegistry =
+        dev.aarso.domain.runtime.RuntimeProfileRegistry(termuxRuntimeBridge, termuxWindowsCompatBridge)
+
+    /**
+     * Provider-neutral execution fabric. The catalogue is recomputed on every resolution so
+     * connection state and probed local capabilities remain current.
+     */
+    val runtimeBroker: dev.aarso.domain.runtime.RuntimeBroker =
+        dev.aarso.domain.runtime.RuntimeBroker {
+            val baseline = dev.aarso.domain.runtime.RuntimeCatalog.baseline(
+                hasTrustedSshHost = remoteHostStore.hosts.value.isNotEmpty(),
+                hasCiHost = gitHostStore.hosts.value.isNotEmpty(),
+            ).filterNot { it.providerId == "linux-capsule" }
+            baseline + runtimeProfileRegistry.currentProfiles()
+        }
+
     /** Durable, retrying queue for network journeys so they survive the subway (P5). The worker
      *  drains it against per-kind handlers; a permanent error (auth/no-host) parks the op for the
      *  user instead of retrying forever. */

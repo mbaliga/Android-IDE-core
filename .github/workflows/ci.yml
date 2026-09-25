@@ -60,6 +60,8 @@ jobs:
         # Puts cmdline-tools (sdkmanager) on PATH — it is installed on ubuntu-latest
         # but not exported by default, which is why a bare `sdkmanager` is not found.
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install pinned NDK + CMake
         # ndkVersion / cmake version are pinned in app/build.gradle.kts; AGP needs

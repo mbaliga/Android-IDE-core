@@ -1,5 +1,6 @@
 package dev.aarso.ui.develop
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,8 +44,7 @@ import kotlinx.coroutines.launch
  * rectangles, no design-system styling) so the structure can be reviewed before a
  * design system lands. Per brief §7 the free-core facets are exactly:
  *
- *  - **Hardware** → supported boards + detect/troubleshoot + the four control paths
- *                   (Pi/Arduino/ESP/on-phone USB flash)
+ *  - **Hardware** → Kindle provisioning/Workdeck plus supported boards and control paths
  *  - **Files**    → review changes to your repo per-hunk and commit (the agentic-coding
  *                   review path; there is no separate "Agent" mode)
  *  - **Terminal** → run a shell command over SSH on your homelab runner
@@ -244,18 +244,40 @@ private fun HardwareFacet() {
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val kindleRepo = remember { dev.aarso.data.kindle.KindleDeviceRepository(context) }
+    var kindleCandidates by remember { mutableStateOf(kindleRepo.discoverUsb()) }
 
     // Supported boards + quick troubleshooting — the Arduino-IDE-grade framing (§7.1). All local
     // and sovereign; the four control paths below are Pi-over-SSH, Arduino-via-Pi, ESP-OTA, and
     // on-phone USB flash (CDC/Stk500/IntelHex). Device interaction is owner-verified on hardware.
     Text("Hardware", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Supported: Raspberry Pi (SSH) · Arduino AVR (via Pi or on-phone USB) · ESP32/8266 (OTA) · " +
+        "Supported: Kindle Oasis 3 provisioning + Workdeck · Raspberry Pi (SSH) · Arduino AVR (via Pi or on-phone USB) · ESP32/8266 (OTA) · " +
             "USB-flashable MCUs. Troubleshooting: no port → check the cable/OTG + driver (CH340/CP210x " +
             "clones need a vendor driver); permission denied → re-trust the Pi in Settings; flash fails " +
             "mid-way → it's flagged, re-run before power-cycling.",
     )
     Spacer(Modifier.height(8.dp))
+
+    WireBox {
+        Text("Kindle · phone-only setup", style = MaterialTheme.typography.titleSmall)
+        Hint(
+            if (kindleCandidates.isEmpty()) "No likely Kindle USB device is visible; setup can still resume from a retained Fylz/SAF handle."
+            else "${kindleCandidates.size} likely Kindle USB device(s) detected.",
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            WireButton("Add / resume Kindle", onClick = {
+                context.startActivity(Intent(context, dev.aarso.ui.kindle.KindleSetupActivity::class.java))
+            })
+            WireButton("Workdeck controller", onClick = {
+                context.startActivity(Intent(context, dev.aarso.ui.workdeck.WorkdeckControllerActivity::class.java))
+            })
+            WireButton("Rescan USB", onClick = { kindleCandidates = kindleRepo.discoverUsb() })
+        }
+    }
+    Spacer(Modifier.height(12.dp))
 
     if (hosts.isEmpty()) {
         Hint(

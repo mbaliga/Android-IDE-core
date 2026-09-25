@@ -1,0 +1,69 @@
+name: Kindle Workdeck client
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "kindle-client/**"
+      - ".github/workflows/kindle-client.yml"
+  pull_request:
+    paths:
+      - "kindle-client/**"
+      - ".github/workflows/kindle-client.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-cross-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host protocol tests
+        run: make -C kindle-client test
+      - name: Install ARM hard-float cross toolchain
+        run: |
+          sudo dpkg --add-architecture armhf
+          # GitHub's amd64 runner sources point at archive/security.ubuntu.com, which do not
+          # publish noble armhf indexes. Keep those sources amd64-only and use Ubuntu Ports for
+          # the one armhf development package needed by the static Kindle binary.
+          sudo sed -i '/^Components:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          echo 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe' \
+            | sudo tee /etc/apt/sources.list.d/ubuntu-armhf.list >/dev/null
+          echo 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe' \
+            | sudo tee -a /etc/apt/sources.list.d/ubuntu-armhf.list >/dev/null
+          echo 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main universe' \
+            | sudo tee -a /etc/apt/sources.list.d/ubuntu-armhf.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf libc6-dev-armhf-cross zlib1g-dev:armhf
+      - name: Build static KOA3 client
+        run: |
+          make -C kindle-client clean
+          make -C kindle-client CC=arm-linux-gnueabihf-gcc LDFLAGS=-static
+          arm-linux-gnueabihf-strip kindle-client/build/workdeck-client
+          file kindle-client/build/workdeck-client
+      - name: Generate fail-closed client manifest
+        run: |
+          bytes=$(stat -c %s kindle-client/build/workdeck-client)
+          digest=$(sha256sum kindle-client/build/workdeck-client | cut -d' ' -f1)
+          jq -n --arg digest "$digest" --argjson bytes "$bytes" '{
+            schemaVersion: 1,
+            manifestVersion: 1,
+            clientVersion: "0.1.0",
+            protocolVersion: 1,
+            architecture: "arm-linux-gnueabihf",
+            sha256: $digest,
+            sizeBytes: $bytes,
+            supportedProfileIds: ["kindle-oasis-3-koa3"],
+            supportedFirmware: [{minimumInclusive:"5.17.1.0.3",maximumInclusive:"5.17.1.0.3"}]
+          }' > kindle-client/build/workdeck-client.manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workdeck-client-koa3-armhf
+          path: |
+            kindle-client/build/workdeck-client
+            kindle-client/build/workdeck-client.manifest.json
+          if-no-files-found: error
+          retention-days: 14

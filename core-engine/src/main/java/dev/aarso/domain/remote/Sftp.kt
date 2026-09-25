@@ -21,6 +21,13 @@ sealed interface SftpOp {
     /** Upload [bytesId] (a content handle the data layer resolves) to [remotePath]. */
     data class Put(val remotePath: String, val bytesId: String) : SftpOp
 
+    /** Bounded installer payload already authorized by the caller; never used for user browsing. */
+    data class PutData(val remotePath: String, val bytes: ByteArray) : SftpOp {
+        init { require(remotePath.isNotBlank() && bytes.size <= 16 * 1024 * 1024) }
+        override fun equals(other: Any?): Boolean = other is PutData && remotePath == other.remotePath && bytes.contentEquals(other.bytes)
+        override fun hashCode(): Int = 31 * remotePath.hashCode() + bytes.contentHashCode()
+    }
+
     /** Download [remotePath] (the data layer receives the bytes). */
     data class Get(val remotePath: String) : SftpOp
 

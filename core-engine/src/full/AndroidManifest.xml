@@ -23,6 +23,16 @@
          module's namespace (dev.aarso.core_engine) doesn't match the moved classes' real
          package (dev.aarso.*), so relative names would resolve wrong. -->
     <application>
+        <activity
+            android:name="dev.aarso.ui.workdeck.WorkdeckProjectionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name="dev.aarso.service.WorkdeckService"
+            android:foregroundServiceType="dataSync|mediaProjection" />
         <service
             android:name="dev.aarso.service.OverlayService"
             android:exported="false"

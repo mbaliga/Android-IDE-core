@@ -84,9 +84,7 @@ class RemoteSessionDriver(
 
     /** Close the session if still live. */
     suspend fun close() {
-        if (!SessionMachine.isTerminal(state)) {
-            move(SessionState.Closed)
-            transport.close()
-        }
+        if (!SessionMachine.isTerminal(state)) move(SessionState.Closed)
+        transport.close()
     }
 }
