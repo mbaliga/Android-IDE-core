@@ -153,7 +153,8 @@ dependencies {
     // Shared crash-recovery utility (same submodule, separate coordinate).
     implementation("dev.aarso:crash-recovery:1.0.0")
     implementation(libs.androidx.core.ktx)
-    implementation("androidx.documentfile:documentfile:1.0.1")\n    implementation(libs.kotlinx.coroutines.core)
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.lifecycle.runtime.ktx)

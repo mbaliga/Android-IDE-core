@@ -1,6 +1,7 @@
 package dev.aarso.domain.runtime
 
-import dev.aarso.data.runtime.TermuxRunCommandBridge\nimport dev.aarso.data.runtime.TermuxWindowsCompatBridge
+import dev.aarso.data.runtime.TermuxRunCommandBridge
+import dev.aarso.data.runtime.TermuxWindowsCompatBridge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

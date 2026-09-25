@@ -8,7 +8,9 @@
       surfaced as a "watched object". No analytics, no telemetry.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <!-- User-granted bridge into Termux RUN_COMMAND; Fonebrew never assumes it is granted. -->\n    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- User-granted bridge into Termux RUN_COMMAND; Fonebrew never assumes it is granted. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <!-- Keep the process alive while a local model loads/generates or downloads. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -23,7 +25,11 @@
       would resolve against THIS module's namespace (dev.aarso.core_engine) — one level off
       from where the actual moved classes still live (dev.aarso.*, unchanged by the move).
     -->
-    <queries>\n        <package android:name="com.termux" />\n    </queries>\n\n    <application android:allowBackup="false" android:supportsRtl="true">
+    <queries>
+        <package android:name="com.termux" />
+    </queries>
+
+    <application android:allowBackup="false" android:supportsRtl="true">
 
         <activity
             android:name="dev.aarso.ui.MainActivity"
