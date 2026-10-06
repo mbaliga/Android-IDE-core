@@ -21,6 +21,7 @@ honest about the no-device build environment).
 | [`loop-distillation.md`](loop-distillation.md) | **The literature as loops**: import a paper/framework; a meta-agent distils it into an editable BPMN Loop. A curated reference library (MoA, self-consistency, reflexion, debate) is the floor; the distiller is the ceiling. | **design + curated-library brick built** |
 | [`voice-input.md`](voice-input.md) | On-device, push-to-talk STT for NL authoring. Deferred. | design |
 | [`material-language.md`](material-language.md) | **The material language** (*Hyle*): honest material physics — dark/light metal, sand (hourglass loaders), water-on-sandstone (transient controls that leave a fading stain) — as a *legible* interface vocabulary, not a skin. Supersedes the fixed `Aeon` palette; absorbs the appearance/theme engine. | vision capture |
+| [`../PORTING_PLAN.md`](../PORTING_PLAN.md) | **Multi-platform porting plan**: Ubuntu Touch (reframe), Linux desktop, iOS/iPadOS, macOS, Windows — a staged KMP seam, honest stubs for the Android-only tiers, Room-KMP spike first. Nothing built. | **plan only** |
 
 ## Shared foundation
 
