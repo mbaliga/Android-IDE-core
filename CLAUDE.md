@@ -7,8 +7,8 @@ routing/influence visible and keeps the user in the loop, even at some cost to c
 
 > **Read `docs/STATE.md` first.** It is the living index of *what's done / pending / the end
 > goal* across the whole constellation. This file is the **build rules + how-to-continue**;
-> `docs/STATE.md` and  are the current state + business. When they
-> disagree, STATE.md is newer.
+> `docs/STATE.md` is the current engineering state. When they disagree, STATE.md is newer.
+> Business/monetization planning is tracked privately, not in this repo.
 
 ## North star + naming split
 The product is a **post-desktop, touch-native computing environment** that makes the phone a
@@ -137,8 +137,8 @@ A family of cooperating apps, not a monolith. Dependency direction sinks toward 
 | **PM + authoring** | a companion project-management surface | not in this repo | repo pending owner; code in main, to carve out |
 | **Sound & haptics** | companion authoring app | **open** | not started |
 
-Integration rule: the routing engine needs a **stable public API** from day one. See `docs/STATE.md`
-intelligence, never hold others' keys).
+Integration rule: the routing engine needs a **stable public API** from day one. Business/monetization
+decisions for these components are tracked privately, not in this repo.
 
 ## Current state — v0.13.0 (2026-06-28; on `apk-dist` as `aarso-sd.apk`)
 Everything below compiled + JVM-tested + assembled; **device behaviour is owner-verified.** Full
@@ -187,9 +187,8 @@ detail in `docs/STATE.md`.
 
 ## How to continue (for the next chat)
 1. Read **`docs/STATE.md`** (the living index), then this file's binding rules + building.
-2.  for the business; `docs/design/*` for per-surface specs
-   (`agentic-ide.md`, `information-architecture.md`, `workflow-builder.md`); `docs/handoff/
-   hyle-extraction.md` — the split plan, now **executed** (Hyle lives in `mbaliga/Hyle-Design-System`;
-   kept as historical record).
+2. `docs/design/*` for per-surface specs (`agentic-ide.md`, `information-architecture.md`,
+   `workflow-builder.md`); `docs/handoff/hyle-extraction.md` — the split plan, now **executed**
+   (Hyle lives in `mbaliga/Hyle-Design-System`; kept as historical record).
 3. Keep the gate green, ship small legible PRs to `main`, refresh `aarso-sd.apk` on `apk-dist`,
    and be honest that on-device behaviour is owner-verified.

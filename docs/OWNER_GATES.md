@@ -1,6 +1,6 @@
 # Owner Gates
 
-> **License:** `LICENSE-PENDING` — see `docs/non_ratified/LICENSE_PENDING.md`.
+> **License:** decided 2026-10-08, PolyForm Noncommercial 1.0.0 (source-available; commercial use needs a licence) — see `LICENSE` and `docs/non_ratified/LICENSE_PENDING.md`.
 
 **What this is:** the single consolidated list of everything across WP-0 through WP-10 that
 needs a real human — real hardware, a real owner decision, or a real GitHub-account-level action
@@ -65,10 +65,9 @@ not duplicated in full here, just indexed:
 4. **`FB-RAT-WS-NEW-1`** (git library choice — JGit + libgit2-JNI evaluation, WP-3) and
    **`FB-RAT-LANG-NEW-1`** (toolchain delivery-mechanism/flavor legality table, WP-9) — both
    PROPOSED in `docs/non_ratified/EXPERIMENTAL_DECISIONS.md`'s open queue, neither self-ratified.
-5. **Licensing** — `android-ide-core`'s license is undecided (`LICENSE-PENDING` throughout this
-   entire corpus); every file emitted across WP-0 through WP-10 carries that marker pending an
-   owner decision, per `03_CONSTELLATION_CONTEXT.md`'s own note that this blocks publishing new
-   public contract text with a real license header.
+5. **Licensing** — decided 2026-10-08, PolyForm Noncommercial 1.0.0 (source-available; commercial
+   use needs a licence). Files emitted across WP-0 through WP-10 still carry the `LICENSE-PENDING`
+   marker until their headers are updated.
 6. **Two new-domain contracts with no `FB-RAT-*` home** (`docs/TRACEABILITY_MATRIX.md` Part C) —
    `SearchContracts.kt` (WP-6) and `LanguageLaneContracts.kt` (WP-9) are real, tested, but were
    never part of the original 109-ID ratification register. Formalize with a proper decision-ID
