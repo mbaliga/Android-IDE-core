@@ -1,7 +1,9 @@
-# License — pending owner decision
+# License — decided 2026-10-08: PolyForm Noncommercial 1.0.0
 
-**Status:** `LICENSE-PENDING`. `android-ide-core` currently ships no `LICENSE` file. This is a
-known, owner-reserved decision (`08_OPEN_QUESTIONS.md` §B.1 of the Fonebrew handoff pack, and
+**Status:** decided 2026-10-08, PolyForm Noncommercial 1.0.0 (source-available; commercial use
+needs a licence). See `LICENSE` and `COMMERCIAL-LICENSE.md`. Files below still carry the
+`LICENSE-PENDING` marker until their headers are updated. This was a known, owner-reserved
+decision (`08_OPEN_QUESTIONS.md` §B.1 of the Fonebrew handoff pack, and
 `Android-IDE-Studio/RATIFICATION.md` S11–S24 track the same open item from an earlier,
 independent session — see `Personal-Tracker/DECISIONS.md` D-U for that history; license PRs were
 opened and held unmerged against this repo and `Hyle-Design-System` on 2026-07-31).

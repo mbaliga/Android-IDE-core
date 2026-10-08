@@ -1,9 +1,9 @@
 # Aarso / Workbench — Project State, Roadmap & End Goal
 
 > Single source of truth: what's **done**, what's **pending**, and the **end goal**. Written
-> 2026-06-28. Companion to `CLAUDE.md` (build rules),  (revenue), and
-> `docs/design/*` (per-surface specs). When in doubt, this file is the map; the others are the
-> territory.
+> 2026-06-28. Companion to `CLAUDE.md` (build rules) and `docs/design/*` (per-surface specs).
+> When in doubt, this file is the map; the others are the territory. Business/monetization
+> planning is tracked privately, not in this repo.
 
 ---
 
@@ -11,10 +11,9 @@
 A **local-first, sovereign AI computing environment** for a high-end Android phone — "an open,
 on-device Claude Code with loop engineering," extending into a real **agentic IDE** (read repos,
 propose+review+commit changes, drive devices like a Pi/Arduino), with **deterministic on-device
-search** across everything you've ever said to a model. Free and open to *build*; a paid
-"Studio" layer to *ship & sell* a product. Current shipped build: **v0.13.0** on the `apk-dist`
-branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
-runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
+search** across everything you've ever said to a model. Current shipped build: **v0.13.0** on the
+`apk-dist` branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles;
+everything runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
 
 ---
 
@@ -237,12 +236,10 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
    any model, engineer loops, run agents over your repos, drive hardware) without a laptop, and
    **every layer is legible**: you see which model is chosen and why, every cloud touch is a
    watched object, your history is a git-like tree you own and can export.
-2. **A family of cooperating, mostly-open apps** — the main app, Hyle (design), sound/haptics, all
-   open; a paid PM/authoring "Studio" layer; and a routing engine that any app can use to pick the
-   right model for the least cost.
-3. **A FOSS-honest business** — *free to build, pay to ship & sell*; patronage not paywall; the
-   commercially-successful and the willing fund a solo dev's modest, sustainable lifestyle, while
-   nobody is ever locked out ().
+2. **A family of cooperating, mostly-open apps** — the main app, Hyle (design), sound/haptics all
+   open; a routing engine that any app can use to pick the right model for the least cost.
+
+Business/monetization decisions are tracked privately, not in this repo.
 
 ---
 

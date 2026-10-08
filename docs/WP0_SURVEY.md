@@ -75,8 +75,8 @@ No repo has anything resembling a shared `ContractEnvelope<T>` / `ErrorEnvelope`
   boolean `isEntitled` check wired through `StudioEntryPoint.kt:36-55`
   (`installStudioEntryPoint`/`reinstallStudioSeams`), backed by `StudioEntitlement.kt` (96 lines,
   activate/validateNow/deactivate), `EntitlementRecordStore.kt` (53 lines, Keystore-backed),
-  `LemonSqueezyTransport.kt` (80 lines, real OkHttp License-API calls). This is a narrow,
-  single-purpose product gate, not a capability-ladder/authority engine.
+  the license-check transport (80 lines, real OkHttp License-API calls; provider name redacted).
+  This is a narrow, single-purpose product gate, not a capability-ladder/authority engine.
 - **aarso:** explicit finding — "No trace of `CapabilityManifest`, authority/grant/ladder
   concepts, `Device Broker`, `Execution Contract`, or any routing-engine material — none of the
   WP-1/WP-1L vocabulary appears in this repo at all" (confirmed by grep for
@@ -370,11 +370,12 @@ a `core/` git submodule providing `dev.aarso:core-engine` via `includeBuild`
   registers a `DevelopTab("Launch")` into core's seam).
 
 **Entitlement status:** structurally code-complete but **cannot sell**. `StudioEntitlement.kt`
-(96 lines), `EntitlementRecordStore.kt` (53 lines, Keystore-backed), `LemonSqueezyTransport.kt`
+(96 lines), `EntitlementRecordStore.kt` (53 lines, Keystore-backed), and the license-check transport
 (80 lines, real OkHttp License-API calls) all exist and are wired through `StudioEntryPoint.kt`.
-Blocking issue: `LemonSqueezyConfig.kt:13-17` has four literal `TODO-lemon-squeezy-*` placeholder
-values (`STORE_ID`, `PRODUCT_ID`, `STORE_URL`), with an explicit `// TODO(owner): replace every
-value below with the real Lemon Squeezy store before v1 ships.` This is the entire TODO surface
+Blocking issue: the entitlement config file (lines 13-17) has four literal TODO placeholder
+values (`STORE_ID`, `PRODUCT_ID`, `STORE_URL`), with an explicit `// TODO(owner)` to replace every
+value with the real store details before v1 ships (provider and store details: see the owner;
+redacted here). This is the entire TODO surface
 of the module — grep across `app/`, `studio-pm/`, `studio-launch/` finds no other TODOs.
 
 **Instrument-track status (PC-A/PC-B "Roundtable"):**
@@ -446,7 +447,7 @@ absence).
 |---|---|---|---|
 | (a) Common envelope/error/receipt library | **create-new** | none exists; natural home is core-engine given it hosts the rest of the domain/data layer | core/aarso/studio/hyle: all four grepped zero hits on `Envelope`/`Receipt`/`ArtifactRef`/`CapabilityManifest`/`MigrationPlan`. Nearest analogs: Studio `StudioEntitlement.kt:9-12` `ActivateResult`, `LsTransport.kt` `LsOutcome`; Hyle `crash-recovery/.../CrashReport.kt` `encode()`/`decode()` "CRASHv2" |
 | (b) Workspace Kernel | **create-new** | none | core + studio: explicit grep for `WorkspaceKernel`/`DocumentBuffer` → zero hits; no mention in aarso/hyle reports |
-| (c) Execution Contract + Authority engine | **create-new** | none; nearest precedent is Studio's narrow entitlement gate | core: zero hits `ExecutionContract`/`ratified`; studio: zero hits `CapabilityManifest` etc., but `StudioEntitlement.kt`/`EntitlementRecordStore.kt`/`LemonSqueezyTransport.kt`/`StudioEntryPoint.kt` exist as a narrow gate precedent; aarso: "none of the WP-1/WP-1L vocabulary appears in this repo at all" |
+| (c) Execution Contract + Authority engine | **create-new** | none; nearest precedent is Studio's narrow entitlement gate | core: zero hits `ExecutionContract`/`ratified`; studio: zero hits `CapabilityManifest` etc., but `StudioEntitlement.kt`/`EntitlementRecordStore.kt`/the license-check transport/`StudioEntryPoint.kt` exist as a narrow gate precedent; aarso: "none of the WP-1/WP-1L vocabulary appears in this repo at all" |
 | (d) Loop Engineering (GraphRunner adapter target) | **extend-existing** | core-engine `domain/loop/` | `core-engine/src/main/java/dev/aarso/domain/loop/GraphRunner.kt` (269 lines) + `LoopBudget.kt` + `GraphRunLedger.kt`, full API cited, test `GraphRunnerTest.kt`. Plus post-survey (uncommitted): `docs/ratified/loops/LOOP_FROZEN_CONCEPTS_WP1L_G0.md` + `schemas/loops/registries/*.json` (6 files) + `schemas/loops/fixtures/canonicalization/*`, created 2026-08-07 03:35–03:39 UTC, after the survey ran |
 | (e) Device Broker | **extend-existing** (substrate; no "broker" by that name) | core-engine `data/DeviceRepo.kt` + `domain/device` + SSH spine | `core-engine/src/main/java/dev/aarso/data/DeviceRepo.kt` (runs `DeviceRecipe`→`ExecRequest` via `RemoteSessionDriver`, vetted-host-only); `device` is one of 40 `domain/` subpackages per core report's enumeration |
 | (f) Integration lanes (CSApp/Assay import grammar) | **create-new — no evidence found either way** | none | zero mentions of "CSApp" or "Assay" in any of the four reports; no report ran a targeted grep for these terms — WP-1 should grep directly before assuming greenfield |

@@ -1,7 +1,8 @@
 # Trademarks
 
-This repository's **code** is licensed under Apache-2.0 (see `LICENSE`). Apache-2.0 §6 is explicit
-that the code license does not grant any trademark rights — this file states this project's
+This repository's **code** is source-available under the PolyForm Noncommercial License 1.0.0 (see
+`LICENSE`). That license grants only the rights it lists ("These terms do not imply any other
+licenses"), so it does not grant any trademark rights — this file states this project's
 trademark policy separately, following the pattern used by Mozilla/Firefox and the Linux
 Foundation's member projects.
 
@@ -17,20 +18,22 @@ condition has now resolved.
 - **"Aarso"** — the project's `rootProject.name`, its `dev.aarso` package/application-id root, and
   the name of the private self-reflection lens (`Aarso`, package `dev.aarso.domain.mirror`) are
   Madhav Baliga's marks.
-- **"Fonebrew"** (the consumer-facing brand name — see the status note above) and any associated
+- **"Fonebrew"™** (the consumer-facing brand name — see the status note above) and any associated
   logos, wordmarks, or icon assets, once they exist — these are Madhav Baliga's marks, not
-  licensed under Apache-2.0.
+  licensed under the PolyForm Noncommercial License 1.0.0.
+  - **Registration status:** An application to register FONEBREW has been filed and is pending; no registration is claimed.
 - Logo/icon/brand-asset files, wherever they're added to this repo, are covered by a separate
   all-rights-reserved (or CC-BY-ND, once chosen) notice placed alongside those files — never the
-  Apache-2.0 code license. No such asset files exist in this repo as of this writing.
+  PolyForm Noncommercial code license. No such asset files exist in this repo as of this writing.
 
 ## What you may do
 
 - **Build and distribute unmodified official releases** of this project, under the project's own
   name, including through F-Droid or other unmodified-build distribution channels. This does not
   require separate trademark permission.
-- **Fork, modify, and redistribute the code** — Apache-2.0 already grants this. You do not need
-  trademark permission to fork.
+- **Fork, modify, and redistribute the code for noncommercial purposes** — the PolyForm
+  Noncommercial License 1.0.0 already grants this (commercial use needs a commercial license; see
+  `COMMERCIAL-LICENSE.md`). You do not need trademark permission to fork.
 - **Refer to this project by name** in truthful, non-confusing statements (e.g. "based on
   Aarso/[brand]," "a fork of Aarso/[brand]") with a clear no-affiliation disclaimer where relevant.
 
