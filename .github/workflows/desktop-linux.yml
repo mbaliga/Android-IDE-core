@@ -1,0 +1,215 @@
+name: Desktop Linux spikes
+
+# LX-2 of docs/PORTING_PLAN.md (section 6.1): the four port-risk spikes under desktop/spikes/, each an
+# ISOLATED Gradle build (own settings, own pins) that never touches the repo-root build:
+#   S-FB1 Room-KMP + BundledSQLiteDriver on a plain jvm() target     (JDK only)
+#   S-FB2 FTS5 SearchDatabase + Room-KMP open in one JVM process      (JDK only)
+#   S-FB3 Linux x86_64 CPU build of the llama JNI shim + System.load  (JDK + cmake + g++ + the llama.cpp submodule)
+#   S-FB4 Compose Desktop draws one room: offscreen Skia render + a real window on Xvfb  (JDK + fonts + xvfb)
+#
+# Rules this file follows (porting program R3/R6, same as desktop-host-core.yml): a NEW file only -- ci.yml
+# and cleanup-artifacts.yml are untouched; third-party actions pinned by full commit SHA; read-only
+# token; NO artifact upload (R6: Actions artifact storage is exhausted) -- results are in the job log;
+# the packaging step runs on main/tags only; nothing is signed or published.
+#
+# Honesty about what a green run means: every assertion here is a JVM/native test that really runs on the
+# hosted VM. NO `continue-on-error` appears in this file, so a failing spike turns the run red; nothing is
+# retried into green except the Maven-resolution step, which retries only the Gradle invocation (the same
+# transient-403 flake ci.yml documents) and still exits non-zero if all attempts fail.
+#
+# Evidence label: CI (hosted VM) / CONTAINER-BUILD-ONLY. Nothing here shows device behaviour, desktop
+# look-and-feel, or that a human can use a desktop app.
+#
+# S-FB3 STATUS: its job is the heavy one (a full llama.cpp CPU compile plus stable-diffusion.cpp, ~15-25 min on 3-4 cores). It ran to
+# green LOCALLY in the build container (see desktop/spikes/S-FB3/README.md for the exact log excerpts), but
+# it has NEVER run on a hosted runner as of this file's first commit -- treat its first hosted run as
+# unverified. It is time-boxed (timeout-minutes) and, if it ever OOMs or times out, the honest response is
+# to remove the job and keep the local evidence -- not to mark it continue-on-error.
+
+on:
+  push:
+    paths:
+      - "desktop/spikes/**"
+      - ".github/workflows/desktop-linux.yml"
+      # S-FB1/S-FB2/S-FB3 map these existing sources READ-ONLY, so a change to them can break a spike:
+      - "core-engine/src/main/java/dev/fonebrew/data/entity/**"
+      - "core-engine/src/main/java/dev/fonebrew/data/dao/**"
+      - "core-engine/src/main/java/dev/fonebrew/data/Converters.kt"
+      - "core-engine/src/main/java/dev/fonebrew/data/search/SearchDriverFactory.kt"
+      - "core-engine/src/main/sqldelight/**"
+      - "core-engine/src/main/cpp/llama_jni.cpp"
+      - "core-engine/src/main/cpp/CMakeLists.txt"
+      - "sdengine/src/main/cpp/sd_jni.cpp"
+      - "sdengine/src/main/cpp/CMakeLists.txt"
+      - "gradle/libs.versions.toml"
+  pull_request:
+    paths:
+      - "desktop/spikes/**"
+      - ".github/workflows/desktop-linux.yml"
+      - "core-engine/src/main/java/dev/fonebrew/data/entity/**"
+      - "core-engine/src/main/java/dev/fonebrew/data/dao/**"
+      - "core-engine/src/main/java/dev/fonebrew/data/Converters.kt"
+      - "core-engine/src/main/java/dev/fonebrew/data/search/SearchDriverFactory.kt"
+      - "core-engine/src/main/sqldelight/**"
+      - "core-engine/src/main/cpp/llama_jni.cpp"
+      - "core-engine/src/main/cpp/CMakeLists.txt"
+      - "sdengine/src/main/cpp/sd_jni.cpp"
+      - "sdengine/src/main/cpp/CMakeLists.txt"
+      - "gradle/libs.versions.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pin-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out (no submodules)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Spike pins still equal the repo's do-not-regress pins
+        run: python3 -I desktop/spikes/check_pins.py
+
+  jvm-spikes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: S-FB1, task: jvmTest, extra: "" }
+          - { id: S-FB2, task: jvmTest, extra: "" }
+          # requireXvfb: a missing virtual X server must FAIL the real-window smoke, not skip it.
+          - { id: S-FB4, task: test, extra: "-Pfb4.requireXvfb=true" }
+    env:
+      # Kotlin cannot write class files with non-ASCII names under a POSIX locale (CLAUDE.md).
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Check out (no submodules)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            desktop/spikes/**/*.gradle*
+            desktop/spikes/**/gradle.properties
+
+      - name: S-FB4 needs a virtual X server and a system font set (Skia reads fonts through fontconfig)
+        if: matrix.id == 'S-FB4'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb fontconfig fonts-dejavu-core
+          command -v xvfb-run
+          echo "fontconfig sees $(fc-list 2>/dev/null | wc -l) font file(s)"
+
+      - name: Run ${{ matrix.id }} (Android SDK variables UNSET -- a hidden SDK dependency must fail loudly)
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::gradle attempt $attempt"
+            if env -u ANDROID_HOME -u ANDROID_SDK_ROOT -u ANDROID_NDK_ROOT -u ANDROID_NDK_HOME \
+                 ./gradlew -p desktop/spikes/${{ matrix.id }} --no-daemon ${{ matrix.task }} ${{ matrix.extra }}; then
+              echo "::endgroup::"; exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt $attempt failed; backing off before retry..."
+            sleep $((attempt * 20))
+          done
+          echo "all gradle attempts failed"; exit 1
+
+      - name: Additive check -- running the spike wrote nothing into the repo
+        run: |
+          git diff --exit-code
+          stray="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$stray" ]; then echo "::error::spike build left changes in the repo:"; echo "$stray"; exit 1; fi
+          echo "git diff clean, no stray files"
+
+  # PACKAGING lane (plan: "package lanes on main or tags only"). Builds an unsigned app image to show the
+  # Compose Desktop toolchain can package; the image is NOT uploaded anywhere and is not for release.
+  s-fb4-distributable:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Check out (no submodules)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Set up JDK 17 (Temurin) -- provides jpackage
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: createDistributable (UNSIGNED -- not for release)
+        run: |
+          for attempt in 1 2 3; do
+            if env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew -p desktop/spikes/S-FB4 --no-daemon createDistributable; then exit 0; fi
+            sleep $((attempt * 20))
+          done
+          exit 1
+      - name: The app image exists and has a launcher
+        run: test -x desktop/spikes/S-FB4/build/compose/binaries/main/app/spike-fb4/bin/spike-fb4
+
+  s-fb3-native-shim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Check out (no submodules; only the PUBLIC llama.cpp one is fetched below)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: llama.cpp and stable-diffusion.cpp submodules at their pinned commits (shallow; both PUBLIC)
+        run: |
+          git submodule update --init --depth 1 -- core-engine/src/main/cpp/llama.cpp
+          git submodule update --init --depth 1 --recursive -- sdengine/src/main/cpp/stable-diffusion.cpp
+          test -f core-engine/src/main/cpp/llama.cpp/CMakeLists.txt
+          test -f sdengine/src/main/cpp/stable-diffusion.cpp/ggml/CMakeLists.txt
+
+      - name: Set up JDK 17 (Temurin) -- JAVA_HOME supplies the JNI headers
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Toolchain the spike needs
+        run: |
+          cmake --version | head -1; g++ --version | head -1; patch --version | head -1
+          nproc; free -g | head -2
+
+      - name: Build both shims out of tree; run part A (llama shim, static) and part B (llama + sd in one JVM)
+        # Android SDK variables UNSET. The sd build defaults to 2 jobs (its vocab.cpp needs ~5 GB; S-FB3 F7).
+        # The shared-ggml variant (-Pfb3.shared=true) is local evidence only and is not run here.
+        run: |
+          env -u ANDROID_HOME -u ANDROID_SDK_ROOT -u ANDROID_NDK_ROOT -u ANDROID_NDK_HOME \
+            ./gradlew -p desktop/spikes/S-FB3 --no-daemon -Pfb3.jobs="$(nproc)" test testTwoLibs
+
+      - name: Additive check -- the existing cpp sources and the rest of the tree are untouched
+        run: |
+          git diff --exit-code
+          stray="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$stray" ]; then echo "::error::native spike left changes in the repo:"; echo "$stray"; exit 1; fi
+          echo "git diff clean, no stray files"

@@ -1,0 +1,36 @@
+--- a/core-engine/src/main/cpp/llama_jni.cpp
++++ b/core-engine/src/main/cpp/llama_jni.cpp
+@@ -13,7 +13,11 @@
+ // on-device benchmarking (§10.6).
+ 
+ #include <jni.h>
++#ifdef __ANDROID__
+ #include <android/log.h>
++#else
++#include <cstdarg>  // desktop JVM builds: no NDK liblog
++#endif
+ #include <atomic>
+ #include <cmath>
+ #include <mutex>
+@@ -26,8 +30,21 @@
+ #include "llama.h"
+ 
+ #define LOG_TAG "aarso-llama"
++#ifdef __ANDROID__
+ #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+ #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
++#else
++static void fonebrew_log(char level, const char* fmt, ...) {
++    std::fprintf(stderr, "%c/" LOG_TAG ": ", level);
++    va_list ap;
++    va_start(ap, fmt);
++    std::vfprintf(stderr, fmt, ap);
++    va_end(ap);
++    std::fputc('\n', stderr);
++}
++#define LOGE(...) fonebrew_log('E', __VA_ARGS__)
++#define LOGI(...) fonebrew_log('I', __VA_ARGS__)
++#endif
+ 
+ namespace {
+ 
