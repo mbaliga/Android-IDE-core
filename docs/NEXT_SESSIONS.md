@@ -123,6 +123,10 @@ the differentiator-first-vs-substrate-first reordering (both still-open owner de
 below) would need resolving first, since an extension model's shape depends heavily on whether
 Fonebrew ships any hosted backend at all.
 
+### 10. Multi-platform ports
+Planned, not started: see `docs/PORTING_PLAN.md`. The seam is a staged KMP extraction of `domain/`, `contracts/` and
+`inference/` with a Room-KMP spike first; gated on the owner's ruling on `FB-RAT-PORT-NEW-1` and on v0.13 device verification.
+
 ## Standing open owner decisions (restated from `HANDOFF_STATE.md`, not new here)
 
 These block scoping some of the above more precisely than "read the seam and start," and are not

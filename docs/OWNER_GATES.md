@@ -73,6 +73,9 @@ not duplicated in full here, just indexed:
    `SearchContracts.kt` (WP-6) and `LanguageLaneContracts.kt` (WP-9) are real, tested, but were
    never part of the original 109-ID ratification register. Formalize with a proper decision-ID
    sequence, or consciously leave as implementation-only — either is fine, but nobody has chosen.
+7. **Multi-platform ports** — the owner decisions raised by `docs/PORTING_PLAN.md` §8 (desktop vs device independence,
+   module shape, secret custody per platform, the Ubuntu Touch reframe, iOS scope) are filed as proposals
+   `FB-RAT-PORT-NEW-1` to `-6` in `docs/non_ratified/EXPERIMENTAL_DECISIONS.md`; none is ratified.
 
 ## D. Full-harness verification, as of this closeout
 
