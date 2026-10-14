@@ -79,3 +79,5 @@ include(":app")
 include(":core-engine")
 include(":sdengine")
 include(":hyle-probe")
+// WatchBrew wire contract (docs/design/watchbrew.md §2): pure Kotlin/JVM, no Android deps.
+include(":watch-bridge")
