@@ -90,7 +90,7 @@ class ModulePurityTest {
     }
 
     @Test
-    fun publicSurface_isTheEightMessagesPlusCodec() {
+    fun publicSurface_isTheEightMessagesPlusCodecAndTransportVocabulary() {
         // A wire contract grows deliberately: a new public top-level type must be added here on purpose.
         val declared = mainSources().flatMap { f ->
             f.readLines().mapNotNull { Regex("""^public (?:data |sealed |enum )?(?:class|interface|object) (\w+)""").find(it)?.groupValues?.get(1) }
@@ -101,6 +101,8 @@ class ModulePurityTest {
                 "ContractHello", "AskRequest", "AskChunk", "Usage", "AskError",
                 "WatchTaskState", "TaskEntry", "TaskSnapshot", "TaskToggleRequest", "TaskToggleResult",
                 "LoopRunSnapshot", "Spend", "StateGlyphKeys", "VersionMismatch", "HelloCompatibility",
+                // Transport vocabulary shared by both consumers (paths + stream framing) — still pure constants/bytes.
+                "WatchPaths", "StreamFraming", "FrameDecoder",
             ),
             declared,
         )
