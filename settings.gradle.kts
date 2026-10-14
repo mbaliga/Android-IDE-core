@@ -81,3 +81,7 @@ include(":sdengine")
 include(":hyle-probe")
 // WatchBrew wire contract (docs/design/watchbrew.md §2): pure Kotlin/JVM, no Android deps.
 include(":watch-bridge")
+// WatchBrew, the Wear OS app (docs/design/watchbrew.md section 2): depends ONLY on :watch-bridge,
+// never on :core-engine (no native engine libs on the wrist). applicationIds mirror the phone's dist
+// flavors so the Wearable Data Layer routes between the pair.
+include(":watchbrew")

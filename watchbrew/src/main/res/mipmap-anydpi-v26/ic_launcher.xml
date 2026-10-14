@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WatchBrew's icon is the Fonebrew brand mark in its canonical MONOCHROME register (owner ruling
+     2026-09-06: the black/white glyph is the canonical brand set). The foreground and monochrome layers
+     are a byte-identical copy of core-engine's ic_launcher_monochrome.png — copied, never redrawn —
+     and WatchbrewModuleGuardTest pins the equality. The background is the Hyle ink. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/watch_ink" />
+    <foreground android:drawable="@drawable/ic_launcher_monochrome" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors WatchPalette.INK (itself a copy of Hyle's Ink); WatchResourcesTest pins the equality.
+         Used for the window background (no white flash on launch) and the launcher icon's background. -->
+    <color name="watch_ink">#0E0F12</color>
+</resources>
