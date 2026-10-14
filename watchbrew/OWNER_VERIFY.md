@@ -2,9 +2,11 @@
 
 Everything below needs **a real Wear OS watch paired to the phone running the matching Fonebrew build**.
 The build container has neither, so none of it is machine-verified, and none of it is claimed. Each line
-says what to look for and what "wrong" looks like. This file is the **watch app's half**; the
-phone-side relay's half belongs with the relay (the design doc plans a `docs/watch/OWNER_VERIFY.md` for it —
-check whether it exists yet).
+says what to look for and what "wrong" looks like. This file is the **watch app's half** (per-screen detail);
+the end-to-end pass in running order, with the phone side, the pairing/signing steps and the engine-policy
+caveats, is [`docs/watch/OWNER_VERIFY.md`](../docs/watch/OWNER_VERIFY.md) — read its section 2 before
+trying to see a cloud-watched reply (the v1 relay is on-device only), and its sections 3, 4 and 6 for
+when phone-side changes reach the wrist (only when the watch next syncs).
 
 ## 0. Before anything: same applicationId, same key
 

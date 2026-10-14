@@ -91,10 +91,15 @@ jobs:
         # licenseReport block. Test + license tasks moved from :app to :core-engine in the
         # § de-fork (:app is now a thin shell with no test sources / runtime deps of its
         # own to scan).
+        # WatchBrew (docs/design/watchbrew.md): :watch-bridge:test is the pure-Kotlin wire
+        # contract's JVM suite; :watchbrew:test{Full,Play}DebugUnitTest are the Wear OS app's
+        # (which also compile all of its Kotlin, so a watch-side regression fails CI even
+        # though the watch APK is never assembled here). These prove nothing about a real
+        # watch, pairing or the Data Layer — those stay owner-verified (docs/watch/OWNER_VERIFY.md).
         run: |
           for attempt in 1 2 3; do
             echo "::group::gradle attempt $attempt"
-            if ./gradlew --no-daemon :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest :core-engine:checkLicense; then
+            if ./gradlew --no-daemon :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest :core-engine:checkLicense :watch-bridge:test :watchbrew:testFullDebugUnitTest :watchbrew:testPlayDebugUnitTest; then
               echo "::endgroup::"; exit 0
             fi
             echo "::endgroup::"

@@ -259,6 +259,9 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
    engine** repo (give the agent access).
 5. Device verification: Echo send + relaunch (markdown fix), the Loop editor feel, the Devices/SSH
    flows, and the USB flash with a real board.
+6. **WatchBrew** (2026-10-14): run the end-to-end device checklist `docs/watch/OWNER_VERIFY.md` on a
+   real Wear OS watch, and answer the four decision points at the foot of `docs/design/watchbrew.md`
+   (Data Layer vs BLE transport; v1 surfaces; Apple Watch sequencing; own repo or not). See section 12.
 
 ---
 
@@ -290,9 +293,13 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
   Search's SQL schema lives at `src/main/sqldelight/dev/aarso/data/search/Search.sq` — the second,
   FTS5-capable database, separate from Room's.
 - `hyle/` design-system module · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
+- `watch-bridge/` WatchBrew wire contract (pure Kotlin) · `watchbrew/` the Wear OS app · phone relay in
+  `core-engine/.../data/watch/` — section 12.
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),
   `handoff/hyle-extraction.md`, **this file**.
-- `apk-dist` branch — the installable `aarso-sd.apk`.
+- `apk-dist` branch — the installable `fonebrew-sd.apk` (the older `aarso-sd.apk` name above is the
+  pre-rename file) and, once published, `fonebrew-watch.apk`; the two are always rebuilt together from
+  one container so the debug signatures match (section 12, "The signing trap").
 
 ---
 
@@ -359,3 +366,75 @@ the `localExecutionProvider`/`localUserPrincipal`/`principalStore` `AppContainer
 Re-verified: `OperationWorker` is live via `ui/loops/LoopRoom.kt`'s Loop-push retry queue, and the
 authority trio is live via the same `RunSessionDriver`/`RunFacet` chain as `domain.authority`
 above. None of the four are parked; nothing was changed for them here.
+
+---
+
+## 12. WatchBrew v1 — the wrist surface (2026-10-14)
+
+Design (ratified-by-default; every DECIDED line is an owner-overridable engineering call):
+`docs/design/watchbrew.md`. Device checklist: `docs/watch/OWNER_VERIFY.md` (every box unchecked). Not
+Studio's "Watch" feature — same word, nothing shared.
+
+**What exists (three pieces, one repo).** `:watch-bridge` (pure-Kotlin wire contract: versioned envelope,
+org.json codecs, Data Layer paths, length-prefixed reply-stream framing) · `:core-engine` `data/watch/`
+(phone relay: `WearRelayService` + `WearRelayPresenter`; the engine path, the one message tree, `TaskStore`
+and the run ledger are reached through it; lazy DI seam in `AppContainer`) · `:watchbrew` (Wear OS app: Ask,
+Tasks, Loops, one Tile, one complication; depends only on `:watch-bridge`, never `:core-engine`, no
+network permission, no key). Transport is the Wearable Data Layer: device-local pair transport, not telemetry.
+
+**Machine-verified (JVM gate, run 2026-10-14 against `0bcfeb5`, unpiped, every test task re-executed
+with `--rerun`, exit 0):**
+
+| Task | Tests | Failures / errors | Skipped |
+|---|---|---|---|
+| `:core-engine:testFullDebugUnitTest` | 2923 | 0 / 0 | 1 |
+| `:core-engine:testPlayDebugUnitTest` | 2923 | 0 / 0 | 1 |
+| `:watch-bridge:test` | 118 | 0 / 0 | 0 |
+| `:watchbrew:testFullDebugUnitTest` | 202 | 0 / 0 | 0 |
+| `:watchbrew:testPlayDebugUnitTest` | 202 | 0 / 0 | 0 |
+| `:core-engine:checkLicense` | green | n/a | n/a |
+
+(`:watchbrew:checkLicense` and `:watchbrew:assemble{Full,Play}Debug` were also run and are green, but are
+**not** in the CI gate. Counts are a dated snapshot, not a contract: re-run the gate for the live number.)
+What those cover: the contract
+codecs (round-trip, malformed/truncated/fuzzed input, version handshake, usage invariants), the relay
+presenter and turn runner (request to action, chunk stream, snapshot assembly, toggle application), the
+watch presenters and reducers (connection state machine, reply accumulation, task reduction, loop/spend,
+tile and complication derivation, virtual-time watchdogs), and module guards (dependency law, no network
+code, applicationId parity with the phone, brand-asset parity, the colour-blind glyph rule). CI now runs
+the three WatchBrew tasks alongside the core gate (`.github/workflows/ci.yml`, retry loop unchanged).
+
+**Owner-verified only — nothing here has run on a watch, an emulator or a paired phone:** pairing and
+Data Layer delivery between the real pair; RemoteInput / voice; streaming feel and whether a long reply
+survives inside the listener-service callback; whether Android lets a Data Layer callback start the
+generation foreground service with the phone backgrounded; a wrist Ask arriving while the phone's own chat
+is generating on the one local engine; how the Compose screens, the Tile (vector glyphs through
+ProtoLayout) and the complication actually render; and battery over a day.
+
+**As-built behaviour worth knowing (so it is not discovered as a surprise):**
+- **On-device answers only.** The v1 relay resolves the model through the phone's `DefaultModelPolicy`,
+  which never resolves cloud (binding rule 2). The cloud path and the watched-object glyph on the wrist
+  are built and tested with a cloud-shaped fake, but a real wrist Ask cannot be answered by the cloud
+  until a per-use opt-in exists ("wrist cloud opt-in", a named, not-started follow-up needing an owner
+  decision). So the watched glyph is **not** verifiable on a device today (OWNER_VERIFY section 2).
+- **The phone never pushes.** It answers the watch (sync on watch resume / "Check again", a snapshot after
+  each toggle). A task or loop run changing on the phone is not seen on the wrist until the watch next
+  syncs; loops are point-in-time snapshots labelled with their age, and the complication updates only when
+  a snapshot arrives. Push-on-change is not built.
+- A relayed turn is an ordinary append-only turn in a visibly named "Wrist · WatchBrew" conversation,
+  tagged `via=watchbrew` at insert time; nothing is written retroactively.
+
+**The signing trap.** The Data Layer delivers only between a phone app and a watch app with the same
+applicationId **and** the same signing key (`full` = `dev.aarso.full`, `play` = `dev.aarso`). Debug builds
+are signed by the building machine's debug keystore, so `fonebrew-watch.apk` and `fonebrew-sd.apk` must be
+rebuilt together from one container in one session and published to `apk-dist` together; one refreshed
+alone (or one from CI and one from a laptop) installs cleanly and then never talks. Check with
+`apksigner verify --print-certs` on both (identical SHA-256 digests). Neither APK has been published to
+`apk-dist` by this wave (the phone's native cross-compile was not attempted here, and the container has no
+CMake installed); the first pair there must be built together.
+
+**Deferred (named follow-ups, none started):** wrist cloud opt-in; push-on-change; a Hyle wear target
+(Hyle repo; today the colour tokens are a pinned copy); R8 shrinking (25.0 MB to a trial 3.4 MB, held for an
+on-device smoke pass); ambient / always-on rendering; tile-carousel preview art; a GMS-free BLE transport;
+gating `:watchbrew:checkLicense` in CI; Apple Watch (gated on the owner verifying a real Wear OS device,
+then on an iOS host; design doc section 5).

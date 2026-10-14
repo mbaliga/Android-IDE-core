@@ -93,6 +93,12 @@ hyle-design-system/         git submodule (mbaliga/Hyle-Design-System) — the S
                             single-sourcing exists to prevent. Change a component in the
                             submodule, not in app/.
 hyle-probe/                 on-device render harness app for Hyle (depends on dev.aarso:hyle)
+watch-bridge/               WatchBrew wire contract: pure Kotlin/JVM (no Android deps), versioned envelope +
+                            org.json codecs + Data Layer paths + reply-stream framing. Both ends consume it.
+watchbrew/                  WatchBrew, the Wear OS app (Ask / Tasks / Loops / Tile / complication): a remote
+                            surface over the Wearable Data Layer. Depends ONLY on :watch-bridge — never
+                            :core-engine, never a key, never a network. Phone side = core-engine
+                            data/watch/ (WearRelayService). Design law: docs/design/watchbrew.md
 ```
 
 ### Architecture spine (don't violate)
@@ -128,16 +134,26 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
 - Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.aarso.full`, default) /
   **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.aarso`).
 - Gate: `./gradlew :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest
-  :core-engine:checkLicense` (keep green — this is exactly what CI runs, `.github/workflows/
-  ci.yml:91`; not the pre-de-fork `:app:test*` tasks this line used to name — test + license
+  :core-engine:checkLicense :watch-bridge:test :watchbrew:testFullDebugUnitTest
+  :watchbrew:testPlayDebugUnitTest` (keep green — this is exactly what CI runs, `.github/workflows/
+  ci.yml:102`; not the pre-de-fork `:app:test*` tasks this line used to name — test + license
   tasks moved from `:app` to `:core-engine` in the de-fork, `:app` is now a thin shell with no
-  test sources of its own to scan). For the current test/failure counts, don't trust a number
+  test sources of its own to scan; the three WatchBrew tasks joined at the WatchBrew v1 closeout,
+  2026-10-14 — they prove the wire contract and the watch's pure logic, never a real watch).
+  For the current test/failure counts, don't trust a number
   frozen in this file — it goes stale the moment the suite grows; **`HANDOFF_STATE.md` is the
   live baseline** the next session should reproduce and keep green. Hyle's own
   `:hyle:test` now runs in the Hyle repo's CI; core consumes Hyle via the includeBuild'd submodule
   (`git submodule update --init --recursive` first, so the composite build resolves `dev.aarso:hyle`).
 - `./gradlew :app:assembleFullDebug` → sideload APK (slow native cross-compile).
   `:app:bundlePlayRelease` → Play AAB.
+- `./gradlew :watchbrew:assembleFullDebug` → the WatchBrew watch APK (Wear OS; **no native code**, so
+  it is fast — nothing like the phone cross-compile). **Pairing constraint (load-bearing):** the
+  Wearable Data Layer delivers only between a phone app and a watch app with the *same applicationId
+  AND the same signing key* (`full` → `dev.aarso.full`, `play` → `dev.aarso`; a test pins the ids).
+  A watch APK signed by a different keystore than the phone APK installs and runs fine, then (by the
+  Data Layer's rules; predicted, never observed here) never hears the phone. Debug builds share the
+  building machine's default debug keystore, so build both from one machine. Details: `watchbrew/README.md`, `docs/watch/OWNER_VERIFY.md`.
 - **Two SQL toolchains coexist in the main module (do not "unify"):** Room owns the append-only
   message tree (`AppDatabase`); **SQLDelight owns the FTS5 search index** (`SearchDatabase`, schema
   at `src/main/sqldelight/dev/aarso/data/search/Search.sq`) as a *separate SQLite file*. This isn't
@@ -154,7 +170,13 @@ hyle-probe/                 on-device render harness app for Hyle (depends on de
   1.8.2) satisfies it. Pinning an older BoM → runtime `NoSuchMethodError` on every markdown turn
   (this was the launch/send crash). Keep BoM ≥ 1.8 or downgrade the renderer in lockstep.
 - **APK delivery:** push the APK as `fonebrew-sd.apk` on the **orphan branch `apk-dist`**
-  (`--force`).
+  (`--force`). **`fonebrew-watch.apk` (the `full` WatchBrew debug APK) joins it there, and the two
+  are ALWAYS rebuilt together from ONE container in the same session** — never refresh one without
+  the other. This is the signing trap: both are debug builds signed by whatever debug keystore the
+  building machine has, and a fresh container/CI runner mints a *different* one. By the Data Layer's
+  rules (docs/design/watchbrew.md §2) a mismatched pair installs cleanly and then exchanges no
+  messages — expect the watch to say "Phone not reachable" forever (predicted, not observed: no
+  watch here). Same machine, same session, same keystore, or treat the pair as void.
 - **CI caveat:** the workflow runs the JVM gate only — the native assemble is `if: false` (it OOMs
   the runner), so **CI never launches the app**. A device-only launch/render crash passes CI. The
   in-app **crash-recovery harness** exists precisely because of this. **Actions are WORKING again
@@ -235,6 +257,11 @@ detail in `docs/STATE.md`.
   **fixed the launch/send crash** (Compose BoM → Foundation 1.8). **Preview the recovery
   screen without a real crash:** Settings → Global → About, long-press the version line
   (debug builds only) — calls `CrashRecovery.previewIntent(context, "Fonebrew")`.
+- **WatchBrew v1 (Wear OS companion; `watch-bridge/` + `watchbrew/` + phone relay `data/watch/`) —
+  OWNER-UNVERIFIED:** compiled + JVM-tested (gate above); nothing has run on a watch, emulator or
+  paired phone. Phone-answered only (v1 relay is on-device engines; cloud is deferred), keys stay in
+  the phone Keystore. Pairing, voice, streaming feel, Tile/complication and battery are owner-only:
+  `docs/watch/OWNER_VERIFY.md`; state in `docs/STATE.md` §12; design law `docs/design/watchbrew.md`.
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
   (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
