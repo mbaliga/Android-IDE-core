@@ -15,25 +15,47 @@ the sandbox's default locale is POSIX/C, not UTF-8 (`locale` shows `LC_CTYPE="PO
 breaks the Kotlin compiler on any file containing a backtick-quoted test name with a non-ASCII
 character (an em dash, in the case that surfaced it) — `InvalidPathException: Malformed input`.
 Fix: `export LANG=C.utf8 LC_ALL=C.utf8` (that locale is preinstalled) before invoking `./gradlew`.
-With that fix, `:core-engine:testFullDebugUnitTest` runs for real: **1549 tests, 0 failures, 1
-ignored** as of WP-10's completion (1489 at the end of WP-9, 1455 at the end of WP-8b) — unchanged
-through WP-11's closeout, which is documentation-only and adds no new tests; WP-11's own
-`docs/WP11_GATE_REPORT.md` additionally confirms `:core-engine:testPlayDebugUnitTest` matches
-this exact count (also 1549/0/0/1) and `:core-engine:checkLicense` passes — the real, complete CI
-gate, not just the `full`-flavor slice every per-WP report above ran individually. This is the
-live baseline the next session should keep green, not the guessed "868 tests" figure
-`CLAUDE.md`/`docs/STATE.md` still quote (stale, pre-dates this session's additions).
+With that fix, the gate runs for real. **Live baseline (2026-10-14, WatchBrew v1 + LX-1/LX-2 closeout):**
+`:core-engine:testFullDebugUnitTest` and `:core-engine:testPlayDebugUnitTest` **2,923 tests each,
+0 failures, 1 skipped** (SearchBenchTest, manual); `:core-engine:checkLicense` green;
+`:watch-bridge:test` **118/0**; `:watchbrew:testFullDebugUnitTest` + `:watchbrew:testPlayDebugUnitTest`
+green (counts in `docs/STATE.md` §12) — this six-task line is exactly what `ci.yml` runs. The
+separate `desktop/` host build (LX-1, its own Gradle build, JDK-only) runs **2,160/0** mapped
+domain tests — `desktop-host-core.yml` carries it in CI. *(History: 1549/flavor at WP-10/11,
+2026-08-07; 2,698 at the bifurcation waves; 2,784 at the mounts waves; growth since is the
+WatchBrew relay + contract-adjacent tests.)* The old guessed "868 tests" figure in older docs is
+long stale.
 `Android-IDE-Studio`'s `core` submodule is repointed at this repo's `claude/fonebrew-development-
 clzu43` branch (not `main` — see that repo's `settings.gradle.kts` pin comment and this repo's
-WP-2 gate report §4); its own CI (`mbaliga/Android-IDE-Studio#86`) is currently red on an
-account/repo-access issue unrelated to any code here (a private cross-repo submodule clone
-failing with "Repository not found" — needs an owner-level PAT/deploy-key fix, see that PR's
-comment thread) — not something a further code change in this repo can fix. The NDK auto-install (`ndk;28.2.13676358`) does fail in this sandbox and
-the native `assembleFullDebug`/CMake path is NOT verified here — the JVM unit-test gate does not
-need it and works around it fine; do not spend time chasing the NDK unless a native build is
-actually required. `git submodule update --init hyle-design-system` (the native llama.cpp/
-stable-diffusion.cpp submodules are NOT needed for the JVM gate and are large — skip them) is
-required before Gradle can resolve `dev.aarso:hyle:0.2.0`.
+WP-2 gate report §4); **its CI is GREEN as of 2026-10-13** (run 399: the owner's
+`CORE_SUBMODULE_TOKEN`-class access fix landed; the "Repository not found" submodule-clone
+failure documented in PR #86's thread is resolved — treat Studio red as a real signal again).
+The native toolchain DOES work in this sandbox when installed explicitly (sdkmanager
+`ndk;28.2.13676358` + `cmake;3.31.6`): `:app:assembleFullDebug` has shipped real APKs from here
+(0.3.0, 0.3.1, 0.4.0). The JVM gate still needs none of it. `git submodule update --init
+hyle-design-system shared-libraries` is required before Gradle can resolve `dev.aarso:hyle` /
+`dev.aarso:crash-recovery` / `dev.aarso:interaction-mode`; the native llama.cpp/
+stable-diffusion.cpp submodules are needed only for `assembleFullDebug`.
+
+## PROGRESS — 2026-10-14: WatchBrew v1 + porting LX-1/LX-2 (all lanes adversarially verified)
+
+- **WatchBrew v1** (owner directive 2026-10-13; design law `docs/design/watchbrew.md`):
+  `:watch-bridge` wire contract (`0b3cab3`, `c226c57`), phone relay `data/watch/WearRelayService`
+  (`5d97801`), `:watchbrew` Wear OS app (`0bcfeb5`), CI/docs closeout (`2a48da3`). v1 relay
+  answers on-device only (cloud-from-wrist deferred — a named owner call); keys never cross the
+  bridge; the same-appId + same-keystore Data Layer pairing trap is documented in CLAUDE.md
+  Building. Owner checklist: `docs/watch/OWNER_VERIFY.md` (all boxes honestly unchecked).
+- **Porting LX-1** (`c933301`): `desktop/` JVM host lane maps `domain/` + contracts, 2,160/0
+  tests off-Android, zero existing files touched; `desktop/PORTABILITY.md` inventories the
+  IOS-1 migration surface. Plan-gap findings: `Segmenter.kt` references `android.icu` fully
+  qualified (needs expect/actual); a third back-edge (`GestureModeDefaults` → interaction-mode)
+  beyond the plan's two; org.json-as-runtime-dep licence question for distributables.
+- **Porting LX-2** (`59eb5ba`): all four spikes PROVEN with runnable evidence in
+  `desktop/spikes/` — Room-KMP works at current pins (P12 storage cost: zero); CMP 1.7.3 vs
+  markdown-renderer clash quantified (desktop UI needs CMP ≥ 1.8); llama/sd shims need
+  `#ifdef __ANDROID__` log guards (exact patch recorded, LX-7); FTS5 + Room coexist in one JVM.
+  LX-3+ (edits Android-side files) stays behind the plan's owner gate (v0.13 device
+  verification + OQ-7a).
 
 ## WPs done, this repo
 
