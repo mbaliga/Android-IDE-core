@@ -440,3 +440,37 @@ Owner questions in the program register that concern this repo (status as of 202
 - OQ-38 (ruled): iOS toolchain pin
 
 When the owner confirms or changes the line, this repo's original cells above stay as the engineering detail; only the verdicts and re-costs in program section 5A change.
+
+## Update 2026-10-14: the market lens, iPadOS and the owner's latest answers
+
+Status: PLAN. Nothing here is built, run on a device, signed or submitted. This update follows the section "Owner rulings and the proposed line (added 2026-10-07)" above and the program plan's section 5A.12 (Personal-Tracker `PORTING_PROGRAM.md`, [PR #10](https://github.com/mbaliga/Personal-Tracker/pull/10)), which governs where the two differ. It records the owner's market lens and answers of 2026-10-13 and 2026-10-14; the proposed line is still a proposal. Two tests were added to the program's section 5A.1: (d) a real gap, or we are better or cheaper ("better" only where it has been measured; free alone is no gap when free tools exist); (w) mature free alternatives abound and the app adds nothing.
+
+### Where Android-IDE-core sits now (program section 5A.12, a proposal)
+
+| Target       | Verdict, weeks and flags |
+| ------------ | ------------------------ |
+| Ubuntu Touch | port 24w g r             |
+| Linux        | follows 8w g             |
+| iPhone       | follows                  |
+| iPad         | port 20w g (later)       |
+| macOS        | no-port                  |
+| Windows      | no-port                  |
+
+The Apple column is now split: iPhone and iPad are judged apart. Where an app ports to both, the weeks are counted once on the lead cell and the other reads follows. The wave (early or later) is for the iPad, and for the iPhone where it leads.
+
+### What changed for this repo
+
+- iPad is now its own column: **port, later wave (not the first Apple wave), 20 weeks** on top of the 8-week Kotlin Multiplatform seam; iPhone follows as a universal widening (the earlier section had one iOS cell, port 20w).
+- iPad specifics: iPadOS apps cannot spawn a shell or toolchain, so the local-process providers cannot run there. The research found the job served in pieces on iPad (a Git client, an SSH client, a vendor's cloud agent, local-chat apps) and found no single app combining a message tree, a Council, a Loop graph engine and a reviewed repo loop, though absence could not be proven (2026-10-14, partly unverified). App Review's stance on agent apps is unsettled (a single-sourced report, unverified).
+- Ubuntu Touch: the owner chose Compose Desktop under XMir (S-UT2) as the first spike for the native shape (OQ-36, in part). It links no Qt, so no I-11 exception is requested, and the open core's Apache-2.0 licence should satisfy OpenStore's open-source review (not confirmed). It needs the unconfined template and a 24.04 device, and the owner chose to wait for the OnePlus 6 on a newer image (OQ-37), so it stays NDV.
+
+### Owner answers that apply here
+
+- **TestFlight (PT:D-Z, approved 2026-10-14):** "Approve PROPOSED-1 as drafted". Directive I-1 now carries an exception for crash reports that Apple collects on TestFlight and the App Store. The app does not transmit those reports and adds no crash-reporting or analytics SDK of its own, and its README, store listing and about/privacy page must name the exception. This supersedes any statement in the earlier section that TestFlight is not used until the exception is approved. Any repo-local no-telemetry rule here is a restatement that PT:D-Z does not amend; recording the exception there is for the owner.
+- **Mac mini timing (OQ-31, 2026-10-14):** "Use hosted macOS runners on public repos first, buy later". This repo is public, so hosted macOS runners are free for it; simulator builds, unit tests and unsigned archives are possible there when this repo's own sequencing allows. Its iPad work is sequenced after the 8-week Kotlin Multiplatform seam. The Mac mini stays chosen and not bought. Signing and a TestFlight upload need the Apple Developer Program, which the owner has not yet joined (owner action).
+- **Apple ids and signing:** Apple bundle ids use `com.asoc.<appname>` (OQ-25, in part; a NAMES.md row first, R11). Signing material is to live in GitHub environment secrets behind a required-approval gate (OQ-3, Apple half). The owner will enrol in the Apple Developer Program ("Not yet, I'll enrol"); until then every Apple build is a simulator or unsigned hosted build.
+- **Apple devices:** the owner has an iPad Pro M4, an Apple Pencil and an iPhone 12 mini; the Mac mini is not yet bought, and nothing is device-verified.
+- **Ubuntu Touch device (OQ-37, 2026-10-14):** "Wait for the OnePlus 6 on a newer image". No second device is bought; the research reads the OnePlus 6 as 20.04-only (the installed image is not stated, OQ-33), so it only takes the S-UT1 (focal) pre-spike, and every Ubuntu Touch device gate stays NDV until it runs 24.04.
+- **Skin contract (OQ-39, 2026-10-14):** proposed conformance level for this app: Level 1 (listed as Aarso in the spec; cost class A, a runtime-built LocalHyleColors). The owner chose Tier 1 (palette) everywhere first and every app declaring its own level; the assistant chose JSON, not XML, after the owner asked for a check; the draft spec is Personal-Tracker `porting/skin-contract/SPEC-DRAFT.md`. This is a proposal, not decided for this app.
+
+When the owner confirms or changes the line, this repo's original cells above stay as the engineering detail; only the verdicts and re-costs in program section 5A.12 change.
