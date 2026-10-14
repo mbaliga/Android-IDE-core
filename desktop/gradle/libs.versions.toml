@@ -1,0 +1,25 @@
+# Pins for the desktop/ build ONLY. Every version below must equal the repo-root pin it mirrors --
+# the point of this lane is to compile and test the SAME sources with the SAME compiler and the
+# SAME test libraries. scripts/check_pins.py fails if any of them drifts from the root build.
+# Do not bump one here without bumping its root counterpart (an owner-gated, Android-gate-verified
+# change per CLAUDE.md's do-not-regress pins).
+[versions]
+# root: gradle/libs.versions.toml  kotlin
+kotlin = "2.1.0"
+# root: gradle/libs.versions.toml  coroutines
+coroutines = "1.10.1"
+# root: gradle/libs.versions.toml  junit
+junit = "4.13.2"
+# root: core-engine/build.gradle.kts  testImplementation("org.json:json:...")
+# The Android runtime bundles its own org.json; plain JVM does not, so the host lane declares the
+# real artifact. Same version the Android unit tests already use.
+orgJson = "20231013"
+
+[libraries]
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

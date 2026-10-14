@@ -1,0 +1,138 @@
+name: Desktop host core
+
+# LX-1 of docs/PORTING_PLAN.md (section 6.1): compile the Android core's pure-Kotlin domain/ +
+# contracts/kotlin on a plain host JDK and run the matching domain tests, from desktop/'s OWN Gradle
+# build. JDK-ONLY BY DESIGN: there is no Android SDK step in this file, no NDK, no submodule checkout
+# (the private hyle-design-system / shared-libraries clones need a PAT; this lane must not), and the
+# Gradle step below runs with the ANDROID_* variables UNSET so a hidden SDK dependency fails loudly
+# instead of being satisfied by the runner image's preinstalled SDK.
+#
+# Rules this file follows (porting program R3/R6): a NEW workflow file only -- ci.yml and
+# cleanup-artifacts.yml are untouched; third-party actions pinned by full commit SHA; read-only token;
+# no artifact upload (test results are summarised in the job log / step summary instead); nothing is
+# built for release, signed, or published. It proves compile + JVM tests on a hosted Linux VM and
+# nothing about any device or any desktop UI (there is none yet).
+#
+# Evidence label for what this lane can ever show: CI (hosted VM) / CONTAINER-BUILD-ONLY -- JVM x86_64
+# compile and tests, nothing else.
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-host-core.yml"
+      # The lane compiles these in place, so a change to any of them can break it:
+      - "core-engine/src/main/java/dev/fonebrew/domain/**"
+      - "core-engine/src/test/java/dev/fonebrew/domain/**"
+      - "contracts/kotlin/**"
+      # The pins the desktop build mirrors (scripts/check_pins.py):
+      - "gradle/libs.versions.toml"
+      - "core-engine/build.gradle.kts"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-host-core.yml"
+      - "core-engine/src/main/java/dev/fonebrew/domain/**"
+      - "core-engine/src/test/java/dev/fonebrew/domain/**"
+      - "contracts/kotlin/**"
+      - "gradle/libs.versions.toml"
+      - "core-engine/build.gradle.kts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-host-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The domain tests contain non-ASCII (em-dash) backticked names; the Kotlin compiler needs a
+      # UTF-8 locale to write their class files (CLAUDE.md "Set a UTF-8 locale before the JVM gate").
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Check out (no submodules)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Full history: the root-unchanged check below inspects the commits of this push/PR.
+          fetch-depth: 0
+          # Deliberately NOT recursive: this lane maps only in-repo sources.
+          submodules: false
+          persist-credentials: false
+
+      - name: Root-unchanged check (history) -- the port lane edits no existing file
+        # Plan LX-1: "a root-unchanged git diff --exit-code check". Any commit that touches
+        # desktop/ or .github/workflows/desktop-*.yml must not modify/delete/rename a file outside them.
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE:-$PUSH_BEFORE}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git merge-base HEAD origin/main 2>/dev/null || echo ALL)"
+          fi
+          desktop/scripts/check_root_unchanged.sh history "$base"
+
+      - name: Pin parity -- desktop build mirrors the root's Kotlin / coroutines / JUnit / org.json pins
+        run: python3 -I desktop/scripts/check_pins.py
+
+      - name: No Android Gradle plugin in the desktop build
+        run: |
+          # Comment lines are dropped first: the files DOCUMENT that they need no SDK in prose.
+          if cat desktop/settings.gradle.kts desktop/gradle/libs.versions.toml desktop/core-host/build.gradle.kts \
+               | grep -vE '^[[:space:]]*(//|#)' \
+               | grep -nE 'com\.android|android\.(application|library)|ANDROID_(HOME|SDK_ROOT)'; then
+            echo "::error::the desktop build must not reference the Android Gradle plugin or SDK"; exit 1
+          fi
+          echo "no AGP / ANDROID_HOME reference in the desktop build files"
+
+      - name: Set up JDK 17 (Temurin) -- the only toolchain this lane needs
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            desktop/**/*.gradle*
+            desktop/gradle/libs.versions.toml
+            desktop/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Compile mapped domain + contracts and run the mapped domain tests (Android env UNSET)
+        # Maven Central intermittently 403s hosted runners during dependency resolution (see ci.yml's
+        # identical note), so retry a few times with backoff. `env -u` removes every Android SDK
+        # variable the runner image pre-sets: if this build secretly needed an SDK it fails here.
+        working-directory: desktop
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::gradle attempt $attempt"
+            if env -u ANDROID_HOME -u ANDROID_SDK_ROOT -u ANDROID_NDK_ROOT -u ANDROID_NDK_HOME \
+                 ./gradlew --no-daemon :core-host:test; then
+              echo "::endgroup::"; exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt $attempt failed; backing off before retry..."
+            sleep $((attempt * 20))
+          done
+          echo "all gradle attempts failed"; exit 1
+
+      - name: Reconcile test count -- executed == the tests that exist in the mapped sources
+        # The plan's 1549 is a whole-module 2026-08-07 figure; the real invariant is that this lane
+        # runs EXACTLY the tests present in the mapped test sources. Fails on any mismatch.
+        run: |
+          python3 -I desktop/scripts/reconcile_tests.py \
+            --results desktop/core-host/build/test-results/test \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Root-unchanged check (tree) -- running the lane wrote nothing into the repo
+        run: desktop/scripts/check_root_unchanged.sh tree
+
+      - name: PORTABILITY.md is current (warning only, never fails the lane)
+        run: |
+          if ! python3 -I desktop/scripts/portability_inventory.py --check; then
+            echo "::warning file=desktop/PORTABILITY.md::stale inventory; regenerate with python3 -I desktop/scripts/portability_inventory.py --write"
+          fi
