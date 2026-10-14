@@ -450,6 +450,73 @@ class AppContainer(context: Context) {
     // Device recipes over the SSH spine (IA: agentic-ide #3): RPi / Arduino-via-Pi / ESP-OTA.
     val deviceRepo: dev.fonebrew.data.DeviceRepo = dev.fonebrew.data.DeviceRepo { newSshTransport() }
 
+    /**
+     * WatchBrew phone-side relay (docs/design/watchbrew.md; `data/watch/`). The one seam through which
+     * [dev.fonebrew.data.watch.WearRelayService] reaches the phone's stores, **lazy on purpose**: nothing
+     * here is constructed at app start. It is first touched when the first message from a paired watch
+     * arrives, so a phone that never pairs a watch never allocates a presenter, a scope or an engine
+     * resolver. Same lazy-seam idiom as the parked-substrate properties above.
+     *
+     * Everything is wired from existing collaborators; the relay owns no store of its own:
+     *  - a relayed question runs through [modelRegistry] / [engineProvider] (the same engine factory a
+     *    chat turn uses) and is appended to [repository] as a normal turn, with [ledgerStore],
+     *    [embeddingLogger], [pricingStore] and [freeTierUsageStore] fed exactly as chat feeds them;
+     *  - the model is chosen by the on-device-only policy ([dev.fonebrew.data.watch.WristEngineResolver.onDevice]):
+     *    cloud is never an ambient default (binding rule 2), so a wrist question is never sent to a
+     *    cloud provider today; the wiring uses no provider key and `providerStore` is not referenced;
+     *  - tasks go through [taskStore] (the phone stays the single writer), loop-run glances read
+     *    [repository] + [ledgerStore] + [backgroundJobs].
+     *
+     * The scope is process-lifetime (see [dev.fonebrew.data.watch.WearRelay]).
+     */
+    val wearRelay: dev.fonebrew.data.watch.WearRelay by lazy {
+        val appContext = context.applicationContext
+        dev.fonebrew.data.watch.WearRelay(
+            presenter = dev.fonebrew.data.watch.WearRelayPresenter(
+                turns = dev.fonebrew.data.watch.WristTurnRunner(
+                    repository = repository,
+                    resolver = dev.fonebrew.data.watch.WristEngineResolver.onDevice(
+                        specs = { modelRegistry.allSpecs() },
+                        persistedModelId = { sessionStore.activeModelId.value },
+                        engineFor = { engineProvider.engineFor(it) },
+                        unavailableReason = { engineProvider.unavailableReason(it) },
+                    ),
+                    appendLedger = { ledgerStore.append(it) },
+                    onUserNode = { embeddingLogger.onMessageInserted(it) },
+                    priceFor = { pricingStore.book.value.priceFor(it) },
+                    recordFreeTier = { providerId, tokensIn, tokensOut -> freeTierUsageStore.record(providerId, tokensIn, tokensOut) },
+                    projectOf = { chatId -> sessionStore.conversationProjects.value[chatId] },
+                    kv = dev.fonebrew.data.watch.KvSnapshots(
+                        loadPathFor = { nodeId -> if (kvCacheStore.exists(nodeId)) kvCacheStore.pathFor(nodeId) else null },
+                        savePathFor = { nodeId -> kvCacheStore.pathFor(nodeId) },
+                    ),
+                    keepAlive = dev.fonebrew.data.watch.ProcessKeepAlive { spec ->
+                        if (dev.fonebrew.data.watch.ProcessKeepAlive.needsBoost(spec)) {
+                            // Same courtesy the chat gives a resident local model. Whether Android lets a Data
+                            // Layer callback start this service is device-only; a refusal is logged by the
+                            // service itself and the turn runs without the boost.
+                            dev.fonebrew.service.GenerationService.start(appContext)
+                            AutoCloseable { dev.fonebrew.service.GenerationService.stop(appContext) }
+                        } else {
+                            AutoCloseable { }
+                        }
+                    },
+                ),
+                tasks = taskStore,
+                loops = dev.fonebrew.data.watch.LedgerLoopRunSource(
+                    repository = repository,
+                    ledger = ledgerStore,
+                    jobs = { backgroundJobs.jobs.value },
+                    loopName = { loopId -> loopId?.let { loopStore.get(it)?.name } },
+                    currencyCode = { pricingStore.currencyCode.value },
+                ),
+                phoneAppVersion = runCatching { appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName }
+                    .getOrNull().orEmpty(),
+            ),
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        )
+    }
+
     /** FTS5 search index (separate SQLite file from Room's [database] — see
      *  [dev.fonebrew.data.search.SearchDriverFactory]'s KDoc) + the repository that projects the
      *  message tree into it and serves ranked queries against it. */

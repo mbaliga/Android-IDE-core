@@ -47,6 +47,16 @@ sqldelightAndroidxDriver = "0.0.1"
 # which runs a real FTS5 query in a JVM unit test against this exact artifact.
 sqliteBundled = "2.7.0"
 
+# --- Wearable Data Layer (phone-side WearRelayService in :core-engine; the :watchbrew app pins the SAME
+# coordinate). Device-local pair transport over Bluetooth/Wi-Fi between the paired phone and watch: not
+# telemetry, nothing leaves the pair (binding rule 1; docs/design/watchbrew.md section 2). Exact STABLE
+# pin, resolves against google(); a Data Layer client on each side should be the same release, so this
+# is one pin both consumers read. 19.0.0 (2024-11) rather than the newest 20.0.x: the conservative pick
+# the watch lane already shipped against, and nothing the relay uses (MessageClient / ChannelClient /
+# WearableListenerService) is new in 20. License: Android SDK License, admitted by the GMS-scoped rule
+# in config/allowed-licenses.json (no allowlist edit).
+playServicesWearable = "19.0.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -81,6 +91,9 @@ sqldelight-runtime = { group = "app.cash.sqldelight", name = "runtime", version.
 sqldelight-coroutines-extensions = { group = "app.cash.sqldelight", name = "coroutines-extensions", version.ref = "sqldelight" }
 sqldelight-androidx-driver = { group = "com.eygraber", name = "sqldelight-androidx-driver", version.ref = "sqldelightAndroidxDriver" }
 androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqliteBundled" }
+
+# Wearable Data Layer client (phone relay; see [versions] playServicesWearable).
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

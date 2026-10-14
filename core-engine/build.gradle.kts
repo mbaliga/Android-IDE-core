@@ -215,6 +215,18 @@ dependencies {
     // On-device image generation native library (libaarso_sd.so).
     implementation(project(":sdengine"))
 
+    // WatchBrew phone-side relay (docs/design/watchbrew.md; data/watch/WearRelayService). The wire
+    // contract is a pure-Kotlin sibling module, consumed here and by :watchbrew and by nothing else.
+    // A plain-JVM project dependency: it carries no Android variant attributes, so (like :sdengine
+    // above) it resolves cleanly for both dist flavors. org.json is compileOnly there; on-device it
+    // is the platform's, and JVM tests below already bring a real one.
+    implementation(project(":watch-bridge"))
+    // The Wearable Data Layer (MessageClient in, ChannelClient out, WearableListenerService). Device-
+    // local pair transport — not telemetry; nothing leaves the paired phone and watch. Both flavors:
+    // the Data Layer is plain Play services, nothing the policy-safe `play` flavor excludes. License
+    // is the Android SDK License, admitted by the GMS-scoped rule in config/allowed-licenses.json.
+    implementation(libs.play.services.wearable)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     // Real org.json for JVM tests (the app uses Android's bundled org.json; the

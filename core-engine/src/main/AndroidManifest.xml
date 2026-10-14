@@ -78,6 +78,28 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!--
+          WatchBrew phone-side relay (docs/design/watchbrew.md): receives the paired watch's
+          requests over the Wearable Data Layer, device-local pair transport (Bluetooth / Wi-Fi
+          between the two devices) — not telemetry, nothing leaves the pair. Exported because the
+          Data Layer (Play services) binds it from outside this process; the Data Layer only routes
+          messages from a watch app with the SAME application id and signing key. The filter is
+          scoped to the /watchbrew/ path prefix and nothing wider (the paths are
+          dev.fonebrew.watchbridge.WatchPaths; a unit test keeps this filter equal to that
+          contract). Reply streaming is phone -> watch over ChannelClient, so no channel filter here.
+        -->
+        <service
+            android:name="dev.fonebrew.data.watch.WearRelayService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/watchbrew/" />
+            </intent-filter>
+        </service>
+
         <!-- §7: device assistant (assist-gesture summon). Select Fonebrew under
              Settings → Default apps → Digital assistant. -->
         <service

@@ -56,6 +56,12 @@ object Conversations {
     /** Metadata key marking a turn whose payload is a generated image file. */
     const val IMAGE_KEY = "image"
 
+    /** Metadata key a conversation's ROOT may carry to name itself. Minted once at insert, like every
+     *  node key (the tree is append-only, so a title is never added or changed afterward). Absent on
+     *  every ordinary chat, whose title stays "the first words of its opening ask"; the relayed
+     *  Wrist conversation ([dev.fonebrew.data.watch.WristConversation]) is the one writer today. */
+    const val TITLE_KEY = "conversation.title"
+
     /** Metadata key for user-node attachments — a JSON array of {path, mime}
      *  (see [Attachments]). Path-only in v1: no width/height/kind fields. */
     const val ATTACHMENTS_KEY = "attachments"
@@ -99,6 +105,8 @@ object Conversations {
 
     /** First words of the first user turn (a conversation is named by its opening ask). */
     private fun titleOf(nodes: List<MessageNode>): String {
+        // A root that named itself at insert time wins; every other conversation falls through unchanged.
+        nodes.firstOrNull { it.isRoot }?.metadata?.get(TITLE_KEY)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
         val opening = nodes.asSequence()
             .filter { it.role == Role.USER }
             .minByOrNull { it.createdAt }
