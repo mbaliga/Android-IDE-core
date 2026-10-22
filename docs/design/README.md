@@ -9,6 +9,7 @@ honest about the no-device build environment).
 
 | Doc | What | Status |
 |-----|------|--------|
+| [`watchbrew.md`](watchbrew.md) | Watch companion, remote session hosts and optional e-ink document surface. Galaxy Watch8 LTE / Oasis 2 target. | **browser prototype + native fake-host app; device/transport work pending** |
 | [`information-architecture.md`](information-architecture.md) | **The canonical IA** (owner spec, 2026-06-23): the whole-app map — Conversations (left) · Chat (home, with single/expert/model interaction modes + group participants) · Settings (right, 5 icon tabs, never a launcher) · Develop (bottom) · Tree (up) · Loops (down) · Project mgmt · the "Me/Myself/I" user meta. Spatial map is the spine; settings hold config only. | **owner spec — anchor doc** |
 | [`council-workflows.md`](council-workflows.md) | The loop as a product: today's one-shot council fan-out → a loopable graph of **experts** (per-node model = "model suited to the task"); objective→propose→critique→refine; "propose a look". | **design + engine spike built** |
 | [`coding-assistant.md`](coding-assistant.md) | Aarso as a coding assistant **on your repos**: connect a Git host, enter git ID, work on repos/branches, edit→review-diff→commit/push, via the Claude API (watched). | design |

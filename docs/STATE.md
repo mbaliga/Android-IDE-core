@@ -7,6 +7,19 @@
 
 ---
 
+## WatchBrew native demo milestone — 2026-10-15
+
+WatchBrew lives entirely in ide-core. [Design](design/watchbrew.md) and
+[interactive browser prototype](../prototypes/watchbrew/index.html) cover a lightweight watch
+companion, explicit phone/computer/cloud host selection and an optional e-ink reading surface.
+The [`watchbrew/`](../watchbrew/README.md) module now supplies a standalone Wear OS fake-host
+application with persisted drafts/outbox, reviewed system dictation and watch conversation flows.
+It builds independently with `-PwatchbrewOnly=true`; a debug APK and JVM state tests are available.
+Real transport, native Oasis 2 support and device rendering/power/thermal validation remain pending.
+See the design for the staged implementation plan.
+
+---
+
 ## 0. TL;DR
 A **local-first, sovereign AI computing environment** for a high-end Android phone — "an open,
 on-device Claude Code with loop engineering," extending into a real **agentic IDE** (read repos,

@@ -30,11 +30,15 @@ dependencyResolutionManagement {
 // any `dev.aarso:hyle` dependency with that build's :hyle project (matched on group:name),
 // so there is no vendored :hyle module here anymore. Update the pin with:
 //   git -C hyle-design-system fetch && git -C hyle-design-system checkout <sha> && git add hyle-design-system
-includeBuild("hyle-design-system")
+val watchbrewOnly = providers.gradleProperty("watchbrewOnly").orNull == "true"
+if (!watchbrewOnly) includeBuild("hyle-design-system")
 
 // Aarso ("mirror"); design thesis: legibility + cognitive sovereignty.
 rootProject.name = "Aarso"
-include(":app")
-include(":core-engine")
-include(":sdengine")
-include(":hyle-probe")
+include(":watchbrew")
+if (!watchbrewOnly) {
+    include(":app")
+    include(":core-engine")
+    include(":sdengine")
+    include(":hyle-probe")
+}
