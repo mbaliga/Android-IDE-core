@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-build-receipt.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/loop-build-receipt.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopBuildReceipt per LOOP_ENGINEERING_SPEC_V2.1.md §20 (Package build pipeline, the 10 numbered steps) and LOOP_PACKAGE_SPEC.md §5 (build receipt field list, merged from the source draft's duplicate §11/§16). §20: 'The build fails closed. It never publishes a partially built package.' This schema's allStepsSucceeded/steps/packageContentDigest interaction is this work package's structural encoding of that sentence — see the long-form note on `allStepsSucceeded` below.",
   "title": "LoopBuildReceipt",
   "description": "The record LOOP_ENGINEERING_SPEC_V2.1.md §20 step 10 emits: which of the ten fixed pipeline steps ran and their outcome, the resulting digests, validation findings, test-suite results, signature action (if any), builder identity, and a fail-closed flag. A receipt is emitted whether the build succeeded or was blocked (LOOP_PACKAGE_SPEC.md §5's state table: 'a non-deterministic build is not silently discarded, it is recorded as such') — steps after a blocking failure are recorded as SKIPPED, never simply absent, so the tuple stays the fixed ten-step shape in every receipt.",

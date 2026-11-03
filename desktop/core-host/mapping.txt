@@ -1,0 +1,41 @@
+# desktop/core-host/mapping.txt -- the ONE place the host lane's source mapping is declared.
+#
+# Read by BOTH build.gradle.kts (srcDir + exclusion filter) and desktop/scripts/*.py (so the
+# test-count reconciliation and PORTABILITY.md are derived from exactly the files Gradle compiles,
+# with no second copy of the list to drift). Plan reference: docs/PORTING_PLAN.md section 6.1, LX-1.
+#
+# Line format (fields separated by " | ", paths are repo-root-relative, '#' starts a comment):
+#   main-root    | <directory>
+#   test-root    | <directory>
+#   main-exclude | <file> | <witness> | <reason>
+#   test-exclude | <file> | <witness> | <reason>
+# The witness is a literal string that MUST still occur in the excluded file. If it does not (the
+# back-edge was removed, e.g. by plan step LX-3), `./gradlew :core-host:verifyMapping` fails and
+# says "delete this exclusion" -- an exclusion can never silently outlive its reason or point at a
+# file that no longer exists.
+
+# --- source roots -------------------------------------------------------------------------------
+# Package-by-directory is not required by Kotlin, so the roots are the package directories
+# themselves. core-engine/src/main/java/dev/fonebrew/domain is the whole domain/ tree; the contract
+# corpus is the same ../contracts/kotlin root :core-engine already adds as an extra srcDir.
+main-root | core-engine/src/main/java/dev/fonebrew/domain
+main-root | contracts/kotlin
+test-root | core-engine/src/test/java/dev/fonebrew/domain
+
+# --- main exclusions: the two back-edges the plan names (section 2 table, section 6.1 LX-1) -----
+main-exclude | core-engine/src/main/java/dev/fonebrew/domain/authority/AuditedAuthorityEngine.kt | import dev.fonebrew.data.ReceiptStore | PLAN-NAMED back-edge #1: AuditedAuthorityEngine -> data/ReceiptStore (Room-backed). Inverted behind an interface by plan step LX-3(a); until then it cannot compile without data/.
+main-exclude | core-engine/src/main/java/dev/fonebrew/domain/execution/CiActionsExecutionProvider.kt | import dev.fonebrew.data.GitTransport | PLAN-NAMED back-edge #2: CiActionsExecutionProvider -> data/GitTransport (OkHttp-backed). Inverted behind an interface by plan step LX-3(a); until then it cannot compile without data/.
+
+# --- main exclusion NOT named by the plan: found while building this lane ------------------------
+# The plan (written 2026-10-06 against an older branch state) lists two back-edges. A third has
+# appeared since: domain/mode/GestureModeDefaults.kt imports the shared-libraries :interaction-mode
+# enum. Reaching it needs the private shared-libraries submodule (a PAT-gated checkout) AND an
+# Android library build, i.e. exactly the Android SDK / submodule dependency this lane must not
+# have. Excluded rather than faked (no stand-in enum), and reported as a finding for LX-3.
+main-exclude | core-engine/src/main/java/dev/fonebrew/domain/mode/GestureModeDefaults.kt | import dev.aarso.interactionmode.InteractionMode | NOT PLAN-NAMED (post-plan drift): GestureModeDefaults -> shared-libraries :interaction-mode InteractionMode (Android library behind a private submodule). Needs an LX-3-style inversion or a pure-Kotlin home for the enum.
+
+# --- test exclusions: tests that cannot compile once their subject / a data/ type is absent ------
+test-exclude | core-engine/src/test/java/dev/fonebrew/domain/authority/AuditedAuthorityEngineTest.kt | import dev.fonebrew.data.ReceiptStore | Tests main-exclude #1; also imports data/ReceiptStore + data/dao/ReceiptDao + data/entity/ReceiptEntity directly.
+test-exclude | core-engine/src/test/java/dev/fonebrew/domain/execution/CiActionsExecutionProviderTest.kt | import dev.fonebrew.data.GitTransport | Tests main-exclude #2; also imports data/GitTransport directly.
+test-exclude | core-engine/src/test/java/dev/fonebrew/domain/mode/GestureModeDefaultsTest.kt | import dev.aarso.interactionmode.InteractionMode | Tests the post-plan main-exclude (GestureModeDefaults); imports the shared-libraries enum directly.
+test-exclude | core-engine/src/test/java/dev/fonebrew/domain/loop/LoopTemplateCatalogTest.kt | import dev.fonebrew.data.LoopTemplateAssets | Its subject (domain/loop/LoopTemplateCatalog) IS mapped, but the test imports data/LoopTemplateAssets (an android.content.Context-bound loader) for a lockstep check on its constant. A stand-in class would make that check vacuous, so the file is excluded instead; its sibling LocalizationDraftLoopTest (same asset, read straight off disk) stays mapped.

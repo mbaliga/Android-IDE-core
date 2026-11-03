@@ -23,7 +23,7 @@
   },
   "storageLocation": {
     "kind": "LOCAL_FS",
-    "locator": "../../../../data/data/dev.aarso.full/files/../../../../etc/passwd"
+    "locator": "../../../../data/data/dev.fonebrew.full/files/../../../../etc/passwd"
   },
   "verificationState": "VERIFIED",
   "unknownFields": {}

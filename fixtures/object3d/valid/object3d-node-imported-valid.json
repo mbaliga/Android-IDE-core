@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-imported-0003",
+  "file": {
+    "relativePath": "objects3d/7081a2b3c4d5e6f9.stl",
+    "sizeBytes": 184320,
+    "digest": null
+  },
+  "format": "STL_BINARY",
+  "source": "IMPORTED",
+  "provider": null,
+  "prompt": null,
+  "generation": null,
+  "provenanceState": "UNKNOWN",
+  "watched": false,
+  "createdAtUtc": "2026-08-15T12:05:00Z",
+  "unknownFields": {}
+}

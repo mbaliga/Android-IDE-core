@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.2.0",
+  "generatedAtUtc": "2026-09-06T00:00:00Z",
+  "nodes": [
+    { "id": "01JB00000000000000000RT1", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": null, "at": "2026-09-01T10:00:00Z", "label": null },
+    { "id": "01JB0000000000000MSG101", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB00000000000000000RT1", "at": "2026-09-01T10:05:00Z", "label": null },
+    { "id": "01JB0000000000000MSG102", "kind": "MESSAGE", "rootId": "01JB00000000000000000RT1", "parentId": "01JB0000000000000MSG101", "at": "2026-09-01T10:06:00Z", "label": null },
+    { "id": "01JB000000000000COMMIT1", "kind": "COMMIT", "rootId": "01JB00000000000000000RT1", "parentId": "01JB0000000000000MSG101", "at": "2026-09-01T10:07:00Z", "label": "Fix off-by-one in fixture indexer", "sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", "repoRef": "mbaliga/android-ide-core@main" }
+  ],
+  "edges": [
+    { "from": "01JB00000000000000000RT1", "to": "01JB0000000000000MSG101", "kind": "REPLY", "derivation": "EXTRACTED", "because": "parent-child reply recorded in the message tree" },
+    { "from": "01JB0000000000000MSG101", "to": "01JB0000000000000MSG102", "kind": "REPLY", "derivation": "INFERRED", "because": "a future analysis layer would derive this continuation relationship; no current projector emits it" },
+    { "from": "01JB0000000000000MSG101", "to": "01JB000000000000COMMIT1", "kind": "COMMIT_ANCHOR", "derivation": "EXTRACTED", "because": "commit sha minted from this message's agent-run ChangeSet commit" }
+  ],
+  "unknownFields": {}
+}

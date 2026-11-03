@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/proving-tests.v1.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/integrations/proving-tests.v1.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ProvingTests is named but never specified in the source pack (WP-1 task brief §6) — designed here: a container for the detailed proving-test entries an AssayIndex.provingTests summary (schemas/integrations/assay-index.v1.schema.json) points at, living at runs/<runId>/proving-tests.v1.json alongside the generated sources at tests/proving/. A proving test is what INCIDENT_SOURCE_AND_PROOF_CONTRACT.md's proof-gated resolution (INT-021) can accept as satisfying the proof requirement for an Assay-sourced Incident. schemaVersion pinned to major 1, FB-RAT-COM-003.",
   "title": "ProvingTests",
   "description": "Container for one Assay run's proving-test entries. `runId` MUST equal the owning AssayIndex.runId this file is filed under — the two are always read together, never independently trusted.",

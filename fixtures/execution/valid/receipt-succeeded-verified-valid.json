@@ -36,7 +36,7 @@
       "sizeBytes": 39482,
       "storageLocation": {
         "kind": "LOCAL_FS",
-        "locator": "/data/user/0/dev.aarso.full/files/execution-logs/01J8ZR0000000000000000E1.log"
+        "locator": "/data/user/0/dev.fonebrew.full/files/execution-logs/01J8ZR0000000000000000E1.log"
       },
       "verificationState": "VERIFIED",
       "producerReceipt": null,
@@ -65,7 +65,7 @@
       "sizeBytes": 5120,
       "storageLocation": {
         "kind": "LOCAL_FS",
-        "locator": "/data/user/0/dev.aarso.full/files/execution-logs/01J8ZR0000000000000000E1-test-report.xml"
+        "locator": "/data/user/0/dev.fonebrew.full/files/execution-logs/01J8ZR0000000000000000E1-test-report.xml"
       },
       "verificationState": "VERIFIED",
       "producerReceipt": {
@@ -75,7 +75,7 @@
           "version": "0.13.0",
           "instanceId": null
         },
-        "sourceLocation": "/data/user/0/dev.aarso.full/workspace/android-ide-core",
+        "sourceLocation": "/data/user/0/dev.fonebrew.full/workspace/android-ide-core",
         "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
         "initiatingPrincipal": "owner",
         "evidenceLinks": []
@@ -90,7 +90,7 @@
     "verifiedAtUtc": "2026-08-07T09:22:11Z"
   },
   "provenance": {
-    "sourceLocation": "/data/user/0/dev.aarso.full/workspace/android-ide-core",
+    "sourceLocation": "/data/user/0/dev.fonebrew.full/workspace/android-ide-core",
     "projectRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
     "initiatingPrincipal": "owner",
     "evidenceLinks": []

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-ondevice-0001",
+  "file": {
+    "relativePath": "objects3d/9f8e7d6c5b4a3928.glb",
+    "sizeBytes": 48213,
+    "digest": {
+      "algorithm": "SHA-256",
+      "digestHex": "9f8e7d6c5b4a39281a2b3c4d5e6f70819f8e7d6c5b4a39281a2b3c4d5e6f7081",
+      "byteLength": 48213
+    }
+  },
+  "format": "GLB",
+  "source": "ON_DEVICE_GENERATED",
+  "provider": null,
+  "prompt": "a small red box next to a blue sphere",
+  "generation": {
+    "method": "DSL_PRIMITIVES",
+    "rawOutputText": "{\"schemaVersion\":\"1.0.0\",\"ops\":[{\"id\":\"box1\",\"kind\":\"BOX\",\"colorHex\":\"#CC2222\",\"params\":{\"width\":1.0,\"height\":1.0,\"depth\":1.0},\"transform\":{\"translate\":{\"x\":-1.0,\"y\":0.0,\"z\":0.0}}},{\"id\":\"sphere1\",\"kind\":\"SPHERE\",\"colorHex\":\"#2222CC\",\"params\":{\"radius\":0.6},\"transform\":{\"translate\":{\"x\":1.0,\"y\":0.0,\"z\":0.0}}}]}",
+    "retried": false
+  },
+  "provenanceState": "LOCAL",
+  "watched": false,
+  "createdAtUtc": "2026-08-15T10:00:00Z",
+  "unknownFields": {}
+}

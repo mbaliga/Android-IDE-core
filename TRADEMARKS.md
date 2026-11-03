@@ -14,8 +14,8 @@ condition has now resolved.
 
 ## What's covered
 
-- **"Aarso"** — the project's `rootProject.name`, its `dev.aarso` package/application-id root, and
-  the name of the private self-reflection lens (`Aarso`, package `dev.aarso.domain.mirror`) are
+- **"Aarso"** — the project's `rootProject.name`, its `dev.fonebrew` package/application-id root, and
+  the name of the private self-reflection lens (`Aarso`, package `dev.fonebrew.domain.mirror`) are
   Madhav Baliga's marks.
 - **"Fonebrew"** (the consumer-facing brand name — see the status note above) and any associated
   logos, wordmarks, or icon assets, once they exist — these are Madhav Baliga's marks, not
@@ -38,7 +38,7 @@ condition has now resolved.
 
 - **Ship a modified build under the project's name or brand**, or in a way that could confuse users
   into thinking a modified build is the official one. Forks must pick their own name.
-- **Use the `dev.aarso.*` application ID namespace** for a modified/forked build. Pick your own
+- **Use the `dev.fonebrew.*` application ID namespace** for a modified/forked build. Pick your own
   application ID.
 - **Use the project's logo, icon, or wordmark as your own app's branding**, once such assets exist,
   without separate permission.

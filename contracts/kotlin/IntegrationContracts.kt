@@ -10,7 +10,7 @@
 //   ProvingTests     -> proving-tests.v1.schema.json
 //   ImportPreview    -> import-preview.v1.schema.json
 //   ImportReceipt    -> import-receipt.v1.schema.json
-// plus IntegrityRef, reused as-is from dev.aarso.contracts.common (schemas/common/
+// plus IntegrityRef, reused as-is from dev.fonebrew.contracts.common (schemas/common/
 // artifact-ref.schema.json) — NOT redefined here, per this repo's convention. If a field
 // appears in one place, it MUST appear in the other, or the two have drifted and one of
 // them is wrong. See docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md, CSAPP_ISSUES_MANIFEST_V1.md,
@@ -27,7 +27,7 @@
 // environment — this file has been written carefully (balanced braces, matched types, no
 // typos attempted) but has NOT been compiled. Do not report it as compiling; that is for
 // the next session with Gradle available to confirm. This file also depends on
-// contracts/kotlin/CommonContracts.kt (package dev.aarso.contracts.common) being compiled
+// contracts/kotlin/CommonContracts.kt (package dev.fonebrew.contracts.common) being compiled
 // in the same module/source set — it is not a standalone-compilable file by itself.
 //
 // What is deliberately NOT in this file, and why:
@@ -40,7 +40,7 @@
 //    work package's schema list (docs/ratified/INCIDENT_SOURCE_AND_PROOF_CONTRACT.md §2).
 //    `ProofRef.PermanentOverride` below is the in-memory shape a future Studio-owned schema
 //    would mirror, not a claim that one is ratified yet.
-//  - A `CsAppProducerRef`/`AssayToolRef` unification with dev.aarso.contracts.common.ProducerRef
+//  - A `CsAppProducerRef`/`AssayToolRef` unification with dev.fonebrew.contracts.common.ProducerRef
 //    — CSApp's own field name is `app` (not `name`), matching the source pack's worked field
 //    list exactly (docs/ratified/CSAPP_ISSUES_MANIFEST_V1.md §1); forcing it into the common
 //    ProducerRef shape would silently rename a field the wire schema does not rename.
@@ -57,9 +57,9 @@
 // call site is exactly the compile-time guarantee this domain wants, mirroring
 // ExecutionContracts.kt's ExecutionLifecycleState precedent.
 
-package dev.aarso.contracts.integrations
+package dev.fonebrew.contracts.integrations
 
-import dev.aarso.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.IntegrityRef
 import java.time.Instant
 
 // =========================================================================================
@@ -74,7 +74,7 @@ enum class ImportSourceType { CSAPP_ISSUES_MANIFEST, ASSAY_REPO_INDEX }
  * §4) plus the open IMPORT_INVALID_<FIELD> record-level family (registry-hygiene fix — same
  * document, and docs/ratified/IMPORT_RECEIPT_V1.md §2). A plain `enum class` cannot represent
  * the open family, hence a sealed interface with one `data class` case for it, mirroring
- * dev.aarso.contracts.common.DigestAlgorithm's `fromWireValue` pattern for the closed part.
+ * dev.fonebrew.contracts.common.DigestAlgorithm's `fromWireValue` pattern for the closed part.
  */
 sealed interface ImportErrorCode {
     val wireCode: String
@@ -176,7 +176,7 @@ data class CsAppIssue(
 
 /**
  * CSApp's file-lane export — one snapshot of one project's issue backlog (INT-013).
- * Deliberately NOT wrapped in a dev.aarso.contracts.common.ContractEnvelope: CSApp is a fully
+ * Deliberately NOT wrapped in a dev.fonebrew.contracts.common.ContractEnvelope: CSApp is a fully
  * independent, standalone-useful app (INT-002) that MUST NOT depend on this constellation's
  * envelope library to write its own export file.
  */

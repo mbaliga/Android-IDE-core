@@ -1,16 +1,16 @@
-# Design: Coding assistant — Aarso on your repos
+# Design: Coding assistant — Fonebrew on your repos
 
 > Status: **design** (a Settings → Global → "Git & coding" entry is stubbed). The
 > owner's intent, clarified: *"integrate with GitHub / Gitea etc. so I can enter my
 > git ID, work on my repos, branches, etc. — whatever I do in Claude Code, but on
-> Aarso, using the Claude API."* This is **not** about syncing Aarso's conversation
-> tree to a repo; it's Aarso acting as a **coding assistant** on the user's
+> Fonebrew, using the Claude API."* This is **not** about syncing Fonebrew's conversation
+> tree to a repo; it's Fonebrew acting as a **coding assistant** on the user's
 > repositories.
 
 ## Why
 
 The owner already drives a coding loop with a Claude-Code-style assistant against
-their Git repos. They want that on Aarso: connect a Git host, pick a repo and
+their Git repos. They want that on Fonebrew: connect a Git host, pick a repo and
 branch, and run the same objective→propose→review→refine loop on real code — with
 the **Claude API** (a watched cloud provider) as the engine instead of a desktop
 tool. It is the concrete, code-shaped instance of the council/workflow vision in
@@ -140,10 +140,10 @@ finding: "MiMo" is **two different things**, and only one path fits a phone app.
 *agent* (a fork of **OpenCode**; Node/npm; **MIT** + `USE_RESTRICTIONS.md` + Xiaomi
 ToS). It genuinely beats Claude Code on ultra-long (200+ step) tasks per its own
 benchmarks. But it is a **terminal/Node application — not embeddable in an Android
-app.** Aarso's equivalent is its *own* native loop (`WorkflowRunner` + escalation
+app.** Fonebrew's equivalent is its *own* native loop (`WorkflowRunner` + escalation
 gates, `council-workflows.md`). It's a useful **design reference** (persistent memory,
 subagents, plan/build/compose modes) and it speaks **OpenAI-compatible** APIs — which
-matters in (3) — but it is not something Aarso embeds.
+matters in (3) — but it is not something Fonebrew embeds.
 
 **2. The MiMo models, on-device — infeasible.** `MiMo-V2-Flash` is a **309B-total /
 15B-active MoE**; a 4-bit quant is **~174 GB**, and MoE needs *all* experts resident
@@ -156,14 +156,14 @@ a real but separate option, fine for the cheap steps only.
 **3. The MiMo models as a watched cloud provider — ✅ the fit.** The weights are
 **open (MIT, per the HF model card)**, **256k** context, with strong coding numbers
 (**SWE-Bench Verified 73.4**, post-trained), served over an **OpenAI-compatible API**
-(Xiaomi's MiMo Platform / the free "MiMo Auto" channel / **self-hosted**). Aarso
+(Xiaomi's MiMo Platform / the free "MiMo Auto" channel / **self-hosted**). Fonebrew
 already has a **provider-generic OpenAI-compatible engine** (`inference/cloud/`), so
 MiMo slots in as **just another watched cloud provider — likely config only** (base
 URL + key + a catalog entry), no new engine and no vendor branch.
 
 **The sovereignty angle (why open weights matter here).** Because the weights are
 open, a sovereignty-minded user can **self-host the endpoint** (own box / rented GPU)
-and point Aarso's OpenAI-compatible provider at *their* server — Aarso then talks only
+and point Fonebrew's OpenAI-compatible provider at *their* server — Fonebrew then talks only
 to a model the user controls. It's still off-device, so it stays a **watched object**,
 but it's *your* watched object: closer to the on-device ideal than any closed API,
 without the phone-RAM wall.
@@ -191,4 +191,4 @@ Sources: [VentureBeat — MiMo Code](https://venturebeat.com/technology/xiaomis-
 - Scope of v1: single-file edits on one repo, or full multi-file branch workflows.
 - MiMo: use Xiaomi's hosted endpoint (watched, easiest) or stand up a **self-hosted**
   endpoint (max sovereignty, needs a GPU box)? Either way it's the same OpenAI-compatible
-  provider in Aarso.
+  provider in Fonebrew.

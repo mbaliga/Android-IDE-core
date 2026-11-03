@@ -14,7 +14,7 @@
 // default (LexicalSearch is 100% local, no network, no embeddings -- see SearchIndexables.kt's
 // own header). A semantic/embedding stage is opt-in, provider-generic, and -- per that binding
 // rule -- any cloud embedding provider is a "watched object," never a hidden fallback. This file
-// does not invent a new Embedder interface: `dev.aarso.embedding.Embedder` already exists and
+// does not invent a new Embedder interface: `dev.fonebrew.embedding.Embedder` already exists and
 // already satisfies "embedder provider interface" from the WP-6 brief; SemanticSearchProvider
 // below is the missing piece one layer up (turning embeddings into ranked results), not a
 // replacement for it.
@@ -29,7 +29,7 @@
 // (2026-08-07), unlike WP-1's contract files (which predate this session's real-toolchain
 // discovery and were written before a compiler was available).
 
-package dev.aarso.contracts.search
+package dev.fonebrew.contracts.search
 
 import java.time.Instant
 
@@ -61,7 +61,7 @@ data class IndexFreshness(
 
 /**
  * A cancellation signal a long-running search/index pass polls, mirroring
- * `dev.aarso.contracts.execution.CancelMode`'s spirit for this domain's own single-shot
+ * `dev.fonebrew.contracts.execution.CancelMode`'s spirit for this domain's own single-shot
  * operations (index a corpus, run a semantic query) without pulling in that domain's
  * request/handle machinery this domain doesn't need.
  */
@@ -74,7 +74,7 @@ fun interface SearchCancellation {
 }
 
 /**
- * Where one [dev.aarso.domain.search.SearchHit]-equivalent result actually came from, so a UI
+ * Where one [dev.fonebrew.domain.search.SearchHit]-equivalent result actually came from, so a UI
  * can show "from this file, indexed 2 minutes ago" rather than presenting every result as
  * equally fresh/authoritative. `sourceId` is a `bufferId` or conversation id, source-kind-specific.
  */
@@ -103,7 +103,7 @@ object QueryGrammarRef {
 /**
  * FB-RAT-COM-001-style closed vocabulary for why a semantic search call did not run, when it
  * doesn't: [SemanticSearchProvider] is a contract this pass ships with exactly one real
- * implementation ([dev.aarso.domain.search.DisabledSemanticSearchProvider]) — "unimplemented
+ * implementation ([dev.fonebrew.domain.search.DisabledSemanticSearchProvider]) — "unimplemented
  * semantic feature exists as contract + disabled flag + TODO ledger," per the WP-6 brief's own
  * resume-seam instruction, not a speculative embedding pipeline this pass has no way to verify.
  */

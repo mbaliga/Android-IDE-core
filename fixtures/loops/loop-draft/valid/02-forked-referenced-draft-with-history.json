@@ -21,7 +21,7 @@
     "mediaType": "application/zip",
     "digest": { "algorithm": "SHA-256", "digestHex": "379ae21ac461e9a64b806e1fac1e9f63dc148afeab163a76e31f022be8c14b8c", "byteLength": 10240 },
     "sizeBytes": 10240,
-    "storageLocation": { "kind": "LOCAL_FS", "locator": "/data/user/0/dev.aarso/files/test-workspaces/tw1.zip" },
+    "storageLocation": { "kind": "LOCAL_FS", "locator": "/data/user/0/dev.fonebrew/files/test-workspaces/tw1.zip" },
     "verificationState": "VERIFIED"
   },
   "sourceSurface": "PHONE",

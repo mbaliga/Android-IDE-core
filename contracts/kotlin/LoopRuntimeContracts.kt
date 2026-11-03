@@ -22,11 +22,11 @@
 // [RunState.toTerminalRunStateOrNull].
 //
 // Cross-package reuse (first-party imports, not third-party dependencies):
-// dev.aarso.contracts.common.ArtifactRef, dev.aarso.contracts.common.SideEffectState — reused
+// dev.fonebrew.contracts.common.ArtifactRef, dev.fonebrew.contracts.common.SideEffectState — reused
 // as-is, matching every other domain's file in this directory.
 //
 // Same-PACKAGE reuse (no import needed — Kotlin visibility is automatic within one package;
-// dev.aarso.contracts.loops now spans seven files): [dev.aarso.contracts.loops.DurableObjectRef]
+// dev.fonebrew.contracts.loops now spans seven files): [dev.fonebrew.contracts.loops.DurableObjectRef]
 // (LoopActivationContracts.kt), [BaseRevisionRef] (LoopAuthoringContracts.kt — reused directly
 // for [LoopRun.sourceRef]: "one draft or installed release" is exactly what that sealed interface
 // already models), [ActorClass] (LoopAuthoringContracts.kt), [ExecutionTargetType]/[NodeCategory]/
@@ -34,7 +34,7 @@
 // None of these are redefined here. This file's own [RunState]/[TerminalReasonCategory]/
 // [LocalCloudRatio]/[NodeAttemptOutcome] are, in turn, reused BY NAME (same-package visibility,
 // no import) from contracts/kotlin/LoopResultAndLineageContracts.kt (same package) for
-// [dev.aarso.contracts.loops.LoopResultShare] and its bucketed node-outcome-count map — see that
+// [dev.fonebrew.contracts.loops.LoopResultShare] and its bucketed node-outcome-count map — see that
 // file's own header for the reverse direction of this cross-file dependency note.
 //
 // Toolchain constraint (binding): kotlinc-compilable with NO third-party dependencies — stdlib +
@@ -65,10 +65,10 @@
 // closed 17-value enum independently (see loop-run.schema.json's own adversarial/ fixtures for the
 // resulting schema-valid-but-illegal-transition case this Kotlin type does NOT allow).
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
-import dev.aarso.contracts.common.ArtifactRef
-import dev.aarso.contracts.common.SideEffectState
+import dev.fonebrew.contracts.common.ArtifactRef
+import dev.fonebrew.contracts.common.SideEffectState
 import java.time.Instant
 
 private val SEMANTIC_DIGEST_PATTERN = Regex("^sha256:[0-9a-f]{64}\$")
@@ -121,7 +121,7 @@ enum class RunState {
         /**
          * §9's from-state/event/to-state table, reduced to (from, to) reachability pairs — the
          * event text and receipt columns are documentation-level (carried on [RunEvent.description]
-         * instead), matching [dev.aarso.contracts.loops.InstallationState.isValidTransition]'s
+         * instead), matching [dev.fonebrew.contracts.loops.InstallationState.isValidTransition]'s
          * identical precedent for a wire-shape file rather than a runtime driver.
          */
         private val TRANSITIONS: Map<RunState, Set<RunState>> = mapOf(
@@ -164,7 +164,7 @@ enum class TerminalReasonCategory {
     SIDE_EFFECT_OUTCOME_UNCONFIRMED
 }
 
-/** §9: "Terminal states MUST include a terminal reason..." `detail` is local-diagnostic free text — never carried into [dev.aarso.contracts.loops.LoopResultShare], which carries only [category]. */
+/** §9: "Terminal states MUST include a terminal reason..." `detail` is local-diagnostic free text — never carried into [dev.fonebrew.contracts.loops.LoopResultShare], which carries only [category]. */
 data class TerminalReason(
     val category: TerminalReasonCategory,
     val detail: String
@@ -282,7 +282,7 @@ data class RunOutputs(
  * The COMPLETE local run record (§2.7). Kept ALONGSIDE [LoopRunSummary] per this work package's
  * merged-artifact-list instruction — two distinct objects, not one with an optional-fields toggle.
  * Nothing here is redacted, bucketed, or allowlisted; that happens downstream, first at
- * [LoopRunSummary] and then at [dev.aarso.contracts.loops.LoopResultShare]
+ * [LoopRunSummary] and then at [dev.fonebrew.contracts.loops.LoopResultShare]
  * (LoopResultAndLineageContracts.kt). This type MUST NOT itself be uploaded, exported, or shared
  * by any automated path (FB-RAT-MKT-008) — only the explicit Share Result flow may derive a
  * [LoopRunSummary] from it, under explicit user action.
@@ -377,14 +377,14 @@ enum class ShareScanState { NOT_YET_SCANNED, SCANNED_CLEAN, SCANNED_FINDINGS_RED
 
 /**
  * The CLEAR MIDDLE STAGE between a complete [LoopRun] and a finalized, bucketed
- * [dev.aarso.contracts.loops.LoopResultShare] — not a third, independent shape. Already stripped
+ * [dev.fonebrew.contracts.loops.LoopResultShare] — not a third, independent shape. Already stripped
  * of every default-excluded category (FB-RAT-RES-003), still UNBUCKETED (bucketing is a
- * [dev.aarso.contracts.loops.LoopResultShare]-step concern, LOOP_RESULT_SHARING_CONTRACT.md §4).
+ * [dev.fonebrew.contracts.loops.LoopResultShare]-step concern, LOOP_RESULT_SHARING_CONTRACT.md §4).
  * Built only from a completed or terminal [LoopRun] (FB-RAT-RES-001) — `terminalState` is
  * therefore [TerminalRunState] (the 8-value closed vocabulary), never a non-terminal value; there
  * is no representable non-terminal [LoopRunSummary]. `verificationClaim` is nullable here (signing
  * happens later, at consent/RECEIPT_SIGNED — LOOP_RESULT_SHARING_CONTRACT.md §3) — contrast
- * [dev.aarso.contracts.loops.LoopResultShare.verificationClaim], which is required and non-null.
+ * [dev.fonebrew.contracts.loops.LoopResultShare.verificationClaim], which is required and non-null.
  */
 data class LoopRunSummary(
     val summaryId: String,

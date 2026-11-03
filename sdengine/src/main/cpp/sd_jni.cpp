@@ -1,6 +1,6 @@
 // JNI bridge for on-device image generation via stable-diffusion.cpp (§4c).
 // Built into libaarso_sd.so (its own ggml). Runs txt2img on CPU and writes a PNG.
-// Symbol names match dev.aarso.inference.image.SdImageEngine in :app.
+// Symbol names match dev.fonebrew.inference.image.SdImageEngine in :app.
 
 #include <jni.h>
 #include <android/log.h>
@@ -16,7 +16,7 @@
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_dev_aarso_inference_image_SdImageEngine_nativeSdLoad(
+Java_dev_fonebrew_inference_image_SdImageEngine_nativeSdLoad(
         JNIEnv* env, jobject, jstring modelPath, jint threads) {
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
     sd_ctx_params_t p;
@@ -34,12 +34,12 @@ Java_dev_aarso_inference_image_SdImageEngine_nativeSdLoad(
 }
 
 JNIEXPORT void JNICALL
-Java_dev_aarso_inference_image_SdImageEngine_nativeSdFree(JNIEnv*, jobject, jlong handle) {
+Java_dev_fonebrew_inference_image_SdImageEngine_nativeSdFree(JNIEnv*, jobject, jlong handle) {
     if (handle != 0) free_sd_ctx(reinterpret_cast<sd_ctx_t*>(handle));
 }
 
 JNIEXPORT jboolean JNICALL
-Java_dev_aarso_inference_image_SdImageEngine_nativeSdTxt2Img(
+Java_dev_fonebrew_inference_image_SdImageEngine_nativeSdTxt2Img(
         JNIEnv* env, jobject, jlong handle, jstring prompt, jstring negative,
         jint steps, jint width, jint height, jlong seed, jstring outPath) {
     if (handle == 0) return JNI_FALSE;

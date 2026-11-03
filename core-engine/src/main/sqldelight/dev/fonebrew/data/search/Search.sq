@@ -1,0 +1,461 @@
+-- Search index substrate (FONEBREW_SEARCH_SPEC.md §4), trimmed to what's actually backed by
+-- data in this repo today (see the build plan's "facet data reality check" — tool:/file:/
+-- build:/room:/tag:/lang:/has:attachment|artifact|error/is:unread|failed are deferred until
+-- those domain concepts exist; adding their columns now would be dead weight). loop:/task: WERE
+-- on that deferred list — they are not anymore: loop_projection/task_projection below back them
+-- with real LoopStore/TaskStore data (see dev.fonebrew.domain.search.query.Field's KDoc).
+--
+-- Two SQL toolchains now coexist in :core-engine: Room owns the append-only message tree
+-- (AppDatabase), SQLDelight owns this FTS5 index — Room has no @Fts5, only @Fts3/@Fts4 (AOSP's
+-- system SQLite build), so a bundled-SQLite substrate is the entry ticket for FTS5, not an
+-- optimization (see D1). This is a separate SQLite file (SearchDatabase), not a Room migration.
+
+CREATE TABLE conv_projection (
+  conv_id            TEXT PRIMARY KEY,
+  title              TEXT NOT NULL,
+  snippet            TEXT NOT NULL,
+  body               TEXT NOT NULL,   -- segmented (Segmenter), space-joined, normalized
+  title_raw          TEXT NOT NULL,   -- original, for display + LexicalSearch re-scoring
+  snippet_raw        TEXT NOT NULL,
+  body_raw           TEXT NOT NULL,
+  updated_at         INTEGER NOT NULL,          -- epoch ms, drives the recency boost
+  created_at         INTEGER NOT NULL,
+  projection_version INTEGER NOT NULL
+);
+
+CREATE TABLE conv_facets (
+  conv_id      TEXT PRIMARY KEY REFERENCES conv_projection(conv_id) ON DELETE CASCADE,
+  starred      INTEGER NOT NULL DEFAULT 0,
+  archived     INTEGER NOT NULL DEFAULT 0,
+  project_id   TEXT,
+  model_ids    TEXT NOT NULL DEFAULT '',  -- comma-joined distinct model ids for this conversation
+  turn_count   INTEGER NOT NULL DEFAULT 0,
+  branch_count INTEGER NOT NULL DEFAULT 0,
+  has_image    INTEGER NOT NULL DEFAULT 0,
+  has_code     INTEGER NOT NULL DEFAULT 0,   -- derived from markdown fences at projection time
+  cost_minor   INTEGER NOT NULL DEFAULT 0,   -- summed LedgerEntry.estCostMinor (minor currency
+                                             -- units, e.g. cents) for this conv — named to match
+                                             -- the actual source field's unit, not spec §4's
+                                             -- "cost_micros" (this app has no micros-denominated
+                                             -- cost data; renaming avoids a misleading unit)
+  last_used_at INTEGER,
+  -- THREAD_TOPOLOGY_PLAN.md WP6 ("mega-thread + search facets"): projected from the same
+  -- ThreadMarker facts dev.fonebrew.domain.thread.ThreadChains reads — a LINEAGE_SRC marker's
+  -- payload (lineage_parent/lineage_kind) and CHAPTER/COMPACTION_RUN marker counts for this
+  -- root. lineage_kind is a dev.fonebrew.domain.tree.TreeFork.LineageKind name ('FORK'|'SPAWN'),
+  -- NULL exactly when lineage_parent is NULL (this conv is a chain origin, not a fork/spawn).
+  lineage_parent   TEXT,
+  lineage_kind     TEXT,
+  chapter_count    INTEGER NOT NULL DEFAULT 0,
+  compaction_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_facets_composite ON conv_facets(archived, starred, project_id);
+CREATE INDEX idx_proj_updated ON conv_projection(updated_at DESC);
+
+-- Primary lexical index. detail='full' is REQUIRED: detail=column disables phrase/NEAR queries,
+-- and quoted-phrase search is table-stakes (spec §6.1). unicode61 with the extended category
+-- list is belt-and-braces — the real CJK/Devanagari/Arabic fix is Segmenter running upstream in
+-- Kotlin (D2); this table only ever receives pre-segmented, space-joined text.
+CREATE VIRTUAL TABLE conv_fts USING fts5(
+  title, snippet, body,
+  content       = 'conv_projection',
+  content_rowid = 'rowid',
+  tokenize      = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+  prefix        = '2 3',
+  detail        = 'full',
+  columnsize    = 1
+);
+
+-- External-content FTS5 tables do NOT auto-sync with their content table (verified empirically
+-- in the WP3 driver spike: inserting into conv_projection alone left conv_fts's shadow index
+-- empty, zero MATCH hits) — SQLite requires the app to keep them in sync itself, normally via
+-- the three AI/AD/AU triggers documented at https://sqlite.org/fts5.html#external_content_tables
+--
+-- Those triggers are deliberately NOT declared here. Verified empirically: SQLDelight 2.1.0's
+-- SQL analyzer (`InsertStmtValuesMixin.annotate`) throws a `ClassCastException` — `SqlModule-
+-- ColumnDefImpl cannot be cast to ColumnDefMixin` — on ANY `INSERT INTO conv_fts(<column-list>)`
+-- with an explicit column list, in a trigger or standalone, VALUES or SELECT form; it cannot
+-- resolve an FTS5 virtual table's "module columns" as insert targets. This is a sql-psi/
+-- SQLDelight tooling limitation, not a real SQLite problem — the exact same SQL is valid FTS5
+-- syntax. Since the crash is purely at .sq compile-time, the fix is to keep this SQL out of the
+-- analyzed schema entirely: SearchDriverFactory issues the three CREATE TRIGGER statements as a
+-- raw SQL string via SqlDriver.execute() right after opening the database, which SQLDelight's
+-- analyzer never sees. See SearchDriverFactory.kt and SearchDatabaseFactoryTest.
+
+CREATE TABLE index_state (
+  id                 INTEGER PRIMARY KEY CHECK (id = 1),
+  last_indexed_rowid INTEGER NOT NULL DEFAULT 0,
+  projection_version INTEGER NOT NULL,
+  tokenizer_version  INTEGER NOT NULL,
+  schema_version     INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL
+);
+
+CREATE TABLE saved_search (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  query      TEXT NOT NULL,
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  sort_key   INTEGER
+);
+
+CREATE TABLE search_history (
+  at             INTEGER NOT NULL,
+  query          TEXT NOT NULL,
+  result_count   INTEGER,
+  opened_conv_id TEXT  -- NULL if abandoned; local-only recency ordering, never uploaded
+);
+
+-- ============ queries used by the WP3 driver spike + WP4 glue ============
+
+-- Idempotent (ON CONFLICT DO UPDATE): SearchIndexer (WP6) re-runs this for a conv_id whose
+-- content changed, and a resumed-after-interruption chunk may re-process a conv_id it already
+-- wrote — both must overwrite cleanly, never throw a PRIMARY KEY violation. An UPDATE path also
+-- fires conv_projection_au (not _ai), which is exactly the trigger that keeps conv_fts in sync
+-- for edits, not just first-time inserts.
+upsertProjection:
+INSERT INTO conv_projection(conv_id, title, snippet, body, title_raw, snippet_raw, body_raw, updated_at, created_at, projection_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(conv_id) DO UPDATE SET
+  title = excluded.title,
+  snippet = excluded.snippet,
+  body = excluded.body,
+  title_raw = excluded.title_raw,
+  snippet_raw = excluded.snippet_raw,
+  body_raw = excluded.body_raw,
+  updated_at = excluded.updated_at,
+  created_at = excluded.created_at,
+  projection_version = excluded.projection_version;
+
+deleteProjection:
+DELETE FROM conv_projection WHERE conv_id = ?;
+
+countProjections:
+SELECT count(*) FROM conv_projection;
+
+-- Just enough of every indexed row to decide whether it still matches the freshly-projected
+-- one (WP17's incremental sync). Deliberately includes the facet columns, not only updated_at:
+-- starring or archiving a conversation, or assigning it to a project, changes what it should
+-- match without touching its last-activity timestamp, so an updated_at-only comparison would
+-- leave those edits invisible to search until the next cold rebuild.
+selectIndexStamps:
+SELECT p.conv_id, p.updated_at, p.projection_version,
+       f.starred, f.archived, f.project_id, f.model_ids,
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor,
+       f.lineage_parent, f.lineage_kind, f.chapter_count, f.compaction_count
+FROM conv_projection p
+LEFT JOIN conv_facets f ON f.conv_id = p.conv_id;
+
+-- SearchProjector (WP5) produces one Row per conversation; the indexer (WP6) writes it as one
+-- upsertProjection + one upsertFacets call per conv_id, inside the same chunk transaction.
+upsertFacets:
+INSERT INTO conv_facets(conv_id, starred, archived, project_id, model_ids, turn_count, branch_count, has_image, has_code, cost_minor, last_used_at, lineage_parent, lineage_kind, chapter_count, compaction_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(conv_id) DO UPDATE SET
+  starred = excluded.starred,
+  archived = excluded.archived,
+  project_id = excluded.project_id,
+  model_ids = excluded.model_ids,
+  turn_count = excluded.turn_count,
+  branch_count = excluded.branch_count,
+  has_image = excluded.has_image,
+  has_code = excluded.has_code,
+  cost_minor = excluded.cost_minor,
+  last_used_at = excluded.last_used_at,
+  lineage_parent = excluded.lineage_parent,
+  lineage_kind = excluded.lineage_kind,
+  chapter_count = excluded.chapter_count,
+  compaction_count = excluded.compaction_count;
+
+selectFacets:
+SELECT * FROM conv_facets WHERE conv_id = ?;
+
+-- Saved searches (§7 "save as smart collection" — see ScopeStack.nameableSnapshot, WP9).
+-- Execution against these rows (turning a saved query back into results) is whichever surface
+-- first needs it, WP10/WP11 — this is schema-complete CRUD, not yet wired to the UI.
+insertSavedSearch:
+INSERT INTO saved_search(id, name, query, pinned, created_at, sort_key)
+VALUES (?, ?, ?, ?, ?, ?);
+
+selectSavedSearches:
+SELECT * FROM saved_search ORDER BY pinned DESC, sort_key ASC, created_at DESC;
+
+deleteSavedSearch:
+DELETE FROM saved_search WHERE id = ?;
+
+-- Recent searches. `search_history` has existed since the M0–M3 search commit and had ZERO
+-- queries against it — the table was schema without a feature, so the overlay's empty state had
+-- nothing personal to show and fell back to a wall of operator syntax instead. These four are
+-- what make it a surface.
+--
+-- Dedupe is by exact query text and happens on write (delete-then-insert inside one
+-- transaction, see SearchViewModel), not by GROUP BY on read: one row per distinct query keeps
+-- `opened_conv_id` meaning "what this search led to *last* time" instead of an arbitrary pick
+-- among duplicates.
+--
+-- Trimming compares `at` rather than rowid: both work, and `at` needs no assumption about
+-- SQLDelight resolving SQLite's implicit rowid column. A tie on `at` keeps one extra row, which
+-- is harmless for a local recency list.
+insertSearchHistory:
+INSERT INTO search_history(at, query, result_count, opened_conv_id)
+VALUES (?, ?, ?, ?);
+
+deleteSearchHistoryFor:
+DELETE FROM search_history WHERE query = ?;
+
+selectRecentSearches:
+SELECT query, at, result_count, opened_conv_id
+FROM search_history
+ORDER BY at DESC
+LIMIT :limit;
+
+trimSearchHistory:
+DELETE FROM search_history
+WHERE at NOT IN (SELECT at FROM search_history ORDER BY at DESC LIMIT :keep);
+
+-- Local-first, and search history is sensitive: "clear" must actually delete, not hide.
+clearSearchHistory:
+DELETE FROM search_history;
+
+-- The value vocabulary for autocomplete (QuerySuggestions.IndexedValues) — what `project:` and
+-- `model:` can actually complete to, read from the index rather than from a hardcoded list, so a
+-- completion can never offer a value that matches nothing. model_ids is the comma-joined column
+-- (see conv_facets); splitting it back into individual ids is the caller's job, since SQLite has
+-- no string-split and a recursive CTE for this would be far more machinery than one Kotlin
+-- `split(',')`.
+selectDistinctProjects:
+SELECT DISTINCT project_id FROM conv_facets
+WHERE project_id IS NOT NULL AND project_id != ''
+ORDER BY project_id;
+
+selectDistinctModelIds:
+SELECT DISTINCT model_ids FROM conv_facets WHERE model_ids != '';
+
+-- Candidate generation (§5.1): bm25 column weights (10,4,1) are FTS5's per-query ranking
+-- weights for title/snippet/body — deliberately NOT the same as LexicalSearch's 2x/1x final
+-- weights (WP7 re-scores).
+--
+-- Deviation from the spec's literal `rank MATCH 'bm25(...)' ... ORDER BY rank`: FTS5's `rank`
+-- is a magic column injected only at query-execution time by the virtual table module, which
+-- SQLDelight's static SQL analyzer (it verifies every column reference against the declared
+-- schema) doesn't know about and rejects at build time — verified empirically, no SQLDelight
+-- 2.x dialect module resolves it. `ORDER BY bm25(conv_fts, ...)` calls the ranking function
+-- directly instead, which the analyzer accepts. FTS5's docs note plain `ORDER BY rank` *can* be
+-- faster (early termination before materializing every row's score) — a real perf cost of this
+-- workaround, accepted here since M1's candidate query is still WHERE-bounded by MATCH + LIMIT
+-- and absolute latency at 100k+ scale is owner-verified/device-only in this pass regardless
+-- (see SearchBench, WP15). Revisit if a future SQLDelight release adds `rank` awareness.
+-- Lower bm25() is a *better* match (FTS5 convention) — ascending order is correct as written.
+searchCandidates:
+SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at
+FROM conv_fts
+JOIN conv_projection p ON p.rowid = conv_fts.rowid
+WHERE conv_fts MATCH :ftsQuery
+ORDER BY bm25(conv_fts, 10.0, 4.0, 1.0)
+LIMIT :limit;
+
+-- Same candidate generation, carrying each row's facet values along (WP16) so the facet
+-- predicate can be evaluated without an N+1 selectFacets call per candidate. LEFT JOIN, not
+-- JOIN: a projection whose facets row is somehow missing must still be findable by text — a
+-- missing facets row means "no facet data", not "not a conversation". FacetEvaluator gets
+-- defaults for those columns; see SearchQuery.toSubject.
+--
+-- Ranking here is query-aware (bm25 below) but the row a user actually READS was not: every
+-- result showed snippet_raw, the first 220 characters of the first assistant turn, picked at
+-- index time before any query existed — so a hit deep in a conversation displayed a preview
+-- that didn't contain the search term. That is fixed in Kotlin, not here:
+-- dev.fonebrew.domain.search.QuerySnippet centres a window of body_raw (returned by this
+-- query) on the first matched term.
+--
+-- A THIRD SQLDelight-analyzer limitation, found the only way these ever are — by compiling.
+-- FTS5's own snippet() auxiliary function would be the natural way to do this in SQL, and it
+-- works against real SQLite; the 2.1.0 analyzer rejects it outright ("Unknown function
+-- snippet" at generateFullDebugSearchDatabaseInterface) even though it resolves bm25() in the
+-- ORDER BY two lines down. Do not re-add it without compiling: passing tests against a raw
+-- sqlite3 connection prove nothing about the generator. The cost of its absence is small and
+-- named in QuerySnippet's KDoc — only matches unreachable by a raw substring scan of body_raw
+-- (NFKC folding, length-changing lowercase) fall back to the index-time snippet.
+searchCandidatesWithFacets:
+SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at,
+       f.starred, f.archived, f.project_id, f.model_ids,
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor
+FROM conv_fts
+JOIN conv_projection p ON p.rowid = conv_fts.rowid
+LEFT JOIN conv_facets f ON f.conv_id = p.conv_id
+WHERE conv_fts MATCH :ftsQuery
+ORDER BY bm25(conv_fts, 10.0, 4.0, 1.0)
+LIMIT :limit;
+
+-- The facet-only path: a query like `is:starred` or `after:-7d` with no lexical text at all has
+-- no FTS expression to MATCH against, so there is no candidate set to narrow — the candidates
+-- are "the most recent N conversations", filtered by the facet predicate afterwards. Ordered by
+-- recency (not relevance) because with no query terms there is no relevance to rank by.
+selectRecentWithFacets:
+SELECT p.conv_id, p.title_raw, p.snippet_raw, p.body_raw, p.updated_at,
+       f.starred, f.archived, f.project_id, f.model_ids,
+       f.turn_count, f.branch_count, f.has_image, f.has_code, f.cost_minor
+FROM conv_projection p
+LEFT JOIN conv_facets f ON f.conv_id = p.conv_id
+ORDER BY p.updated_at DESC
+LIMIT :limit;
+
+selectIndexState:
+SELECT * FROM index_state WHERE id = 1;
+
+upsertIndexState:
+INSERT INTO index_state(id, last_indexed_rowid, projection_version, tokenizer_version, schema_version, updated_at)
+VALUES (1, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  last_indexed_rowid = excluded.last_indexed_rowid,
+  projection_version = excluded.projection_version,
+  tokenizer_version = excluded.tokenizer_version,
+  schema_version = excluded.schema_version,
+  updated_at = excluded.updated_at;
+
+-- ============ loop / task projections (loop:/task: — see Field.kt) ============
+--
+-- Deliberately SEPARATE FTS5 tables from conv_fts, not more rows in it. FTS5's bm25() draws its
+-- IDF-style term weighting from the *whole* virtual table's corpus statistics (document count,
+-- average field length), so mixing loop/task rows into conv_fts's own corpus would silently
+-- shift every conversation's bm25 score the moment a loop or task was indexed — the ordering a
+-- conversation-only search returns would no longer be "byte-for-byte what it was before loops
+-- were indexed" (the standing guarantee SearchQueryTest's golden-ordering case pins). A separate
+-- table per record kind keeps conv_fts's corpus, and therefore its scores, untouched by design,
+-- at the cost of running one MATCH per kind instead of one MATCH total — worth it here since a
+-- query only ever targets one kind at a time (bare text stays conversation-only; loop:/task:
+-- switch retrieval to that kind — see dev.fonebrew.data.search.SearchQuery.candidates).
+--
+-- No separate `_facets` table for either (contrast conv_projection/conv_facets): loop/task have
+-- exactly one filterable, oft-changing-independent-of-text attribute each (state), so it rides
+-- in the projection table itself rather than earning its own join.
+CREATE TABLE loop_projection (
+  loop_id            TEXT PRIMARY KEY,
+  title              TEXT NOT NULL,   -- segmented (Segmenter): the loop's name
+  body               TEXT NOT NULL,   -- segmented: BPMN graph name + every node's label/
+                                       -- instructions/role, space-joined (LoopSearchProjector)
+  title_raw          TEXT NOT NULL,
+  body_raw           TEXT NOT NULL,
+  state              TEXT NOT NULL,   -- LoopState name (UNUSED/RUNNING/RETIRED) — what a
+                                       -- loop:<value> facet value matches against, case-insensitive
+  updated_at         INTEGER NOT NULL,
+  created_at         INTEGER NOT NULL,
+  projection_version INTEGER NOT NULL
+);
+CREATE INDEX idx_loop_proj_updated ON loop_projection(updated_at DESC);
+
+CREATE VIRTUAL TABLE loop_fts USING fts5(
+  title, body,
+  content       = 'loop_projection',
+  content_rowid = 'rowid',
+  tokenize      = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+  prefix        = '2 3',
+  detail        = 'full',
+  columnsize    = 1
+);
+-- loop_fts's AI/AD/AU external-content sync triggers, and task_fts's below, are raw SQL issued
+-- from SearchDriverFactory, not declared here — same SQLDelight 2.1.0 analyzer ClassCastException
+-- on an explicit-column-list INSERT into an FTS5 virtual table that conv_fts's own triggers
+-- worked around (see this file's header comment on conv_fts). Same reasoning, same fix.
+
+CREATE TABLE task_projection (
+  task_id            TEXT PRIMARY KEY,
+  title              TEXT NOT NULL,   -- segmented: the task's title
+  body               TEXT NOT NULL,   -- segmented: the task's notes (TaskSearchProjector)
+  title_raw          TEXT NOT NULL,
+  body_raw           TEXT NOT NULL,
+  state              TEXT NOT NULL,   -- TaskState name (TODO/DOING/BLOCKED/DONE) — what a
+                                       -- task:<value> facet value matches against, case-insensitive
+  updated_at         INTEGER NOT NULL,
+  created_at         INTEGER NOT NULL,
+  projection_version INTEGER NOT NULL
+);
+CREATE INDEX idx_task_proj_updated ON task_projection(updated_at DESC);
+
+CREATE VIRTUAL TABLE task_fts USING fts5(
+  title, body,
+  content       = 'task_projection',
+  content_rowid = 'rowid',
+  tokenize      = "unicode61 categories 'L* N* Co Mn Mc' remove_diacritics 0",
+  prefix        = '2 3',
+  detail        = 'full',
+  columnsize    = 1
+);
+
+upsertLoopProjection:
+INSERT INTO loop_projection(loop_id, title, body, title_raw, body_raw, state, updated_at, created_at, projection_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(loop_id) DO UPDATE SET
+  title = excluded.title,
+  body = excluded.body,
+  title_raw = excluded.title_raw,
+  body_raw = excluded.body_raw,
+  state = excluded.state,
+  updated_at = excluded.updated_at,
+  created_at = excluded.created_at,
+  projection_version = excluded.projection_version;
+
+deleteLoopProjection:
+DELETE FROM loop_projection WHERE loop_id = ?;
+
+countLoopProjections:
+SELECT count(*) FROM loop_projection;
+
+-- Incremental-sync stamps (mirrors selectIndexStamps' role for conv_projection) — enough of every
+-- indexed loop row to decide whether SearchIndexer.syncLoops needs to re-upsert it.
+selectLoopIndexStamps:
+SELECT loop_id, updated_at, projection_version, state FROM loop_projection;
+
+-- Candidate generation for a loop:-scoped query. Only two ranked columns (no snippet tier), so
+-- the bm25 weights are title/body, not conv_fts's title/snippet/body triple.
+searchLoopCandidates:
+SELECT p.loop_id, p.title_raw, p.body_raw, p.state, p.updated_at
+FROM loop_fts
+JOIN loop_projection p ON p.rowid = loop_fts.rowid
+WHERE loop_fts MATCH :ftsQuery
+ORDER BY bm25(loop_fts, 10.0, 1.0)
+LIMIT :limit;
+
+-- The facet-only path for a loop:-scoped query (e.g. bare `loop:` or `loop:unused` with no other
+-- text) — same "most recent N, filtered after" shape as selectRecentWithFacets.
+selectRecentLoops:
+SELECT loop_id, title_raw, body_raw, state, updated_at
+FROM loop_projection
+ORDER BY updated_at DESC
+LIMIT :limit;
+
+upsertTaskProjection:
+INSERT INTO task_projection(task_id, title, body, title_raw, body_raw, state, updated_at, created_at, projection_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(task_id) DO UPDATE SET
+  title = excluded.title,
+  body = excluded.body,
+  title_raw = excluded.title_raw,
+  body_raw = excluded.body_raw,
+  state = excluded.state,
+  updated_at = excluded.updated_at,
+  created_at = excluded.created_at,
+  projection_version = excluded.projection_version;
+
+deleteTaskProjection:
+DELETE FROM task_projection WHERE task_id = ?;
+
+countTaskProjections:
+SELECT count(*) FROM task_projection;
+
+selectTaskIndexStamps:
+SELECT task_id, updated_at, projection_version, state FROM task_projection;
+
+searchTaskCandidates:
+SELECT p.task_id, p.title_raw, p.body_raw, p.state, p.updated_at
+FROM task_fts
+JOIN task_projection p ON p.rowid = task_fts.rowid
+WHERE task_fts MATCH :ftsQuery
+ORDER BY bm25(task_fts, 10.0, 1.0)
+LIMIT :limit;
+
+selectRecentTasks:
+SELECT task_id, title_raw, body_raw, state, updated_at
+FROM task_projection
+ORDER BY updated_at DESC
+LIMIT :limit;

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/import-preview.v1.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/integrations/import-preview.v1.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ImportPreview is named but never specified in the source pack (WP-1 task brief §6) — designed here as step 4 ('Preview') of the six-step manual import grammar (INT-011, docs/ratified/MANUAL_INTEGRATION_GRAMMAR.md): new/changed/duplicate/conflicting/rejected records, computed AFTER Validate (step 3) and BEFORE any mutation, so the user can make an informed Confirm decision (step 5, INT-007 'no silent partial import'). schemaVersion pinned to major 1, FB-RAT-COM-003.",
   "title": "ImportPreview",
   "description": "The read-only preview Core computes for one source snapshot before any Incident/CustomerIssue/AuditFinding is created or mutated. Carries no side effects itself — it is what the user reviews at the Preview step, and what an eventual ImportReceipt (schemas/integrations/import-receipt.v1.schema.json) confirms a subset (or all) of, via `previewId`.",

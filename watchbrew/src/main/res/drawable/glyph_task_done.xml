@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WatchBrew glyph: task_done. One of the shape vocabulary in core/Glyph.kt. A single-colour vector so it can be
+     tinted at the use site (Compose Icon tint / Tile image tint); state is carried by this SHAPE plus a
+     word, never by hue (the owner is red-green colour-blind). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M5,12.5 l4.5,4.5 l9.5,-10" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

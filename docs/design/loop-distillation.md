@@ -5,7 +5,7 @@
 > with this doc; the *ceiling* (a meta-agent that distils a source you bring into a
 > new loop) is design-only here. Naming rule (CLAUDE.md §3): everything below is a
 > **council / loop / workflow of experts** — never "MoE". Importing a paper that is
-> *named* "Mixture of Experts" is fine; what we never do is rebrand Aarso's own
+> *named* "Mixture of Experts" is fine; what we never do is rebrand Fonebrew's own
 > council as MoE.
 
 ## The owner's insight
@@ -16,7 +16,7 @@
 That is exactly right, and it is the most thesis-pure framing the project has found.
 Almost every orchestration paper in the literature is a **graph over model calls** —
 service tasks (an engine call), gateways (routing/voting), and loop markers (rounds,
-retries). In Aarso's ontology that is precisely a **Loop**: a `BpmnGraph` of experts
+retries). In Fonebrew's ontology that is precisely a **Loop**: a `BpmnGraph` of experts
 (`domain/bpmn/BpmnGraph.kt`) executed by the graph runner over `EngineGenerator`s.
 
 So "loop engineering" stops being a slogan and becomes literally true: the research
@@ -62,7 +62,7 @@ orchestration patterns the user can drop in, inspect, and edit.
 
 ### Ceiling — the meta-distiller (design only)
 A **meta-agent that reads a source you bring and emits a new loop.** Crucially, the
-distiller is *itself a Loop* — Aarso eating its own tail:
+distiller is *itself a Loop* — Fonebrew eating its own tail:
 
 ```
 read source → identify the pattern → extract topology (roles, fan-out N,
@@ -102,7 +102,7 @@ propose→critique→refine engine already built and Echo-tested.
 ## What exists to build on (don't reinvent)
 
 - **`domain/bpmn/BpmnGraph.kt` + `BpmnArchive.kt`** — the loop model and its BPMN 2.0
-  transport; Aarso semantics ride in `<aarso:meta>` extension elements. The library's
+  transport; Fonebrew semantics ride in `<aarso:meta>` extension elements. The library's
   output target and its validity oracle.
 - **`domain/council/Workflow.kt`** (`WorkflowRunner`, `Expert`, `Stop`, `Generator`,
   `Gating`) — the refine-loop engine the distiller *is*.
@@ -123,7 +123,7 @@ propose→critique→refine engine already built and Echo-tested.
 
 ## Binding constraints (must hold)
 
-- **Never "MoE"** for Aarso's own feature. Council / experts / loop.
+- **Never "MoE"** for Fonebrew's own feature. Council / experts / loop.
 - **On-device default; cloud watched.** Templates default to no cloud; the distiller's
   own cloud use is a visible watched object.
 - **No telemetry.** Sources are fetched only when the user asks, only from the

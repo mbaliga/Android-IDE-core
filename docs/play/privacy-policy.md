@@ -1,4 +1,4 @@
-# Aarso privacy policy (draft)
+# Fonebrew privacy policy (draft)
 
 _Last updated: 2026-06-12_
 
@@ -6,8 +6,8 @@ _Last updated: 2026-06-12_
 > new domain, a path under the existing `mdhv.xyz`. Paste this text there and use
 > that URL as the Play Console "Privacy policy URL".
 
-Aarso is a local-first AI app. **We do not collect, store, or share any of your
-data.** There is no Aarso server and no analytics.
+Fonebrew is a local-first AI app. **We do not collect, store, or share any of your
+data.** There is no Fonebrew server and no analytics.
 
 - **Conversations and models stay on your device**, in app-private storage.
   Uninstalling the app deletes them.
@@ -17,7 +17,7 @@ data.** There is no Aarso server and no analytics.
 - **Cloud providers (optional)**: if you add a provider (e.g., Anthropic,
   OpenAI-compatible, Gemini) with your own API key, the messages you explicitly
   send with that provider selected go to that provider under their privacy
-  policy. Aarso marks every cloud provider as "watched" in the UI and never
+  policy. Fonebrew marks every cloud provider as "watched" in the UI and never
   routes to the cloud by default.
 - **API keys** are encrypted at rest with Android Keystore and are sent only to
   the provider they belong to.

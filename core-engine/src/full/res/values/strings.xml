@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The sideload build is its own install (dev.aarso.full) — label it so two
+    <!-- The sideload build is its own install (dev.fonebrew.full) — label it so two
          launcher icons are tellable apart. -->
-    <string name="app_name">Aarso (full)</string>
+    <string name="app_name">Fonebrew (full)</string>
 </resources>

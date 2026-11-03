@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/common/migration-plan.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/common/migration-plan.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. MigrationPlan per FB-RAT-COM-011 — describes how a reader/store moves from one schemaVersion of SOME OTHER contract to another (major or minor compatibility, per FB-RAT-COM-003), plus the data migration and rollback it requires. Typically carried as the `payload` of a ContractEnvelope<MigrationPlan> (see envelope.schema.json); `migrationId` below is this object's own FB-RAT-COM-002 stable ID.",
   "title": "MigrationPlan",
   "type": "object",

@@ -8,7 +8,7 @@
 //   ExecutionRequest   -> request.schema.json
 //   ExecutionHandle    -> handle.schema.json
 //   ExecutionReceipt   -> receipt.schema.json
-// plus ArtifactRef, reused as-is from dev.aarso.contracts.common (schemas/common/
+// plus ArtifactRef, reused as-is from dev.fonebrew.contracts.common (schemas/common/
 // artifact-ref.schema.json) — NOT redefined here, per the WP-1 task brief.
 // If a field appears in one place, it MUST appear in the other, or the two have drifted
 // and one of them is wrong. See docs/ratified/EXECUTION_CONTRACT.md for the citations
@@ -23,7 +23,7 @@
 // environment — this file has been written carefully (balanced braces, matched types, no
 // typos attempted) but has NOT been compiled. Do not report it as compiling; that is for
 // the next session with Gradle available to confirm. This file also depends on
-// contracts/kotlin/CommonContracts.kt (package dev.aarso.contracts.common) being compiled
+// contracts/kotlin/CommonContracts.kt (package dev.fonebrew.contracts.common) being compiled
 // in the same module/source set — it is not a standalone-compilable file by itself.
 //
 // Why a sealed-interface state machine DOES appear in this file (unlike CommonContracts.kt,
@@ -39,11 +39,11 @@
 // is the in-memory/runtime state-machine encoding a provider implementation actually
 // programs against; the enum is the serialized wire projection of the same twelve values.
 
-package dev.aarso.contracts.execution
+package dev.fonebrew.contracts.execution
 
-import dev.aarso.contracts.common.ArtifactRef
-import dev.aarso.contracts.common.CapabilityManifest
-import dev.aarso.contracts.common.ProducerRef
+import dev.fonebrew.contracts.common.ArtifactRef
+import dev.fonebrew.contracts.common.CapabilityManifest
+import dev.fonebrew.contracts.common.ProducerRef
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 
@@ -116,11 +116,11 @@ enum class FgsType { DATA_SYNC, MEDIA_PROCESSING, SPECIAL_USE, CONNECTED_DEVICE,
 
 /**
  * A place execution can run. Typically carried as the `payload` of a
- * dev.aarso.contracts.common.ContractEnvelope<ExecutionTarget>. `id` is this object's own
+ * dev.fonebrew.contracts.common.ContractEnvelope<ExecutionTarget>. `id` is this object's own
  * FB-RAT-COM-002 stable ID, distinct from the envelope's objectId.
  *
  * @param capabilities Optional CapabilityManifest (reused from
- *   dev.aarso.contracts.common.CapabilityManifest, not redefined here), expected to carry
+ *   dev.fonebrew.contracts.common.CapabilityManifest, not redefined here), expected to carry
  *   `subjectKind == CapabilitySubjectKind.EXECUTION` when present — this class does not
  *   itself enforce that narrowing (mirrors the schema's allOf/$ref composition, which JSON
  *   Schema enforces structurally but a plain Kotlin property type cannot without a custom
@@ -259,7 +259,7 @@ enum class ExternalDuplicateBehavior { IGNORE_DUPLICATE, RETURN_PRIOR_RESULT, RE
 /**
  * A request to run a typed operation against a specific ExecutionTarget (by id — not
  * embedded). Typically carried as the `payload` of a
- * dev.aarso.contracts.common.ContractEnvelope<ExecutionRequest>.
+ * dev.fonebrew.contracts.common.ContractEnvelope<ExecutionRequest>.
  *
  * Structurally operationalizes (via the init{} checks below, mirroring
  * schemas/execution/request.schema.json's allOf/if/then blocks):
@@ -409,7 +409,7 @@ private val UNKNOWN_RECONNECT_OUTCOMES: Set<ReconnectOutcome> = setOf(
 
 /**
  * Live/in-flight handle to a started ExecutionRequest. Typically carried as the `payload` of
- * a dev.aarso.contracts.common.ContractEnvelope<ExecutionHandle>. `handleId` is this
+ * a dev.fonebrew.contracts.common.ContractEnvelope<ExecutionHandle>. `handleId` is this
  * object's own FB-RAT-COM-002 stable ID.
  *
  * @param resumedFromHandleId FB-RAT-EXE-005 (support resume/restart/explicit migration): the
@@ -489,7 +489,7 @@ data class ExecutionLogs(
     val ref: ArtifactRef? = null,
     /**
      * Short inline excerpt. MUST be redaction-scanned before population, identically to
-     * dev.aarso.contracts.common.ErrorEnvelope.detail — see
+     * dev.fonebrew.contracts.common.ErrorEnvelope.detail — see
      * fixtures/execution/adversarial/receipt-secret-leak-in-log-excerpt.adversarial.json for
      * the violation this contract forbids.
      */
@@ -531,7 +531,7 @@ data class ReceiptVerification(
     val verifiedAtUtc: Instant? = null
 )
 
-/** FB-RAT-COM-008 provenance minimum, duplicated inline (mirrors dev.aarso.contracts.common.ProducerReceiptRef) per this domain's own receipt shape. */
+/** FB-RAT-COM-008 provenance minimum, duplicated inline (mirrors dev.fonebrew.contracts.common.ProducerReceiptRef) per this domain's own receipt shape. */
 data class ExecutionProvenance(
     val sourceLocation: String,
     val projectRevision: String,
@@ -547,11 +547,11 @@ data class ExecutionProvenance(
 
 /**
  * The durable, terminal record of one ExecutionRequest run. Typically carried as the
- * `payload` of a dev.aarso.contracts.common.ContractEnvelope<ExecutionReceipt>. `receiptId`
+ * `payload` of a dev.fonebrew.contracts.common.ContractEnvelope<ExecutionReceipt>. `receiptId`
  * is this object's own FB-RAT-COM-002 stable ID. Receipts are append-only (FB-RAT-COM-006) —
  * a corrected receipt is a NEW receipt, never an in-place edit.
  *
- * `outputs` reuses dev.aarso.contracts.common.ArtifactRef as-is — NOT redefined here.
+ * `outputs` reuses dev.fonebrew.contracts.common.ArtifactRef as-is — NOT redefined here.
  *
  * Structurally operationalizes (via init{}, mirroring receipt.schema.json's allOf/if/then):
  *  - FB-RAT-EXE-009: exitState SUCCEEDED requires verification.state VERIFIED;
@@ -566,7 +566,7 @@ data class ExecutionReceipt(
     val handleId: String,
     val targetSnapshot: TargetSnapshot,
     val revision: String?,
-    val capsuleDigest: dev.aarso.contracts.common.IntegrityRef,
+    val capsuleDigest: dev.fonebrew.contracts.common.IntegrityRef,
     val timings: Timings,
     val exitState: ExecutionExitState,
     val logs: ExecutionLogs,

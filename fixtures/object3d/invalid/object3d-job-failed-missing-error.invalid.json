@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "job-invalid-0002",
+  "provider": "TRIPO",
+  "providerJobId": "tp_01J9K0000000000000000BAD2",
+  "mode": "IMAGE_TO_3D",
+  "prompt": null,
+  "sourceImageRef": "img-node-0099",
+  "state": "FAILED",
+  "progressPercent": 40,
+  "downloadUrl": null,
+  "resultNodeId": null,
+  "errorEnvelope": null,
+  "createdAtUtc": "2026-08-15T16:10:00Z",
+  "updatedAtUtc": "2026-08-15T16:12:00Z",
+  "unknownFields": {}
+}

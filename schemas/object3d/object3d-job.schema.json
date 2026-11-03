@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/object3d/object3d-job.schema.json",
+  "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Object3dJob per docs/design/objects-3d.md §5/§6 ('job lifecycle: dev.fonebrew.domain.object3d.Object3dJob.kt state machine (QUEUED->RUNNING->DOWNLOADING->DONE/FAILED), tested' and 'object3d-job.schema.json (cloud job envelope)'). Typically carried as the `payload` of a ContractEnvelope<Object3dJob> (schemas/common/envelope.schema.json). Every Object3dJob is, by construction, a watched-cloud operation (binding rule 2) — there is no on-device variant of this schema because the on-device path (§4) never leaves the device and has no async job to track.",
+  "title": "Object3dJob",
+  "description": "One async cloud 3D-generation job against Meshy or Tripo (§5): create -> poll -> download. `downloadUrl` is checked for SHAPE only by this schema (`format: uri`) — that its host is actually the declared `provider`'s own infrastructure, not an unrelated or look-alike host, is an application-level check (dev.fonebrew.domain.object3d.CloudObject3dContracts.validateDownloadUrl), same split schemas/loops/loop-release.schema.json's `releaseAssetUrl` documents for the identical class of gap. See fixtures/object3d/adversarial/ for the fixture that is structurally valid here but MUST be refused by that real check.",
+  "type": "object",
+  "required": ["schemaVersion", "jobId", "provider", "providerJobId", "mode", "state", "createdAtUtc", "updatedAtUtc"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "MAJOR.MINOR.PATCH of this record's shape. A reader MUST reject an unrecognized MAJOR."
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique stable id for this job record (this app's own id, not the provider's)."
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["MESHY", "TRIPO"],
+      "description": "§5: 'adapters for Meshy and Tripo'. Unlike Object3dNode.provider, CUSTOM is deliberately not a legal value here — a job is always dispatched against one of the two adapters this schema's sibling CloudObject3dContracts.kt implements; a custom base-URL escape hatch (§1) still has to declare which of the two wire protocols it speaks, which is a CloudObject3dContracts.textTo3dCreate/imageTo3dCreate constructor-time choice, not a third job-schema value."
+    },
+    "providerJobId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The vendor's own job/task id, returned from the create call and used for every subsequent poll (§5: 'async job -> poll -> download')."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["TEXT_TO_3D", "IMAGE_TO_3D"],
+      "description": "§5: 'both: text->3D and image->3D'."
+    },
+    "prompt": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Required non-blank when mode=TEXT_TO_3D; null when mode=IMAGE_TO_3D (see allOf)."
+    },
+    "sourceImageRef": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Reference to the source image artifact when mode=IMAGE_TO_3D — required non-blank in that case, null for TEXT_TO_3D (see allOf). Deliberately a bare reference string (not an inline ArtifactRef) since the image itself is dev.fonebrew.domain.image's object, not this domain's."
+    },
+    "state": {
+      "$ref": "#/$defs/Object3dJobState"
+    },
+    "progressPercent": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100,
+      "default": null,
+      "description": "Provider-reported progress, when available. Null before the provider reports any, or for a provider that only reports coarse state."
+    },
+    "downloadUrl": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "default": null,
+      "description": "Required non-null when state is DOWNLOADING or DONE; null otherwise (see allOf). See this schema's top-level $comment — shape-checked only here."
+    },
+    "resultNodeId": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "References the Object3dNode.nodeId (object3d-node.schema.json) minted once the downloaded bytes are written to app storage. Required non-null exactly when state=DONE (see allOf); null otherwise — a job is not DONE until the file exists and its node is minted, never DONE-with-no-node."
+    },
+    "errorEnvelope": {
+      "oneOf": [
+        { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/error.schema.json" },
+        { "type": "null" }
+      ],
+      "default": null,
+      "description": "Reused as-is from schemas/common/error.schema.json. Required non-null when state=FAILED (see allOf); null otherwise."
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant this job record was first created (the create-call dispatch time)."
+    },
+    "updatedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant `state` (or progress) last changed. MUST be >= createdAtUtc."
+    },
+    "unknownFields": {
+      "type": "object",
+      "default": {},
+      "description": "Bag for fields a decoder received but did not recognize, preserved for round-trip."
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "properties": { "mode": { "const": "TEXT_TO_3D" } }, "required": ["mode"] },
+      "then": {
+        "required": ["prompt"],
+        "properties": { "prompt": { "type": "string", "minLength": 1 }, "sourceImageRef": { "const": null } }
+      }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "IMAGE_TO_3D" } }, "required": ["mode"] },
+      "then": {
+        "required": ["sourceImageRef"],
+        "properties": { "sourceImageRef": { "type": "string", "minLength": 1 }, "prompt": { "const": null } }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "enum": ["DOWNLOADING", "DONE"] } }, "required": ["state"] },
+      "then": { "required": ["downloadUrl"], "properties": { "downloadUrl": { "type": "string", "format": "uri" } } },
+      "$comment": "Mirrors schemas/devices/operation.schema.json's state-conditional if/then discipline: DOWNLOADING/DONE structurally imply the URL that made the transition possible actually exists."
+    },
+    {
+      "if": { "properties": { "state": { "const": "QUEUED" } }, "required": ["state"] },
+      "then": { "properties": { "downloadUrl": { "const": null }, "resultNodeId": { "const": null } } }
+    },
+    {
+      "if": { "properties": { "state": { "const": "DONE" } }, "required": ["state"] },
+      "then": { "required": ["resultNodeId"], "properties": { "resultNodeId": { "type": "string", "minLength": 1 }, "errorEnvelope": { "const": null } } }
+    },
+    {
+      "if": { "properties": { "state": { "const": "FAILED" } }, "required": ["state"] },
+      "then": {
+        "required": ["errorEnvelope"],
+        "properties": {
+          "errorEnvelope": { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/error.schema.json" },
+          "resultNodeId": { "const": null }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Object3dJobState": {
+      "type": "string",
+      "enum": ["QUEUED", "RUNNING", "DOWNLOADING", "DONE", "FAILED"],
+      "description": "§5/§6, verbatim. Non-terminal: QUEUED, RUNNING, DOWNLOADING. Terminal: DONE, FAILED. This single-snapshot schema enumerates the valid values but (like schemas/execution/handle.schema.json's ExecutionState) cannot itself enforce that a transition BETWEEN two snapshots followed a legal edge — that is dev.fonebrew.domain.object3d.Object3dJobMachine's job (the Kotlin sealed-interface encoding), mirroring dev.fonebrew.domain.device.broker.DeviceOperationMachine's own split between this JSON-Schema-visible enum and the real transition law."
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "job-adversarial-0001",
+  "provider": "MESHY",
+  "providerJobId": "msy_01J9K0000000000000000EVL1",
+  "mode": "TEXT_TO_3D",
+  "prompt": "a friendly cartoon robot",
+  "sourceImageRef": null,
+  "state": "DOWNLOADING",
+  "progressPercent": 88,
+  "downloadUrl": "https://meshy.ai.attacker-controlled.example/results/model.glb",
+  "resultNodeId": null,
+  "errorEnvelope": null,
+  "createdAtUtc": "2026-08-15T18:00:00Z",
+  "updatedAtUtc": "2026-08-15T18:05:00Z",
+  "unknownFields": {}
+}

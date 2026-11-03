@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/execution/handle.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/execution/handle.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionHandle per FB-RAT-EXE-001. Typically carried as the `payload` of a ContractEnvelope<ExecutionHandle> (see schemas/common/envelope.schema.json). `handleId` is this object's own FB-RAT-COM-002 stable ID.",
   "title": "ExecutionHandle",
   "description": "Live/in-flight handle to a started ExecutionRequest: state, heartbeat, declared cancellation semantics, and (when applicable) a reconnect token. Structurally operationalizes FB-RAT-EXE-002 (lifecycle), FB-RAT-EXE-003 (every provider declares cancellation semantics + reports what is known to have stopped), FB-RAT-EXE-004 (reconnect uncertainty MUST report UNKNOWN rather than false termination or success), and FB-RAT-EXE-005 (Android recovery posture — assume the process may die; journal work; support resume/restart/explicit migration). See docs/ratified/EXECUTION_CONTRACT.md §2 for the full lifecycle transition table this `state` enum encodes.",

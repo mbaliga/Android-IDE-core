@@ -4,7 +4,7 @@
 > (`Build`, `BuildsApi`) is built + JVM-tested. The UI (the bottom **Branches /
 > Tests / Builds** room) and the installer are next, on the locked Aeon atoms.
 
-When you develop an app on Aarso (coding-assistant + Loops on your Git repo), you
+When you develop an app on Fonebrew (coding-assistant + Loops on your Git repo), you
 should be able to **see its branches and versions and install the build in-app** —
 no leaving for the browser to grab an APK. This closes the loop from *"develop on
 your repos"* to *"ship and run from the app,"* talking only to your watched host.
@@ -67,17 +67,17 @@ this lives in the **sideload/`full` flavor** (and F-Droid), never the Play build
 consistent with the existing flavor split.
 
 ### 3. Honest limits
-- **Aarso doesn't *build* the APK.** A phone can't realistically run Gradle/AGP/NDK;
-  the build stays in your CI/cloud (where `aarso-sd.apk` comes from today). Aarso is
+- **Fonebrew doesn't *build* the APK.** A phone can't realistically run Gradle/AGP/NDK;
+  the build stays in your CI/cloud (where `fonebrew-sd.apk` comes from today). Fonebrew is
   the **viewer + installer** of artifacts your CI produces.
 - **Multi-platform** generalises on the *download* side (any release asset — deb/
   AppImage, exe/msi, dmg), but only **Android APKs install in-app**; desktop ones
   are downloads handed to the OS. **iOS is last** — Apple has no sideload path
-  (`.ipa` needs TestFlight/notarization), so there Aarso shows/downloads but never
+  (`.ipa` needs TestFlight/notarization), so there Fonebrew shows/downloads but never
   installs.
 
 ### 4. The differentiated bit
-Once Aarso can **install** the build it just produced, it can run an **on-device
+Once Fonebrew can **install** the build it just produced, it can run an **on-device
 smoke/perf pass on the real APK on your own device** — a feedback loop CI physically
 can't give you (no runner has your phone). That on-device verdict becomes another
 test badge + gate input.

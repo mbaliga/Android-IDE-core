@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher label: WatchBrew, the wrist surface of Fonebrew (docs/design/watchbrew.md). Not Studio's "Watch" feature. -->
+    <string name="app_name">WatchBrew</string>
+    <string name="tile_label">Ask Fonebrew</string>
+    <string name="tile_description">Ask your phone, and see the last reply.</string>
+    <string name="complication_label">Pending tasks</string>
+    <string name="ask_input_label">Ask Fonebrew</string>
+</resources>

@@ -1,15 +1,15 @@
 # Project management — the board is your repo's issues
 
-Part of the expanded direction: Aarso as an **agentic Android IDE** where you
+Part of the expanded direction: Fonebrew as an **agentic Android IDE** where you
 conceive, build, test, and launch an app from the phone. This doc covers the
 **project-management surface** — a Kanban/Jira-style board, test dashboards, and a
 pending-items view — built the sovereign way.
 
-## Thesis: no Aarso-side project store
+## Thesis: no Fonebrew-side project store
 
 The board is **a view over the issues in your own Git host repo**, exactly as the
 chat history is one append-only message tree, not a separate subsystem. There is no
-hidden Aarso database of tasks. A card *is* an issue; moving it edits the issue on
+hidden Fonebrew database of tasks. A card *is* an issue; moving it edits the issue on
 your host. Open the same repo on github.com / your Gitea and the board is legible
 there too — anti-black-box by construction (mirrors the tree-sovereignty decision:
 plaintext, openable, yours).

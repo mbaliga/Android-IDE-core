@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/execution/receipt.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/execution/receipt.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionReceipt per FB-RAT-EXE-001. Typically carried as the `payload` of a ContractEnvelope<ExecutionReceipt> (see schemas/common/envelope.schema.json). `receiptId` is this object's own FB-RAT-COM-002 stable ID. Receipts are append-only (FB-RAT-COM-006) — a corrected receipt is a NEW receipt referencing the old one via `unknownFields`/provenance, never an in-place edit.",
   "title": "ExecutionReceipt",
   "description": "The durable, terminal record of one ExecutionRequest run: a target snapshot, the revision actually executed, a capsule digest, timings, exit state, logs, resource usage, output ArtifactRefs (reused from schemas/common/artifact-ref.schema.json, not redefined), recorded side effects, and result verification — kept structurally separate from success (FB-RAT-EXE-009). Emitted once, at (or after) a terminal ExecutionHandle.state.",
@@ -66,7 +66,7 @@
       "properties": {
         "ref": {
           "oneOf": [
-            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json" },
+            { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/artifact-ref.schema.json" },
             { "type": "null" }
           ],
           "default": null,
@@ -105,7 +105,7 @@
     },
     "outputs": {
       "type": "array",
-      "items": { "$ref": "https://android-ide-core.dev.aarso/schemas/common/artifact-ref.schema.json" },
+      "items": { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/artifact-ref.schema.json" },
       "default": [],
       "description": "Realized output artifacts, reused as-is from schemas/common/artifact-ref.schema.json (not redefined here) — each entry's own `producerReceipt.receiptObjectId` SHOULD point back at this receipt's ContractEnvelope.objectId."
     },

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/transfer-envelope.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/transfer-envelope.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. TransferEnvelope per LOOP_ENGINEERING_SPEC_V2.1.md §21 (Transfer and activation boundary): 'Transfer moves inert bytes. It does not grant authority, resolve secrets, or start execution... Every transfer is represented by a user-initiated envelope containing expected media type and digest.' This schema states the boundary object only — the full ten-step import grammar and eleven-state machine are LOOP_IMPORT_ACTIVATION_CONTRACT.md's (FB-RAT-IMP-001), not restated here.",
   "title": "TransferEnvelope",
   "description": "The user-initiated envelope that precedes any package transfer, carrying the transfer channel, the caller's EXPECTED media type and digest (checked against what actually arrives), and a human-readable source description. Typically carried as the `payload` of a ContractEnvelope<TransferEnvelope> (schemas/common/envelope.schema.json), inheriting objectId/createdAtUtc/producer from that outer envelope.",

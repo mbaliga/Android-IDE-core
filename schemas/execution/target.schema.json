@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/execution/target.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/execution/target.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. ExecutionTarget per FB-RAT-EXE-001 (execution object model). Typically carried as the `payload` of a ContractEnvelope<ExecutionTarget> (see schemas/common/envelope.schema.json), inheriting schemaVersion/objectId/producer/createdAtUtc from that outer envelope — `id` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId (a target can be re-wrapped in a fresh envelope, e.g. on a re-scan, without changing its own identity).",
   "title": "ExecutionTarget",
   "description": "A place execution can run: this phone, an SSH host, a Raspberry Pi, a GitHub Actions runner, a Gitea Actions runner (FB-RAT-EXE-010 — initial providers; no other target type is in scope for this contract version). Every field on this shape exists so an ExecutionRequest against this target, and an ExecutionReceipt produced from it, can be evaluated against FB-RAT-STR-004 (compute provenance — execution location, revision, data boundary, state, and result MUST be visible for any non-local target) and the Android platform-grounding facts (W^X exec restriction, FGS type ceilings) baked into this contract as normative text in docs/ratified/EXECUTION_CONTRACT.md §3.",
@@ -41,7 +41,7 @@
       "oneOf": [
         {
           "allOf": [
-            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/capability-manifest.schema.json" },
+            { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/capability-manifest.schema.json" },
             {
               "type": "object",
               "properties": {

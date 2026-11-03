@@ -6,9 +6,9 @@
 
 ## The problem
 
-Aarso has grown: chat, images, the tree, models depth, the theme engine, Git/coding,
+Fonebrew has grown: chat, images, the tree, models depth, the theme engine, Git/coding,
 and now Loops (the workflow builder + escalation). A new user dropped into all of it
-is lost; but the whole point of Aarso is **legibility** — making routing, cost, and
+is lost; but the whole point of Fonebrew is **legibility** — making routing, cost, and
 cloud-influence *visible*. So we cannot solve complexity by *hiding* the machinery.
 
 ## The guardrail (non-negotiable)
@@ -18,7 +18,7 @@ cloud-influence *visible*. So we cannot solve complexity by *hiding* the machine
 "Simple" = fewer entry points and gentler defaults. It must **never** make the app
 opaque. Whenever something is actually happening that involves routing, cost, or a
 watched-cloud call, it is surfaced (collapsed, expandable) **at every tier**. A simple
-mode that hid the watched-object marker would turn Aarso into the generic chat client
+mode that hid the watched-object marker would turn Fonebrew into the generic chat client
 it is defined against — so signals like `Surface.WATCHED_BADGE` are marked
 **mandatory** and cannot be switched off.
 
@@ -27,7 +27,7 @@ it is defined against — so signals like `Surface.WATCHED_BADGE` are marked
 Of the three options floated — (1) a simple/advanced switch, (2) a separate "lite"
 app, (3) an init wizard — the answer is **3 + 1, unified by tiers; not 2.**
 
-- **Not a separate lite app.** A minimal Aarso *is* a generic chat client (the thing
+- **Not a separate lite app.** A minimal Fonebrew *is* a generic chat client (the thing
   the project rejects), and it doubles maintenance for a solo developer. It also must
   not be conflated with the `full`/`play` build flavors, which exist for **Play
   policy**, an orthogonal concern.
@@ -59,7 +59,7 @@ Three tiers (`DisclosureTier`), each a superset of the last:
 ## Next (UX owner-driven — mock before code)
 
 1. **Onboarding intent step** — extend `OnboardingScreen` with the "what do you want
-   Aarso for?" card that sets the tier (+ keeps the existing RAM-fit starter-model
+   Fonebrew for?" card that sets the tier (+ keeps the existing RAM-fit starter-model
    step). Teaches the sovereignty framing while it configures. _(Mock first.)_
 2. **A depth dial in Settings → Global** — move tiers any time; advanced toggles for
    individual surfaces.
