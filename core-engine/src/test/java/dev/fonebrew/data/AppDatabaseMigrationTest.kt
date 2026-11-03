@@ -8,6 +8,7 @@ import dev.fonebrew.data.entity.MessageEmbeddingEntity
 import dev.fonebrew.data.entity.MessageNodeEntity
 import dev.fonebrew.data.entity.TokenCountEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -156,7 +157,7 @@ class AppDatabaseMigrationTest {
             assertEquals("""{"source":"migration-test"}""", node.metadataJson)
 
             val allNodes = db.messageNodeDao().observeAll()
-            assertEquals(1, kotlinx.coroutines.flow.first(allNodes).size)
+            assertEquals(1, allNodes.first().size)
 
             val tokenCount = db.tokenCountDao().forNode(nodeId)
             assertEquals(1, tokenCount.size)
@@ -191,7 +192,7 @@ class AppDatabaseMigrationTest {
         stampStoredVersion(10)
 
         openDatabase(migrations = listOf(MIGRATION_10_11)).useAndClose { db ->
-            val all = kotlinx.coroutines.flow.first(db.messageNodeDao().observeAll())
+            val all = db.messageNodeDao().observeAll().first()
             assertEquals(5, all.size)
             assertEquals((0..4).map { "message #$it" }, all.map { it.content })
         }
