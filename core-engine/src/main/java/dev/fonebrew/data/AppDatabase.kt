@@ -58,7 +58,7 @@ import dev.fonebrew.data.entity.VersionEntity
         ThreadMarkerEntity::class,
         DelegationEventEntity::class,
     ],
-    version = 10,
+    version = 11,
     // Schema export is off in Phase 0 (no migrations yet). Turn on with a
     // room.schemaLocation KSP arg once the schema needs to be versioned. v4->v5
     // (loop-surface ledger columns, CORE_PHASES.md P3) rides the same
@@ -81,7 +81,16 @@ import dev.fonebrew.data.entity.VersionEntity
     // v9->v10 (launch-line reunification): DROPS the Watchlist table — the free-tier Watch tab
     // was pulled on the launch line (owner call, moving to Studio); the dev line had carried the
     // base-era table forward untouched. Same destructive-migration ride as every prior bump.
-    exportSchema = false,
+    //
+    // v10->v11 (data-loss fix — the #1 blocking bug across two audits): no entity/column/table
+    // changed. This bump exists solely to retire fallbackToDestructiveMigration() (see the
+    // Room.databaseBuilder call site in AppContainer.kt for the policy this establishes going
+    // forward) by proving the real migration path end-to-end: exportSchema is now true, v10's
+    // and v11's schemas are both committed under core-engine/schemas/, and MIGRATION_10_11
+    // (data/Migrations.kt) is a real, no-op Migration object — correct precisely because v11's
+    // exported schema is structurally identical to v10's. MigrationTest exercises it against a
+    // hand-built v10 database with representative message-tree rows and asserts they survive.
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

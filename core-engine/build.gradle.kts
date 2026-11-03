@@ -147,6 +147,16 @@ android {
     }
 }
 
+// Room schema export (data-loss-fix lane): historical schema JSON per version, committed under
+// core-engine/schemas/dev.fonebrew.data.AppDatabase/<version>.json. This is what makes a real
+// Migration testable at all — MigrationTest in src/test reads these as fixtures. Do not delete
+// an old version's JSON: every future bump needs the full history to diff against, and
+// `exportSchema = true` on @Database (AppDatabase.kt) regenerates only the current version's
+// file, never backfills a dropped one.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Search index substrate (FONEBREW_SEARCH_SPEC.md D1) — SQLDelight over bundled SQLite, for
 // FTS5 (Room has no @Fts5). Coexists with Room (the message-tree store); separate database.
 sqldelight {

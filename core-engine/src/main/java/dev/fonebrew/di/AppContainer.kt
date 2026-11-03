@@ -9,6 +9,7 @@ import dev.fonebrew.data.ImageProviderStore
 import dev.fonebrew.data.ImageStore
 import dev.fonebrew.data.KvCacheStore
 import dev.fonebrew.data.LocalModelStore
+import dev.fonebrew.data.MIGRATION_10_11
 import dev.fonebrew.data.MessageTreeRepository
 import dev.fonebrew.data.ModelDownloader
 import dev.fonebrew.data.ProviderStore
@@ -36,11 +37,24 @@ import dev.fonebrew.inference.echoDevSpecs
  */
 class AppContainer(context: Context) {
 
+    // POLICY (data-loss-fix lane — the #1 blocking bug across two prior audits):
+    // fallbackToDestructiveMigration() silently WIPES the user's entire append-only message
+    // tree on every schema bump. It is retired as of v11 (dev.fonebrew.data.MIGRATION_10_11)
+    // and must never come back. Every future @Database version bump on AppDatabase MUST ship:
+    //   1. Its own real androidx.room.migration.Migration object in Migrations.kt (a genuine
+    //      no-op is fine when the bump adds nothing that needs data moved — see
+    //      MIGRATION_10_11's own KDoc for when that's legitimate).
+    //   2. A migration test (see src/test/java/dev/fonebrew/data/AppDatabaseMigrationTest.kt)
+    //      that builds a database at the prior version with representative rows and asserts
+    //      they survive the migration to the new version.
+    //   3. An entry in .addMigrations(...) below — never fallbackToDestructiveMigration().
+    // exportSchema = true on AppDatabase (core-engine/schemas/) is what makes (2) possible at
+    // all; keep every version's exported schema JSON committed, including this one's.
     private val database: AppDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
         AppDatabase.NAME,
-    ).fallbackToDestructiveMigration().build()
+    ).addMigrations(MIGRATION_10_11).build()
 
     val repository: MessageTreeRepository = MessageTreeRepository(
         nodes = database.messageNodeDao(),
