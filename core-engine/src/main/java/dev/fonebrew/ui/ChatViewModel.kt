@@ -74,6 +74,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -265,6 +266,9 @@ class ChatViewModel(
     private val threadObserver: dev.fonebrew.data.ThreadObserver,
     private val taskStore: dev.fonebrew.data.TaskStore,
     private val appContext: Context,
+    /** Process-scoped mirror of [GenPhase] for the home-screen widgets (docs/widgets.md); null in
+     *  callers that don't wire one. The chat stays the only writer and the source of truth. */
+    private val generationStatus: dev.fonebrew.data.GenerationStatus? = null,
 ) : ViewModel() {
 
     /** Content routed in from share / text-selection / assist (§7). */
@@ -277,6 +281,20 @@ class ChatViewModel(
     private val activeModelId = MutableStateFlow(
         DefaultModelPolicy.resolveActive(registry.allSpecs(), session.activeModelId.value)?.id,
     )
+    /**
+     * Where the turn in flight runs, for the home-screen widgets' provenance mark (binding rule 2), when
+     * it is not simply the active model: set by the image, 3D and Council paths before they start and
+     * cleared when they end. Null for every turn that runs on [activeModelId].
+     */
+    private val turnRunOnDevice = MutableStateFlow<Boolean?>(null)
+
+    private data class MirroredTurn(
+        val phase: GenPhase,
+        val mode: dev.fonebrew.data.GenerationStatus.Mode,
+        val modelId: String?,
+        val runOnDevice: Boolean?,
+    )
+
     private val transient = MutableStateFlow(
         // New conversations start in the owner's preferred council mode (Settings → Global).
         when (session.councilDefault.value) {
@@ -310,6 +328,34 @@ class ChatViewModel(
                     DefaultModelPolicy.resolveActive(registry.allSpecs(), session.activeModelId.value)
                         ?.let { spec -> setActiveModel(spec.id) }
                 }
+            }
+        }
+        // Home-screen widgets: mirror the phase (and which composer mode it belongs to) plus the
+        // active model id to process scope. Read-only from here on; no turn logic changes.
+        generationStatus?.let { status ->
+            viewModelScope.launch {
+                combine(
+                    transient.map { t ->
+                        val mode = when {
+                            t.imageMode -> dev.fonebrew.data.GenerationStatus.Mode.IMAGE
+                            t.object3dMode -> dev.fonebrew.data.GenerationStatus.Mode.OBJECT_3D
+                            t.councilMode -> dev.fonebrew.data.GenerationStatus.Mode.COUNCIL
+                            else -> dev.fonebrew.data.GenerationStatus.Mode.TEXT
+                        }
+                        t.genPhase to mode
+                    }.distinctUntilChanged(),
+                    activeModelId,
+                    turnRunOnDevice,
+                ) { (phase, mode), modelId, runOnDevice -> MirroredTurn(phase, mode, modelId, runOnDevice) }
+                    .distinctUntilChanged()
+                    .collect { t ->
+                        val mirrored = when (t.phase) {
+                            GenPhase.IDLE -> dev.fonebrew.data.GenerationStatus.Phase.IDLE
+                            GenPhase.LOADING -> dev.fonebrew.data.GenerationStatus.Phase.LOADING
+                            GenPhase.GENERATING -> dev.fonebrew.data.GenerationStatus.Phase.GENERATING
+                        }
+                        status.report(mirrored, t.mode, t.modelId, t.runOnDevice)
+                    }
             }
         }
     }
@@ -1176,6 +1222,8 @@ class ChatViewModel(
 
             GenerationService.start(appContext)
             stopRequested = false
+            // Home-screen widget provenance: a Council with any cloud voice is a cloud turn.
+            turnRunOnDevice.value = voices.all { it.spec.isOnDevice }
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
                 val basePath = repository.path(userNode.id)
@@ -1217,6 +1265,7 @@ class ChatViewModel(
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(councilStreaming = null, genPhase = GenPhase.IDLE, error = t.message ?: "council failed")
             } finally {
+                turnRunOnDevice.value = null
                 GenerationService.stop(appContext)
             }
         }
@@ -1261,6 +1310,9 @@ class ChatViewModel(
             moveLeaf(userNode.id)
 
             GenerationService.start(appContext)
+            // Home-screen widget provenance: the image comes from on-device SD or a cloud provider,
+            // never from the chat's text model.
+            turnRunOnDevice.value = sdModel != null
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.GENERATING)
                 val (path, producerId) = if (sdModel != null) {
@@ -1295,6 +1347,7 @@ class ChatViewModel(
                     error = t.message ?: "image generation failed",
                 )
             } finally {
+                turnRunOnDevice.value = null
                 GenerationService.stop(appContext)
             }
         }
@@ -1330,6 +1383,9 @@ class ChatViewModel(
             moveLeaf(userNode.id)
 
             GenerationService.start(appContext)
+            // Home-screen widget provenance: on-device 3D prompts the active model (null: describe it);
+            // the cloud scope sends the prompt to a cloud 3D provider.
+            turnRunOnDevice.value = if (scope == Object3dGenScope.CLOUD) false else null
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.GENERATING)
                 val generated = when (scope) {
@@ -1359,6 +1415,7 @@ class ChatViewModel(
                     error = t.message ?: "3D generation failed",
                 )
             } finally {
+                turnRunOnDevice.value = null
                 GenerationService.stop(appContext)
             }
         }
@@ -1520,6 +1577,8 @@ class ChatViewModel(
     override fun onCleared() {
         // App task removed: don't leave a dangling foreground service.
         GenerationService.stop(appContext)
+        // Whatever this chat was generating died with its scope; the widgets must not say otherwise.
+        generationStatus?.chatGone()
     }
 
     /**
@@ -2401,6 +2460,7 @@ class ChatViewModel(
                     c.threadObserver,
                     c.taskStore,
                     app.applicationContext,
+                    c.generationStatus,
                 )
             }
         }

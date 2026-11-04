@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +27,7 @@ import dev.aarso.hyle.cells.HyleTabSpec
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.ui.ChatScreen
 import dev.fonebrew.ui.ChatViewModel
+import dev.fonebrew.ui.develop.DEVELOP_TAB_AGENT
 import dev.fonebrew.ui.develop.DevelopRoom
 import dev.fonebrew.ui.loops.LoopRoom
 import dev.fonebrew.ui.rooms.ChatsRoom
@@ -32,6 +35,7 @@ import dev.fonebrew.ui.rooms.ProductRoomFree
 import dev.fonebrew.ui.rooms.SettingsRoom
 import dev.fonebrew.ui.rooms.TreeRoom
 import dev.fonebrew.ui.spatial.ProjectRoomSlot
+import dev.fonebrew.widget.WidgetDestination
 
 /**
  * The Regular shell (bifurcation wave 1, lane R; owner ruling 2026-09-15): a conventional
@@ -70,6 +74,40 @@ fun RegularShell() {
     var showTree by remember { mutableStateOf(false) }
     var showLoops by remember { mutableStateOf(false) }
 
+    // Home-screen widget taps (docs/widgets.md): the same destinations SpatialRoot handles, mapped
+    // onto this shell's tabs and overlays. Consumed once.
+    var composerRequest by remember { mutableStateOf(false) }
+    var developTabRequest by remember { mutableStateOf<Int?>(null) }
+    var highlightTaskId by remember { mutableStateOf<String?>(null) }
+    val widgetRoute by container.widgetRoutes.pending.collectAsState()
+    LaunchedEffect(widgetRoute) {
+        val route = container.widgetRoutes.consume() ?: return@LaunchedEffect
+        showTree = false
+        showLoops = false
+        when (route.destination) {
+            WidgetDestination.NEW_CHAT -> {
+                chatViewModel.newChat()
+                destination = RegularDestination.CHAT
+                composerRequest = true
+            }
+            WidgetDestination.CHAT -> {
+                destination = RegularDestination.CHAT
+                composerRequest = true
+            }
+            WidgetDestination.CHATS -> destination = RegularDestination.CHATS
+            WidgetDestination.TASKS -> {
+                highlightTaskId = route.taskId
+                destination = RegularDestination.PROJECTS
+            }
+            WidgetDestination.AGENT_REVIEW -> {
+                developTabRequest = DEVELOP_TAB_AGENT
+                destination = RegularDestination.DEVELOP
+            }
+            WidgetDestination.LOOPS -> showLoops = true
+            WidgetDestination.MODELS -> destination = RegularDestination.SETTINGS
+        }
+    }
+
     // Closing an overlay takes priority over the tab-reset handler below; the two conditions are
     // mutually exclusive by construction, so registration order never matters here.
     BackHandler(enabled = showTree || showLoops) {
@@ -91,6 +129,8 @@ fun RegularShell() {
                         onOpenSettings = { destination = RegularDestination.SETTINGS },
                         onOpenTree = { showTree = true },
                         atHome = true,
+                        composerRequest = composerRequest,
+                        onComposerRequestConsumed = { composerRequest = false },
                     )
                     RegularDestination.CHATS -> ChatsRoom(
                         viewModel = chatViewModel,
@@ -100,13 +140,21 @@ fun RegularShell() {
                     // layer installs the real Project room; core falls back to the free To-do
                     // floor. Neither shell references Studio's type directly.
                     RegularDestination.PROJECTS -> (
-                        ProjectRoomSlot.content ?: { onClose -> ProductRoomFree(onClose) }
+                        ProjectRoomSlot.content ?: { onClose ->
+                            ProductRoomFree(
+                                onClose,
+                                highlightTaskId = highlightTaskId,
+                                onHighlightConsumed = { highlightTaskId = null },
+                            )
+                        }
                     )(
                         { destination = RegularDestination.CHAT },
                     )
                     RegularDestination.DEVELOP -> DevelopRoom(
                         onClose = { destination = RegularDestination.CHAT },
                         onOpenLoops = { showLoops = true },
+                        tabRequest = developTabRequest,
+                        onTabRequestConsumed = { developTabRequest = null },
                     )
                     RegularDestination.SETTINGS -> SettingsRoom(
                         onShowSpatialMap = { container.sessionStore.setSpatialMapSeen(false) },

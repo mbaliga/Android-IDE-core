@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +42,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.fonebrew.FonebrewApp
 import kotlinx.coroutines.launch
+
+/** The Agent tab's index in [DevelopRoom]'s tab row (Hardware / Agent / Terminal / Audit). */
+const val DEVELOP_TAB_AGENT: Int = 1
 
 /**
  * The "develop on your repo" room — reskinned to Hyle. The header/tabs call
@@ -68,7 +72,14 @@ import kotlinx.coroutines.launch
  * Presented full-screen from Settings (like the Loop room). [onClose] returns.
  */
 @Composable
-fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
+fun DevelopRoom(
+    onClose: () -> Unit,
+    onOpenLoops: () -> Unit = {},
+    /** A tab to switch to once (a home-screen widget tap opening Develop → Agent); consumed via
+     *  [onTabRequestConsumed], the same one-shot shape as ChatScreen's findRequest. */
+    tabRequest: Int? = null,
+    onTabRequestConsumed: () -> Unit = {},
+) {
     BackHandler(onBack = onClose)
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     // Brief §7: Develop's tabs are exactly Hardware / Agent / Terminal / Audit (the brief itself
@@ -78,6 +89,12 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
     //  - Builds moved to the Tree (§6.1) — the Tree's Builds tab owns build history.
     //  - There's no tab separate from Agent for agentic changes — reviewing them IS this tab.
     var tab by remember { mutableStateOf(0) }
+    LaunchedEffect(tabRequest) {
+        if (tabRequest != null) {
+            tab = tabRequest
+            onTabRequestConsumed()
+        }
+    }
     // The paid Studio tab (Launch / store-publish) is contributed via DevelopTabs (S2 seam),
     // so core never references it directly.
     val studioTabs = remember { DevelopTabs.provider() }
@@ -755,6 +772,13 @@ private fun FilesFacet() {
     var reviewing by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 
+    // The home-screen "Agent review" widget follows this tab through AgentReviewHolder (a mirror; the
+    // proposal itself stays here, bound to this screen and the host it was read from). When the tab
+    // leaves composition its proposal and run are gone, so the mirror is cleared with them.
+    DisposableEffect(Unit) {
+        onDispose { container.agentReview.clear() }
+    }
+
     if (!runner.hasHost) {
         Hint("Connect a Git host (Settings → Global → Git & coding) — the agent reads and commits to your repo.")
         return
@@ -794,24 +818,36 @@ private fun FilesFacet() {
             val mid = modelId ?: return@WireButton
             val paths = pathsText.split("\n", ",").map { it.trim() }.filter { it.isNotEmpty() }
             busy = true; status = "reading ${paths.size} file(s)…"; proposal = null
+            val onDevice = container.modelRegistry.byId(mid)?.isOnDevice == true
+            container.agentReview.started(onDevice)
             scope.launch {
                 val jobId = container.backgroundJobs.start(
                     "Agent: ${objective.take(40)}${if (objective.length > 40) "…" else ""}",
                     "agent",
                 )
-                val ctx = runner.read(paths)
-                status = "proposing… (read ${ctx.size}/${paths.size})"
-                runner.propose(objective, ctx, mid).fold(
-                    { p ->
-                        proposal = p
-                        status = "proposed ${p.changeSet.effective.size} change(s) over files: ${p.filesRead.joinToString(", ").ifEmpty { "(none)" }}"
-                        container.backgroundJobs.finish(jobId)
-                    },
-                    {
-                        status = "failed: ${it.message}"
-                        container.backgroundJobs.finish(jobId, failed = true)
-                    },
-                )
+                try {
+                    val ctx = runner.read(paths)
+                    status = "proposing… (read ${ctx.size}/${paths.size})"
+                    runner.propose(objective, ctx, mid).fold(
+                        { p ->
+                            proposal = p
+                            container.agentReview.offer(p, onDevice)
+                            status = "proposed ${p.changeSet.effective.size} change(s) over files: ${p.filesRead.joinToString(", ").ifEmpty { "(none)" }}"
+                            container.backgroundJobs.finish(jobId)
+                        },
+                        {
+                            status = "failed: ${it.message}"
+                            container.agentReview.finished()
+                            container.backgroundJobs.finish(jobId, failed = true)
+                        },
+                    )
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Leaving this room cancels the run; without this the job would read "running"
+                    // forever (Chat's background strip, the Agent review widget).
+                    container.agentReview.finished()
+                    container.backgroundJobs.finish(jobId, failed = true)
+                    throw e
+                }
                 busy = false
             }
         },
@@ -839,7 +875,7 @@ private fun FilesFacet() {
                         busy = true
                         scope.launch {
                             runner.commit(approved, "Agent: ${objective.take(60)}").fold(
-                                { ids -> status = "committed ${ids.size} file(s)"; proposal = null; reviewing = false },
+                                { ids -> status = "committed ${ids.size} file(s)"; proposal = null; container.agentReview.clear(); reviewing = false },
                                 { status = "commit failed: ${it.message}" },
                             )
                             busy = false

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview fallback for the quick-start (pads) widget. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp" android:height="56dp"
+    android:viewportWidth="250" android:viewportHeight="56">
+    <path android:fillColor="#FF16181D" android:pathData="M12,0h226a12,12 0,0 1,12 12v32a12,12 0,0 1,-12 12h-226a12,12 0,0 1,-12 -12v-32a12,12 0,0 1,12 -12z" />
+    <path android:fillColor="#FF8E7BFF" android:pathData="M10,4h52a6,6 0,0 1,6 6v36a6,6 0,0 1,-6 6h-52a6,6 0,0 1,-6 -6v-36a6,6 0,0 1,6 -6z" />
+    <path android:fillColor="#FF20242B" android:pathData="M72,4h52a6,6 0,0 1,6 6v36a6,6 0,0 1,-6 6h-52a6,6 0,0 1,-6 -6v-36a6,6 0,0 1,6 -6z" />
+    <path android:fillColor="#FF20242B" android:pathData="M134,4h52a6,6 0,0 1,6 6v36a6,6 0,0 1,-6 6h-52a6,6 0,0 1,-6 -6v-36a6,6 0,0 1,6 -6z" />
+    <path android:fillColor="#FF20242B" android:pathData="M196,4h44a6,6 0,0 1,6 6v36a6,6 0,0 1,-6 6h-44a6,6 0,0 1,-6 -6v-36a6,6 0,0 1,6 -6z" />
+</vector>

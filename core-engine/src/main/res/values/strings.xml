@@ -4,4 +4,156 @@
          "Bru" is HUL-owned and litigious in India). "Aarso" ("mirror") names only the
          inert self-reflection lens (domain/mirror/), never the host app. -->
     <string name="app_name">Fonebrew</string>
+
+    <!-- Home-screen widgets (docs/widgets.md). Every word a widget shows is here; the brand comes
+         from app_name above (so Studio, or the full build's label, brands them correctly). -->
+    <string name="widget_next_up_label">Next up</string>
+    <string name="widget_next_up_description">Your open tasks: overdue and due-today first, then the top of your To-do list.</string>
+    <string name="widget_model_label">Model</string>
+    <string name="widget_model_description">Whether a model is loading or generating, and which model your chats use, on-device or cloud.</string>
+    <string name="widget_downloads_label">Model downloads</string>
+    <string name="widget_downloads_description">Progress of model downloads in flight, including paused and failed ones.</string>
+    <string name="widget_agent_label">Agent review</string>
+    <string name="widget_agent_description">Changes the coding agent proposed that are waiting for your review. Nothing commits without you.</string>
+    <string name="widget_loops_label">Loop runs</string>
+    <string name="widget_loops_description">Your latest loop runs: running, complete, stopped or failed, with their recorded spend.</string>
+    <string name="widget_quick_label">Quick start</string>
+    <string name="widget_quick_description">Start a new chat, or jump to tasks, the agent, loops, models or your chats.</string>
+
+    <string name="widget_loading">Loading…</string>
+    <string name="widget_error">%1$s couldn\'t read this just now. Open the app to see it.</string>
+    <string name="widget_as_of">as of %1$s</string>
+    <string name="widget_since">since %1$s</string>
+    <string name="widget_separator">%1$s · %2$s</string>
+    <string name="widget_spoken_open">%1$s. Opens %2$s.</string>
+
+    <string name="widget_next_up_empty">No open tasks. Your To-do list is clear.</string>
+    <string name="widget_task_withheld">Task from a chat (title hidden here)</string>
+    <string name="widget_task_untitled">Untitled task</string>
+    <string name="widget_due_overdue">overdue</string>
+    <string name="widget_due_soon">due soon</string>
+    <string name="widget_due_today">today</string>
+    <string name="widget_due_in_days">in %1$dd</string>
+    <string name="widget_task_doing">doing</string>
+    <string name="widget_task_blocked">blocked</string>
+    <plurals name="widget_tasks_open">
+        <item quantity="one">%d open</item>
+        <item quantity="other">%d open</item>
+    </plurals>
+    <plurals name="widget_tasks_overdue">
+        <item quantity="one">%d overdue</item>
+        <item quantity="other">%d overdue</item>
+    </plurals>
+    <plurals name="widget_tasks_due">
+        <item quantity="one">%d due within a day</item>
+        <item quantity="other">%d due within a day</item>
+    </plurals>
+
+    <string name="widget_model_generating">Generating</string>
+    <string name="widget_model_loading">Loading model</string>
+    <string name="widget_model_ready">Ready</string>
+    <string name="widget_model_none">No model yet</string>
+    <string name="widget_model_none_hint">Download a model, or add a cloud provider in Settings.</string>
+    <string name="widget_mode_council">Council</string>
+    <string name="widget_mode_image">image</string>
+    <string name="widget_mode_object3d">3D object</string>
+    <string name="widget_model_chats_use">Chats use %1$s</string>
+    <!-- An image, 3D or Council turn that doesn't run on the chat's model: where it runs instead. -->
+    <string name="widget_model_run_on_device">This turn runs on this phone</string>
+    <string name="widget_model_run_cloud">This turn uses a cloud model</string>
+    <string name="widget_provenance_on_device">On-device</string>
+    <string name="widget_provenance_cloud">Cloud · watched</string>
+    <string name="widget_model_last_ended">last turn ended %1$s</string>
+    <plurals name="widget_model_on_device_count">
+        <item quantity="one">%d on-device model on this phone</item>
+        <item quantity="other">%d on-device models on this phone</item>
+    </plurals>
+    <string name="widget_model_no_downloads">No downloads running</string>
+    <plurals name="widget_model_downloads_running">
+        <item quantity="one">%d download running</item>
+        <item quantity="other">%d downloads running</item>
+    </plurals>
+
+    <string name="widget_downloads_empty">No model downloads in flight.</string>
+    <string name="widget_downloads_none_short">No downloads</string>
+    <string name="widget_download_running">Downloading</string>
+    <string name="widget_download_paused">Paused</string>
+    <string name="widget_download_failed">Failed · open to retry</string>
+    <string name="widget_download_percent">%1$d%%</string>
+    <string name="widget_download_bytes">%1$s of %2$s</string>
+    <string name="widget_download_bytes_unknown">%1$s so far</string>
+    <string name="widget_downloads_more">+%1$d more</string>
+    <plurals name="widget_downloads_count">
+        <item quantity="one">%d download</item>
+        <item quantity="other">%d downloads</item>
+    </plurals>
+
+    <plurals name="widget_agent_ready">
+        <item quantity="one">%d change to review</item>
+        <item quantity="other">%d changes to review</item>
+    </plurals>
+    <string name="widget_agent_ready_body">Review it hunk by hunk; nothing commits without you.</string>
+    <string name="widget_agent_working">The agent is proposing changes</string>
+    <string name="widget_agent_working_body">You\'ll review whatever it proposes before anything commits.</string>
+    <string name="widget_agent_failed">The last agent run didn\'t finish</string>
+    <string name="widget_agent_failed_body">Open Develop → Agent to try again.</string>
+    <string name="widget_agent_nothing">The agent proposed no changes</string>
+    <string name="widget_agent_idle">Nothing waiting for review</string>
+    <string name="widget_agent_idle_body">Ask for a change in Develop → Agent.</string>
+    <string name="widget_agent_no_host">No Git host connected</string>
+    <string name="widget_agent_no_host_body">Connect one in Settings to use the agent.</string>
+    <string name="widget_agent_lines">+%1$d −%2$d lines</string>
+    <plurals name="widget_agent_files_read">
+        <item quantity="one">read %d file</item>
+        <item quantity="other">read %d files</item>
+    </plurals>
+    <string name="widget_agent_by_on_device">Proposed by an on-device model</string>
+    <string name="widget_agent_by_cloud">Proposed by a cloud model · watched</string>
+    <string name="widget_agent_action_review">Review changes</string>
+    <string name="widget_agent_action_open">Open Agent</string>
+
+    <string name="widget_loops_empty">No loop runs yet.</string>
+    <string name="widget_loop_unsaved">Unsaved loop</string>
+    <string name="widget_loop_running">running</string>
+    <string name="widget_loop_complete">complete</string>
+    <string name="widget_loop_stopped">stopped</string>
+    <string name="widget_loop_failed">failed</string>
+    <string name="widget_loop_spend_estimated">~%1$s (estimated)</string>
+    <string name="widget_loop_spend_minor">%1$s (minor units)</string>
+    <plurals name="widget_loops_count">
+        <item quantity="one">%d recent run</item>
+        <item quantity="other">%d recent runs</item>
+    </plurals>
+
+    <string name="widget_pad_new_chat">New chat</string>
+    <string name="widget_pad_tasks">Tasks</string>
+    <string name="widget_pad_agent">Agent</string>
+    <string name="widget_pad_loops">Loops</string>
+    <string name="widget_pad_models">Models</string>
+    <string name="widget_pad_chats">Chats</string>
+
+    <!-- Where a tap goes, for TalkBack ("… Opens Tasks."). -->
+    <string name="widget_dest_chat">the chat</string>
+    <string name="widget_dest_tasks">Tasks</string>
+    <string name="widget_dest_agent">Develop → Agent</string>
+    <string name="widget_dest_loops">Loops</string>
+    <string name="widget_dest_models">Models</string>
+
+    <!-- Picker previews only (previewLayout): sample content, never shown on a home screen. -->
+    <string name="widget_preview_as_of">as of Tue 09:41</string>
+    <string name="widget_preview_task_1">Renew the domain</string>
+    <string name="widget_preview_task_2">Review the loop budget</string>
+    <string name="widget_preview_task_3">Flash the Uno sketch</string>
+    <string name="widget_preview_in_days">in 3d</string>
+    <string name="widget_preview_model_value">▶ Generating</string>
+    <string name="widget_preview_model_name">⌂ Chats use an on-device model</string>
+    <string name="widget_preview_download_name">model-q4_k_m.gguf</string>
+    <string name="widget_preview_download_meta">Downloading · 58% · 1.2 GB of 2.1 GB</string>
+    <string name="widget_preview_agent_title">◆ 3 changes to review</string>
+    <string name="widget_preview_loop_1">Draft and review</string>
+    <string name="widget_preview_loop_2">Release notes</string>
+    <string name="widget_preview_loop_3">Nightly triage</string>
+    <string name="widget_preview_pad_new_chat">+\nNew chat</string>
+    <string name="widget_preview_pad_tasks">✓\nTasks</string>
+    <string name="widget_preview_pad_agent">‹›\nAgent</string>
 </resources>

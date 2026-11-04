@@ -129,6 +129,97 @@
         </service>
 
         <!--
+          Home-screen widgets (docs/widgets.md): standard App Widgets, so any launcher can host them.
+          Exported because the launcher binds them (the platform's own requirement); they only draw
+          and open this app's own activity. The time/zone/locale actions redraw printed times and
+          words; ACTION_TICK is the provider's own inexact due-boundary alarm. No new permission.
+        -->
+        <receiver
+            android:name="dev.fonebrew.widget.NextUpWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_next_up_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_next_up" />
+        </receiver>
+        <receiver
+            android:name="dev.fonebrew.widget.ModelWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_model_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_model" />
+        </receiver>
+        <receiver
+            android:name="dev.fonebrew.widget.DownloadsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_downloads_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_downloads" />
+        </receiver>
+        <receiver
+            android:name="dev.fonebrew.widget.AgentReviewWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_agent_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_agent" />
+        </receiver>
+        <receiver
+            android:name="dev.fonebrew.widget.LoopRunsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_loops_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_loops" />
+        </receiver>
+        <receiver
+            android:name="dev.fonebrew.widget.QuickStartWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_quick_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_quick_start" />
+        </receiver>
+
+        <!--
           FileProvider used by ApkInstaller (full flavor) to hand a cache-dir APK to
           the system installer via a content:// URI. Declared in main so the provider
           exists on both flavors; the install codepath is full-only (stub in play).
