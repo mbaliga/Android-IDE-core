@@ -143,3 +143,15 @@ OWNER_VERIFY.md` checklist ships with the module.
 2. Watch surfaces of v1 (Ask/Tasks/Loops/Tile) — trim or extend.
 3. Apple Watch sequencing — accept that it realistically waits on an iOS host decision.
 4. Whether WatchBrew ever gets its own repo (today: module in core).
+
+## v2 direction — salvaged concept (2026-11-04)
+
+A parallel concept line (`feat/watchbrew-concept-prototype`, authored 2026-10-22 from owner
+direction of 2026-10-15, closed after salvage) extends this design toward **remote hosts**
+(phone / computer / explicitly-opted-in cloud host), a versioned command/event session protocol
+with replay dedup and event-cursor resume, offline capture with a durable outbox, message
+rating / reply / regenerate-from-here on the wrist, next-turn mode switching (needs an adapter
+against the immutable-interaction rule — owner ruling required), and an optional e-ink reading
+workspace (Oasis 2, via the Workdeck seams). None of that is built here; the concept lives at
+`docs/design/watchbrew-remote-concept.md` with its M0 web prototype under `prototypes/watchbrew/`.
+v1 (this document) remains the law for the shipped module.
