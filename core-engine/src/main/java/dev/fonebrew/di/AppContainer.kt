@@ -461,6 +461,17 @@ class AppContainer(context: Context) {
     // change) — surfaced together in Chat's background-tasks strip.
     val backgroundJobs: dev.fonebrew.data.BackgroundJobs = dev.fonebrew.data.BackgroundJobs()
 
+    // Home-screen widgets (docs/widgets.md). Three small process-scoped holders the widgets read,
+    // each written by the screen that owns the data (the chat reports its generation phase, the
+    // Develop room offers/clears its pending proposal, MainActivity hands over a widget tap's route),
+    // plus the redraw hub, lazy so it is built only once a widget is actually placed.
+    val generationStatus: dev.fonebrew.data.GenerationStatus = dev.fonebrew.data.GenerationStatus()
+    val agentReview: dev.fonebrew.data.AgentReviewHolder = dev.fonebrew.data.AgentReviewHolder()
+    val widgetRoutes: dev.fonebrew.widget.WidgetRouteInbox = dev.fonebrew.widget.WidgetRouteInbox()
+    val widgetUpdates: dev.fonebrew.widget.WidgetUpdates by lazy {
+        dev.fonebrew.widget.WidgetUpdates(context.applicationContext, this)
+    }
+
     // Device recipes over the SSH spine (IA: agentic-ide #3): RPi / Arduino-via-Pi / ESP-OTA.
     val deviceRepo: dev.fonebrew.data.DeviceRepo = dev.fonebrew.data.DeviceRepo { newSshTransport() }
 

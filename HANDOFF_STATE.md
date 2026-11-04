@@ -37,6 +37,15 @@ hyle-design-system shared-libraries` is required before Gradle can resolve `dev.
 `dev.aarso:crash-recovery` / `dev.aarso:interaction-mode`; the native llama.cpp/
 stable-diffusion.cpp submodules are needed only for `assembleFullDebug`.
 
+## PROGRESS — 2026-11-04: home-screen widgets (uncommitted working tree, owner-unverified)
+
+- Six App Widgets in `:core-engine` (`dev.fonebrew.widget`; spec + owner-verify list `docs/widgets.md`;
+  state `docs/STATE.md` §13). JVM gate after the change and its review fixes:
+  `:core-engine:test{Full,Play}DebugUnitTest` **2,990 tests each, 0 failures, 1 skipped** (baseline the
+  same day: 2,925 / 0 / 1); `checkLicense`,
+  `:watch-bridge:test` (118/0) and `:watchbrew:test{Full,Play}DebugUnitTest` (202/0 each) green. Nothing
+  rendered on a device.
+
 ## PROGRESS — 2026-10-14: WatchBrew v1 + porting LX-1/LX-2 (all lanes adversarially verified)
 
 - **WatchBrew v1** (owner directive 2026-10-13; design law `docs/design/watchbrew.md`):

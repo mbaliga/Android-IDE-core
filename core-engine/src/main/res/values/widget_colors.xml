@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Home-screen widget colours (docs/widgets.md), day values. They are the Hyle light register's own
+  values (hyle-design-system: hyle/src/main/java/dev/aarso/hyle/theme/Color.kt: LSurface1, LSurface2,
+  LOutline, LTextHigh, LTextMid, LViolet), copied as resources because a RemoteViews widget is drawn by
+  the launcher, which can't read Compose tokens. Night values are in values-night/.
+
+  Colour never carries meaning on its own: every state on a widget also has a shape and a word.
+  No red, no green. Violet is emphasis (the primary pad, an overdue label), as in the app.
+-->
+<resources>
+    <color name="widget_surface">#FFFFFFFF</color>
+    <color name="widget_inset">#FFEEF0F4</color>
+    <color name="widget_outline">#FFD5D7DB</color>
+    <color name="widget_text_high">#FF1A1C1F</color>
+    <color name="widget_text_mid">#FF5A5E66</color>
+    <color name="widget_accent">#FF5B45D6</color>
+    <color name="widget_on_accent">#FFFFFFFF</color>
+    <color name="widget_ripple">#291A1C1F</color>
+</resources>

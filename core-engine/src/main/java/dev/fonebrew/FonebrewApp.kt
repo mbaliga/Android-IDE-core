@@ -12,6 +12,11 @@ open class FonebrewApp : Application() {
     lateinit var container: AppContainer
         private set
 
+    /** The container, or null if it failed to build — for callers outside the UI (home-screen
+     *  widgets) that must draw an honest error state instead of throwing. */
+    val containerOrNull: AppContainer?
+        get() = if (::container.isInitialized) container else null
+
     override fun onCreate() {
         // Install crash capture FIRST, so even a failure in container construction below (or a
         // later first-frame/Compose crash) lands a readable trace for the recovery screen.
@@ -23,5 +28,8 @@ open class FonebrewApp : Application() {
         } catch (e: Throwable) {
             CrashRecovery.captureInitError(this, appLabel = "Fonebrew", e)
         }
+        // Home-screen widgets (docs/widgets.md): if any are placed, redraw them from this fresh
+        // process's real state and start pushing updates. Background thread; never throws here.
+        dev.fonebrew.widget.FonebrewWidgets.onProcessStart(this)
     }
 }

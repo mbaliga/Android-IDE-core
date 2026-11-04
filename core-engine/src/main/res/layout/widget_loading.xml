@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Initial layout (before the first render) and the error state of every Fonebrew widget. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:clipToOutline="true"
+    android:orientation="vertical"
+    android:padding="@dimen/widget_padding"
+    android:gravity="center_vertical">
+    <TextView
+        android:id="@+id/loading_title"
+        style="@style/FonebrewWidgetText.Label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name" />
+    <TextView
+        android:id="@+id/loading_body"
+        style="@style/FonebrewWidgetText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/widget_loading"
+        android:layout_marginTop="4dp"
+        android:maxLines="2" />
+</LinearLayout>

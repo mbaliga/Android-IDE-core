@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity() {
 
         val app = application as FonebrewApp
         handleIntake(intent)
+        // A recreated activity (rotation, theme switch) is handed its original intent again; a
+        // widget tap must act once, or "New chat" would reset the chat on every rotation.
+        if (savedInstanceState == null) handleWidgetTap(intent)
         val session = app.container.sessionStore
         setContent {
             val modeStr by session.themeMode.collectAsState()
@@ -54,6 +57,20 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntake(intent)
+        handleWidgetTap(intent)
+    }
+
+    /** A home-screen widget tap (docs/widgets.md): navigation only. MainActivity is exported, so the
+     *  extras are validated ([dev.fonebrew.widget.WidgetRoutes.parse]) and anything unknown is ignored. */
+    private fun handleWidgetTap(intent: Intent?) {
+        if (intent?.action != dev.fonebrew.widget.WidgetRoutes.ACTION_OPEN) return
+        // Reopened from Recents, the task's first intent comes back too: that tap was already acted on.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val route = dev.fonebrew.widget.WidgetRoutes.parse(
+            intent.getStringExtra(dev.fonebrew.widget.WidgetRoutes.EXTRA_DESTINATION),
+            intent.getStringExtra(dev.fonebrew.widget.WidgetRoutes.EXTRA_TASK_ID),
+        ) ?: return
+        (application as FonebrewApp).container.widgetRoutes.offer(route)
     }
 
     /** Route shared / selected text (and shared images) into the app (§7). */

@@ -438,3 +438,34 @@ CMake installed); the first pair there must be built together.
 on-device smoke pass); ambient / always-on rendering; tile-carousel preview art; a GMS-free BLE transport;
 gating `:watchbrew:checkLicense` in CI; Apple Watch (gated on the owner verifying a real Wear OS device,
 then on an iOS host; design doc section 5).
+
+---
+
+## 13. Home-screen widgets (2026-11-04)
+
+Owner ask (constellation-wide): at least five home-screen widgets per app, each in several sizes, usable
+by any Android launcher. Spec and owner-verify list: `docs/widgets.md`.
+
+**What exists.** Six standard App Widgets in `:core-engine` (`dev.fonebrew.widget`), so both flavors and,
+after its next `core` bump, Studio get them: **Next up** (tasks: overdue and due-today first, then the
+To-do order), **Model** (loading / generating / ready, and the active model with ⌂ On-device or ☁ Cloud ·
+watched), **Model downloads** (progress, paused, failed), **Agent review** (changes waiting for review,
+with provenance), **Loop runs** (latest runs and recorded spend, the same assembly the watch uses), and
+**Quick start** (New chat, Tasks, Agent, Loops, Models, Chats). Each has three or four size layouts sent as
+one size-mapped `RemoteViews`; updates are pushed from the stores (`WidgetUpdates`), never polled. Two
+small process-scoped mirrors made this honest: `GenerationStatus` (the chat mirrors its `GenPhase`, and
+where an image / 3D / Council turn really runs, so cloud work is always marked) and `AgentReviewHolder`
+(the Agent tab mirrors its run and pending proposal; the proposal itself stays in the tab, as before). No
+conversation text, typed input, file path or key reaches the home screen; a task converted from a chat
+turn shows with its title hidden. No new permission, dependency or network path. The Aarso mirror has no
+widget (it ships inert).
+
+**Machine-verified (2026-11-04, JVM only):** `:core-engine:test{Full,Play}DebugUnitTest` 2,990 tests each,
+0 failures, 1 skipped (2,925 before; +65 widget tests, 7 of them from the review pass that fixed cloud
+provenance on the Model and Agent review widgets, kept the agent proposal in the Agent tab, and fixed pad
+sizes and clipping), `:core-engine:checkLicense`, `:app:process{Full,Play}DebugResources` and both flavors'
+`:core-engine` Kotlin compile green.
+
+**Owner-verified only — nothing has been seen on a phone or a launcher:** rendering, resizing, previews,
+glyph fonts, day/night, taps in both interaction modes, TalkBack, the due-boundary alarm, and OEM battery
+managers (`docs/widgets.md`, Owner-verify).
