@@ -1,7 +1,7 @@
 {
   "manifestId": "cap-play-dist-0001",
   "subjectKind": "EXTENSION",
-  "subjectId": "dev.aarso (play flavor)",
+  "subjectId": "dev.fonebrew (play flavor)",
   "supportedOperations": [
     "distribution.downloadAndExecuteNativeCode",
     "execution.oneShotCommand"

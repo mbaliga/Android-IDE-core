@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "job-tripo-image-0002",
+  "provider": "TRIPO",
+  "providerJobId": "tp_01J9K0000000000000000IMG2",
+  "mode": "IMAGE_TO_3D",
+  "prompt": null,
+  "sourceImageRef": "img-node-0042",
+  "state": "DOWNLOADING",
+  "progressPercent": 92.5,
+  "downloadUrl": "https://assets.tripo3d.ai/results/tp_01J9K0000000000000000IMG2/model.glb",
+  "resultNodeId": null,
+  "errorEnvelope": null,
+  "createdAtUtc": "2026-08-15T13:10:00Z",
+  "updatedAtUtc": "2026-08-15T13:14:30Z",
+  "unknownFields": {}
+}

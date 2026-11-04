@@ -1,7 +1,12 @@
-// Desktop host lane (porting plan LX-1): a separate Gradle build, JVM only, no AGP and no
-// Android SDK. It compiles the pure-JVM sources that :core-engine already owns, by srcDir,
-// so they stay in one place. The root build is untouched; CI checks that with
-// `git diff --exit-code` over the root build files (desktop-host-core.yml).
+// desktop/ is its OWN Gradle build (porting plan docs/PORTING_PLAN.md section 6.1, step LX-1).
+//
+// It is deliberately NOT included from the repo-root settings.gradle.kts and the root build never
+// sees it: running ./gradlew from the repo root is unchanged, and running ./desktop/gradlew from
+// here needs only a JDK -- no Android Gradle plugin, no Android SDK, no ANDROID_HOME, no git
+// submodules (hyle-design-system / shared-libraries / the native engines are never touched).
+//
+// Pins mirror the root build's do-not-regress pins (see gradle/libs.versions.toml in this
+// directory); scripts/check_pins.py proves they have not drifted.
 pluginManagement {
     repositories {
         mavenCentral()
@@ -9,6 +14,8 @@ pluginManagement {
     }
 }
 
+// Same toolchain-resolver the root build uses: auto-provisions JDK 17 on a machine that lacks one.
+// (CI already has Temurin 17 from setup-java, so this is a no-op there.)
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
@@ -20,5 +27,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "aarso-desktop"
+rootProject.name = "fonebrew-desktop"
 include(":core-host")

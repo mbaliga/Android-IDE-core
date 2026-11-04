@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-invalid-0001",
+  "file": {
+    "relativePath": "objects3d/deadbeefcafef00d.glb",
+    "sizeBytes": 102400,
+    "digest": null
+  },
+  "format": "GLB",
+  "source": "CLOUD_GENERATED",
+  "provider": null,
+  "prompt": "a low-poly fox",
+  "generation": null,
+  "provenanceState": "CLOUD",
+  "watched": true,
+  "createdAtUtc": "2026-08-15T15:00:00Z",
+  "unknownFields": {}
+}

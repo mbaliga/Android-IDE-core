@@ -1,30 +1,59 @@
-android-ide-core / Aarso / Workbench (dev.aarso) — Third-Party NOTICE
+android-ide-core / Aarso / Workbench (dev.fonebrew) — Third-Party NOTICE
 ========================================================================
 
 This file lists the runtime dependencies packaged into the app (both `full` and
 `play` dist flavors), grouped by license, and is generated from the gate's
-license-report tool. See `app/build.gradle.kts` (`licenseReport { ... }`) and
-`config/allowed-licenses.json` for the enforcement mechanism (§1.8 of
-`CLAUDE.md`): the `:app:checkLicense` Gradle task fails the build on any
-runtime dependency whose license isn't on that allowlist.
+license-report tool. See `core-engine/build.gradle.kts` (`licenseReport { ... }`)
+and `config/allowed-licenses.json` for the enforcement mechanism (§1.8 of
+`CLAUDE.md`): the `:core-engine:checkLicense` Gradle task fails the build on any
+runtime dependency whose license isn't on that allowlist. (Pre-de-fork this said
+`:app:checkLicense` — test + license tasks moved to `:core-engine`; see
+CLAUDE.md's Building section.)
 
-`dev.aarso:hyle` (the design system, consumed via the `hyle-design-system` git
-submodule + `includeBuild`) is deliberately not listed below — it's first-party
-code from a sibling repo in this constellation (`mbaliga/Hyle-Design-System`,
-same owner), not a third-party dependency in the §1.8 sense. It's excluded from
-the scan by construction: an included-build project substitution has no Maven
-POM for the license-report tool to read license metadata from in the first
-place.
+`dev.aarso:hyle`, `dev.aarso:crash-recovery` and `dev.aarso:interaction-mode`
+(consumed via the `hyle-design-system` / `shared-libraries` git submodules +
+`includeBuild`) are deliberately not itemized in the per-license lists below —
+they're first-party code from sibling repos in this constellation
+(`mbaliga/Hyle-Design-System`, `mbaliga/Shared-Libraries-asoc`; same owner),
+not third-party dependencies in the §1.8 sense. They DO now appear as scan
+entries (see AUDIT FIX note below — that wasn't always true), but with no
+license the report can read: an included-build project substitution has no
+Maven POM for the tool to read license metadata from, so they're allow-listed
+by module name instead of by license in `config/allowed-licenses.json`
+(`crash-recovery`/`interaction-mode` are Apache-2.0 by hand-verified inspection
+of `shared-libraries/LICENSE`, same as this repo's own `LICENSE`; hyle-design-
+system carries no repo-level LICENSE file at all — flagged, not this repo's to
+fix).
+
+**AUDIT FIX (2026-09-15, lane LC-license):** `:core-engine`'s license-scan
+configurations were missing AGP's `BuildTypeAttr`, the same silent-drop shape
+Studio's hygiene wave found in its own `:app` scan (dependency-license-report
+resolves leniently, so an ambiguous project()/includeBuild variant selection
+was silently DROPPED rather than failing the build) — see the long comment on
+`licenseScanAttrs` in `core-engine/build.gradle.kts` for the empirical
+diagnosis. Fixed by pinning `BuildTypeAttr = "debug"`. This surfaced the three
+dev.aarso:* entries above, now correctly present and allow-listed; it did NOT
+change resolution of any third-party (non-first-party) dependency — verified
+by diffing the regenerated report against this file's prior list, the only
+deltas beyond the three first-party entries are unrelated dependency drift
+already present since the "last regenerated" date below (SQLDelight,
+Guava/coroutines-guava, an androidx.sqlite version bump, etc. — pulled in by
+work after 2026-07-11, nothing to do with this fix). That drift means the
+itemized per-license lists below are stale independent of this fix; refreshing
+them is a separate, ordinary NOTICE-regen pass, not done here — named as a
+follow-up, not silently left implied current.
 
 Regenerate the underlying data with:
-    ANDROID_HOME=<sdk> ./gradlew :app:generateLicenseReport
+    ANDROID_HOME=<sdk> ./gradlew :core-engine:checkLicense
     (full detail, including bundled LICENSE files where available, lands in
-    app/build/reports/dependency-license/)
+    core-engine/build/reports/dependency-license/)
 
 Test-only dependencies (JUnit, kotlinx-coroutines-test, org.json) are not
 runtime-linked and are not listed here — they never ship in the APK.
 
-Last regenerated: 2026-07-11 (Studio Suite brief / CORE_PHASES.md P0-core).
+Last regenerated (full itemized list below): 2026-07-11 (Studio Suite brief /
+CORE_PHASES.md P0-core). Per-license artifact counts below are NOT refreshed
+by the 2026-09-15 audit fix above — see that note.
 
 ## Apache License 2.0 (124 artifacts)
 
@@ -164,6 +193,94 @@ Last regenerated: 2026-07-11 (Studio Suite brief / CORE_PHASES.md P0-core).
 
 - `net.i2p.crypto:eddsa:0.3.0`
 
+## MIT License (hand-appended — vendored asset, not a Maven dependency)
+
+`:app:checkLicense`/`generateLicenseReport` (above) only scans runtime Maven dependencies, so it
+never sees anything under `src/main/assets` — a vendored third-party JS library bundled as an
+asset has no POM for the license-report tool to read. Listed here by hand instead
+(THREAD_TOPOLOGY_PLAN.md WP11):
+
+- **AntV G6 5.1.1** (`third_party/g6/g6.min.js`, embedded verbatim into the committed
+  `core-engine/src/main/assets/graph/graph-room.html` by `scripts/build-graph-room.js`) — the
+  graph-visualization engine behind the G6 "deep graph room" (`dev.fonebrew.ui.graph.GraphWebRoom`).
+  MIT License, Copyright (c) 2018 Alipay.inc. Full text prepended verbatim as a header comment in
+  `third_party/g6/g6.min.js` itself; reproduced here:
+
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all
+  > copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  > SOFTWARE.
+
+- **three.js v0.180.0** + `examples/jsm` addons (`OrbitControls`, and the loaders in
+  docs/design/objects-3d.md §2's format matrix: `GLTFLoader`, `OBJLoader`, `MTLLoader`,
+  `STLLoader`, `PLYLoader`, `FBXLoader`, `ColladaLoader`, `3MFLoader`, `USDZLoader`) — same
+  reasoning as the AntV G6 entry above (a vendored asset, no Maven POM for the license-report
+  tool to read), with one difference in *how* it got vendored: three.js ships as ES module
+  *source*, not a single prebuilt UMD file, so `scripts/build-object-viewer.js` bundles it via
+  esbuild from the npm package `three@0.180.0` into `third_party/threejs/object-viewer.bundle.min.js`,
+  embedded verbatim into the committed `core-engine/src/main/assets/object3d/object-viewer.html`
+  by that same script — the offline 3D object viewer behind
+  `dev.fonebrew.ui.object3d.ObjectViewerRoom`. MIT License, Copyright © 2010-2025 three.js authors.
+  Full text prepended verbatim as a header comment in
+  `third_party/threejs/object-viewer.bundle.min.js` itself; reproduced here:
+
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in
+  > all copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  > THE SOFTWARE.
+
+- **fflate v0.8.2** (as vendored inside three.js's own
+  `examples/jsm/libs/fflate.module.js`) — a second MIT library folded into the same bundle,
+  pulled in transitively by `GLTFLoader`/`3MFLoader`/`USDZLoader` for synchronous zip/inflate of
+  embedded assets (docs/design/objects-3d.md §2's 3MF/USDZ rows are both ZIP/OPC containers).
+  Same reasoning as the two entries above — no Maven POM, hand-appended here and in
+  `third_party/threejs/object-viewer.bundle.min.js`'s own header comment. MIT License, Copyright
+  (c) 2026 Arjun Barrett. Full text:
+
+  > Permission is hereby granted, free of charge, to any person obtaining a copy
+  > of this software and associated documentation files (the "Software"), to deal
+  > in the Software without restriction, including without limitation the rights
+  > to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  > copies of the Software, and to permit persons to whom the Software is
+  > furnished to do so, subject to the following conditions:
+  >
+  > The above copyright notice and this permission notice shall be included in all
+  > copies or substantial portions of the Software.
+  >
+  > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  > SOFTWARE.
+
 ## Android Software Development Kit License (Google Play services) (4 artifacts)
 
 - `com.google.android.gms:play-services-base:18.5.0`
@@ -180,4 +297,8 @@ Last regenerated: 2026-07-11 (Studio Suite brief / CORE_PHASES.md P0-core).
 - `com.google.mlkit:text-recognition-bundled-common:17.0.0`
 - `com.google.mlkit:vision-common:17.3.0`
 - `com.google.mlkit:vision-interfaces:16.3.0`
+
+## AICore Terms of Service (Google) (1 artifact)
+
+- `com.google.ai.edge.aicore:aicore:0.0.1-exp01`
 

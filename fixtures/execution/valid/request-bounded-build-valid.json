@@ -5,7 +5,7 @@
     "operationClass": "BUILD",
     "command": "./gradlew",
     "args": ["--no-daemon", ":core-engine:testFullDebugUnitTest", ":core-engine:testPlayDebugUnitTest", ":core-engine:checkLicense"],
-    "workingDirectory": "/data/user/0/dev.aarso.full/workspace/android-ide-core"
+    "workingDirectory": "/data/user/0/dev.fonebrew.full/workspace/android-ide-core"
   },
   "workingRevision": "ab3567ecf1a2b3c4d5e6f7089a1b2c3d4e5f6071",
   "environment": {

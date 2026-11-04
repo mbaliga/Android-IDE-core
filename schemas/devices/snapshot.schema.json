@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/devices/snapshot.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/devices/snapshot.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceSnapshot per FB-RAT-DEV-002 (device object model) and FB-RAT-DEV-005 (verification before good state). Typically carried as the `payload` of a ContractEnvelope<DeviceSnapshot> (see schemas/common/envelope.schema.json). `snapshotId` is this object's own FB-RAT-COM-002 stable ID.",
   "title": "DeviceSnapshot",
   "description": "A point-in-time belief about what firmware a device is running and whether that belief is verified. FB-RAT-DEV-005: update last-known-good only after protocol/read-back/version/self-test verification — `lastKnownGood` is structurally forced false unless `verification.state` is VERIFIED. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §5.",

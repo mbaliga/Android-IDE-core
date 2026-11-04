@@ -22,7 +22,7 @@ WP-2 — `./gradlew :core-engine:testFullDebugUnitTest`.
 ## 0. What was built
 
 - **`domain/contracts/IntegrationsCodec.kt`** (R1) — JSON encode/decode for every
-  `dev.aarso.contracts.integrations` wire shape (`IssuesManifest`, `AssayIndex`, `ProvingTests`,
+  `dev.fonebrew.contracts.integrations` wire shape (`IssuesManifest`, `AssayIndex`, `ProvingTests`,
   `ImportPreview`, `ImportReceipt`, `ImportErrorCode`'s closed-plus-open vocabulary), same
   unknown-field-preserving pattern as WP-2/WP-3/WP-4's codecs. **Round-tripped against the REAL
   WP-1 fixture files** (`fixtures/integrations/valid/*.json`, embedded verbatim in the test —

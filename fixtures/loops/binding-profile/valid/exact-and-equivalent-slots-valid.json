@@ -42,7 +42,7 @@
   ],
   "resolvedAtUtc": "2026-08-01T10:00:05Z",
   "producer": {
-    "name": "dev.aarso.full",
+    "name": "dev.fonebrew.full",
     "version": "0.13.0"
   }
 }

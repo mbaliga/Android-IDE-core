@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "01J9M0000000000000000CH1",
+  "rootId": "01J8Z0000000000000000RT1",
+  "anchorMsgId": "01J8Z00000000000000MSG42",
+  "kind": "CHAPTER",
+  "label": "Auth flow rewrite",
+  "note": "Everything above this belongs to the old cookie-based session design.",
+  "at": "2026-08-10T09:14:31Z",
+  "source": "USER",
+  "payloadJson": null,
+  "unknownFields": {}
+}

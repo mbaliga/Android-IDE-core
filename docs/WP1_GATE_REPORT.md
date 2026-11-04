@@ -150,7 +150,7 @@ other semantic issues cannot be ruled out without `kotlinc`/Gradle, which this s
 have (matches `CLAUDE.md`'s environment-honesty rule and every domain agent's own header). **This
 is the sub-item this gate cannot close; it needs the next session (or CI) with the Gradle
 toolchain available to run `./gradlew :app:compileFullDebugKotlin` (or equivalent) against these
-6 files plus their `dev.aarso.contracts.*` package structure.**
+6 files plus their `dev.fonebrew.contracts.*` package structure.**
 
 ## 6. Unknown-field round-trip — UNVERIFIED, honestly, as an explicit follow-up
 
@@ -426,7 +426,7 @@ is now wired as an additional source directory into `core-engine`'s main source 
 see**: `contracts/kotlin/IntegrationContracts.kt` compiled cleanly (the WP-1 gate's own lexical
 fix already caught that file's `*/`-in-KDoc bug), but two files from **WP-1L** —
 `LoopAuthoringContracts.kt` and `LoopPackageContracts.kt` — declared the same
-`data class ValidationFinding` in the same package (`dev.aarso.contracts.loops`), a real Kotlin
+`data class ValidationFinding` in the same package (`dev.fonebrew.contracts.loops`), a real Kotlin
 redeclaration error no structural or lexical check in either the WP-1 or WP-1L gate could detect.
 Fixed (see `docs/WP1L_GATE_REPORT.md`'s own addendum for the full account, since the defect and
 its fix both live in WP-1L's files, not WP-1's). After the fix: **`:core-engine:compileFullDebugKotlin`

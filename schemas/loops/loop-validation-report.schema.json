@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-validation-report.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/loop-validation-report.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopValidationReport per loop-validation-rules.v1.json's own top-level description: 'A validation report MUST include this rulesetVersion, the semantic digest of the definition being validated, the surface implementation identity, and findings sorted deterministically (by namespace, then code, then nodeId/edgeId).' `findings[].code` MUST be a code from that frozen registry — this schema cross-references it (pattern + duplicated namespace enum) rather than re-enumerating all 24 current rules, so an additive registry minor bump never forces a schema change (matching loop-package-manifest.schema.json's CapabilityRequest precedent).",
   "title": "LoopValidationReport",
   "description": "The output of the CONTAINER_VERIFIED-to-PARSED_VALIDATED transition (LOOP_IMPORT_ACTIVATION_CONTRACT.md §3): schema/graph/engine-policy validation against loop-validation-rules.v1.json, run before anything is created or changed. Also produced independently at build time (LOOP_ENGINEERING_SPEC_V2.1 §20's build pipeline step 2, VALIDATE_SEMANTIC_GRAPH) and re-run whenever a definition changes.",

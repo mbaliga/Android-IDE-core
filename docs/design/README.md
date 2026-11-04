@@ -1,4 +1,4 @@
-# Aarso — design docs (vision & roadmap)
+# Fonebrew — design docs (vision & roadmap)
 
 Forward-looking features, captured as design before code so any session (human or
 agent) can pick them up. All obey the binding rules in `/CLAUDE.md` (no telemetry;
@@ -11,7 +11,7 @@ honest about the no-device build environment).
 |-----|------|--------|
 | [`information-architecture.md`](information-architecture.md) | **The canonical IA** (owner spec, 2026-06-23): the whole-app map — Conversations (left) · Chat (home, with single/expert/model interaction modes + group participants) · Settings (right, 5 icon tabs, never a launcher) · Develop (bottom) · Tree (up) · Loops (down) · Project mgmt · the "Me/Myself/I" user meta. Spatial map is the spine; settings hold config only. | **owner spec — anchor doc** |
 | [`council-workflows.md`](council-workflows.md) | The loop as a product: today's one-shot council fan-out → a loopable graph of **experts** (per-node model = "model suited to the task"); objective→propose→critique→refine; "propose a look". | **design + engine spike built** |
-| [`coding-assistant.md`](coding-assistant.md) | Aarso as a coding assistant **on your repos**: connect a Git host, enter git ID, work on repos/branches, edit→review-diff→commit/push, via the Claude API (watched). | design |
+| [`coding-assistant.md`](coding-assistant.md) | Fonebrew as a coding assistant **on your repos**: connect a Git host, enter git ID, work on repos/branches, edit→review-diff→commit/push, via the Claude API (watched). | design |
 | [`tree-sovereignty.md`](tree-sovereignty.md) | Your **history in a repo you own**: mirror the git-shaped message tree to GitHub/Gitea/self-hosted as open, diff-friendly files — "discard the shell" portability. | **design + format brick built** |
 | [`workflow-builder.md`](workflow-builder.md) | **Loops** (the workflow builder): the loop visualized & gated; BPMN-2.0 transport for definitions; the Cost-gate macro; the Loops list + Log + canvas. | **design + BPMN/gating bricks built** |
 | [`disclosure.md`](disclosure.md) | **Progressive disclosure**: tame complexity via CORE/STUDIO/POWER tiers (intent wizard + depth dial), without ever hiding routing/cost/watched signals. | **design + tier model built** |

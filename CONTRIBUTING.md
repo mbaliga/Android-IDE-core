@@ -25,7 +25,7 @@ commit in the PR carries a sign-off.
 ## Before opening a PR
 
 - Read `CLAUDE.md` for the binding rules (no telemetry ever, on-device-first, no
-  `dev.aarso.*`-collision naming, Keystore-only key handling) — these aren't up for debate in a PR.
+  `dev.fonebrew.*`-collision naming, Keystore-only key handling) — these aren't up for debate in a PR.
 - Run the JVM gate locally if you can: `./gradlew :core-engine:testFullDebugUnitTest
   :core-engine:testPlayDebugUnitTest :core-engine:checkLicense`. If you can't (no Android SDK
   locally), say so in the PR — CI will run it.

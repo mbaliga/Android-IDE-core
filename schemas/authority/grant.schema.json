@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/authority/grant.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/authority/grant.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. Grant per FB-RAT-AUTH-001/002/004/005/006/007 (GRANT MODEL: principal + actions + resource scope + constraints + expiry + confirmation policy + delegation rule). Typically carried as the `payload` of a ContractEnvelope<Grant> (see schemas/common/envelope.schema.json) — `grantId` below is this object's own FB-RAT-COM-002 stable ID, distinct from the envelope's objectId. `grantId` is also the exact string schemas/execution/request.schema.json's `authorityGrant.grantId` field references (FB-RAT-COM-012 'no contract bypass') — see docs/ratified/CAPABILITY_AUTHORITY_MODEL.md §11 for that cross-domain correlation.",
   "title": "Grant",
   "description": "A scoped authorization: WHO (principalId) may do WHAT (capabilityIds, all resolving to the same authorityRung) to WHICH resource (resourceScope), under WHAT constraints, until WHEN (expiresAtUtc), with WHAT confirmation policy, and WHETHER a child principal may inherit it (delegationRule). capabilityIds MUST be drawn from schemas/loops/registries/capability-ids.v1.json's reverse-DNS fb.* namespace — that registry is the concrete capability-ID vocabulary this general authority model is written against; it is not redefined here.",

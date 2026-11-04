@@ -1,0 +1,54 @@
+Fixture: fixtures/object3d/adversarial/object3d-job-download-url-non-provider-host.adversarial.json
+Schema: schemas/object3d/object3d-job.schema.json (structurally PASSES — see below)
+
+WHAT THIS FIXTURE SHOWS
+
+An Object3dJob claims provider: "MESHY" and state: "DOWNLOADING" with
+downloadUrl: "https://meshy.ai.attacker-controlled.example/results/model.glb" — a classic
+look-alike host: the label starts with "meshy.ai." so it reads as Meshy's own domain at a glance,
+but the REAL registrable host is "attacker-controlled.example"; "meshy.ai" here is just a
+subdomain label the attacker chose, not Meshy's infrastructure. This is exactly §6's third
+adversarial minimum: "a job response pointing the download at a non-provider host — refused, per
+the loop-release precedent" (schemas/loops/loop-release.schema.json's releaseAssetUrl documents
+the identical shape-only-vs-host-checked split for a sibling contract).
+
+WHY JSON SCHEMA VALIDATION ALONE CANNOT CATCH THIS
+
+schemas/object3d/object3d-job.schema.json's `downloadUrl` is `format: uri` only (see that field's
+own description and the schema's top-level $comment) — a well-formed HTTPS URL with a
+plausible-looking host is, structurally, indistinguishable from a genuine one. JSON Schema has no
+notion of "this producer's declared identity" to cross-check a URL's actual host against.
+
+REQUIRED REAL BEHAVIOR
+
+A real cloud engine (§5's future `inference/object3d/CloudObject3dEngines.kt`) MUST run every
+provider-reported `downloadUrl` through
+dev.fonebrew.domain.object3d.CloudObject3dContracts.validateDownloadUrl(provider, downloadUrl)
+BEFORE fetching it or persisting it into any Object3dJob record. For this fixture:
+
+  1. The URL parses and uses https — those checks pass.
+  2. The host is "meshy.ai.attacker-controlled.example". validateDownloadUrl checks this against
+     Object3dCloudProvider.MESHY.allowedDownloadHostSuffixes = ["meshy.ai"]: the host does NOT
+     equal "meshy.ai", and does NOT end with the literal suffix ".meshy.ai" (it ends with
+     ".attacker-controlled.example") — so the check MUST return
+     DownloadUrlValidation.Refused(...), never Allowed.
+
+The job MUST NOT transition to DOWNLOADING (or DONE) on the strength of this URL — see
+dev.fonebrew.domain.object3d.Object3dJobMachine, whose BeginDownload/Complete events a real driver
+must gate on a prior successful validateDownloadUrl call, exactly the same "the broker judges, the
+machine just enforces which two outcomes are legal" split
+dev.fonebrew.domain.device.broker.FlashOperationDriver/DeviceOperationMachine already establish
+for the device-flash domain. A job whose only known downloadUrl fails this check MUST instead be
+driven to Object3dJobMachine.apply(state, Event.Fail("downloadUrl host is not Meshy's own
+infrastructure")) — i.e. state=FAILED with a populated errorEnvelope — never silently retried
+against the same untrusted URL, and never fetched "just to see." See
+CloudObject3dContractsTest's "refuses a look-alike Meshy host" case, which calls
+validateDownloadUrl with this exact fixture's downloadUrl and asserts Refused.
+
+Rejection code: OBJECT3D_DOWNLOAD_HOST_NOT_PROVIDER
+Severity: CRITICAL (this is the last gate before fetching attacker-controlled content and writing
+it to app-private storage as a trusted 3D asset).
+Retryable: false (not against this URL — a legitimate retry means polling the job again for a
+fresh, correctly-hosted downloadUrl, never re-attempting the rejected one).
+Recovery action: treat the job as failed; if the provider keeps returning a non-provider-host
+downloadUrl on subsequent polls, surface an honest error to the user rather than ever downloading.

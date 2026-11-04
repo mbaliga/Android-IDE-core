@@ -1,0 +1,33 @@
+Structural validation result: PASSES schemas/thread/thread-graph.schema.json. `because` is only
+constrained to be a non-blank string when `derivation` is present — JSON Schema has no way to know
+a particular string's CONTENT crosses from a structural explanation into an interpretation of the
+user's phrasing/tone/idiolect, so this fixture is adversarial at the semantic layer only (same
+class of gap fixtures/thread/adversarial/thread-marker-interpretive-note.adversarial.json documents
+for ThreadMarker.note, and fixtures/thread/adversarial/thread-event-delegation-secret-leak
+documents for ThreadEvent.chosenRef).
+
+Required behavior from a real implementation (not just structural validation):
+  1. CLAUDE.md binding rule 4 / THREAD_TOPOLOGY_PLAN.md binding constraint 3 (Issue #2): "§5c
+     idiolect baseline is owner-only input — do not invent it. §5c self-observation + §5b drift
+     are blocked on GitHub Issue #2." An edge's `because` (EXTRACTED or INFERRED, but especially
+     INFERRED — the derivation an analysis layer computes rather than reads off a record) MUST
+     NEVER read as an interpretation of the user's phrasing, tone, or psychological state.
+     "echoes a defensive, hedging pattern," "probable idiolect drift" are exactly the class of
+     evaluative language this gate blocks, regardless of how plausible or well-intentioned it
+     reads, and regardless of whether the edge itself is EXTRACTED or INFERRED.
+  2. `derivation: INFERRED` names WHERE a relationship came from (a future analysis layer derived
+     it, rather than the projector reading it off an existing record) — it is a provenance label,
+     not a license to interpret. A conformance ADVERSARIAL test for ThreadGraph MUST include a
+     fixture exactly like this one and assert any future INFERRED-edge producer (an analysis layer
+     THREAD_TOPOLOGY_PLAN.md does not yet define) REJECTS writing a `because` that names a pattern,
+     drift, tone, or psychological state — only a plain structural fact about the recorded data
+     (e.g. "co-occurs in the same 30-second window," "both turns cite the same file path").
+  3. `dev.fonebrew.domain.mirror.AarsoEventLog` stays write-only and `ThreadGraphProjector` reads
+     Room stores only, never the event log (binding constraint 3) — irrelevant to which layer this
+     defect would appear in: an analysis layer computing INFERRED edges is bound by the exact same
+     Issue #2 boundary as the projector, marker, and event producers already are.
+  4. No INFERRED-edge producer exists yet in this session's scope (this lane ships the schema/codec
+     vocabulary only — `ThreadGraphProjector` emits `EXTRACTED` exclusively, never `INFERRED`, per
+     its own KDoc) — this fixture documents the obligation a later work package's analysis-layer
+     implementation MUST satisfy, per this corpus's "fixtures first" Definition of Ready
+     (FB-RAT-DIST-004).

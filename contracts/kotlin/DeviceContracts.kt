@@ -9,14 +9,14 @@
 //   DeviceSnapshot     -> snapshot.schema.json
 //   DeviceOperation    -> operation.schema.json
 // plus ArtifactRef, CapabilityManifest, ErrorEnvelope, IntegrityRef, reused as-is from
-// dev.aarso.contracts.common (schemas/common/*.schema.json) — NOT redefined here, per the
+// dev.fonebrew.contracts.common (schemas/common/*.schema.json) — NOT redefined here, per the
 // WP-1 task brief. If a field appears in one place, it MUST appear in the other, or the two
 // have drifted and one of them is wrong. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md
 // for the citations (FB-RAT-DEV-001..011) each field/rule operationalizes.
 //
 // DISTRIBUTION_CAPABILITY_SPLIT.md (FB-RAT-DIST-001/002/003) has NO schema or Kotlin of its
 // own per the traceability matrix given in the WP-1 task brief — it is policy prose plus a
-// reference into dev.aarso.contracts.common.CapabilityManifest (subjectKind EXTENSION or
+// reference into dev.fonebrew.contracts.common.CapabilityManifest (subjectKind EXTENSION or
 // DEVICE, narrowed via targetRequirements["distributionFlavor"]), which "foundations" already
 // wrote. Nothing in this file adds Distribution-specific types.
 //
@@ -31,7 +31,7 @@
 // environment — this file has been written carefully (balanced braces, matched types, no
 // typos attempted) but has NOT been compiled. Do not report it as compiling; that is for
 // the next session with Gradle available to confirm. This file also depends on
-// contracts/kotlin/CommonContracts.kt (package dev.aarso.contracts.common) being compiled
+// contracts/kotlin/CommonContracts.kt (package dev.fonebrew.contracts.common) being compiled
 // in the same module/source set — it is not a standalone-compilable file by itself.
 //
 // Why DeviceOperationState IS a sealed interface (mirroring ExecutionContracts.kt's
@@ -49,13 +49,13 @@
 // sealed-interface encoding of it, and inventing one here would not mirror any existing
 // precedent in this constellation's contracts corpus.
 
-package dev.aarso.contracts.devices
+package dev.fonebrew.contracts.devices
 
-import dev.aarso.contracts.common.ArtifactRef
-import dev.aarso.contracts.common.CapabilityManifest
-import dev.aarso.contracts.common.ErrorEnvelope
-import dev.aarso.contracts.common.DigestAlgorithm
-import dev.aarso.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.ArtifactRef
+import dev.fonebrew.contracts.common.CapabilityManifest
+import dev.fonebrew.contracts.common.ErrorEnvelope
+import dev.fonebrew.contracts.common.DigestAlgorithm
+import dev.fonebrew.contracts.common.IntegrityRef
 import java.time.Instant
 
 // =========================================================================================
@@ -112,7 +112,7 @@ data class BootloaderInfo(
 
 /**
  * FB-RAT-DEV-004: flash preflight validates board identity confidence before erase. See
- * [IdentityConfidenceLevel] for the ordered scale a [dev.aarso.contracts.devices.DeviceOperation]
+ * [IdentityConfidenceLevel] for the ordered scale a [dev.fonebrew.contracts.devices.DeviceOperation]
  * gates on via [OperationPreconditions.identityConfidenceAtLeast].
  */
 enum class IdentityConfidenceLevel { CONFIRMED, PROBABLE, UNCERTAIN, UNKNOWN }
@@ -124,7 +124,7 @@ data class IdentityConfidence(
 
 /**
  * What a discovered device claims to be. Typically carried as the `payload` of a
- * dev.aarso.contracts.common.ContractEnvelope<DeviceIdentity>. `deviceIdentityId` is this
+ * dev.fonebrew.contracts.common.ContractEnvelope<DeviceIdentity>. `deviceIdentityId` is this
  * object's own FB-RAT-COM-002 stable ID — a device keeps the same id across reconnects,
  * USB-port moves, and even a firmware re-flash that changes its USB descriptor strings.
  */
@@ -189,7 +189,7 @@ data class DeviceLock(
 
 /**
  * Live connection state for a [DeviceIdentity]. Typically carried as the `payload` of a
- * dev.aarso.contracts.common.ContractEnvelope<DeviceConnection>. `connectionId` is this
+ * dev.fonebrew.contracts.common.ContractEnvelope<DeviceConnection>. `connectionId` is this
  * object's own FB-RAT-COM-002 stable ID — a single physical device unplugged and replugged
  * produces a NEW connectionId each time; `deviceIdentityId` is what stays constant.
  *
@@ -255,11 +255,11 @@ data class SigningInfo(
 
 /**
  * A firmware image that can be flashed to a device. Typically carried as the `payload` of a
- * dev.aarso.contracts.common.ContractEnvelope<FirmwareArtifact>. `firmwareArtifactId` is this
+ * dev.fonebrew.contracts.common.ContractEnvelope<FirmwareArtifact>. `firmwareArtifactId` is this
  * object's own FB-RAT-COM-002 stable ID.
  *
  * @param artifact The underlying byte artifact (digest, storage, verification, build
- *   provenance), reused as-is from dev.aarso.contracts.common.ArtifactRef — NOT redefined here.
+ *   provenance), reused as-is from dev.fonebrew.contracts.common.ArtifactRef — NOT redefined here.
  * @param boardCompatibility FB-RAT-DEV-007 (wrong-board block): non-empty — see the init{}
  *   check below and fixtures/devices/adversarial/wrong-board-attempt.adversarial.json for why
  *   this field alone cannot itself enforce a cross-object match; that is a DeviceOperation
@@ -300,7 +300,7 @@ data class SnapshotVerification(
 
 /**
  * A point-in-time belief about what firmware a device is running. Typically carried as the
- * `payload` of a dev.aarso.contracts.common.ContractEnvelope<DeviceSnapshot>. `snapshotId` is
+ * `payload` of a dev.fonebrew.contracts.common.ContractEnvelope<DeviceSnapshot>. `snapshotId` is
  * this object's own FB-RAT-COM-002 stable ID. Snapshots are append-only — a corrected belief
  * is a NEW snapshot, never an in-place edit.
  *
@@ -442,7 +442,7 @@ data class OperationVerification(
 )
 
 /**
- * Mirrors dev.aarso.contracts.common.RollbackPlan's pattern: `steps` MUST be non-empty when
+ * Mirrors dev.fonebrew.contracts.common.RollbackPlan's pattern: `steps` MUST be non-empty when
  * `possible` is true, and MUST be empty when `possible` is false.
  */
 data class DeviceRollbackPlan(
@@ -483,7 +483,7 @@ data class OperationReceipt(
 
 /**
  * One Device-Broker-arbitrated operation. Typically carried as the `payload` of a
- * dev.aarso.contracts.common.ContractEnvelope<DeviceOperation>. `operationId` is this
+ * dev.fonebrew.contracts.common.ContractEnvelope<DeviceOperation>. `operationId` is this
  * object's own FB-RAT-COM-002 stable ID.
  *
  * Structurally operationalizes (via the init{} checks below, mirroring

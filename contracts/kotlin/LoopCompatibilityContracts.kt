@@ -10,13 +10,13 @@
 // This is the "activation-compatibility" WP-1L group's second of two files —
 // LoopActivationContracts.kt (same package) owns LoopInstallation/LoopActivationReceipt/
 // BindingProfile/LoopValidationReport, including [SubstitutionPolicy] (LOOP_COMPATIBILITY
-// _CONTRACT.md §5's own vocabulary, but shared with [dev.aarso.contracts.loops.BindingRecord]
+// _CONTRACT.md §5's own vocabulary, but shared with [dev.fonebrew.contracts.loops.BindingRecord]
 // there, so it is defined in that file, not this one — [CompatibilityOutcome] below is the
 // converse case: owned here, and reused by that file's LoopActivationReceipt without
 // redefinition, since both files compile into the same package).
 //
 // Cross-package reuse (first-party import, not a third-party dependency): IntegrityRef from
-// dev.aarso.contracts.common. Same-PACKAGE reuse (no import needed): DistFlavor from
+// dev.fonebrew.contracts.common. Same-PACKAGE reuse (no import needed): DistFlavor from
 // LoopDefinitionContracts.kt, reused as [CacheKey.distributionFlavor] rather than redefining a
 // third FULL/PLAY-shaped enum in this package.
 //
@@ -39,9 +39,9 @@
 // `require()` calls the way the JSON Schema had to. One source of truth for the precedence rule,
 // expressed the natural way in each language.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
-import dev.aarso.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.IntegrityRef
 import java.time.Instant
 
 // =========================================================================================
@@ -177,7 +177,7 @@ data class CacheKey(
  * values (LOOP_COMPATIBILITY_CONTRACT.md §1-§11).
  *
  * @param phoneAuthoritative Pinned to `true` by construction (FB-RAT-CMP-005) — there is no
- *   representable false state in this type, mirroring [dev.aarso.contracts.loops.TransferEnvelope
+ *   representable false state in this type, mirroring [dev.fonebrew.contracts.loops.TransferEnvelope
  *   .initiatedByUser]'s same pattern: a marketplace- or browser-produced PREVIEW is a
  *   genuinely different, unmodeled shape (§6 — it MUST be labeled a preview and MUST NOT be
  *   cached or reused as if authoritative), never a false value of this field.
@@ -198,7 +198,7 @@ data class LoopCompatibilityReport(
     val cacheKey: CacheKey,
     val evaluatedAtUtc: Instant,
     val schemaVersion: String = "1.0.0",
-    val producer: dev.aarso.contracts.common.ProducerRef? = null,
+    val producer: dev.fonebrew.contracts.common.ProducerRef? = null,
     val unknownFields: Map<String, Any?> = emptyMap()
 ) {
     /** Always true — see the class doc; there is no constructor parameter for this because there is no representable false state. */

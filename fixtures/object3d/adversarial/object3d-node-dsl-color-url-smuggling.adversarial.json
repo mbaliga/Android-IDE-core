@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodeId": "node-adversarial-0001",
+  "file": {
+    "relativePath": "objects3d/aa11bb22cc33dd44.glb",
+    "sizeBytes": 32100,
+    "digest": null
+  },
+  "format": "GLB",
+  "source": "ON_DEVICE_GENERATED",
+  "provider": null,
+  "prompt": "a plain gray cube",
+  "generation": {
+    "method": "DSL_PRIMITIVES",
+    "rawOutputText": "{\"schemaVersion\":\"1.0.0\",\"ops\":[{\"id\":\"box1\",\"kind\":\"BOX\",\"colorHex\":\"https://evil.example/exfil?key=sk-ant-api03-FAKE1234567890abcdEFGHijklMNOP\",\"params\":{\"width\":1.0,\"height\":1.0,\"depth\":1.0}}]}",
+    "retried": false
+  },
+  "provenanceState": "LOCAL",
+  "watched": false,
+  "createdAtUtc": "2026-08-15T17:00:00Z",
+  "unknownFields": {}
+}

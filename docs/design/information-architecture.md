@@ -1,4 +1,4 @@
-# Aarso — Information Architecture (owner spec, 2026-06-23)
+# Fonebrew — Information Architecture (owner spec, 2026-06-23)
 
 This is the **owner's canonical IA** for the whole app, dictated 2026-06-23. It supersedes
 the ad-hoc "Settings as launcher" structure (which caused the nested-scroll crash, PR #39).
@@ -64,7 +64,7 @@ Project grouping.
    - **Attach row** (scrollable chips): *Photos · Camera · Files* (· Avatar) — attach reference
      media; **no mode switch**.
    - **Tools list** (vertical, icon + title + subtitle): *Images — create & edit · Videos ·
-     (Music) · Canvas · Deep Research · …* — these map onto Aarso's **provider types**
+     (Music) · Canvas · Deep Research · …* — these map onto Fonebrew's **provider types**
      (Image / Video / 3D / Text) and features. Generation is a tool here, not a composer mode.
 
    So the current separate-`ComposerMode.IMAGE` pill is **removed**; image/video/3D generation
@@ -131,7 +131,7 @@ data-flow visualization (which stage, done/running/blocked, data on edges).
 
 ## "Me / Myself / I" — the user meta  ⚠️ placement TBD
 Linked to the **Aarso mirror engine** (within-axis self-reflection). Contents:
-- **Drift & self-observation** (the Aarso engine). 🚫 **BLOCKED — binding rule 4 / GitHub
+- **Drift & self-observation** (the Fonebrew engine). 🚫 **BLOCKED — binding rule 4 / GitHub
   Issue #2.** The §5b drift metric + §5c self-observation engine require the owner's idiolect
   baseline; *do not invent it.* The bounded inert `MirrorLens` seam may exist; the metric may
   not.

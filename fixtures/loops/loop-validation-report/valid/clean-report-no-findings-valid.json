@@ -6,7 +6,7 @@
   "semanticDigestVersion": "fb-semantic-digest-1",
   "surfaceImplementation": {
     "surface": "PHONE",
-    "name": "dev.aarso.full",
+    "name": "dev.fonebrew.full",
     "version": "0.13.0",
     "instanceId": null
   },

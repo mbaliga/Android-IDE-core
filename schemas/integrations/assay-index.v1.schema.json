@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/integrations/assay-index.v1.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/integrations/assay-index.v1.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. AssayIndex per INT-018 (repo layout: .assay/assay-index.v1.json + runs/<run-id>/) and INT-019 (runId is the stable dedupe key). schemaVersion pinned to major 1, FB-RAT-COM-003. Not wrapped in a ContractEnvelope — Assay is a fully independent, standalone-useful app (INT-002) that MUST NOT depend on this constellation's envelope library to write its own repo output.",
   "title": "AssayIndex",
   "description": "The top-level manifest at .assay/assay-index.v1.json, committed by Assay to a user-selected branch after a scan run. Fonebrew Core reads this only when the user selects a repo+branch and taps 'Check branch' (INT-020 — Studio never invokes or polls Assay). findingFiles/provingTests here are SUMMARY entries (path/sha256/count, or path/count) pointing at the detailed content living alongside this index — findings.sarif (+ optional findings.json companion) and runs/<run-id>/proving-tests.v1.json (schemas/integrations/proving-tests.v1.schema.json) respectively; this schema does not repeat their contents.",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/devices/operation.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/devices/operation.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DeviceOperation per FB-RAT-DEV-002 (device object model), operationalizing the 7-step flash contract (FB-RAT-DEV-004/005/006/007) and the FB-RAT-DEV-001 Device Broker's exclusive-lock + explicit-destructive-authority requirements. Typically carried as the `payload` of a ContractEnvelope<DeviceOperation> (see schemas/common/envelope.schema.json). `operationId` is this object's own FB-RAT-COM-002 stable ID.",
   "title": "DeviceOperation",
   "description": "One device-broker-arbitrated operation (flash, erase, read-back verify, self-test, a serial session, or a debug session): preconditions, explicit destructive authority, the firmware artifact (when applicable), protocol progress, verification, rollback, and a terminal receipt. See docs/ratified/DEVICE_STATE_AND_SAFETY_SPEC.md §4 for the full 7-step flash-contract table this schema structurally enforces the checkable half of.",
@@ -236,7 +236,7 @@
         },
         "errorEnvelope": {
           "oneOf": [
-            { "$ref": "https://android-ide-core.dev.aarso/schemas/common/error.schema.json" },
+            { "$ref": "https://android-ide-core.dev.fonebrew/schemas/common/error.schema.json" },
             { "type": "null" }
           ],
           "default": null,

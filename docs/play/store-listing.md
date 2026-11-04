@@ -1,6 +1,6 @@
 # Store listing checklist
 
-- **Title**: Aarso — local AI, on your terms (≤30 chars: "Aarso: Local AI")
+- **Title**: Fonebrew — local AI, on your terms (≤30 chars: "Fonebrew: Local AI")
 - **Short description** (≤80): "Run open AI models on your phone. Private,
   offline, no account — your mirror."
 - **Long description**: lead with on-device/no-telemetry; the conversation

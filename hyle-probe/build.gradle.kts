@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "dev.aarso.hyleprobe"
+    namespace = "dev.fonebrew.hyleprobe"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.aarso.hyleprobe"
+        applicationId = "dev.fonebrew.hyleprobe"
         minSdk = 31
         targetSdk = 36
         versionCode = 1

@@ -1,11 +1,11 @@
-# Fonebrew — the open core (android-ide-core)
+# **Fonebrew** — the open core (android-ide-core)
 
 **Fonebrew** is a **sovereign, post-desktop computing environment on the phone** — an
 open, on-device "Claude Code with loop engineering" that grows into a real **agentic IDE**:
 chat with any model (on-device GGUF + cloud), a git-like message **tree**, a **Council**
 of models, a free-form **Loop** graph engine (GraphRunner + BPMN 2.0), the agentic **repo
 loop** (read → propose → per-hunk review → commit), **Devices** (Pi / Arduino / ESP / USB),
-and a full spatial IA. **Open core**, package `dev.aarso.*` (rename deferred).
+and a full spatial IA. **Open core**, package `dev.fonebrew.*` (rename deferred).
 
 ## Binding rules (do not relax)
 1. **No telemetry, analytics, or phoning home. Ever.**
@@ -24,7 +24,7 @@ installs into the core's inert `MirrorSeam`). The paid **Studio** layer (project
 UX, the store-publish pipeline) attaches above core through clean seams (`DevelopTabs`,
 `ProjectRoomSlot`) — so the open core ships free and complete on its own.
 
-> Extracted from the Aarso monorepo per its `docs/EXTRACTION_PLAN.md`. Public-core history
+> Extracted from the Fonebrew monorepo per its `docs/EXTRACTION_PLAN.md`. Public-core history
 > begins fresh here (orphan-start), so no proprietary code or history is carried in.
 
 ## Build

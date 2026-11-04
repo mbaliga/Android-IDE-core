@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        WatchBrew — the Wear OS surface for Fonebrew (docs/design/watchbrew.md).
+
+        PERMISSIONS: none. In particular NO INTERNET and NO network-state permission: the watch never
+        talks to a network, never holds an API key, and never calls a cloud provider. The only
+        transport is the Wearable Data Layer to the paired phone (device-local, not telemetry).
+        WatchbrewModuleGuardTest fails the gate if a <uses-permission> ever appears here.
+    -->
+
+    <uses-feature android:name="android.hardware.type.watch" />
+
+    <application
+        android:name="dev.fonebrew.watch.WatchApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WatchBrew">
+
+        <uses-library
+            android:name="com.google.android.wearable"
+            android:required="true" />
+
+        <!-- A companion of the phone app, not a standalone watch app: without the phone it has nothing to
+             show (no on-watch models, no keys — design doc section 1). -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="false" />
+
+        <activity
+            android:name="dev.fonebrew.watch.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.WatchBrew">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Phone -> watch: one-shot messages (hello, task snapshot, toggle result, loop runs) and the
+             streamed reply channel. Filtered to the WatchBrew path prefix only (WatchPaths.PREFIX). -->
+        <service
+            android:name="dev.fonebrew.watch.link.WatchListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/watchbrew/"
+                    android:scheme="wear" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/watchbrew/"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
+        <!-- The one Tile: the Ask shortcut + a snippet of the last reply. -->
+        <service
+            android:name="dev.fonebrew.watch.tile.WatchTileService"
+            android:exported="true"
+            android:label="@string/tile_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/ic_launcher_monochrome" />
+        </service>
+
+        <!-- The one complication: pending-task count (SHORT_TEXT). Push-driven (UPDATE_PERIOD_SECONDS 0):
+             refreshed when a task snapshot arrives, never on a timer that would wake the radio. -->
+        <service
+            android:name="dev.fonebrew.watch.complication.PendingTasksComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_fonebrew"
+            android:label="@string/complication_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_MANAGER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="0" />
+        </service>
+    </application>
+</manifest>

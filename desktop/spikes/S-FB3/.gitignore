@@ -1,0 +1,4 @@
+# native build tree (cmake out-of-tree) lives under build/native/ -- never committed
+build/
+.gradle/
+.kotlin/

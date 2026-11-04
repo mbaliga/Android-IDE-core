@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/loops/loop-package-manifest.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/loops/loop-package-manifest.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. LoopPackageManifest = the .floop container's REQUIRED manifest.json (schemas/loops/registries/floop-container-format.v1.json requiredTopLevelLayout). That registry defines the archive bytes, path rules, packageInventory classifications, and packageContentDigest algorithm this schema's fields must agree with byte-for-byte; a conflict between this schema and that registry is this schema's error and the registry wins (docs/ratified/loops/LOOP_PACKAGE_SPEC.md, 'the registry wins'). schemaVersion below is what floop-container-format.v1.json's pathRules.adversarialClasses_MUST_reject calls out as 'unknown major schema version in manifest.json' — a reader MUST reject an unrecognized major before doing anything else with this document.",
   "title": "LoopPackageManifest",
   "description": "The manifest.json member of a .floop LoopPackage archive: package identity, capability requests, a compatibility summary, the per-file packageInventory, packageContentDigest, an optional pointer to the detached signature, license, and provenance. Definition.json remains the sole source of SEMANTIC identity (semantic-digest.v1.json) — this manifest is the archive's identity/trust/inventory record, not a copy of loop semantics.",

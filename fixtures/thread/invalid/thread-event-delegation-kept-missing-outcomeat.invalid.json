@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "eventId": "01J9E0000000000000000DL2",
+  "kind": "DELEGATION",
+  "occurredAtUtc": "2026-08-10T09:25:00Z",
+  "delegationId": "01J9D0000000000000000DG2",
+  "delegationKind": "COUNCIL_AUTOMERGE",
+  "outcome": "KEPT",
+  "unknownFields": {}
+}

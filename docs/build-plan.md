@@ -22,7 +22,7 @@ the work is effortless.*
 **Naming brief (owner decides).** The host-app name must read as a *computing environment /
 seat of capability*, not a single tool. Evoke **sovereignty over systems** — a place you
 build and command from. Avoid: the **trap** register (Chakravyuha owns it), the **mirror**
-register (Aarso owns it), and any **vehicle/charioteer** image ("AI drives, you ride" is the
+register (Fonebrew owns it), and any **vehicle/charioteer** image ("AI drives, you ride" is the
 deskilling claim we argue against). Direction: workshop / forge / seat-of-self-rule.
 
 **Module boundaries (set early, Sprint 0):**
@@ -165,7 +165,7 @@ deskilling claim we argue against). Direction: workshop / forge / seat-of-self-r
   does the spatial model need a rethink for an OS-like surface? **Owner + Opus-thinking.** 🎨
 - **Arduino path.** v1 (delegate-to-Pi) ships now and is fully legible. v2 (on-device USB-OTG)
   is the device-gated stretch. Confirm v1-first.
-- **Rename timing (Sprint R).** Decoupled mechanical sweep `dev.aarso` → `dev.<name>` (package,
+- **Rename timing (Sprint R).** Decoupled mechanical sweep `dev.fonebrew` → `dev.<name>` (package,
   appIds `…full`/`…`, `apk-dist` branch, install URL, docs). Run **after** the name is locked;
   low-risk, CI-checked. Recommend: not now (don't block the build); soon (before launch/portfolio).
 - **Cost placement (HANDOFF §9 G).** Still open: G1 standalone+inline / G2 standalone / G3
@@ -206,7 +206,7 @@ green, headless boundary respected.
 
 ## G. Progress log (autonomous sessions append here)
 
-- **Sprint 0** — ✅ this doc committed; north-star + Workbench/Aarso naming split added to
+- **Sprint 0** — ✅ this doc committed; north-star + Workbench/Fonebrew naming split added to
   `CLAUDE.md` / `HANDOFF.md` / `docs/status.md`; bounded `domain/mirror/` seam landed
   (`MirrorLens`, `InertMirrorLens`, `Observation`, `Reflection`, `MirrorSeam`) — inert, no
   metric logic, JVM-tested (`MirrorSeamTest`). §5b/§5c untouched (Issue #2). [PR #5]

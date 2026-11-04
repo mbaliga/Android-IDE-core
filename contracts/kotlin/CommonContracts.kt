@@ -40,7 +40,7 @@
 // verification state, etc.) because they map 1:1 onto the JSON Schema `enum` keyword and
 // keep this file's shapes exactly mirrored to schemas/common/*.schema.json.
 
-package dev.aarso.contracts.common
+package dev.fonebrew.contracts.common
 
 import java.time.Instant
 

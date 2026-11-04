@@ -16,13 +16,13 @@
 // (same package) owns CompatibilityOutcome/CompatibilityAxis/LoopCompatibilityReport.
 //
 // Cross-package reuse (first-party imports, not third-party dependencies): IntegrityRef and
-// ProducerRef from dev.aarso.contracts.common (matches every other domain's file in this
+// ProducerRef from dev.fonebrew.contracts.common (matches every other domain's file in this
 // directory). Same-PACKAGE reuse (no import needed — Kotlin visibility is automatic within one
 // package): ReleaseIdentity and TransferEnvelope from LoopPackageContracts.kt; AuthorityRung,
 // DistFlavor, and BindingSlotKind from LoopDefinitionContracts.kt; LoopValidationSeverity from
 // LoopPackageContracts.kt. None of these are redefined here.
 //
-// RESOLVED (WP-2 gate, real Gradle compile): `dev.aarso.contracts.loops.ValidationFinding` was
+// RESOLVED (WP-2 gate, real Gradle compile): `dev.fonebrew.contracts.loops.ValidationFinding` was
 // declared twice in this package (LoopAuthoringContracts.kt and LoopPackageContracts.kt) — a
 // real redeclaration no structural/lexical WP-1L check could see. Fixed by keeping
 // LoopAuthoringContracts.kt's `ValidationFinding`/`FindingSeverity` as canonical (it carries
@@ -56,10 +56,10 @@
 // function over a plain enum, which is enough for a wire-shape file to validate a transition
 // without inventing sixteen additional sealed subtypes this domain does not otherwise need.
 
-package dev.aarso.contracts.loops
+package dev.fonebrew.contracts.loops
 
-import dev.aarso.contracts.common.IntegrityRef
-import dev.aarso.contracts.common.ProducerRef
+import dev.fonebrew.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.ProducerRef
 import java.time.Instant
 
 private val ENGINE_VERSION_REGEX = Regex("^\\d+\\.\\d+\\.\\d+$")
@@ -161,7 +161,7 @@ enum class InstallationState {
 /**
  * Points at another durable object (a [LoopCompatibilityReport], a [BindingProfile], a receipt)
  * by its own FB-RAT-COM-002 `objectId`, with an optional integrity pin (FB-RAT-COM-005).
- * Deliberately NOT [dev.aarso.contracts.common.ArtifactRef] — that type describes a byte
+ * Deliberately NOT [dev.fonebrew.contracts.common.ArtifactRef] — that type describes a byte
  * artifact's storage location; these references are to structured JSON documents already
  * modeled by their own data classes in this file, not opaque byte blobs.
  */
@@ -185,7 +185,7 @@ data class DurableObjectRef(
  * [InstallationState.INSTALLED] — LOOP-ID-002).
  *
  * @param authorityGrants Grant IDs (schemas/authority/grant.schema.json `Grant.grantId`) only —
- *   referenced by ID, never embedded; the authority domain (`dev.aarso.contracts.authority`)
+ *   referenced by ID, never embedded; the authority domain (`dev.fonebrew.contracts.authority`)
  *   owns the full `Grant` shape.
  */
 data class LoopInstallation(

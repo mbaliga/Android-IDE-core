@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/recovery-snapshot.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/recovery-snapshot.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. RecoverySnapshot per FB-RAT-WS-001/003: the checkpoint WorkspaceJournal.checkpoint()/restore() produce/consume, existing specifically to satisfy FB-RAT-WS-003 (dirty buffers survive Activity recreation/process death/reboot until explicit save or discard). Typically carried as the `payload` of a ContractEnvelope<RecoverySnapshot>; `snapshotId` below is this object's own FB-RAT-COM-002 stable ID. `resourceUri`/`digest` sub-shapes mirror resource-uri.schema.json / schemas/common/envelope.schema.json's IntegrityRef $defs — duplicated locally rather than cross-file $ref'd, same standalone-file tradeoff COMMON_CONVENTIONS.md documents.",
   "title": "RecoverySnapshot",
   "type": "object",

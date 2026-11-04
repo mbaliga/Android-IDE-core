@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://android-ide-core.dev.aarso/schemas/workspace/document-buffer.schema.json",
+  "$id": "https://android-ide-core.dev.fonebrew/schemas/workspace/document-buffer.schema.json",
   "$comment": "LICENSE-PENDING — see docs/non_ratified/LICENSE_PENDING.md. DocumentBuffer per FB-RAT-WS-001/003/004/005. FB-RAT-WS-003 (crash-safe buffers: dirty buffers survive Activity recreation/process death/reboot until explicit save or discard) is why `dirty`+`journalSequence` are both present — journalSequence is what a RecoverySnapshot/WorkspaceJournal.restore() uses to reconstitute exactly this buffer's un-persisted edits. `state` follows the DocumentBufferState machine in WORKSPACE_KERNEL_SPEC.md §4 (CLOSED -> OPEN_CLEAN -> OPEN_DIRTY -> SAVING -> OPEN_CLEAN | SAVE_FAILED; OPEN_DIRTY -> CONFLICTED -> MERGING -> OPEN_DIRTY). The `dirty` and `conflictState` fields are each pinned to `state` via `allOf`/`if`/`then` below so a wire payload cannot claim an internally-contradictory buffer (e.g. state=OPEN_CLEAN with dirty=true, or state=CONFLICTED with conflictState=null) — see fixtures/workspace/invalid/document-buffer-dirty-state-contradiction.invalid.json and fixtures/workspace/invalid/document-buffer-conflict-state-mismatch.invalid.json.",
   "title": "DocumentBuffer",
   "type": "object",

@@ -21,7 +21,7 @@
 // Toolchain constraint (binding): kotlinc-compilable with NO third-party dependencies —
 // stdlib + java.time.Instant, plus kotlinx-coroutines Flow for WorkspaceProvider.watch()
 // (the one named exception in the WP-1 task brief's shared rules). No kotlinx-serialization,
-// no kotlinx-datetime, no Android imports. Imports dev.aarso.contracts.common (this same
+// no kotlinx-datetime, no Android imports. Imports dev.fonebrew.contracts.common (this same
 // contracts/kotlin/ source set's foundations domain, CommonContracts.kt) for
 // IntegrityRef/ErrorEnvelope — first-party sibling code, not a third-party dependency.
 //
@@ -49,12 +49,12 @@
 // wire format's extra invariant-checking machinery exists because JSON needs it; Kotlin's
 // type system makes the same class of bug unrepresentable instead.
 
-package dev.aarso.contracts.workspace
+package dev.fonebrew.contracts.workspace
 
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
-import dev.aarso.contracts.common.ErrorEnvelope
-import dev.aarso.contracts.common.IntegrityRef
+import dev.fonebrew.contracts.common.ErrorEnvelope
+import dev.fonebrew.contracts.common.IntegrityRef
 
 // ---------------------------------------------------------------------------------------
 // ResourceUri — schemas/workspace/resource-uri.schema.json (FB-RAT-WS-002)
