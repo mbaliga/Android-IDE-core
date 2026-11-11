@@ -181,4 +181,42 @@ class GatewayConditionPresenterTest {
         val result = GatewayConditionPresenter.previewFor(draft, emptyList(), sampleOutput = "anything")
         assertEquals(GatewayConditionPresenter.DRAFT_KEY, result.chosenKey) // the only edge -> the default
     }
+
+    // ── honest condition editor (audit 2026-11-11) ─────────────────────────────────────────
+
+    @Test fun `the offered conditions are exactly the ones the runner evaluates`() {
+        val edges = { c: String -> listOf(
+            dev.fonebrew.domain.bpmn.BpmnEdge("a", "g", "t1", name = null, condition = c),
+            dev.fonebrew.domain.bpmn.BpmnEdge("b", "g", "t2", name = null, condition = null),
+        ) }
+        val gw = dev.fonebrew.domain.bpmn.BpmnNode(id = "g", kind = dev.fonebrew.domain.bpmn.BpmnNodeKind.EXCLUSIVE_GATEWAY)
+        for (c in GatewayConditionPresenter.EVALUABLE_CONDITIONS) {
+            assertTrue(GatewayConditionPresenter.isEvaluable(c))
+            // Evaluable means it actually routes: it wins over the unconditioned default for the
+            // output it matches.
+            val out = if (c == "approved") "APPROVE ok" else "needs work"
+            assertEquals("t1", dev.fonebrew.domain.loop.ConditionGatewayPolicy.choose(gw, out, edges(c))!!.targetId)
+        }
+    }
+
+    @Test fun `free-form and saved conditions the runner cannot evaluate are flagged with glyph and text`() {
+        assertTrue(!GatewayConditionPresenter.isEvaluable("score > 3"))
+        val note = GatewayConditionPresenter.notEvaluatedNote("score > 3")
+        assertTrue(note!!.startsWith("⚠") && note.contains("not evaluated"))
+        // Policy really ignores it: the unconditioned edge wins even for APPROVE output.
+        val gw = dev.fonebrew.domain.bpmn.BpmnNode(id = "g", kind = dev.fonebrew.domain.bpmn.BpmnNodeKind.EXCLUSIVE_GATEWAY)
+        val e = listOf(
+            dev.fonebrew.domain.bpmn.BpmnEdge("a", "g", "t1", name = null, condition = "score > 3"),
+            dev.fonebrew.domain.bpmn.BpmnEdge("b", "g", "t2", name = null, condition = null),
+        )
+        assertEquals("t2", dev.fonebrew.domain.loop.ConditionGatewayPolicy.choose(gw, "APPROVE", e)!!.targetId)
+    }
+
+    @Test fun `no condition and the runner's aliases are not flagged`() {
+        assertNull(GatewayConditionPresenter.notEvaluatedNote(null))
+        assertNull(GatewayConditionPresenter.notEvaluatedNote("  "))
+        assertNull(GatewayConditionPresenter.notEvaluatedNote(" Approved "))
+        assertNull(GatewayConditionPresenter.notEvaluatedNote("not approved"))
+    }
 }
+

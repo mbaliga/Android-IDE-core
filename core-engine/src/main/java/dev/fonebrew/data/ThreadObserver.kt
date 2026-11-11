@@ -21,9 +21,10 @@ import java.time.Instant
  * "nothing to show" (empty list / null) when [enabled] resolves false — never a fabricated remark,
  * matching [dev.fonebrew.domain.mirror.Reflection.NONE]'s "materially absent, not faked" rule.
  *
- * No caller exists yet — same "forward pointer, no consumer wired in" pattern [ThreadGraph]'s own
- * KDoc used for this exact class before it existed. A future WP10 observer remark card is the
- * first real reader; today this exists so the substrate is real and JVM-tested ahead of any UI.
+ * Wired but opt-in, default OFF: [dev.fonebrew.ui.ChatViewModel] holds it (via `AppContainer`) and
+ * surfaces [remarks] to GraphRoom, gated by [dev.fonebrew.data.SessionStore.observerEnabled]
+ * (false until the user turns the Settings toggle on), so by default every method answers
+ * "nothing to show". Whether the remark card feels right on a device is owner-verified only.
  */
 class ThreadObserver(
     private val repository: MessageTreeRepository,

@@ -1122,6 +1122,7 @@ fun LoopRoom(
         fun edgeSuffix(e: LoopEdge) = buildString {
             e.label?.let { append(" ($it)") }
             e.condition?.let { append(" [if: $it]") }
+            GatewayConditionPresenter.notEvaluatedNote(e.condition)?.let { append(" $it") }
         }
         val connections = buildList {
             edges.filter { it.to == id }.forEach { e -> add("← ${nodeById(e.from)?.label ?: e.from}${edgeSuffix(e)}") }
@@ -1775,17 +1776,16 @@ private fun GatewayConditionEditorDialog(
                             val glyph = if (chosen) "✓" else "○"
                             val name = c.label ?: c.condition ?: "(unconditioned)"
                             Text(
-                                "$glyph $name" + (if (isDraft) " — this edge" else "") + (if (chosen) " — taken" else ""),
+                                "$glyph $name" + (if (isDraft) " — this edge" else "") + (if (chosen) " — taken" else "") +
+                                    (GatewayConditionPresenter.notEvaluatedNote(c.condition)?.let { " $it" } ?: ""),
                                 style = if (chosen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                                 color = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    val cond = draft.conditionExpression
-                    if (cond != null && cond.trim().lowercase() != "approved" && cond.trim().lowercase() != "!approved") {
+                    GatewayConditionPresenter.notEvaluatedNote(draft.conditionExpression)?.let {
                         Text(
-                            "This condition isn't one the runner evaluates — only exactly “approved”/“!approved” drive branching. " +
-                                "It's saved on the edge for readability; the preview above shows how it actually behaves (the default branch).",
+                            "$it. Only “approved” / “!approved” drive branching; this one is kept for readability only.",
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1811,10 +1811,17 @@ private fun GatewayConditionEditorDialog(
                     HyleButton("approve — when the last step begins APPROVE", onClick = { chooseLabelAndPreview("approve") })
                     HyleButton("refine — otherwise", onClick = { chooseLabelAndPreview("refine") })
                     HyleButton("else — default branch", onClick = { chooseLabelAndPreview("else") })
-                    HyleField(conditionText, { conditionText = it }, label = "Condition (advanced, optional)", modifier = Modifier.fillMaxWidth())
+                    Text("Condition (optional)", style = MaterialTheme.typography.labelMedium)
+                    // Exactly the conditions the runner evaluates — no free text (no expression
+                    // language exists). "none" = label-only branching.
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HyleChip(conditionText.isBlank(), { conditionText = "" }, "none")
+                        for (c in GatewayConditionPresenter.EVALUABLE_CONDITIONS) {
+                            HyleChip(conditionText == c, { conditionText = c }, c)
+                        }
+                    }
                     Text(
-                        "Only exactly “approved”/“!approved” actually drive branching today — anything else is saved for " +
-                            "readability and behaves as the default branch (the next screen's Preview shows which).",
+                        "approved = the last step's output begins APPROVE; !approved = it does not.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     errorNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
