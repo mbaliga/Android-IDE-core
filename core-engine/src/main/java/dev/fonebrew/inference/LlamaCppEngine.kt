@@ -20,41 +20,31 @@ import kotlinx.coroutines.withContext
  */
 class LlamaCppEngine : InferenceEngine {
 
-    @Volatile
-    private var nativeHandle: Long = 0L
-
-    @Volatile
-    private var loadedModelPath: String? = null
+    private val slot = LoadedModelSlot(object : ModelNative {
+        override fun load(modelPath: String, contextSize: Int): Long = nativeLoadModel(modelPath, contextSize)
+        override fun free(handle: Long) = nativeFree(handle)
+        override fun requestStop(handle: Long) = nativeRequestStop(handle)
+    })
 
     override val tokenizerId: String
-        get() = loadedModelPath?.let { "llama.cpp:" + it.substringAfterLast('/') } ?: "llama.cpp:unloaded"
+        get() = slot.path?.let { "llama.cpp:" + it.substringAfterLast('/') } ?: "llama.cpp:unloaded"
     override val supportsLogprobs: Boolean = true
     override val supportsSamplingParams: Boolean = true
-    override val isLoaded: Boolean get() = nativeHandle != 0L
+    override val isLoaded: Boolean get() = slot.isLoaded
 
+    // load/unload/generate are serialised by [slot]; see LoadedModelSlot for the rules.
     override suspend fun loadModel(modelPath: String, contextSize: Int) = withContext(Dispatchers.Default) {
-        if (nativeHandle != 0L && loadedModelPath == modelPath) return@withContext
-        if (nativeHandle != 0L) {
-            nativeFree(nativeHandle)
-            nativeHandle = 0L
-            loadedModelPath = null
-        }
-        val handle = nativeLoadModel(modelPath, contextSize)
-        check(handle != 0L) { "Failed to load model: $modelPath" }
-        nativeHandle = handle
-        loadedModelPath = modelPath
+        slot.load(modelPath, contextSize)
     }
 
     override suspend fun unload() = withContext(Dispatchers.Default) {
-        if (nativeHandle != 0L) {
-            nativeFree(nativeHandle)
-            nativeHandle = 0L
-            loadedModelPath = null
-        }
+        slot.unload()
     }
 
+    // Not behind the slot lock: callers count tokens while a reply is still streaming, and
+    // generate() holds the lock for the whole stream. Reads a snapshot of the handle, as before.
     override suspend fun countTokens(text: String): Int = withContext(Dispatchers.Default) {
-        val handle = nativeHandle
+        val handle = slot.handle
         if (handle == 0L) 0 else nativeCountTokens(handle, text.toByteArray(Charsets.UTF_8))
     }
 
@@ -64,43 +54,47 @@ class LlamaCppEngine : InferenceEngine {
         sessionLoadPath: String?,
         sessionSavePath: String?,
     ): Flow<GeneratedToken> = callbackFlow {
-        val handle = nativeHandle
-        check(handle != 0L) { "No model loaded." }
-        val roles = messages.map { it.role.wire }.toTypedArray()
-        // Text crosses the JNI boundary as real UTF-8 bytes in both directions:
-        // jstrings carry Modified UTF-8, which garbles emoji on the way in and
-        // aborts the process (NewStringUTF) on the way out.
-        val contents = messages.map { it.content.toByteArray(Charsets.UTF_8) }.toTypedArray()
-        val sink = object : TokenSink {
-            override fun onToken(utf8: ByteArray, logprob: Float, entropy: Float) {
-                trySend(
-                    GeneratedToken(
-                        text = String(utf8, Charsets.UTF_8),
-                        logprob = logprob.takeUnless { it.isNaN() },
-                        entropy = entropy.takeUnless { it.isNaN() },
-                    ),
-                )
-            }
+        // The slot lock is held for the whole stream so the model can't be freed or swapped
+        // mid-decode; unload()/loadModel() ask the decode to stop, then take the lock.
+        slot.withHandle { handle ->
+            val roles = messages.map { it.role.wire }.toTypedArray()
+            // Text crosses the JNI boundary as real UTF-8 bytes in both directions:
+            // jstrings carry Modified UTF-8, which garbles emoji on the way in and
+            // aborts the process (NewStringUTF) on the way out.
+            val contents = messages.map { it.content.toByteArray(Charsets.UTF_8) }.toTypedArray()
+            val sink = object : TokenSink {
+                override fun onToken(utf8: ByteArray, logprob: Float, entropy: Float) {
+                    trySend(
+                        GeneratedToken(
+                            text = String(utf8, Charsets.UTF_8),
+                            logprob = logprob.takeUnless { it.isNaN() },
+                            entropy = entropy.takeUnless { it.isNaN() },
+                        ),
+                    )
+                }
 
-            override fun onDone() {
-                close()
-            }
+                override fun onDone() {
+                    close()
+                }
 
-            override fun onError(message: String) {
-                close(IllegalStateException(message))
+                override fun onError(message: String) {
+                    close(IllegalStateException(message))
+                }
             }
-        }
-        // Run the (blocking) decode loop on its own thread; its JNIEnv is valid
-        // for the sink callbacks, and the Flow collector stays responsive.
-        val worker = Thread {
-            runCatching {
-                nativeGenerate(handle, roles, contents, params.toNativeArgs(), sink, sessionLoadPath, sessionSavePath)
-            }.onFailure { close(it) }
-        }.apply { isDaemon = true; start() }
+            // Run the (blocking) decode loop on its own thread; its JNIEnv is valid
+            // for the sink callbacks, and the Flow collector stays responsive.
+            val worker = Thread {
+                runCatching {
+                    nativeGenerate(handle, roles, contents, params.toNativeArgs(), sink, sessionLoadPath, sessionSavePath)
+                }.onFailure { close(it) }
+            }.apply { isDaemon = true; start() }
 
-        awaitClose {
-            nativeRequestStop(handle)
-            worker.interrupt()
+            awaitClose {
+                nativeRequestStop(handle)
+                worker.interrupt()
+                // Let the native call unwind before the lock (and so a free) is released.
+                worker.join(NATIVE_UNWIND_WAIT_MS)
+            }
         }
     }
 
@@ -133,7 +127,13 @@ class LlamaCppEngine : InferenceEngine {
     private external fun nativeRequestStop(handle: Long)
 
     companion object {
+        private const val NATIVE_UNWIND_WAIT_MS = 5_000L
+
         init {
+            // The native build targets armv8.2-a+dotprod+i8mm+fp16 with no runtime dispatch, so a
+            // CPU lacking one of those would die with SIGILL the moment the library runs. Refuse
+            // to load it instead; EngineProvider surfaces the same reason to the UI.
+            CpuFeatureCheck.ofThisDevice().requireSupported()
             System.loadLibrary("aarso_llama")
         }
     }

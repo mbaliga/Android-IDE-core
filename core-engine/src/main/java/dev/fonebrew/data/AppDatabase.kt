@@ -59,12 +59,12 @@ import dev.fonebrew.data.entity.VersionEntity
         DelegationEventEntity::class,
     ],
     version = 11,
-    // Schema export is off in Phase 0 (no migrations yet). Turn on with a
-    // room.schemaLocation KSP arg once the schema needs to be versioned. v4->v5
-    // (loop-surface ledger columns, CORE_PHASES.md P3) rides the same
-    // fallbackToDestructiveMigration() every prior bump has — no real Migration object exists
-    // anywhere in this codebase yet (none of the JVM tests can exercise one: Room's migration
-    // testing needs Robolectric or an instrumented test, neither of which this gate has).
+    // Version history. Schema export is ON (room.schemaLocation in core-engine/build.gradle.kts)
+    // and every exported version is committed under core-engine/schemas/. Only v10 and v11 have
+    // exports (v10's was re-derived from the pre-bump source tree, see below); v1-v9 predate
+    // export and have NO migration path — see the note after the v10->v11 entry. v4->v5
+    // (loop-surface ledger columns, CORE_PHASES.md P3) rode fallbackToDestructiveMigration(),
+    // as did every bump up to v10; that fallback is gone as of v11.
     // v8 is a merge of two independent v5-based lines that both bumped in parallel: v5->v6->v7
     // (the fonebrew handoff-pack branch: v6 added WP-2's ReceiptStore table, v7 added WP-3's
     // Workspace Kernel journal/snapshot/buffer-registry tables, docs/ratified/
@@ -85,11 +85,16 @@ import dev.fonebrew.data.entity.VersionEntity
     // v10->v11 (data-loss fix — the #1 blocking bug across two audits): no entity/column/table
     // changed. This bump exists solely to retire fallbackToDestructiveMigration() (see the
     // Room.databaseBuilder call site in AppContainer.kt for the policy this establishes going
-    // forward) by proving the real migration path end-to-end: exportSchema is now true, v10's
-    // and v11's schemas are both committed under core-engine/schemas/, and MIGRATION_10_11
-    // (data/Migrations.kt) is a real, no-op Migration object — correct precisely because v11's
-    // exported schema is structurally identical to v10's. MigrationTest exercises it against a
-    // hand-built v10 database with representative message-tree rows and asserts they survive.
+    // forward) by proving the real migration path end-to-end. core-engine/schemas/ holds BOTH
+    // 10.json and 11.json; they differ only in the "version" number (identityHash, entities and
+    // setupQueries are identical — AppDatabaseMigrationTest pins that), which is what makes
+    // MIGRATION_10_11 (data/Migrations.kt) a correct no-op. 10.json was produced by running the
+    // Room schema export on the source tree as it stood before the v10->v11 commit, not copied
+    // from 11.json. The migration test builds its database from 10.json and seeds every table.
+    //
+    // Installs on schema 1-9 have no Migration and, with the destructive fallback gone, fail to
+    // open with Room's "A migration from N to 11 was required but not found". That is
+    // deliberate (never silently wipe user data); it is an owner decision how to treat them.
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
