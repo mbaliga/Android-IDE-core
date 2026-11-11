@@ -69,6 +69,12 @@ class GeminiEngine(
         return sb.toString().orEmptyToNull()
     }
 
+    // A mid-stream failure arrives as a data chunk `{"error":{"code":...,"message":...,"status":...}}`.
+    override fun streamErrorOf(type: String?, data: String): String? {
+        val err = JSONObject(data).optJSONObject("error") ?: return null
+        return "${err.optString("status", "error")}: ${err.optString("message")}"
+    }
+
     // Gemini sends usageMetadata per chunk with cumulative counts; the accumulator keeps the max.
     override fun usageOf(type: String?, data: String): dev.fonebrew.domain.cost.UsageReport? =
         dev.fonebrew.domain.cost.ProviderUsage.fromGemini(data)

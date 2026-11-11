@@ -1,0 +1,7 @@
+: HAND-AUTHORED from the provider public streaming documentation. NOT recorded from a live call.
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{"content":", world"},"finish_reason":null}]}
+

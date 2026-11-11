@@ -1,0 +1,16 @@
+: HAND-AUTHORED from the provider public streaming documentation. NOT recorded from a live call.
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+event: future_event_type
+data: {"object":"future.thing","payload":1}
+
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{"content":", world"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-fix","object":"chat.completion.chunk","created":1700000000,"model":"gpt-fixture","choices":[],"usage":{"prompt_tokens":25,"completion_tokens":15,"total_tokens":40}}
+
+data: [DONE]
+

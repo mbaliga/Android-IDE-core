@@ -44,6 +44,12 @@ class OpenAiCompatEngine(provider: CloudProvider, apiKey: String) :
         return choices.getJSONObject(0).optJSONObject("delta")?.optString("content").orEmptyToNull()
     }
 
+    // A mid-stream failure arrives as a data chunk `{"error":{"message":...,"type":...}}`.
+    override fun streamErrorOf(type: String?, data: String): String? {
+        val err = JSONObject(data).optJSONObject("error") ?: return null
+        return "${err.optString("type", "error")}: ${err.optString("message")}"
+    }
+
     // OpenAI streams a single `usage` block near the end (requires stream_options.include_usage).
     override fun usageOf(type: String?, data: String): dev.fonebrew.domain.cost.UsageReport? =
         dev.fonebrew.domain.cost.ProviderUsage.fromOpenAi(data)
@@ -89,6 +95,9 @@ internal fun buildOpenAiCompatRequestBody(
         .put("messages", msgs)
         .put("stream", true)
         .put("max_tokens", params.maxTokens)
+        // Without this OpenAI-style servers never send the final `usage` chunk, so the real
+        // token counts ProviderUsage.fromOpenAi reads would never arrive (Cost epic).
+        .put("stream_options", JSONObject().put("include_usage", true))
     if (supportsSampling) {
         body.put("temperature", params.temperature.toDouble())
         body.put("top_p", params.topP.toDouble())
