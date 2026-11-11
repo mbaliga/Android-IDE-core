@@ -13,6 +13,9 @@ object InvocationFeatures {
     const val BUBBLE_AVAILABLE: Boolean = false
     const val SCREEN_CAPTURE_AVAILABLE: Boolean = false
 
+    /** PLAY: no usb.host feature is declared, so the on-phone USB flasher is not offered. */
+    const val USB_FLASH_AVAILABLE: Boolean = false
+
     const val FLAG_OUTPUT_ENABLED: Boolean = true
 
     /** PLAY only shows Nooz's shared catalog entries flagged `policySafe` — official/licensed

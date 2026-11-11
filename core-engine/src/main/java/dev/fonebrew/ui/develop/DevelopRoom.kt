@@ -330,13 +330,6 @@ fun Hint(text: String) {
 /* ---------------------------------------------------------------- Devices */
 
 /**
- * The one control path in [HardwareFacet] that needs no SSH host — named rather than written as a
- * bare `3` because "does this mode need a host" is now a real branch in three places, and a magic
- * number was how the host-less user got locked out of it in the first place.
- */
-private const val MODE_USB = 3
-
-/**
  * Devices (agentic-ide #3): run on a Pi/Dell over SSH, or flash an Arduino plugged into that
  * host via `arduino-cli` (the v1 delegate-to-Pi path — the phone never touches the board), or
  * push firmware to an ESP over the network. Recipes run through [dev.fonebrew.data.DeviceRepo];
@@ -355,14 +348,16 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()
+    val usbAvailable = dev.fonebrew.flavor.InvocationFeatures.USB_FLASH_AVAILABLE
 
     // Supported boards + quick troubleshooting — the Arduino-IDE-grade framing (§7.1). All local
     // and sovereign; the four control paths below are Pi-over-SSH, Arduino-via-Pi, ESP-OTA, and
     // on-phone USB flash (CDC/Stk500/IntelHex). Device interaction is owner-verified on hardware.
     Text("Hardware", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Supported: Raspberry Pi (SSH) · Arduino AVR — through a Pi running arduino-cli, or straight " +
-            "off this phone's USB port for a genuine Uno R3 · ESP32/8266 (OTA). Troubleshooting: no " +
+        "Supported: Raspberry Pi (SSH) · Arduino AVR — through a Pi running arduino-cli" +
+            (if (usbAvailable) ", or straight off this phone's USB port for a genuine Uno R3" else "") +
+            " · ESP32/8266 (OTA). Troubleshooting: no " +
             "port → check the cable/OTG + driver (CH340/CP210x clones need a vendor driver this app " +
             "doesn't ship); permission denied → re-trust the Pi in Settings; flash fails mid-way → " +
             "it's flagged, re-run before power-cycling.",
@@ -382,7 +377,10 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     }
     // Keyed on the boolean, not the list: the default mode is re-decided only when the host list
     // crosses empty↔non-empty, so an ordinary host edit never yanks you out of the mode you're in.
-    var mode by remember(hasHosts) { mutableStateOf(if (hasHosts) 0 else MODE_USB) }
+    var mode by remember(hasHosts) { mutableStateOf(HardwareModes.default(hasHosts, usbAvailable)) }
+    // Bounded: a long compile streams thousands of chunks; a String `+=` per chunk is quadratic.
+    // Append into a StringBuilder and publish the text only (same text shown as before).
+    val outputBuf = remember { StringBuilder() }
     var output by remember { mutableStateOf("") }
     var summary by remember { mutableStateOf<String?>(null) }
     var running by remember { mutableStateOf(false) }
@@ -402,10 +400,10 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     }
     fun runRecipe(recipe: dev.fonebrew.domain.remote.ExecRequest, parse: ((String, Int) -> String)?) {
         val host = hosts.firstOrNull { it.alias == selected } ?: return
-        running = true; output = ""; summary = null
+        running = true; outputBuf.setLength(0); output = ""; summary = null
         scope.launch {
-            repo.exec(host, identityFor(host), store.knownHosts.value, recipe, { output += it }).fold(
-                { code -> summary = parse?.invoke(output, code) ?: "exit $code" },
+            repo.exec(host, identityFor(host), store.knownHosts.value, recipe, { outputBuf.append(it); output = outputBuf.toString() }).fold(
+                { code -> summary = parse?.invoke(outputBuf.toString(), code) ?: "exit $code" },
                 { summary = "failed: ${it.message} — is the host trusted? connect once in Settings → Remote." },
             )
             running = false
@@ -422,8 +420,9 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
 
     Text("Devices", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Run on a Pi/Dell over SSH, flash an Arduino plugged into that host, or flash one plugged " +
-            "straight into this phone. Output is shown verbatim.",
+        "Run on a Pi/Dell over SSH, flash an Arduino plugged into that host" +
+            (if (usbAvailable) ", or flash one plugged straight into this phone" else "") +
+            ". Output is shown verbatim.",
     )
     Spacer(Modifier.height(8.dp))
     if (hasHosts) {
@@ -434,28 +433,34 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
         Spacer(Modifier.height(8.dp))
     }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        WireButton("Raspberry Pi", selected = mode == 0, onClick = { mode = 0 })
-        WireButton("Arduino (via Pi)", selected = mode == 1, onClick = { mode = 1 })
-        WireButton("ESP-OTA", selected = mode == 2, onClick = { mode = 2 })
-        WireButton("This phone (USB)", selected = mode == MODE_USB, onClick = { mode = MODE_USB })
+        HardwareModes.available(usbAvailable).forEach { m ->
+            val label = when (m) {
+                HardwareMode.PI -> "Raspberry Pi"
+                HardwareMode.ARDUINO -> "Arduino (via Pi)"
+                HardwareMode.ESP -> "ESP-OTA"
+                HardwareMode.USB -> "This phone (USB)"
+            }
+            WireButton(label, selected = mode == m, onClick = { mode = m })
+        }
     }
     Spacer(Modifier.height(6.dp))
     Hint(
-        if (mode == MODE_USB) {
+        if (mode == HardwareMode.USB) {
             "⌂ on-device — flashes a board plugged into this phone. No network, no pairing."
         } else {
             "☁ watched — controls a paired host over SSH; credentials stay in the Keystore."
         },
     )
     Spacer(Modifier.height(8.dp))
-    if (mode != MODE_USB && !hasHosts) {
+    if (mode != HardwareMode.USB && !hasHosts) {
         Hint(
             "That path runs over SSH and there's no host saved yet. Add one in Settings → Global → " +
                 "your machines and connect once to trust it — then a Pi (or an Arduino plugged into " +
-                "it) shows up here. \"This phone (USB)\" is the one that needs no host at all.",
+                "it) shows up here." +
+                if (usbAvailable) " \"This phone (USB)\" is the one that needs no host at all." else "",
         )
     } else when (mode) {
-        0 -> {
+        HardwareMode.PI -> {
             Hint(
                 "Running one-off shell commands on a paired host now lives in the Terminal tab, so " +
                     "every command shares one running transcript instead of clearing per run.",
@@ -463,7 +468,7 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             WireButton("Open Terminal ▸", onClick = onOpenTerminal)
         }
-        1 -> {
+        HardwareMode.ARDUINO -> {
             dev.aarso.hyle.cells.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             dev.aarso.hyle.cells.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
@@ -491,7 +496,7 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
                 })
             }
         }
-        2 -> {
+        HardwareMode.ESP -> {
             dev.aarso.hyle.cells.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             dev.aarso.hyle.cells.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
@@ -500,7 +505,7 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
                 runRecipe(dev.fonebrew.domain.device.recipe.DeviceRecipes.espOta(espIp.trim(), espBin.trim()), null)
             })
         }
-        else -> UsbFlashPanel()
+        HardwareMode.USB -> if (usbAvailable) UsbFlashPanel()
     }
     summary?.let {
         Spacer(Modifier.height(8.dp))
@@ -754,8 +759,15 @@ private fun FilesFacet() {
     var proposal by remember { mutableStateOf<dev.fonebrew.data.AgentRepoRunner.Proposal?>(null) }
     var reviewing by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    // The target is explicit: with several Git hosts connected the user picks one (never the
+    // implicit first), and the resolved host/repo/branch is shown before Run and before Commit.
+    val hosts by container.gitHostStore.hosts.collectAsState()
+    var chosenId by remember { mutableStateOf(runner.chosenHostId) }
+    val target = dev.fonebrew.domain.git.AgentTarget.resolve(hosts, chosenId)
+    val resolvedHost = (target as? dev.fonebrew.domain.git.AgentTarget.Resolution.Resolved)?.host
+    val targetLabel = resolvedHost?.let { dev.fonebrew.domain.git.AgentTarget.label(it) }
 
-    if (!runner.hasHost) {
+    if (hosts.isEmpty()) {
         Hint("Connect a Git host (Settings → Global → Git & coding) — the agent reads and commits to your repo.")
         return
     }
@@ -771,6 +783,24 @@ private fun FilesFacet() {
         return
     }
     Spacer(Modifier.height(8.dp))
+    if (hosts.size > 1) {
+        Text("Git host", style = MaterialTheme.typography.labelMedium)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            hosts.forEach { h ->
+                WireButton(
+                    (if (h.id == resolvedHost?.id) "● " else "○ ") + dev.fonebrew.domain.git.AgentTarget.label(h),
+                    selected = h.id == resolvedHost?.id,
+                    onClick = { chosenId = h.id; runner.chosenHostId = h.id; proposal = null; status = null },
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+    }
+    Hint(
+        targetLabel?.let { "Will read from and commit to: $it" }
+            ?: "Several Git hosts are connected - choose which one the agent targets before Run.",
+    )
+    Spacer(Modifier.height(6.dp))
     dev.aarso.hyle.cells.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(6.dp))
     dev.aarso.hyle.cells.HyleField(
@@ -789,7 +819,7 @@ private fun FilesFacet() {
     Spacer(Modifier.height(8.dp))
     WireButton(
         if (busy) "Working…" else "Run",
-        enabled = !busy && objective.isNotBlank() && modelId != null,
+        enabled = !busy && objective.isNotBlank() && modelId != null && resolvedHost != null,
         onClick = {
             val mid = modelId ?: return@WireButton
             val paths = pathsText.split("\n", ",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -831,7 +861,7 @@ private fun FilesFacet() {
             androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 dev.fonebrew.ui.ide.ReviewSheet(
                     changeSet = p?.changeSet ?: dev.fonebrew.domain.diff.ChangeSet(emptyList()),
-                    title = "Review — agent changes",
+                    title = "Review — agent changes" + (targetLabel?.let { " → $it" } ?: ""),
                     commitLabel = "Commit",
                     busy = busy,
                     onCancel = { reviewing = false },
@@ -839,7 +869,7 @@ private fun FilesFacet() {
                         busy = true
                         scope.launch {
                             runner.commit(approved, "Agent: ${objective.take(60)}").fold(
-                                { ids -> status = "committed ${ids.size} file(s)"; proposal = null; reviewing = false },
+                                { ids -> status = dev.fonebrew.data.AgentRepoRunner.describeCommit(approved, ids); proposal = null; reviewing = false },
                                 { status = "commit failed: ${it.message}" },
                             )
                             busy = false
