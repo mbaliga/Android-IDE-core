@@ -23,8 +23,15 @@ object GitTreeApi {
     fun getCommit(host: GitHost, sha: String, token: String): GitRequest =
         GitRequest("GET", "${repoBase(host)}/git/commits/${enc(sha)}", headers(host, token), null)
 
-    /** POST a new tree over [baseTreeSha] with one blob entry per (path, content). */
-    fun createTree(host: GitHost, baseTreeSha: String, files: List<Pair<String, String>>, token: String): GitRequest {
+    /** POST a new tree over [baseTreeSha] with one blob entry per (path, content). [deletions] are
+     *  expressed the Git Data way: an entry for the path with `sha: null` removes it from the base tree. */
+    fun createTree(
+        host: GitHost,
+        baseTreeSha: String,
+        files: List<Pair<String, String>>,
+        token: String,
+        deletions: List<String> = emptyList(),
+    ): GitRequest {
         val tree = JSONArray()
         for ((path, content) in files) {
             tree.put(
@@ -33,6 +40,15 @@ object GitTreeApi {
                     .put("mode", "100644")
                     .put("type", "blob")
                     .put("content", content),
+            )
+        }
+        for (path in deletions) {
+            tree.put(
+                JSONObject()
+                    .put("path", path)
+                    .put("mode", "100644")
+                    .put("type", "blob")
+                    .put("sha", JSONObject.NULL),
             )
         }
         val body = JSONObject().put("base_tree", baseTreeSha).put("tree", tree)

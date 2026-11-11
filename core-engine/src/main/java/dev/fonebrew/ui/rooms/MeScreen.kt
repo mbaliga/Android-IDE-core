@@ -128,8 +128,8 @@ fun MeScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             Text(
                 "Which model you use for which task is computed as more usage accrues and the drift " +
-                    "baseline lands. Tracked, not faked. Cost isn't shown here — it lives on each Loop " +
-                    "as a per-run budget boundary, where spend actually happens.",
+                    "baseline lands. Tracked, not faked. Cost is shown under Usage — detailed below, from the " +
+                    "rates you set; each Loop also carries a per-run budget boundary where spend happens.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 

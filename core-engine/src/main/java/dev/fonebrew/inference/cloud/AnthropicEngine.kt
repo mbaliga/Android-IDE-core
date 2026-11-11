@@ -59,6 +59,14 @@ class AnthropicEngine(
 
     override fun isDone(type: String?, data: String): Boolean = type == "message_stop"
 
+    // `event: error` with `{"type":"error","error":{"type":...,"message":...}}`, e.g. overloaded_error.
+    override fun streamErrorOf(type: String?, data: String): String? {
+        if (type != "error") return null
+        val err = runCatching { JSONObject(data).optJSONObject("error") }.getOrNull()
+            ?: return "unparseable error event"
+        return "${err.optString("type", "error")}: ${err.optString("message")}"
+    }
+
     override fun parseDelta(type: String?, data: String): String? {
         if (type != "content_block_delta") return null
         val delta = JSONObject(data).optJSONObject("delta") ?: return null

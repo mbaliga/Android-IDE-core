@@ -455,7 +455,12 @@ class AppContainer(context: Context) {
     // Graph-wave lane D: `repository` is wired so a successful commit mints a queryable
     // CommitAnchor node into the real message tree (dev.fonebrew.data.AgentRepoRunner's own KDoc).
     val agentRepoRunner: dev.fonebrew.data.AgentRepoRunner =
-        dev.fonebrew.data.AgentRepoRunner(gitTransport, gitHostStore, modelRegistry, engineProvider, repository)
+        dev.fonebrew.data.AgentRepoRunner(
+            gitTransport, gitHostStore, modelRegistry, engineProvider, repository,
+            appendLedger = { ledgerStore.append(it) },
+            priceFor = { pricingStore.book.value.priceFor(it) },
+            recordFreeTier = { providerId, tokensIn, tokensOut -> freeTierUsageStore.record(providerId, tokensIn, tokensOut) },
+        )
 
     // Concurrent work in progress elsewhere in the app (a Loop run, the Agent proposing a
     // change) — surfaced together in Chat's background-tasks strip.

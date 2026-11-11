@@ -69,6 +69,23 @@ object GitContentsApi {
         )
     }
 
+    /** DELETE a file; [sha] is the blob sha being removed (required by both hosts). */
+    fun deleteFile(host: GitHost, path: String, message: String, sha: String, token: String): GitRequest {
+        val author = JSONObject().put("name", host.authorName).put("email", host.authorEmail)
+        val body = JSONObject()
+            .put("message", message)
+            .put("sha", sha)
+            .put("branch", host.branch)
+            .put("author", author)
+            .put("committer", author)
+        return GitRequest(
+            "DELETE",
+            "${repoBase(host)}/contents/${encodePath(path)}",
+            commonHeaders(host, token) + ("Content-Type" to "application/json"),
+            body.toString(),
+        )
+    }
+
     private fun repoBase(host: GitHost) = "${apiBase(host)}/repos/${host.owner}/${host.repo}"
 
     private fun commonHeaders(host: GitHost, token: String): Map<String, String> = mapOf(

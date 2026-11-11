@@ -33,4 +33,34 @@ object RegularShellPresenter {
      *  semantics: Back always returns to the first/home tab before it ever falls through to the
      *  system default (process exit). False only for CHAT itself, where Back should fall through. */
     fun backTargetsChat(current: RegularDestination): Boolean = current != RegularDestination.CHAT
+
+    // ── Global search routing (lane C1, 2026-11-11 audit) ─────────────────────────────────────
+    // Regular mounts the SAME SearchOverlay SpatialRoot does; these are the "where does a tapped
+    // result land" decisions, mirroring SpatialRoot's onOpenConversation/onOpenLoop/onOpenTask
+    // (controller.closeAll() -> Chat home, open(LOOPS), open(PROJECT)) in tab-shell terms.
+
+    /** Where an opened search result leaves the shell: which tab, whether the Loops overlay is
+     *  up, and the one-shot hand-off values (find text / loop id / task id) the destination
+     *  room consumes, exactly like SpatialRoot's `pendingFind`/`pendingLoopId`/`pendingTaskId`. */
+    data class SearchLanding(
+        val destination: RegularDestination,
+        val showLoops: Boolean = false,
+        val pendingFind: String? = null,
+        val pendingLoopId: String? = null,
+        val pendingTaskId: String? = null,
+    )
+
+    /** A conversation hit: Chat home, with the query carried into that chat's find bar (blank
+     *  carries nothing). */
+    fun landingForConversation(findText: String): SearchLanding =
+        SearchLanding(RegularDestination.CHAT, pendingFind = findText.takeIf { it.isNotBlank() })
+
+    /** A loop hit: the Loops overlay (Regular's only Loops entry), loading [loopId]. */
+    fun landingForLoop(loopId: String): SearchLanding =
+        SearchLanding(RegularDestination.DEVELOP, showLoops = true, pendingLoopId = loopId)
+
+    /** A task hit: the Projects tab, highlighting [taskId]. */
+    fun landingForTask(taskId: String): SearchLanding =
+        SearchLanding(RegularDestination.PROJECTS, pendingTaskId = taskId)
 }
+

@@ -14,6 +14,10 @@ room = "2.7.1"
 okhttp = "4.12.0"
 mlkitText = "16.0.1"
 junit = "4.13.2"
+# Instrumented smoke test (app/src/androidTest, .github/workflows/emulator-smoke.yml). Apache-2.0.
+# androidTest-only: never on a shipped runtime classpath, so :core-engine:checkLicense is unaffected.
+androidxTestRunner = "1.6.2"
+androidxTestExtJunit = "1.2.1"
 # Pure-Compose markdown rendering (parser: org.jetbrains:markdown). No network,
 # no telemetry. 0.35.x targets the Compose 1.7 line this project's BOM pins.
 markdownRenderer = "0.35.0"
@@ -100,6 +104,9 @@ sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
 mlkit-text = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 sqldelight-runtime = { group = "app.cash.sqldelight", name = "runtime", version.ref = "sqldelight" }

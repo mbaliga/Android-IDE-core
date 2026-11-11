@@ -1,0 +1,219 @@
+name: Emulator smoke
+
+# Launches the app on a real Android emulator and drives it. ci.yml runs the JVM gate only, so a
+# launch / first-frame / markdown-render crash passes it (CLAUDE.md "CI caveat"); this job is the
+# only thing in CI that boots the app. What it does and does NOT prove: docs/ci/emulator-smoke.md.
+#
+# ABI: the shipped app is arm64-v8a only, GitHub runners are x86_64. The smoke build passes
+# -Pfonebrew.smokeAbi=x86_64, which swaps the ABI filter and drops the native engine build for
+# THAT invocation only (property absent -> arm64-v8a + full native build, unchanged). So the
+# smoke APK carries no libaarso_*.so; Echo-only launch must not need one.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: ["claude/fonebrew-development-clzu43"]
+
+concurrency:
+  group: emulator-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Single source for the emulator image, used by the AVD cache key and both runner steps.
+      API_LEVEL: "34"
+      SMOKE_GRADLE_ARGS: "-Pfonebrew.smokeAbi=x86_64"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # hyle-design-system + shared-libraries are includeBuild'd private submodules, so the
+          # default GITHUB_TOKEN cannot clone them - same PAT fallback ci.yml uses. The native
+          # llama.cpp / stable-diffusion.cpp submodules come along but are never compiled here.
+          submodules: recursive
+          token: ${{ secrets.CORE_SUBMODULE_TOKEN || github.token }}
+
+      - name: Enable KVM
+        # The documented udev rule (android-emulator-runner README): lets the runner user open
+        # /dev/kvm so the x86_64 emulator is hardware-accelerated instead of unusably slow.
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with build cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          # The action's DEFAULT packages input still requests the legacy 'tools' package, which
+          # Google's repository no longer serves (sdkmanager exit 1 before Gradle runs -
+          # CLAUDE.md third infra class). Only platform-tools here; the rest installs below.
+          packages: platform-tools
+
+      - name: Install pinned platform, build-tools and NDK
+        # No CMake and no native compile in this job. The NDK is still installed because the
+        # modules declare ndkVersion and AGP resolves it for packaging; skipping it is a guess
+        # this job should not make silently.
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+
+      - name: Add swap space
+        # Gradle + a 2-vCPU emulator on a ~7 GB runner is tight. Size the swapfile to the space
+        # that actually exists (ci.yml's native job learned this: a fixed size died with ENOSPC).
+        # Warning, not failure, when nothing useful fits.
+        run: |
+          TARGET=/mnt
+          AVAIL_MNT=$(df --output=avail -k /mnt 2>/dev/null | tail -1 || echo 0)
+          AVAIL_ROOT=$(df --output=avail -k / | tail -1)
+          if [ "${AVAIL_ROOT:-0}" -gt "${AVAIL_MNT:-0}" ]; then TARGET=/; fi
+          AVAIL_K=$(df --output=avail -k "$TARGET" | tail -1)
+          WANT_K=$(( AVAIL_K - 4*1024*1024 ))
+          MAX_K=$(( 6*1024*1024 ))
+          [ "$WANT_K" -gt "$MAX_K" ] && WANT_K=$MAX_K
+          if [ "$WANT_K" -lt $(( 2*1024*1024 )) ]; then
+            echo "::warning::only ${AVAIL_K}K free on $TARGET - continuing without extra swap"
+            free -h; df -h; exit 0
+          fi
+          sudo swapoff -a || true
+          sudo fallocate -l "${WANT_K}K" "$TARGET/swapfile"
+          sudo chmod 600 "$TARGET/swapfile"
+          sudo mkswap "$TARGET/swapfile"
+          sudo swapon "$TARGET/swapfile"
+          free -h
+
+      - name: Build smoke APKs (x86_64, no native engine)
+        # Retry for the transient Maven Central / plugin-portal 403s that hit GitHub runners
+        # (same reason ci.yml retries). This is the build, not the test; the test step below
+        # does not retry.
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::gradle attempt $attempt"
+            if ./gradlew --no-daemon $SMOKE_GRADLE_ARGS :app:assembleFullDebug :app:assembleFullDebugAndroidTest; then
+              echo "::endgroup::"; exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt $attempt failed; backing off before retry..."
+            sleep $((attempt * 20))
+          done
+          echo "all gradle attempts failed"; exit 1
+
+      - name: Prove the smoke APK carries no native engine libs
+        # If a libaarso_*.so ever lands in the x86_64 APK the "JNI is lazy" claim in
+        # docs/ci/emulator-smoke.md would silently stop being what is tested.
+        run: |
+          APK=$(ls app/build/outputs/apk/full/debug/*.apk | head -1)
+          echo "APK: $APK"
+          unzip -l "$APK" | grep -E 'lib/' || true
+          if unzip -l "$APK" | grep -q 'libaarso_'; then
+            echo "::error::smoke APK contains libaarso_*.so - the smoke ABI route is not doing what it claims"; exit 1
+          fi
+          if unzip -l "$APK" | grep -q 'lib/arm64-v8a/'; then
+            echo "::error::smoke APK contains arm64-v8a libs"; exit 1
+          fi
+
+      - name: AVD cache
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api${{ env.API_LEVEL }}-google_apis-x86_64-pixel_6-v1
+
+      - name: Create AVD and snapshot (cache miss only)
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2.33.0
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 3072M
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
+      - name: Write the test driver
+        # One shell script so a failure can dump logcat into the job log before the emulator is
+        # torn down (emulator-runner runs each `script:` line in its own shell). The script's
+        # exit code is Gradle's - the test result is never masked.
+        run: |
+          cat > "$RUNNER_TEMP/smoke.sh" <<'EOF'
+          #!/usr/bin/env bash
+          set -u
+          adb logcat -c || true
+          ./gradlew --no-daemon $SMOKE_GRADLE_ARGS :app:connectedFullDebugAndroidTest
+          rc=$?
+          adb logcat -d -v threadtime > "$GITHUB_WORKSPACE/emulator-logcat.txt" || true
+          if [ "$rc" -ne 0 ]; then
+            echo "::group::logcat (crash / fatal / app tags, last 400 matching lines)"
+            grep -E 'FATAL EXCEPTION|AndroidRuntime|CrashRecovery|dev\.aarso|dev\.fonebrew|UnsatisfiedLinkError|ANR in' \
+              "$GITHUB_WORKSPACE/emulator-logcat.txt" | tail -n 400 || true
+            echo "::endgroup::"
+            echo "::group::logcat (last 300 lines, unfiltered)"
+            tail -n 300 "$GITHUB_WORKSPACE/emulator-logcat.txt" || true
+            echo "::endgroup::"
+          fi
+          exit "$rc"
+          EOF
+          chmod +x "$RUNNER_TEMP/smoke.sh"
+
+      - name: Run emulator smoke tests (gating)
+        # NO continue-on-error here: this step is the verdict. Only the uploads below are
+        # allowed to fail without redding the job.
+        uses: reactivecircus/android-emulator-runner@v2.33.0
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 3072M
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash $RUNNER_TEMP/smoke.sh
+
+      - name: Assert the three smoke tests actually ran
+        # connectedAndroidTest can go green having run nothing (no matching tests). Count the
+        # JUnit XML so "green" cannot be vacuous. Hard-fails.
+        run: |
+          shopt -s globstar nullglob
+          FILES=(app/build/outputs/androidTest-results/connected/**/TEST-*.xml)
+          [ "${#FILES[@]}" -gt 0 ] || { echo "::error::no instrumentation result XML found"; exit 1; }
+          TESTS=$(grep -ho 'tests="[0-9]*"' "${FILES[@]}" | head -1 | tr -dc '0-9')
+          FAILS=$(grep -ho 'failures="[0-9]*"' "${FILES[@]}" | head -1 | tr -dc '0-9')
+          ERRS=$(grep -ho 'errors="[0-9]*"' "${FILES[@]}" | head -1 | tr -dc '0-9')
+          echo "tests=$TESTS failures=$FAILS errors=$ERRS"
+          [ "${TESTS:-0}" -ge 3 ] && [ "${FAILS:-1}" -eq 0 ] && [ "${ERRS:-1}" -eq 0 ] \
+            || { echo "::error::expected >=3 tests, 0 failures, 0 errors"; exit 1; }
+
+      - name: Upload logcat and test reports
+        if: always()
+        # continue-on-error: diagnostic only. An account-level "Artifact storage quota has been
+        # hit" is a known false negative (CLAUDE.md CI caveat) and must not red a green test.
+        # The logcat is also dumped into the job log on failure, so this is never the only copy.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-smoke-reports
+          path: |
+            emulator-logcat.txt
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: ignore

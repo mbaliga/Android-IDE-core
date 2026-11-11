@@ -1327,10 +1327,15 @@ private fun GitConnect() {
     val transport = container.gitTransport
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()
-    val generator: Generator? = remember {
-        val spec = container.modelRegistry.allSpecs().firstOrNull { container.engineProvider.isRunnable(it) }
-        spec?.let { s -> container.engineProvider.engineFor(s)?.let { engine -> EngineGenerator(engine, s.modelPath) } }
+    // The spec CodeLens actually runs on, kept alongside its generator so the "watched" badge is
+    // derived from the same model (binding rule 2) — it can be a cloud model.
+    val generatorSpec = remember {
+        container.modelRegistry.allSpecs().firstOrNull { container.engineProvider.isRunnable(it) }
     }
+    val generator: Generator? = remember {
+        generatorSpec?.let { s -> container.engineProvider.engineFor(s)?.let { engine -> EngineGenerator(engine, s.modelPath) } }
+    }
+    val generatorWatched = codeLensWatched(generatorSpec)
 
     Text(
         "Connect a Git host you own — GitHub or Gitea/Forgejo — for tree backup and " +
@@ -1344,7 +1349,7 @@ private fun GitConnect() {
         var browsing by remember(h.id) { mutableStateOf(false) }
         var ciOpen by remember(h.id) { mutableStateOf(false) }
         if (browsing) {
-            GitBrowser(h, store.token(h.id).orEmpty(), container.gitBrowse, generator) { browsing = false }
+            GitBrowser(h, store.token(h.id).orEmpty(), container.gitBrowse, generator, generatorWatched) { browsing = false }
         }
         if (ciOpen) {
             CiPanel(h, store.token(h.id).orEmpty(), transport) { ciOpen = false }
@@ -1577,7 +1582,7 @@ private fun BuildsSection() {
  *  attach a named custom action to; see the inline note at the `HyleTree` call). [generator] is
  *  optional — if null the Lens shows the code without explanations. */
 @Composable
-private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generator: Generator?, onClose: () -> Unit) {
+private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generator: Generator?, watched: Boolean, onClose: () -> Unit) {
     // path ("" = root) -> that directory's listing, populated lazily as chevrons open it.
     val childrenByPath = remember { mutableStateMapOf<String, List<GitBrowse.Entry>>() }
     var expandedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -1674,7 +1679,7 @@ private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generato
                         fileName = f.first.substringAfterLast('/'),
                         filePath = f.first,
                         explain = { lines, ext -> generator?.let { g -> CodeLens.explain(lines, ext, g) } },
-                        watched = false,
+                        watched = watched,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         onCommit = { newText, message ->
                             runCatching {

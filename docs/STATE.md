@@ -1,11 +1,26 @@
 > **MERGE-NOTE (2026-08-21):** the launch line (`fix/models-carousel-and-terminal`) carries its own parallel history of this doc; this copy kept the dev line's version wholesale during reunification — reconcile when next editing.
 
-# Aarso / Workbench — Project State, Roadmap & End Goal
+# Fonebrew (lens: Aarso) — Project State, Roadmap & End Goal
 
 > Single source of truth: what's **done**, what's **pending**, and the **end goal**. Written
-> 2026-06-28. Companion to `CLAUDE.md` (build rules),  (revenue), and
-> `docs/design/*` (per-surface specs). When in doubt, this file is the map; the others are the
-> territory.
+> 2026-06-28; **header, TL;DR and Settings description re-framed 2026-11-11** to the real state
+> (the sections below keep their original dates — a "(2026-06-28)" marker means it was not
+> re-audited then). Companion to `CLAUDE.md` (build rules) and `docs/design/*` (per-surface
+> specs). When in doubt, this file is the map; the others are the territory.
+>
+> **Current state (2026-11-11):** product **Fonebrew** (host app; "Workbench" is retired, "Aarso"
+> is only the inert self-reflection lens). **Version 0.4.1 (versionCode 32)** — the launch spine
+> reset of 2026-07-16; the old "v0.13.0" below is the pre-reset dev-line number and is historical.
+> **Source package `dev.fonebrew`** (`core-engine/src/main/java/dev/fonebrew/`); the installed
+> **applicationId is still `dev.aarso`** (play) / `dev.aarso.full` (full) for installed-base
+> continuity — `app/build.gradle.kts` says why. Modules: `:app` (thin shell), `:core-engine`
+> (all app code + tests), `:sdengine`, `:hyle-probe`, `:watch-bridge`, `:watchbrew`; Hyle and
+> crash-recovery come from submodules via `includeBuild`. The JVM gate is **six tasks**
+> (`CLAUDE.md` "Building"; same as CI): `:core-engine:testFullDebugUnitTest`
+> `:core-engine:testPlayDebugUnitTest` `:core-engine:checkLicense` `:watch-bridge:test`
+> `:watchbrew:testFullDebugUnitTest` `:watchbrew:testPlayDebugUnitTest`. **Owner-unverified:**
+> everything that runs on a device — rendering, gestures, Regular/asoc feel, inference, cloud,
+> USB, SSH, WatchBrew pairing/Tile/battery. This environment has no device or emulator.
 
 ---
 
@@ -14,8 +29,8 @@ A **local-first, sovereign AI computing environment** for a high-end Android pho
 on-device Claude Code with loop engineering," extending into a real **agentic IDE** (read repos,
 propose+review+commit changes, drive devices like a Pi/Arduino), with **deterministic on-device
 search** across everything you've ever said to a model. Free and open to *build*; a paid
-"Studio" layer to *ship & sell* a product. Current shipped build: **v0.13.0** on the `apk-dist`
-branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
+"Studio" layer to *ship & sell* a product. Current build: **v0.4.1 (32)**, delivered on the
+`apk-dist` branch as `fonebrew-sd.apk` (+ `fonebrew-watch.apk`; the older `aarso-sd.apk` is pre-rename). The app compiles, all JVM tests pass, the full APK assembles; everything
 runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
 
 ---
@@ -37,7 +52,7 @@ the dependency direction sinks toward the routing engine.
 
 | Component | What it is | Source | Status |
 |---|---|---|---|
-| **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.13.0) |
+| **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.4.1 / 32; the v0.13.0 label is the pre-reset dev-line number) |
 | **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | **Done** — its own repo `mbaliga/Hyle-Design-System`, single source of `dev.aarso:hyle:0.2.0`, consumed here via git submodule + includeBuild (vendored copy deleted; `0.1.0` retired) |
 | **PM + authoring** | A companion project-management surface | not in this repo | New repo pending owner; code mostly lives in main today, to be carved out |
 | **Sound & haptics authoring** | A companion authoring app | **Open** | Not started here |
@@ -49,7 +64,8 @@ router's interface; never the reverse.
 ---
 
 ## 3. What's DONE (shipped, this repo)
-Built and merged across this work; on `apk-dist` as v0.13.0. **Runtime/gesture/device behaviour is
+Built and merged across this work (the v0.9.0→v0.13.0 labels in this section are the pre-reset
+dev-line numbers; the shipping build is now v0.4.1 (32)). **Runtime/gesture/device behaviour is
 owner-verified only.**
 
 ### Core chat & sovereignty
@@ -60,9 +76,14 @@ owner-verified only.**
 - Image generation (cloud + on-device SD). KV-cache snapshots. Keystore-encrypted keys.
 
 ### Spatial IA (the room model) — full set landed
+- *Two shells over these rooms (owner ruling 2026-09-15):* **asoc** = the room model below
+  (edge drags + pinch, `ui/spatial/SpatialRoot`); **Regular** = a bottom-tab shell (Chat / Chats /
+  Projects / Develop / Settings, `ui/regular/RegularShell`) and the default for new installs.
+  Global search is mounted in both (Regular gained it 2026-11-11 — it was previously dead there).
 - **Chat** = home; **Conversations** left (All / Text / Image / Starred / **Projects** grouping);
-  **Settings** right (5 icon tabs: Global / Image / Text / Video / 3D, + on-device⇄cloud toggle,
-  Git & coding/GitHub connect, **Export everything**, the **Me · Myself · I** profile);
+  **Settings** right (4 tabs as of 2026-11-11 — General / Models / Dev / About; the Models tab
+  nests Text / Image / Video / 3D, each with an on-device⇄watched-cloud toggle; the earlier
+  five-icon-tab layout is gone; Git & coding/GitHub connect, **Export everything**, the **Me · Myself · I** profile);
   **Project** top (Tasks: Board / List / **Waterfall** + **Incidents** w/ trend); **Tree** on the
   z-axis (+ git-sync indicator, manual export, handoff summary); **Loops** (see below);
   **Develop** bottom.
@@ -94,7 +115,8 @@ owner-verified only.**
   crash's trace; the next launch shows a minimal **Recovery screen** (Continue / Share report /
   Reset data) instead of bricking — stock Material only, can't re-trigger a theming crash.
 - **Hyle** design-system module: pure tokens (`Finish`/`Pulse`/`RadiantHues`), JVM-tested,
-  publishable as `dev.aarso:hyle:0.1.0`; `:hyle-probe` render harness.
+  published as `dev.aarso:hyle:0.1.0` at the time, since superseded by 0.2.0 in its own repo
+  (see §2); `:hyle-probe` render harness.
 - **Build**: two flavors (full sideload / play policy-safe), `arm64-v8a`, NDK r28; CI runs the JVM
   unit-test gate (the native APK assemble is disabled to avoid runner OOM — **CI never launches
   the app**, which is why device-only crashes were invisible).
@@ -184,7 +206,8 @@ separate future pass.
 ### Version history (this cycle)
 v0.9.0 full IA · v0.9.1 B4 depth + loop streaming + profile icon · v0.10.0 agentic IDE + devices ·
 v0.11.0 per-hunk review + squashed commits + USB runtime · v0.12.0 Echo-send fix · v0.12.1 crash
-harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (current)**.
+harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor** (last pre-reset dev-line number; the launch spine then reset
+to 0.1.0 on 2026-07-16 and is now **0.4.1 (32)**).
 
 ---
 
@@ -270,13 +293,15 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
   **never launches the app** — so all runtime, gesture, rendering, network, and hardware behaviour
   is **owner-verified on the phone**. The tested cores (parsers, Intel HEX, STK500, diff, Git
   request builders, BPMN round-trip) are the parts that *are* machine-verified.
-- **CI "build-test" is red for a billing reason, not a code one** (corrected 2026-06-30). Every
+- **HISTORICAL (superseded 2026-08-21 — Actions work again and red CI is a real signal; see
+  `CLAUDE.md` "CI caveat" for the later infra false-negatives).** **CI "build-test" was red for a
+  billing reason, not a code one** (corrected 2026-06-30). Every
   run — `main`, `v0-13-0`, even docs-only PRs — fails in **3–6 seconds with no runner assigned**,
   i.e. the job dies *at startup before any step executes*. That is the signature of **GitHub
   Actions minutes / spending-limit exhaustion on a private repo**, not the "Maven Central 403
   during dependency resolution" previously assumed here (a 403 would surface *minutes* into a run).
   "Re-run to clear it" never worked because nothing transient was there to clear. The code is
-  sound: the exact gate (`:app:testFullDebugUnitTest :app:testPlayDebugUnitTest :hyle:test`) was
+  sound: the then-gate (`:app:testFullDebugUnitTest :app:testPlayDebugUnitTest :hyle:test` — the pre-de-fork task names) was
   reproduced locally — **BUILD SUCCESSFUL, 868 tests, 0 failures**. Fix is account-level: top up
   Actions minutes / raise the spending limit, **or** lean on the public repos (public repos get
   unlimited free Actions — e.g. the open `android-ide-core` / Phonebrew). No `ci.yml` edit can fix
@@ -285,14 +310,15 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 ---
 
 ## 10. Where things live (map)
-- `app/src/main/java/dev/aarso/` — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
+- `core-engine/src/main/java/dev/fonebrew/` (was `app/src/main/java/dev/aarso/` before the de-fork and
+  the package rename; `:app` is now a thin shell) — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
   device, git, ide, remote, **search** + `search/query/`), `data/` (Room tree, stores, repos,
   transports, AgentRepoRunner, DeviceRepo, **search/** — the FTS5 index, projector, indexer,
   retrieval), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
   ide, remote, theme, aeon, spatial, **search/**), `service/`, `security/`.
-  Search's SQL schema lives at `src/main/sqldelight/dev/aarso/data/search/Search.sq` — the second,
+  Search's SQL schema lives at `core-engine/src/main/sqldelight/…/data/search/Search.sq` — the second,
   FTS5-capable database, separate from Room's.
-- `hyle/` design-system module · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
+- `hyle-design-system/` submodule (Hyle, `dev.aarso:hyle:0.2.0`; the in-repo `hyle/` module is gone) · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
 - `watch-bridge/` WatchBrew wire contract (pure Kotlin) · `watchbrew/` the Wear OS app · phone relay in
   `core-engine/.../data/watch/` — section 12.
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),

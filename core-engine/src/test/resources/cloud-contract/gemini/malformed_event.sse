@@ -1,0 +1,7 @@
+: HAND-AUTHORED from the provider public streaming documentation. NOT recorded from a live call.
+data: {"candidates":[{"content":{"parts":[{"text":"Hello"}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":25,"totalTokenCount":25},"modelVersion":"gemini-fixture"}
+
+data: {"candidates":[{"content":{"parts":[{"text":
+
+data: {"candidates":[{"content":{"parts":[{"text":", world"}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":25,"candidatesTokenCount":15,"totalTokenCount":40}}
+
