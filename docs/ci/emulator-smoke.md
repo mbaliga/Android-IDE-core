@@ -1,8 +1,9 @@
 # Emulator smoke (`.github/workflows/emulator-smoke.yml`)
 
-Status: **PUSHED - CI RESULT PENDING.** Written without an emulator (this container has no
-`/dev/kvm`, no device). Nothing below claims the job passed; the first run on the PR is the
-evidence, and until it exists the tests are only known to compile.
+Status: **GREEN IN CI (2026-11-11).** Run 42964815458 on `cdc5c72` passed all three tests on an
+x86_64 emulator. The first run (42963566285) failed one test on a wrong UI marker in the test
+itself; cold launch and the Echo send passed there too. The tests were written without an
+emulator (this container has no `/dev/kvm`), so CI is the only place they run.
 
 ## Why
 
