@@ -25,6 +25,7 @@ import dev.fonebrew.domain.catalog.CatalogModel
 import dev.fonebrew.domain.catalog.ModelCatalogMapper
 import dev.fonebrew.domain.catalog.StarterModels
 import dev.fonebrew.flavor.InvocationFeatures
+import dev.fonebrew.domain.device.DeviceSpec
 import dev.fonebrew.domain.device.ModelFit
 import dev.fonebrew.domain.GeneratedToken
 import dev.fonebrew.domain.MessageNode
@@ -79,6 +80,27 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * The slice of [EngineProvider] the chat loop uses. A seam so a JVM test can hand the real
+ * [ChatViewModel] a scripted engine (EngineProvider itself is final and reaches for native
+ * libraries and the Keystore); production wraps the real provider in [ProviderChatEngines].
+ */
+interface ChatEngines {
+    fun engineFor(spec: ModelSpec, webSearchEnabled: Boolean = false): InferenceEngine?
+    fun isRunnable(spec: ModelSpec): Boolean
+    fun unavailableReason(spec: ModelSpec): String?
+    suspend fun unloadLocalModel()
+}
+
+/** Pure delegation to the real [EngineProvider] — no behaviour of its own. */
+class ProviderChatEngines(private val provider: EngineProvider) : ChatEngines {
+    override fun engineFor(spec: ModelSpec, webSearchEnabled: Boolean): InferenceEngine? =
+        provider.engineFor(spec, webSearchEnabled)
+    override fun isRunnable(spec: ModelSpec): Boolean = provider.isRunnable(spec)
+    override fun unavailableReason(spec: ModelSpec): String? = provider.unavailableReason(spec)
+    override suspend fun unloadLocalModel() = provider.unloadLocalModel()
+}
 
 /** Where a turn is in its lifecycle, for the progress indicator. */
 enum class GenPhase { IDLE, LOADING, GENERATING }
@@ -236,7 +258,7 @@ private data class StreamState(
 class ChatViewModel(
     private val repository: MessageTreeRepository,
     private val registry: ModelRegistry,
-    private val engines: EngineProvider,
+    private val engines: ChatEngines,
     private val providers: ProviderStore,
     private val locals: LocalModelStore,
     private val embeddingLogger: EmbeddingLogger,
@@ -265,6 +287,8 @@ class ChatViewModel(
     private val threadObserver: dev.fonebrew.data.ThreadObserver,
     private val taskStore: dev.fonebrew.data.TaskStore,
     private val appContext: Context,
+    /** Test seam: the live hardware read. Production default is [DeviceInfo.read] on [appContext]. */
+    deviceSpecReader: () -> DeviceSpec = { DeviceInfo.read(appContext) },
 ) : ViewModel() {
 
     /** Content routed in from share / text-selection / assist (§7). */
@@ -358,7 +382,7 @@ class ChatViewModel(
     // First-run setup card (§ usability rework): the one recommended starter
     // model for this device, and its download state. The init collector above
     // auto-activates it the moment the file lands.
-    val device = DeviceInfo.read(appContext)
+    val device = deviceSpecReader()
     private val catalog: List<CatalogModel> =
         ModelCatalogMapper.chatModels(catalogStore.catalog(), InvocationFeatures.CATALOG_POLICY_SAFE_ONLY)
     val starter: CatalogModel? = StarterModels.recommend(catalog, device)
@@ -2372,7 +2396,7 @@ class ChatViewModel(
                 ChatViewModel(
                     c.repository,
                     c.modelRegistry,
-                    c.engineProvider,
+                    ProviderChatEngines(c.engineProvider),
                     c.providerStore,
                     c.localModelStore,
                     c.embeddingLogger,
