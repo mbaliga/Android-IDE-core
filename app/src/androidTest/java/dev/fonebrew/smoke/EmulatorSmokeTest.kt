@@ -135,12 +135,15 @@ class EmulatorSmokeTest {
         launch()
         waitFor("Regular shell tab bar") { isPresent(tab("Settings")) }
 
-        // bottom-tab label -> a marker that exists only inside that destination.
+        // bottom-tab label -> a marker that exists only inside that destination. The markers are
+        // each room's own HyleTabBar labels, which Hyle renders as visible Text (not a
+        // contentDescription), so they are matched by text. The bottom bar, by contrast, exposes
+        // its labels as contentDescription, which is how the clicks below find it.
         val destinations = listOf(
-            "Chats" to hasContentDescription("Starred"),
-            "Projects" to hasContentDescription("To-do"),
-            "Develop" to hasContentDescription("Hardware"),
-            "Settings" to hasContentDescription("General"),
+            "Chats" to hasText("Starred"),
+            "Projects" to hasText("To-do"),
+            "Develop" to hasText("Hardware"),
+            "Settings" to hasText("General"),
             "Chat" to hasSetTextAction(),
         )
         for ((label, marker) in destinations) {
