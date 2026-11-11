@@ -62,6 +62,7 @@ read but deliberately left for a future pass, not silently forgotten.
 hardware-gated (Pixel 8/9/10 + select Samsung flagships as of Aug 2026) — verify Fonebrew's actual
 RedMagic dev target's dock behavior explicitly before assuming QPR3 desktop windowing exists
 there, per `01_VALIDATION_REPORT.md` §D1.
+**Status (2026-11-11):** `PointerLayoutMachine.kt` exists in `domain/loop/authoring/` with tests, and is unwired: no Compose or keyboard code consumes it yet.
 
 ## P1 — real but lower priority than the substrate above
 

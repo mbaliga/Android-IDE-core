@@ -20,6 +20,7 @@ with a mouse and keyboard (Android desktop windowing; a phone docked to a displa
 | 2 | Resize to the minimum; the spatial room model (edge bands 72 dp and 56 dp in `SpatialRoot`) still lays out and every room stays reachable. | NEEDS-DEVICE-VALIDATION |
 | 3 | Navigate rooms with mouse drag and the keyboard. | NEEDS-DEVICE-VALIDATION |
 | 4 | Phone regression: on a fullscreen phone the app looks and behaves as before. | NEEDS-DEVICE-VALIDATION |
+| 5 | Once `PointerLayoutMachine` is wired to a real pointer or external-display signal: connect and disconnect mid-edit; selection, draft revision, viewport focus and unsaved editor state are unchanged and the phone layout is restored (spec section 10). Not wired yet. | NEEDS-DEVICE-VALIDATION |
 
 ## Known limitations (no code change proposed)
 
