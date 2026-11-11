@@ -15,6 +15,13 @@
     <!-- Keep the process alive while a local model loads/generates or downloads. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!--
+      Desktop-mode / ChromeOS-style hosts have no touchscreen; without this line Play and
+      package managers filter the app out there. Declaring it optional changes nothing on a
+      phone, which still has one. Keyboard and mouse are likewise not required (default).
+    -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <!-- §7 heavy tiers (overlay bubble, screen capture) live in the FULL flavor's
          manifest overlay — the play build ships without those permissions. -->
 
@@ -44,6 +51,13 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Fonebrew">
+            <!-- Freeform (desktop-mode) windows only: a default size and a floor above what
+                 SpatialRoot's edge bands need. Ignored on a fullscreen phone. -->
+            <layout
+                android:defaultWidth="960dp"
+                android:defaultHeight="720dp"
+                android:minWidth="360dp"
+                android:minHeight="480dp" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
