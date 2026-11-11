@@ -22,6 +22,14 @@ val keystoreProps = Properties().apply {
 fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
+// CI-only emulator-smoke ABI (docs/ci/emulator-smoke.md). GitHub-hosted runners are x86_64, the
+// shipped app is arm64-v8a only. -Pfonebrew.smokeAbi=x86_64 swaps the ABI filter AND drops the
+// native engine build for that one invocation, so the smoke APK carries no libaarso_*.so at all
+// (which also makes every eager JNI load a hard crash the smoke test would catch). Absent -> the
+// property is null -> arm64-v8a + the full native build, exactly as before. Never set for release.
+val smokeAbi: String? = providers.gradleProperty("fonebrew.smokeAbi").orNull?.takeIf { it.isNotBlank() }
+require(smokeAbi == null || smokeAbi == "x86_64") { "fonebrew.smokeAbi only supports x86_64 (got '$smokeAbi')" }
+
 android {
     // Fonebrew. applicationId/namespace stay dev.aarso for installed-base continuity
     // (an id change would install as a second app); the SOURCE package is dev.fonebrew
@@ -44,7 +52,9 @@ android {
 
         // arm64 is the only ABI the target device (and most modern phones) needs;
         // restricting it keeps the packaged native libs (from :core-engine's AAR) small.
-        ndk { abiFilters += "arm64-v8a" }
+        ndk { abiFilters += (smokeAbi ?: "arm64-v8a") }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     val uploadKeystore = signingValue("storeFile", "FONEBREW_KEYSTORE_FILE")
@@ -123,8 +133,23 @@ android {
     kotlin {
         jvmToolchain(17)
     }
+
+    testOptions {
+        // Animations off keeps the Compose smoke deterministic on a CI emulator.
+        animationsDisabled = true
+    }
 }
 
 dependencies {
     implementation(project(":core-engine"))
+
+    // Emulator smoke (app/src/androidTest). Apache-2.0, androidTest-only; checkLicense scans
+    // :core-engine's runtime graph and never sees these.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // InteractionMode appears in InteractionModeBridge.setMode's signature; core-engine keeps it
+    // `implementation`, so the test names it itself.
+    androidTestImplementation("dev.aarso:interaction-mode:0.1.0")
 }
