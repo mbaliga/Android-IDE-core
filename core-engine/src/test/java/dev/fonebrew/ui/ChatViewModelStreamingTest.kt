@@ -203,13 +203,8 @@ class ChatViewModelStreamingTest {
         assertEquals(0, h.echoA.generateCalls)
     }
 
-    // DEFECT (reported, not fixed - this lane may only add seams to ChatViewModel): runTurn picks the
-    // ledger tier with `if (isLocal) ON_DEVICE else CLOUD` where isLocal is `runtime == LOCAL_GGUF`
-    // only, so a turn on the on-device Gemini Nano runtime (and the dev Echo runtime) is written to
-    // the usage ledger as Tier.CLOUD. The ledger is the "no money / no data left the device" record,
-    // so this mislabels an on-device turn as a cloud one. Un-ignore once the tier is derived from
-    // `spec.isOnDevice`.
-    @Ignore("DEFECT: ChatViewModel.runTurn ledgers AICORE_NANO / ECHO_DEV turns as Tier.CLOUD (tier keyed on LOCAL_GGUF only)")
+    // Regression: the tier was once keyed on runtime == LOCAL_GGUF, which wrote Gemini Nano and
+    // Echo turns to the ledger as CLOUD.
     @Test fun `an on-device Gemini Nano turn is ledgered as ON_DEVICE`() = runTest(main.dispatcher) {
         val nano = aiCoreNanoSpec()
         val h = ChatHarness(specs = listOf(nano))

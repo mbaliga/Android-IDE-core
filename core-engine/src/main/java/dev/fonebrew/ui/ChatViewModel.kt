@@ -1057,7 +1057,9 @@ class ChatViewModel(
                         projectId = session.conversationProjects.value[chatId],
                         model = spec.id,
                         provider = spec.providerId ?: "on-device",
-                        tier = if (isLocal) dev.fonebrew.domain.ledger.Tier.ON_DEVICE else dev.fonebrew.domain.ledger.Tier.CLOUD,
+                        // Keyed on the spec, not on LOCAL_GGUF: Gemini Nano and the Echo dev engine also
+                        // never leave the device, and the ledger is the record of what did.
+                        tier = if (spec.isOnDevice) dev.fonebrew.domain.ledger.Tier.ON_DEVICE else dev.fonebrew.domain.ledger.Tier.CLOUD,
                         inputTokens = inCount,
                         outputTokens = outCount.toLong(),
                         estCostMinor = cloudCostMinor ?: 0L,
