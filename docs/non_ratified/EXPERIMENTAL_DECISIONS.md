@@ -96,3 +96,106 @@ the four per-mechanism rulings above if real Play-policy testing contradicts the
 *(Later work packages: append new `FB-RAT-<domain>-NEW-<n>` entries below this line as you
 identify proposals of your own. Do not renumber `FB-RAT-WS-NEW-1` or `FB-RAT-LANG-NEW-1`, or
 insert ahead of either.)*
+
+### `FB-RAT-PORT-NEW-1` — Desktop surface scope (device independence)
+
+**Proposed by:** the multi-platform porting plan (`docs/PORTING_PLAN.md`, 2026-10-06). Filed against
+`docs/handoff/device-independence.md` (a research brief, no decision recorded) and `FB-RAT-PORT-002`
+(Docked IDE, sub-area scoped only).
+
+**Proposal text:** A desktop build of Fonebrew (Linux first, then macOS and Windows) exists as the larger-screen,
+pointer-capable surface for a docked phone and as a build of the open core for other users. It is not an owner
+workflow and does not create a second machine the owner must own or maintain; desktop artifacts are built on rented
+hosted CI. Android stays the primary surface: no state or feature is reachable only on desktop, pointer and keyboard
+stay accelerators (`FB-RAT-LBX-006`), and the desktop head consumes the same pointer-layout machine the Android docked
+work will build (`docs/NEXT_SESSIONS.md` item 4) rather than a second information architecture. There is no in-app
+updater; downloads are handed to the OS (`docs/design/app-distribution.md` §3).
+
+**Status:** PROPOSED, not self-ratified. Raises the porting program's OQ-7a. Until ruled, the repo's tier in the
+program is B, not A.
+
+---
+
+### `FB-RAT-PORT-NEW-2` — KMP seam: module shape and staging
+
+**Proposed by:** the multi-platform porting plan. Filed against the header of `core-engine/build.gradle.kts`,
+`docs/WP2_GATE_REPORT.md` §4 and `FB-RAT-PORT-011`.
+
+**Proposal text:** The portable core moves in three stages, each a set of PRs with the Android gate green. (1) A
+separate Gradle build under `desktop/` maps `domain/`, `contracts/kotlin` and their tests by directory and runs them
+on a host JDK, editing no existing file. (2) Interface refactors on the Android side remove the two `domain/`-to-`data/`
+back-edges, the `inference/`-to-`data/` edges and direct `Context` use in the stores. (3) New Kotlin Multiplatform
+modules (`androidTarget` and `jvm()`, iOS later) beneath `:core-engine` take `domain/`, `contracts/`, `inference/`, the
+pure parts of `data/` and the portable `ui/`, while `:core-engine` stays a `com.android.library` with the `dist` flavor
+dimension so the downstream submodule pin keeps resolving. `:core-engine` is not converted in place.
+
+**Status:** PROPOSED, not self-ratified. Open sub-question: how the Android gate keeps running the moved tests when a
+port may not edit `ci.yml`. Interacts with the porting program's OQ-17 (toolchain pins).
+
+---
+
+### `FB-RAT-PORT-NEW-3` — Persistence off-Android: Room-KMP first, no tree migration
+
+**Proposed by:** the multi-platform porting plan. Filed against `CLAUDE.md` ("Two SQL toolchains coexist … do not
+unify") and `HANDOFF_STATE.md` open thread 10.
+
+**Proposal text:** Spike Room-KMP with `BundledSQLiteDriver` (context-free builder, at the current pins first) for the
+message tree on `jvm()` and later iOS, and keep SQLDelight as the FTS5 index in its own SQLite file, as today. The tree
+is **not** migrated to SQLDelight. If the spike fails, moving the tree to SQLDelight would amend the do-not-unify rule and
+is an owner decision, not a fallback anyone takes silently. The destructive-migration posture (no `Migration` objects,
+schema export off) carries over unless the owner asks for migrations.
+
+**Status:** PROPOSED, not self-ratified. Calibration condition: a pass, fail or unknown verdict recorded in
+`HANDOFF_STATE.md` at Kotlin 2.1.0, KSP 2.1.0-1.0.29 and Room 2.7.1 before any Room 2.8 or toolchain bump is considered.
+
+---
+
+### `FB-RAT-PORT-NEW-4` — Secret custody per platform (rule 5 equivalents)
+
+**Proposed by:** the multi-platform porting plan. Filed against `CLAUDE.md` rule 5 and the porting program's OQ-22.
+
+**Proposal text:** Rule 5 names the Android Keystore and asks that a port present an equivalent custody model for owner
+approval. Proposed equivalents, each reporting its weaker guarantee in the UI as a key-storage tier: macOS and iOS
+Keychain (data-protection, this-device-only, never synchronizable, excluded from backup); Windows DPAPI or Credential
+Manager; Linux Secret Service/libsecret with a passphrase-encrypted file when no service is present; on Ubuntu Touch no
+BYOK key is stored at all. Keys, git tokens and SSH secrets never transfer between surfaces programmatically, and no
+custody path logs or exports them.
+
+**Status:** PROPOSED, not self-ratified. No port holds a key until the owner rules.
+
+---
+
+### `FB-RAT-PORT-NEW-5` — Off-Android capability rows, honest stubs and Windows local execution
+
+**Proposed by:** the multi-platform porting plan. Filed against `ExecutionTargetType` in
+`contracts/kotlin/ExecutionContracts.kt`, `schemas/common/capability-manifest.schema.json`,
+`docs/ratified/DISTRIBUTION_CAPABILITY_SPLIT.md` (`FB-RAT-DIST-001`) and `FB-RAT-LANG-NEW-1`.
+
+**Proposal text:** Add a `LOCAL_DESKTOP` execution target and per-platform capability rows (linux, macos, windows, ios,
+ubuntu-touch), each mechanism declared as `FB-RAT-DIST-001` requires. The assist gesture, overlay bubble, screen-capture
+OCR, USB flashing, in-app APK install and foreground services are not built off-Android; each such surface is a stub whose
+UI says so rather than hiding it. A desktop build can run downloaded toolchains, which changes the language-lane legality
+table and must be recorded there. On Windows, until the owner rules, local execution targets are a labelled stub and SSH
+and CI targets work; the alternatives are requiring WSL or Git-Bash, or per-shell adapters with conformance tests.
+
+**Status:** PROPOSED, not self-ratified. Raises the porting program's OQ-6.
+
+---
+
+### `FB-RAT-PORT-NEW-6` — Shapes of the non-desktop targets: Ubuntu Touch and iOS
+
+**Proposed by:** the multi-platform porting plan. Filed against `docs/ratified/loops/LOOP_WEB_STUDIO_SPEC.md`,
+`docs/CORE_PHASES.md` invariant 6 (licence policy) and `docs/design/app-distribution.md` §3.
+
+**Proposal text:** Ubuntu Touch is a reframe, not a port: a Click webapp (webapp-container, HTML/JS only, common policy
+groups only) over the static Web Studio, labelled as a Web Studio shell and not as the Android app. No QML/Qt client (the
+licence rule bans linking LGPL), no JVM-in-click, and no on-device inference or key storage there; running the Android APK
+under Waydroid is owner-device evidence only. iOS is hard rather than reframe and follows the desktop seam: iPad first,
+foreground-only inference that stops GPU work on resign-active, SSH and CI targets only (no local process), domain and
+contracts commonized onto Kotlin Multiplatform with the golden canonicalization vectors
+(`schemas/loops/fixtures/canonicalization/`) held byte-identical, and nothing downloaded that changes app features.
+
+**Status:** PROPOSED, not self-ratified. Raises the porting program's OQ-1, OQ-2 and OQ-21, and depends on
+`FB-RAT-WEB-010` (itself PROPOSED) for the Web Studio. Neither target starts before the owner rules.
+
+---
