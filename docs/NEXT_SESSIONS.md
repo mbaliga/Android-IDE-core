@@ -62,6 +62,7 @@ read but deliberately left for a future pass, not silently forgotten.
 hardware-gated (Pixel 8/9/10 + select Samsung flagships as of Aug 2026) — verify Fonebrew's actual
 RedMagic dev target's dock behavior explicitly before assuming QPR3 desktop windowing exists
 there, per `01_VALIDATION_REPORT.md` §D1.
+**Status (2026-11-11):** `PointerLayoutMachine.kt` exists in `domain/loop/authoring/` with tests, and is unwired: no Compose or keyboard code consumes it yet.
 
 ## P1 — real but lower priority than the substrate above
 
@@ -122,6 +123,10 @@ bounded-backend call, §4 of that document) — extensions sit even further out 
 the differentiator-first-vs-substrate-first reordering (both still-open owner decisions, restated
 below) would need resolving first, since an extension model's shape depends heavily on whether
 Fonebrew ships any hosted backend at all.
+
+### 10. Multi-platform ports
+Planned, not started: see `docs/PORTING_PLAN.md`. The seam is a staged KMP extraction of `domain/`, `contracts/` and
+`inference/` with a Room-KMP spike first; gated on the owner's ruling on `FB-RAT-PORT-NEW-1` and on v0.13 device verification.
 
 ## Standing open owner decisions (restated from `HANDOFF_STATE.md`, not new here)
 
