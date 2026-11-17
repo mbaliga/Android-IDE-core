@@ -50,4 +50,6 @@ Evidence classes: BUILT-HERE (run in the Linux authoring container, seen to pass
 5. Decide the OQ-38 vs root-pin question before any attempt to make `core-engine` itself KMP.
 6. TestFlight/App Store crash reports are collected by Apple, not by the app (approved exception PT:D-BD); README/store listing must name it. The shell's About text already does.
 7. Device verification on iPad Pro M4 / iPhone 12 mini (everything is NEEDS-DEVICE-VALIDATION): launch, Keychain behaviour, layout.
-8. Tag `ios-v*` pushes build via the workflow; note GitHub may apply the `paths` filter to tag pushes, so use workflow_dispatch if a tag does not trigger.
+8. Tag `ios-v*` pushes build via the workflow (the push trigger has no `paths` filter on purpose); CI-LANE-WRITTEN, never seen to trigger.
+
+9. Known risk (predicted, not observed): `KeychainSecretStoreTest` runs as an unsigned Kotlin/Native test binary on the simulator; Keychain calls there can fail with errSecMissingEntitlement (-34018). If `ios-simulator` goes red on that test alone, it is this, not the shared domain.

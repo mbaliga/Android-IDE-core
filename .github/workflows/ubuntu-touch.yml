@@ -15,12 +15,7 @@ name: Ubuntu Touch (click)
 
 on:
   push:
-    tags: ["ut-v*"]
-    paths:
-      - "ubuntu-touch/**"
-      - ".github/workflows/ubuntu-touch.yml"
-      - "apple/shared/src/jvmTest/**"
-      - "core-engine/src/main/java/dev/fonebrew/domain/diff/LineDiff.kt"
+    tags: ["ut-v*"]   # no `paths:` on push: a release tag must always build
   pull_request:
     paths:
       - "ubuntu-touch/**"
@@ -94,8 +89,8 @@ jobs:
       - name: Locate the click
         id: click
         run: |
-          f="$(ls ubuntu-touch/build/all/app/*.click | head -1)"
-          test -s "$f"
+          f="$(find ubuntu-touch/build -name '*.click' -type f | head -1)"
+          test -n "$f" && test -s "$f"
           echo "file=$f" >> "$GITHUB_OUTPUT"
           ls -l "$f"
       - name: Attach to a DRAFT release (ut-v* tags only)

@@ -545,7 +545,7 @@ real scope, fully indexed in two new documents this WP-11 pass wrote:
     have no live pipeline wiring or `AppContainer` consumer, and no real Snapshot-step I/O
     (reading actual files/repo commits) — see `docs/WP7_GATE_REPORT.md` §6 for the full list.
 15. Multi-platform porting (Ubuntu Touch, Linux, iOS/iPadOS, macOS, Windows): `docs/PORTING_PLAN.md`
-    is a PLAN, nothing built. Its decisions are proposals `FB-RAT-PORT-NEW-1` to `-6` in
+    is a PLAN; only the first iOS slice and the UT companion exist (items below + `docs/IOS_PORT.md`). Its decisions are proposals `FB-RAT-PORT-NEW-1` to `-6` in
     `docs/non_ratified/EXPERIMENTAL_DECISIONS.md`; progress entries for it are appended here.
 16. Ubuntu Touch (2026-11-17): `ubuntu-touch/` is a COMPANION click (Diff Review), not a port; native
     shapes remain blocked on owner rulings (LGPL I-11, OQ-36/37). Status, evidence classes, owner actions:

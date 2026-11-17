@@ -19,13 +19,9 @@ name: iOS (macOS runner)
 # XcodeGen comes from Homebrew (version floats) -- OWNER/FOLLOW-UP: pin a release + checksum.
 
 on:
+  # No `paths:` on push: GitHub's path filtering on tag pushes is unreliable, and a release tag must always build.
   push:
     tags: ["ios-v*"]
-    paths:
-      - "apple/**"
-      - ".github/workflows/ios.yml"
-      - "core-engine/src/main/java/dev/fonebrew/domain/**"
-      - "core-engine/src/test/java/dev/fonebrew/domain/**"
   pull_request:
     paths:
       - "apple/**"
@@ -143,6 +139,12 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Select Xcode (same repo variable as the simulator job)
+        env:
+          XCODE_APP: ${{ vars.XCODE_APP || '' }}
+        run: |
+          if [ -n "$XCODE_APP" ]; then sudo xcode-select -s "/Applications/$XCODE_APP/Contents/Developer"; fi
+          xcodebuild -version
       - name: Unsigned .xcarchive
         working-directory: apple/ios
         run: |

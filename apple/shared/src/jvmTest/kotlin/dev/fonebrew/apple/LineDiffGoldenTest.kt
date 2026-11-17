@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package dev.fonebrew.apple
 
 import dev.fonebrew.domain.diff.LineDiff
@@ -7,11 +8,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Cross-implementation golden vectors for the Ubuntu Touch web shell (ubuntu-touch/webapp/js/linediff.js).
+ * Cross-implementation golden vectors for the Ubuntu Touch web shell (ubuntu-touch/www/linediff.js).
  *
  * The Kotlin [LineDiff] is the truth. This test renders every case below to JSON and requires the checked-in
  * file ubuntu-touch/golden/linediff.v1.json to match it BYTE FOR BYTE; the JS port is then tested against the
- * same file (ubuntu-touch/webapp/test/linediff.test.mjs). To regenerate after an intentional Kotlin change:
+ * same file (ubuntu-touch/tests/linediff.test.cjs). To regenerate after an intentional Kotlin change:
  * `UPDATE_GOLDEN=1 ./gradlew :shared:jvmTest --tests '*LineDiffGoldenTest*'` (from apple/).
  */
 class LineDiffGoldenTest {
