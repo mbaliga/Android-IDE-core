@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No network of any kind: the click declares no networking policy group and this CSP forbids it too. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Fonebrew Diff Review</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Fonebrew Diff Review</h1>
+  <p class="label">A small companion for Ubuntu Touch. <strong>This is not the Fonebrew Android app and not a port of it.</strong></p>
+</header>
+
+<main>
+  <section aria-labelledby="in">
+    <h2 id="in">Compare two texts</h2>
+    <label for="old">Before</label>
+    <textarea id="old" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <label for="new">After</label>
+    <textarea id="new" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <div class="row">
+      <label for="ctx">Context lines</label>
+      <input id="ctx" type="number" min="0" max="20" value="3" inputmode="numeric">
+      <button id="clear" type="button">Clear draft</button>
+    </div>
+    <p id="saved" class="muted" role="status"></p>
+  </section>
+
+  <section aria-labelledby="out">
+    <h2 id="out">Review</h2>
+    <p id="stat" class="stat" role="status">Nothing to compare yet.</p>
+    <div id="hunks"></div>
+    <label for="patch">Unified diff (select and copy)</label>
+    <textarea id="patch" rows="6" readonly spellcheck="false"></textarea>
+  </section>
+
+  <section aria-labelledby="tiers">
+    <h2 id="tiers">What this app is, and is not</h2>
+    <table>
+      <thead><tr><th>Capability</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td>Line diff, byte-identical to the Android core's</td><td><span class="mark">[yes]</span> Available (checked against shared test vectors)</td></tr>
+        <tr><td>On-device models</td><td><span class="mark">[no]</span> Not built on Ubuntu Touch</td></tr>
+        <tr><td>Cloud models and API keys</td><td><span class="mark">[no]</span> Not present: this app has no network access and stores no keys</td></tr>
+        <tr><td>Agent, loops, council, devices</td><td><span class="mark">[no]</span> Not present</td></tr>
+        <tr><td>Telemetry or analytics</td><td><span class="mark">[no]</span> None. Nothing leaves the device.</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">Your text is kept only in this app's private storage, saved as you type, so it survives the system pausing the app.</p>
+  </section>
+</main>
+
+<script src="linediff.js"></script>
+<script src="drafts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

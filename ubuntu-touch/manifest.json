@@ -1,0 +1,15 @@
+{
+  "name": "fonebrew-diff.asoc",
+  "title": "Fonebrew Diff Review",
+  "description": "A small offline line-diff reviewer. A companion, not the Fonebrew Android app.",
+  "version": "0.1.0",
+  "maintainer": "Fonebrew <noreply@invalid.example>",
+  "framework": "ubuntu-sdk-20.04",
+  "architecture": "all",
+  "hooks": {
+    "fonebrew-diff": {
+      "apparmor": "fonebrew-diff.apparmor",
+      "desktop": "fonebrew-diff.desktop"
+    }
+  }
+}

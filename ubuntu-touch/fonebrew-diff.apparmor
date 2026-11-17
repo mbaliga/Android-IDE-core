@@ -1,0 +1,7 @@
+{
+  "template": "ubuntu-webapp",
+  "policy_groups": [
+    "webview"
+  ],
+  "policy_version": 20.04
+}

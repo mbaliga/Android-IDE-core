@@ -1,0 +1,17 @@
+# Clickable config for the Fonebrew Diff Review companion click (Ubuntu Touch).
+# EVIDENCE: CI-LANE-WRITTEN / CODE-ONLY. Never built in the authoring container (no Docker daemon).
+# Click name + app id live in manifest.json (the ONE place: "fonebrew-diff.asoc"); a NAMES.md row
+# (porting rule R11) is an owner follow-up.
+clickable_minimum_required: 8.0.0
+builder: pure
+framework: ubuntu-sdk-20.04      # ASSUMPTION: a 20.04-framework click installs on 24.04-1.x / 2.x (recorded, unverified)
+kill: qmlscene
+# "pure" copies the project dir into the click; keep tests, golden vectors and docs out of the package.
+ignore:
+  - tests
+  - golden
+  - README.md
+  - DEVICE_CHECKLIST_UT.md
+  - clickable.yaml
+  - scripts
+  - build
