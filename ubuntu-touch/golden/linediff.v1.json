@@ -1,0 +1,187 @@
+{
+  "schema": "fonebrew.linediff.golden.v1",
+  "cases": [
+    {
+      "name": "identical",
+      "old": "a\nb\nc\n",
+      "new": "a\nb\nc\n",
+      "context": 3,
+      "stat": {"added": 0, "removed": 0},
+      "unified": "",
+      "hunks": []
+    },
+    {
+      "name": "single-change-ctx1",
+      "old": "a\nb\nc\n",
+      "new": "a\nB\nc\n",
+      "context": 1,
+      "stat": {"added": 1, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 3, "newStart": 1, "newCount": 3, "lines": [[" ", "a"], ["-", "b"], ["+", "B"], [" ", "c"]]}
+      ]
+    },
+    {
+      "name": "single-change-ctx0",
+      "old": "1\n2\n3\n4\n5\n",
+      "new": "1\n2\n3x\n4\n5\n",
+      "context": 0,
+      "stat": {"added": 1, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -3 +3 @@\n-3\n+3x\n",
+      "hunks": [
+        {"oldStart": 3, "oldCount": 1, "newStart": 3, "newCount": 1, "lines": [["-", "3"], ["+", "3x"]]}
+      ]
+    },
+    {
+      "name": "single-change-ctx1-mid",
+      "old": "1\n2\n3\n4\n5\n",
+      "new": "1\n2\n3x\n4\n5\n",
+      "context": 1,
+      "stat": {"added": 1, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -2,3 +2,3 @@\n 2\n-3\n+3x\n 4\n",
+      "hunks": [
+        {"oldStart": 2, "oldCount": 3, "newStart": 2, "newCount": 3, "lines": [[" ", "2"], ["-", "3"], ["+", "3x"], [" ", "4"]]}
+      ]
+    },
+    {
+      "name": "new-file",
+      "old": "",
+      "new": "x\ny\n",
+      "context": 3,
+      "stat": {"added": 2, "removed": 0},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+x\n+y\n",
+      "hunks": [
+        {"oldStart": 0, "oldCount": 0, "newStart": 1, "newCount": 2, "lines": [["+", "x"], ["+", "y"]]}
+      ]
+    },
+    {
+      "name": "deleted-file",
+      "old": "x\ny\n",
+      "new": "",
+      "context": 3,
+      "stat": {"added": 0, "removed": 2},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +0,0 @@\n-x\n-y\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 2, "newStart": 0, "newCount": 0, "lines": [["-", "x"], ["-", "y"]]}
+      ]
+    },
+    {
+      "name": "both-empty",
+      "old": "",
+      "new": "",
+      "context": 3,
+      "stat": {"added": 0, "removed": 0},
+      "unified": "",
+      "hunks": []
+    },
+    {
+      "name": "two-far-hunks",
+      "old": "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15\nL16\nL17\nL18\nL19\nL20\n",
+      "new": "L1\nL2x\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15\nL16\nL17\nL18x\nL19\nL20\n",
+      "context": 2,
+      "stat": {"added": 2, "removed": 2},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,4 +1,4 @@\n L1\n-L2\n+L2x\n L3\n L4\n@@ -16,5 +16,5 @@\n L16\n L17\n-L18\n+L18x\n L19\n L20\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 4, "newStart": 1, "newCount": 4, "lines": [[" ", "L1"], ["-", "L2"], ["+", "L2x"], [" ", "L3"], [" ", "L4"]]},
+        {"oldStart": 16, "oldCount": 5, "newStart": 16, "newCount": 5, "lines": [[" ", "L16"], [" ", "L17"], ["-", "L18"], ["+", "L18x"], [" ", "L19"], [" ", "L20"]]}
+      ]
+    },
+    {
+      "name": "two-near-hunks-merge",
+      "old": "n1\nn2\nn3\nn4\nn5\nn6\nn7\nn8\nn9\nn10\n",
+      "new": "n1\nn2\nn3x\nn4\nn5\nn6x\nn7\nn8\nn9\nn10\n",
+      "context": 2,
+      "stat": {"added": 2, "removed": 2},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,8 +1,8 @@\n n1\n n2\n-n3\n+n3x\n n4\n n5\n-n6\n+n6x\n n7\n n8\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 8, "newStart": 1, "newCount": 8, "lines": [[" ", "n1"], [" ", "n2"], ["-", "n3"], ["+", "n3x"], [" ", "n4"], [" ", "n5"], ["-", "n6"], ["+", "n6x"], [" ", "n7"], [" ", "n8"]]}
+      ]
+    },
+    {
+      "name": "no-trailing-newline",
+      "old": "a\nb",
+      "new": "a\nc",
+      "context": 3,
+      "stat": {"added": 1, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,2 @@\n a\n-b\n+c\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 2, "newStart": 1, "newCount": 2, "lines": [[" ", "a"], ["-", "b"], ["+", "c"]]}
+      ]
+    },
+    {
+      "name": "trailing-newline-only-difference",
+      "old": "a\nb\n",
+      "new": "a\nb",
+      "context": 3,
+      "stat": {"added": 0, "removed": 0},
+      "unified": "",
+      "hunks": []
+    },
+    {
+      "name": "duplicate-lines",
+      "old": "x\nx\nx\ny\n",
+      "new": "x\ny\nx\nx\n",
+      "context": 1,
+      "stat": {"added": 1, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,4 +1,4 @@\n x\n+y\n x\n x\n-y\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 4, "newStart": 1, "newCount": 4, "lines": [[" ", "x"], ["+", "y"], [" ", "x"], [" ", "x"], ["-", "y"]]}
+      ]
+    },
+    {
+      "name": "insert-in-middle",
+      "old": "a\nb\nd\ne\n",
+      "new": "a\nb\nc\nd\ne\n",
+      "context": 1,
+      "stat": {"added": 1, "removed": 0},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -2,2 +2,3 @@\n b\n+c\n d\n",
+      "hunks": [
+        {"oldStart": 2, "oldCount": 2, "newStart": 2, "newCount": 3, "lines": [[" ", "b"], ["+", "c"], [" ", "d"]]}
+      ]
+    },
+    {
+      "name": "delete-in-middle",
+      "old": "a\nb\nc\nd\ne\n",
+      "new": "a\nb\nd\ne\n",
+      "context": 1,
+      "stat": {"added": 0, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -2,3 +2,2 @@\n b\n-c\n d\n",
+      "hunks": [
+        {"oldStart": 2, "oldCount": 3, "newStart": 2, "newCount": 2, "lines": [[" ", "b"], ["-", "c"], [" ", "d"]]}
+      ]
+    },
+    {
+      "name": "unicode-and-escapes",
+      "old": "café — \"q\"\n\ttab\\slash\n",
+      "new": "café — \"q\"\n\ttab\\slash!\n日本語\n",
+      "context": 3,
+      "stat": {"added": 2, "removed": 1},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,3 @@\n café — \"q\"\n-\ttab\\slash\n+\ttab\\slash!\n+日本語\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 2, "newStart": 1, "newCount": 3, "lines": [[" ", "café — \"q\""], ["-", "\ttab\\slash"], ["+", "\ttab\\slash!"], ["+", "日本語"]]}
+      ]
+    },
+    {
+      "name": "blank-lines",
+      "old": "a\n\nb\n\n\nc\n",
+      "new": "a\n\nB\n\nc\n",
+      "context": 1,
+      "stat": {"added": 1, "removed": 2},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -2,4 +2,3 @@\n \n-b\n-\n+B\n \n",
+      "hunks": [
+        {"oldStart": 2, "oldCount": 4, "newStart": 2, "newCount": 3, "lines": [[" ", ""], ["-", "b"], ["-", ""], ["+", "B"], [" ", ""]]}
+      ]
+    },
+    {
+      "name": "replace-all",
+      "old": "a\nb\nc\n",
+      "new": "x\ny\nz\n",
+      "context": 3,
+      "stat": {"added": 3, "removed": 3},
+      "unified": "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n-a\n-b\n-c\n+x\n+y\n+z\n",
+      "hunks": [
+        {"oldStart": 1, "oldCount": 3, "newStart": 1, "newCount": 3, "lines": [["-", "a"], ["-", "b"], ["-", "c"], ["+", "x"], ["+", "y"], ["+", "z"]]}
+      ]
+    }
+  ]
+}

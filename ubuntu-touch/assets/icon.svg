@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Fonebrew Diff Review">
+  <rect width="256" height="256" fill="#1a1a1f"/>
+  <path d="M56 84h72M56 128h144M56 172h96" stroke="#ececf1" stroke-width="14" stroke-linecap="square"/>
+  <path d="M176 70v28M162 84h28" stroke="#35E0FF" stroke-width="14" stroke-linecap="square"/>
+  <path d="M176 158v28" stroke="#8E7BFF" stroke-width="14" stroke-linecap="square"/>
+</svg>

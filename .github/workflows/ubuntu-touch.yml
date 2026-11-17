@@ -1,0 +1,104 @@
+name: Ubuntu Touch (click)
+
+# Owner directive 2026-11-17: Ubuntu Touch builds happen on GitHub Actions.
+# EVIDENCE CLASS: CI-LANE-WRITTEN. This file has never run. What WAS run in the authoring container:
+# the node parity tests, scripts/check_click.py, a clickable 8.10.0 config-schema load, qmllint syntax check,
+# and the Kotlin golden-vector test. The click build itself was NOT run there (no space for the SDK image).
+#
+# What this builds: ubuntu-touch/ = "Fonebrew Diff Review", a small offline companion click (QML window
+# hosting a bundled web page). It is NOT the Fonebrew Android app and NOT a port of it (see
+# ubuntu-touch/README.md). Unsigned; no secrets; no artifact-upload action (account artifact quota,
+# CLAUDE.md "Second infra false-negative"): release assets go through the runner's `gh` with the scoped token,
+# on `ut-v*` tags only, as a DRAFT release.
+#
+# Third-party actions are pinned by full SHA. Clickable is pinned by version via pip.
+
+on:
+  push:
+    tags: ["ut-v*"]   # no `paths:` on push: a release tag must always build
+  pull_request:
+    paths:
+      - "ubuntu-touch/**"
+      - ".github/workflows/ubuntu-touch.yml"
+      - "apple/shared/src/jvmTest/**"
+      - "core-engine/src/main/java/dev/fonebrew/domain/diff/LineDiff.kt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ubuntu-touch-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+
+jobs:
+  payload-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Static click checks (manifest, apparmor groups, CSP, no network APIs)
+        run: python3 -I ubuntu-touch/scripts/check_click.py
+      - name: JS parity with the Kotlin golden vectors, and draft persistence
+        run: |
+          node ubuntu-touch/tests/linediff.test.cjs
+          node ubuntu-touch/tests/drafts.test.cjs
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            apple/**/*.gradle*
+            apple/gradle/libs.versions.toml
+            apple/gradle/wrapper/gradle-wrapper.properties
+      - name: Kotlin LineDiff still reproduces the checked-in golden file byte for byte
+        working-directory: apple
+        run: env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew --no-daemon :shared:jvmTest --tests '*LineDiffGoldenTest*'
+      - name: Headless-Chrome smoke of the real page (non-blocking until it has been seen green once)
+        continue-on-error: true
+        run: bash ubuntu-touch/tests/smoke.sh
+
+  click-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: payload-tests
+    permissions:
+      contents: write   # draft release asset upload on ut-v* tags only
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Install Clickable (pinned)
+        run: python3 -m pip install --user "clickable-ut==8.10.0" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build the unsigned click (pure payload, architecture all; runs in Clickable's SDK container)
+        working-directory: ubuntu-touch
+        run: clickable build
+      - name: "Click lint (click-review), informational; OpenStore review is the real gate"
+        working-directory: ubuntu-touch
+        continue-on-error: true
+        run: clickable review
+      - name: Locate the click
+        id: click
+        run: |
+          f="$(find ubuntu-touch/build -name '*.click' -type f | head -1)"
+          test -n "$f" && test -s "$f"
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          ls -l "$f"
+      - name: Attach to a DRAFT release (ut-v* tags only)
+        if: startsWith(github.ref, 'refs/tags/ut-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          FILE: ${{ steps.click.outputs.file }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --title "$TAG" --notes "Unsigned Ubuntu Touch click: Fonebrew Diff Review companion (not the Android app). Not store-reviewed."
+          gh release upload "$TAG" "$FILE" --clobber

@@ -1,0 +1,34 @@
+# apple/shared/mapping.txt -- the ONE place the shared module's source mapping is declared.
+# Same "map by srcDir" idea as desktop/core-host/mapping.txt: NOTHING is copied or moved, the files stay
+# where Android compiles them (core-engine/src/main/java/dev/fonebrew/domain) and apple/shared compiles
+# them unchanged as commonMain. Only files that are pure common Kotlin (no java.*, javax.*, android.*,
+# org.json) are listed; scripts/check_shared_sources.py enforces that and that every path exists.
+#
+# Line format: "main | <repo-relative file>" / "test | <repo-relative file>" (JUnit 4, jvmTest only).
+#
+# NOT mapped yet (each needs an actual): tree/Attachments.kt, tree/Sources.kt (org.json),
+# tree/Nodes.kt, tree/TreeFork.kt (java.util.UUID; MessageTreeTest needs Nodes), bpmn/BpmnArchive.kt (javax.xml).
+main | core-engine/src/main/java/dev/fonebrew/domain/Role.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/MessageNode.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/Conversation.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/GeneratedToken.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/SamplingParams.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/tree/Bookmarks.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/tree/Conversations.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/tree/MessageTree.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/tree/PathView.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/tree/SiblingCompare.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/tree/TreeOutline.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/diff/ChangeSet.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/diff/LineDiff.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/diff/ReviewSession.kt
+main | core-engine/src/main/java/dev/fonebrew/domain/bpmn/BpmnGraph.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/tree/BookmarksTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/tree/ConversationsTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/tree/PathViewTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/tree/SiblingCompareTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/tree/TreeOutlineTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/diff/ChangeSetReviewTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/diff/ChangeSetTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/diff/LineDiffTest.kt
+test | core-engine/src/test/java/dev/fonebrew/domain/diff/ReviewSessionTest.kt

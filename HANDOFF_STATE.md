@@ -37,6 +37,13 @@ hyle-design-system shared-libraries` is required before Gradle can resolve `dev.
 `dev.aarso:crash-recovery` / `dev.aarso:interaction-mode`; the native llama.cpp/
 stable-diffusion.cpp submodules are needed only for `assembleFullDebug`.
 
+## PROGRESS — 2026-11-17: iOS port first slice (apple/, ios.yml)
+
+Isolated `apple/` Gradle build: KMP `:shared` compiles 15 pure core-engine domain files in place;
+`./gradlew :shared:jvmTest` (run from `apple/`) = 70 tests, 0 failures, BUILT-HERE. SwiftUI proof shell,
+Keychain actual, XcodeGen project and `.github/workflows/ios.yml` are CODE-ONLY / CI-LANE-WRITTEN.
+Full status, gaps and owner actions: `docs/IOS_PORT.md`. Root Android gate not runnable here (no SDK).
+
 ## PROGRESS — 2026-10-14: WatchBrew v1 + porting LX-1/LX-2 (all lanes adversarially verified)
 
 - **WatchBrew v1** (owner directive 2026-10-13; design law `docs/design/watchbrew.md`):
@@ -537,6 +544,12 @@ real scope, fully indexed in two new documents this WP-11 pass wrote:
 14. WP-7's CSApp/Assay import lanes (`CsAppImportLane`/`AssayImportLane`/`ImportReceiptBuilder`)
     have no live pipeline wiring or `AppContainer` consumer, and no real Snapshot-step I/O
     (reading actual files/repo commits) — see `docs/WP7_GATE_REPORT.md` §6 for the full list.
+15. Multi-platform porting (Ubuntu Touch, Linux, iOS/iPadOS, macOS, Windows): `docs/PORTING_PLAN.md`
+    is a PLAN; only the first iOS slice and the UT companion exist (items below + `docs/IOS_PORT.md`). Its decisions are proposals `FB-RAT-PORT-NEW-1` to `-6` in
+    `docs/non_ratified/EXPERIMENTAL_DECISIONS.md`; progress entries for it are appended here.
+16. Ubuntu Touch (2026-11-17): `ubuntu-touch/` is a COMPANION click (Diff Review), not a port; native
+    shapes remain blocked on owner rulings (LGPL I-11, OQ-36/37). Status, evidence classes, owner actions:
+    `docs/UBUNTU_TOUCH_PORT.md`. JS/Kotlin golden parity BUILT-HERE; click build CI-LANE-WRITTEN; device NDV.
 
 ## Commits
 

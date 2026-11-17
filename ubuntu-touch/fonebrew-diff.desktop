@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Fonebrew Diff Review
+Comment=Offline line-diff reviewer (companion; not the Fonebrew Android app)
+Exec=qmlscene %U qml/Main.qml
+Icon=assets/icon.svg
+Terminal=false
+Type=Application
+X-Lomiri-Touch=true
+X-Ubuntu-Touch=true

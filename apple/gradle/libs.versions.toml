@@ -1,0 +1,14 @@
+# Pins for the apple/ build ONLY. Owner ruling OQ-38 (2026-10-07): iOS moves to Kotlin 2.2.21.
+# This build is isolated, so the Android build's do-not-regress pins (Kotlin 2.1.0, KSP, sqldelight
+# 2.1.0, Compose BoM 2025.05.01) are unchanged. Whether the shared sources also compile at the root's
+# 2.1.0 is proven by desktop/ (it maps the same files); scripts/check_shared_sources.py guards that.
+[versions]
+kotlin = "2.2.21"
+junit = "4.13.2"
+
+[libraries]
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

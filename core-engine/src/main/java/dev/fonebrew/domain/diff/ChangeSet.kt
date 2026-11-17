@@ -57,7 +57,7 @@ data class ChangeSet(val changes: List<FileChange>) {
          * (`new`, absent = a delete). Only paths present in either map appear.
          */
         fun of(old: Map<String, String>, new: Map<String, String>): ChangeSet {
-            val paths = (old.keys + new.keys).toSortedSet()
+            val paths = (old.keys + new.keys).distinct().sorted()
             return ChangeSet(paths.map { p -> FileChange(p, old[p] ?: "", new[p] ?: "") })
         }
     }
