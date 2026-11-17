@@ -1,5 +1,4 @@
 {
-  "template": "ubuntu-webapp",
   "policy_groups": [
     "webview"
   ],
