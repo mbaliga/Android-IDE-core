@@ -1,0 +1,187 @@
+name: iOS (macOS runner)
+
+# Porting plan IOS-1/IOS-5/IOS-6 + owner directive 2026-11-17 ("use GitHub CI for the builds").
+# EVIDENCE CLASS: CI-LANE-WRITTEN. This file has never run. Static checks done in the authoring
+# container: YAML parse, the shared-sources guard, and the apple/ JVM test lane (Linux).
+#
+# What it builds, all UNSIGNED and with NO secrets:
+#   1. shared-jvm       (ubuntu)  apple/ :shared:jvmTest -- the mapped common domain + new common tests.
+#   2. swift-kit        (macos)   `swift test` on apple/ios/FonebrewKit (pure Swift helpers).
+#   3. ios-simulator    (macos)   :shared:iosSimulatorArm64Test (Kotlin/Native on the simulator),
+#                                 XcodeGen -> xcodebuild for the iOS Simulator, CODE_SIGNING_ALLOWED=NO.
+#   4. ios-archive      (macos)   unsigned .xcarchive of the app; attached to a DRAFT release on tags only.
+#   5. ios-signed       (macos)   DISABLED TEMPLATE (if: false) behind the `apple-signing` GitHub
+#                                 environment (required reviewers + secrets live there, never in the repo).
+#
+# Hosted macOS minutes are free on public repos and billed (10x) on private ones.
+# Third-party actions are pinned by full SHA (same pins as the other workflows). No artifact-upload
+# action is used: release assets go through the runner's own `gh` CLI with the scoped GITHUB_TOKEN.
+# XcodeGen comes from Homebrew (version floats) -- OWNER/FOLLOW-UP: pin a release + checksum.
+
+on:
+  push:
+    tags: ["ios-v*"]
+    paths:
+      - "apple/**"
+      - ".github/workflows/ios.yml"
+      - "core-engine/src/main/java/dev/fonebrew/domain/**"
+      - "core-engine/src/test/java/dev/fonebrew/domain/**"
+  pull_request:
+    paths:
+      - "apple/**"
+      - ".github/workflows/ios.yml"
+      - "core-engine/src/main/java/dev/fonebrew/domain/**"
+      - "core-engine/src/test/java/dev/fonebrew/domain/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+
+jobs:
+  shared-jvm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Shared sources are common-Kotlin clean and mapped files exist
+        run: python3 -I apple/scripts/check_shared_sources.py
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            apple/**/*.gradle*
+            apple/gradle/libs.versions.toml
+            apple/gradle/wrapper/gradle-wrapper.properties
+      - name: JVM tests of the shared module (Android env UNSET)
+        working-directory: apple
+        run: |
+          for attempt in 1 2 3; do
+            if env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew --no-daemon :shared:jvmTest; then exit 0; fi
+            echo "attempt $attempt failed; backing off"; sleep $((attempt * 20))
+          done
+          exit 1
+
+  swift-kit:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: swift test (pure Swift helpers)
+        working-directory: apple/ios/FonebrewKit
+        run: swift test
+
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    needs: [shared-jvm, swift-kit]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            apple/**/*.gradle*
+            apple/gradle/libs.versions.toml
+            apple/gradle/wrapper/gradle-wrapper.properties
+      - name: Select Xcode (OQ-38 asks for an explicitly selected Xcode 26.x; set via repo variable)
+        env:
+          XCODE_APP: ${{ vars.XCODE_APP || '' }}
+        run: |
+          if [ -n "$XCODE_APP" ]; then sudo xcode-select -s "/Applications/$XCODE_APP/Contents/Developer"; fi
+          xcodebuild -version
+      - name: Kotlin/Native simulator tests (compiles the iOS targets incl. KeychainSecretStore)
+        working-directory: apple
+        run: ./gradlew --no-daemon :shared:iosSimulatorArm64Test
+      - name: Generate the Xcode project
+        working-directory: apple/ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build for the iOS Simulator (unsigned)
+        working-directory: apple/ios
+        run: |
+          xcodebuild -project Fonebrew.xcodeproj -scheme Fonebrew \
+            -sdk iphonesimulator -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -derivedDataPath build/dd build
+
+  ios-archive:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    needs: [ios-simulator]
+    # Archive on every run (proves it builds); publish only for tags.
+    permissions:
+      contents: write   # draft release asset upload on tags only
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Unsigned .xcarchive
+        working-directory: apple/ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -project Fonebrew.xcodeproj -scheme Fonebrew \
+            -sdk iphoneos -configuration Release \
+            -archivePath build/Fonebrew.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            archive
+          (cd build && ditto -c -k --keepParent Fonebrew.xcarchive Fonebrew-unsigned.xcarchive.zip)
+      - name: Attach to a DRAFT release (tags only)
+        if: startsWith(github.ref, 'refs/tags/ios-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --title "$TAG" --notes "Unsigned iOS archive. Not installable on a device until signed by the owner."
+          gh release upload "$TAG" apple/ios/build/Fonebrew-unsigned.xcarchive.zip --clobber
+
+  # DISABLED TEMPLATE. To enable: enrol in the Apple Developer Program, create the `apple-signing`
+  # environment with required reviewers, add the secrets named below there, then remove `if: false`.
+  # No signing material is ever stored in the repository.
+  ios-signed:
+    if: false
+    runs-on: macos-latest
+    needs: [ios-archive]
+    environment: apple-signing
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Import certificate + profile (secrets from the environment only)
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROFILE_BASE64: ${{ secrets.APPLE_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "TEMPLATE: create a temp keychain, import the p12, install the profile,"
+          echo "then xcodebuild archive + -exportArchive with an ExportOptions.plist, then upload to TestFlight."
+          exit 1

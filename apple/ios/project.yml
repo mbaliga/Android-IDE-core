@@ -1,0 +1,58 @@
+# XcodeGen spec (https://github.com/yonaskolb/XcodeGen). `xcodegen generate` writes Fonebrew.xcodeproj;
+# the .xcodeproj is generated in CI and git-ignored. CODE-ONLY until the macOS lane is seen green.
+name: Fonebrew
+options:
+  bundleIdPrefix: com.asoc
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  FonebrewKit:
+    path: FonebrewKit
+settings:
+  base:
+    # ===== APPLE BUNDLE ID (the ONE place) =====================================================
+    # com.asoc.<appname> per owner directive 2026-11-17. Plan rule R11 wants a NAMES.md row first;
+    # NAMES.md lives outside this repo -> OWNER FOLLOW-UP (see docs/IOS_PORT.md). Change here only.
+    PRODUCT_BUNDLE_IDENTIFIER: com.asoc.fonebrew
+    # ============================================================================================
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1,2"          # iPhone + iPad (iPad-first design)
+    # Unsigned by default. Signing is a separate, approval-gated CI job (ios.yml, disabled template).
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+    DEVELOPMENT_TEAM: ""
+    # Static Kotlin framework lands here (see the Gradle pre-build script below).
+    FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+    OTHER_LDFLAGS: "$(inherited) -framework FonebrewShared"
+targets:
+  Fonebrew:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    dependencies:
+      - package: FonebrewKit
+    preBuildScripts:
+      - name: Build Kotlin shared framework
+        basedOnDependencyAnalysis: false
+        script: |
+          cd "$SRCROOT/.." && ./gradlew --no-daemon :shared:embedAndSignAppleFrameworkForXcode
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Fonebrew
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
