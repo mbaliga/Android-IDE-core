@@ -474,3 +474,10 @@ The Apple column is now split: iPhone and iPad are judged apart. Where an app po
 - **Skin contract (OQ-39, 2026-10-14):** proposed conformance level for this app: Level 1 (listed as Aarso in the spec; cost class A, a runtime-built LocalHyleColors). The owner chose Tier 1 (palette) everywhere first and every app declaring its own level; the assistant chose JSON, not XML, after the owner asked for a check; the draft spec is Personal-Tracker `porting/skin-contract/SPEC-DRAFT.md`. This is a proposal, not decided for this app.
 
 When the owner confirms or changes the line, this repo's original cells above stay as the engineering detail; only the verdicts and re-costs in program section 5A.12 change.
+
+## Status update 2026-11-17: iOS (IOS-1 first slice, IOS-5 proof shell, IOS-6 CI)
+
+Owner directive 2026-11-17 overrides "iPad later wave": iOS is built now, on GitHub Actions. See `docs/IOS_PORT.md`
+for the evidence table. Summary: `apple/shared` (KMP, 15 domain files shared in place, 70 JVM tests green here),
+SwiftUI proof shell + Keychain actual + `ios.yml` written but never compiled or run (CODE-ONLY / CI-LANE-WRITTEN).
+IOS-2, IOS-3, IOS-4 not started.

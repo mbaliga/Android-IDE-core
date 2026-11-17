@@ -37,6 +37,13 @@ hyle-design-system shared-libraries` is required before Gradle can resolve `dev.
 `dev.aarso:crash-recovery` / `dev.aarso:interaction-mode`; the native llama.cpp/
 stable-diffusion.cpp submodules are needed only for `assembleFullDebug`.
 
+## PROGRESS — 2026-11-17: iOS port first slice (apple/, ios.yml)
+
+Isolated `apple/` Gradle build: KMP `:shared` compiles 15 pure core-engine domain files in place;
+`./gradlew :shared:jvmTest` (run from `apple/`) = 70 tests, 0 failures, BUILT-HERE. SwiftUI proof shell,
+Keychain actual, XcodeGen project and `.github/workflows/ios.yml` are CODE-ONLY / CI-LANE-WRITTEN.
+Full status, gaps and owner actions: `docs/IOS_PORT.md`. Root Android gate not runnable here (no SDK).
+
 ## PROGRESS — 2026-10-14: WatchBrew v1 + porting LX-1/LX-2 (all lanes adversarially verified)
 
 - **WatchBrew v1** (owner directive 2026-10-13; design law `docs/design/watchbrew.md`):
