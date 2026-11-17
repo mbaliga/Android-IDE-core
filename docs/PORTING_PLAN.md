@@ -481,3 +481,10 @@ Owner directive 2026-11-17 overrides "iPad later wave": iOS is built now, on Git
 for the evidence table. Summary: `apple/shared` (KMP, 15 domain files shared in place, 70 JVM tests green here),
 SwiftUI proof shell + Keychain actual + `ios.yml` written but never compiled or run (CODE-ONLY / CI-LANE-WRITTEN).
 IOS-2, IOS-3, IOS-4 not started.
+
+## Status update 2026-11-17: Ubuntu Touch (UT-2 scaffold, UT-5 docs, UT-3 stand-in payload)
+
+Owner directive 2026-11-17: build Ubuntu Touch on GitHub Actions. `ubuntu-touch/` is a **companion click ("Fonebrew
+Diff Review"), not a port**: native-only ruling and the LGPL rule (I-11) still block every native shape. See
+`docs/UBUNTU_TOUCH_PORT.md`. Golden parity with Kotlin `LineDiff` and static click rules are BUILT-HERE; the click
+build is CI-LANE-WRITTEN; everything on a device is NEEDS-DEVICE-VALIDATION. UT-4 (Content Hub), UT-6 not done.
