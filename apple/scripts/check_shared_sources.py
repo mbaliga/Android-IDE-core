@@ -3,7 +3,7 @@
 (no java.*, javax.*, android.*, org.json, kotlin.jvm.* JVM-only annotations). Run with python3 -I."""
 import re, sys, pathlib
 root = pathlib.Path(__file__).resolve().parents[2]
-bad = re.compile(r'^\s*import\s+(java\.|javax\.|android\.|org\.json|kotlin\.jvm\.)|\b(java|javax|android)\.[a-z]+\.[A-Za-z]|@(Synchronized|Volatile|JvmStatic|JvmField|JvmOverloads)\b')
+bad = re.compile(r'^\s*import\s+(java\.|javax\.|android\.|org\.json|kotlin\.jvm\.)|\b(java|javax|android)\.[a-z]+\.[A-Za-z]|@(Synchronized|Volatile|JvmStatic|JvmField|JvmOverloads)\b|\.(toSortedSet|toSortedMap)\(|\b(sortedSetOf|sortedMapOf)\(')
 errors, n = [], 0
 for i, raw in enumerate((root / "apple/shared/mapping.txt").read_text().splitlines(), 1):
     line = raw.strip()
