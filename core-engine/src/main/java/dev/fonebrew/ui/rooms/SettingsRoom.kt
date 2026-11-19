@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aarso.hyle.cells.HyleSwitch
+import dev.aarso.hyle.component.HyleOnOffToggle
 import dev.aarso.hyle.component.HyleContextMenu
 import dev.aarso.hyle.component.HyleTree
 import dev.fonebrew.data.GitBrowse
@@ -574,7 +574,7 @@ private fun GeneralSettings(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Show Ctrl-C button in Terminal", style = MaterialTheme.typography.bodyMedium)
-            HyleSwitch(checked = showCtrlC, onCheckedChange = session::setTerminalCtrlCButton)
+            HyleOnOffToggle(checked = showCtrlC, onCheckedChange = session::setTerminalCtrlCButton)
         }
     }
     HorizontalDivider()
@@ -605,7 +605,7 @@ private fun GeneralSettings(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Floating bubble (always-on summon)", style = MaterialTheme.typography.bodyMedium)
-            HyleSwitch(
+            HyleOnOffToggle(
                 checked = bubbleOn,
                 onCheckedChange = { on ->
                     if (on) {
@@ -685,10 +685,10 @@ private fun GeneralSettings(
     // Turning a switch off never removes the underlying action — it's always still reachable via
     // the chevron row / TurnActionsSheet / TalkBack custom actions; this just stops the drag from
     // triggering it, for anyone who finds the hold-and-pull motion fights their own touch habits.
-    // These three + the Observer switch below render via [HyleSwitch] (cells package), same as
-    // the rest of this General tab — the owner picked the square up-down switch as the standard
-    // settings toggle (2026-08-21: "the square up down toggle is fine"), retiring the merge-era
-    // mix with the desktop-class kit's HyleToggle.
+    // These three + the Observer switch below render via [HyleOnOffToggle] (the cap toggle),
+    // same as every other on/off in the app. The owner made the cap toggle THE Hyle switch on
+    // 2026-11-19 ("make sure everyone uses this as is"), superseding the 2026-08-21 pick of the
+    // square up-down HyleSwitch and retiring the desktop-class kit's old HyleToggle.
     Text("Gestures", style = MaterialTheme.typography.titleMedium)
     Text(
         "Message-bubble drags — hold briefly, then pull. Every one has a tap equivalent " +
@@ -710,7 +710,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleSwitch(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
+        HyleOnOffToggle(checked = gestureVerdictDrag, onCheckedChange = { session.setGestureVerdictDragEnabled(it) })
     }
     val gestureQuoteReply by session.gestureQuoteReplyEnabled.collectAsState()
     Row(
@@ -726,7 +726,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleSwitch(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
+        HyleOnOffToggle(checked = gestureQuoteReply, onCheckedChange = { session.setGestureQuoteReplyEnabled(it) })
     }
     val gestureRadialFan by session.gestureRadialFanEnabled.collectAsState()
     Row(
@@ -742,7 +742,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleSwitch(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
+        HyleOnOffToggle(checked = gestureRadialFan, onCheckedChange = { session.setGestureRadialFanEnabled(it) })
     }
     HorizontalDivider()
 
@@ -775,7 +775,7 @@ private fun GeneralSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleSwitch(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
+        HyleOnOffToggle(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
     }
 
     // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —
@@ -862,7 +862,7 @@ private fun DevSettings(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        HyleSwitch(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
+        HyleOnOffToggle(checked = entropy, onCheckedChange = { session.setEntropyColoring(it) })
     }
     HorizontalDivider()
 
@@ -1060,7 +1060,7 @@ private fun ProviderPricingSection(viewModel: SettingsViewModel, providers: List
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("Show cost under cloud turns", style = MaterialTheme.typography.bodyMedium)
-        HyleSwitch(
+        HyleOnOffToggle(
             checked = perTurnCostInChat,
             onCheckedChange = { container.sessionStore.setPerTurnCostInChat(it) },
         )
@@ -2187,7 +2187,7 @@ private fun ProviderForm(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Model understands images", style = MaterialTheme.typography.bodyMedium)
-            HyleSwitch(checked = supportsVision, onCheckedChange = { supportsVision = it })
+            HyleOnOffToggle(checked = supportsVision, onCheckedChange = { supportsVision = it })
         }
         DesktopHyleField(
             apiKey, { apiKey = it },

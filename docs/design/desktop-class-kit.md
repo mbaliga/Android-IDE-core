@@ -35,9 +35,12 @@ Geometry: generously rounded rect (~14–16 dp radius), roomy vertical padding, 
 leaning right ~12–15°); the error tick carries a small exclamation notch. Shadow is soft,
 low-elevation. Text left-aligned; single-line default with ellipsis.
 
-**B. HyleToggle**: rounded-square track (not a pill), thumb is a **slanted-edged square**
-(same parallelogram language as the tick), shown off-state: grey track, light thumb right…
-states: off (grey track/white thumb), on (violet track/white thumb), disabled (ghosted).
+**B. Toggle — RETIRED / REPLACED (2026-11-19).** `HyleToggle` (rounded-square track, slanted
+thumb) is gone. THE Hyle switch is now the cap toggle drawn in the owner's Figma SVGs:
+`HyleOnOffToggle` for a boolean (empty, or "No"/"Yes"; black cap that glows green when on) and
+`HyleCapToggle` for a choice between two peers (`#`/`*`, words). One cap shape morphs between
+its two forms; height = `HyleControlHeight` (= `HyleField`'s). Every on/off in the app uses it
+(this supersedes the 2026-08-21 square up-down `HyleSwitch` pick).
 
 **C. HyleKeycap**: keyboard-key chips for shortcut hints, e.g. `#` and `*` pairs: a rounded
 light tray containing a dark keycap with a subtle top-right fold/highlight; two variants
@@ -69,7 +72,7 @@ then bump the submodule pin in core (`git add hyle-design-system`) in the same c
 that adopts it.
 
 New components: `HyleField` (single-line + multiline; state enum NOT_SELECTED/SELECTED/
-ERROR/DISABLED × mandatory flag; label+supporting-text slots), `HyleToggle`, `HyleKeycap`,
+ERROR/DISABLED × mandatory flag; label+supporting-text slots), `HyleOnOffToggle`/`HyleCapToggle`, `HyleKeycap`,
 `HyleTree` (generic: caller supplies nodes + lazy children + icons; exposes expand-state,
 selection, context-menu hook), `HyleContextMenu` (items: icon, label, destructive flag,
 enabled flag; anchored popup). All theme-aware via the Hyle token system (light + dark per
@@ -79,7 +82,7 @@ the mockups; app default remains AMOLED-dark).
 
 - **Settings**: every text input (API keys, base URLs, model names, search) → `HyleField`
   (mandatory/error states real: empty required key = mandatory, failed validation = error);
-  every `Switch` → `HyleToggle` (gestures toggles, observer toggle, on-device⇄cloud stays
+  every `Switch` → `HyleOnOffToggle` (gestures toggles, observer toggle, on-device⇄cloud stays
   the chip pair).
 - **Search overlay** input → `HyleField`.
 - **Council participant editor**, project/chapter rename dialogs → `HyleField`.

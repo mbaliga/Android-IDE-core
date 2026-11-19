@@ -55,7 +55,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -120,7 +119,7 @@ import dev.aarso.hyle.cells.HyleLensHeading
 import dev.aarso.hyle.cells.HyleRadialMenu
 import dev.aarso.hyle.cells.HyleRadialMenuItem
 import dev.aarso.hyle.cells.HyleSealedLens
-import dev.aarso.hyle.cells.HyleSwitch
+import dev.aarso.hyle.component.HyleOnOffToggle
 import dev.aarso.hyle.cells.hylePulse
 import dev.aarso.hyle.cells.rememberHyleHaptics
 import dev.fonebrew.ui.components.MentionPopup
@@ -1737,7 +1736,7 @@ private fun InstrumentsStrip(
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.weight(1f),
             )
-            HyleSwitch(checked = entropyColoring, onCheckedChange = onEntropyColoring)
+            HyleOnOffToggle(checked = entropyColoring, onCheckedChange = onEntropyColoring)
         }
         // THREAD_TOPOLOGY_PLAN.md WP3: "entry from InstrumentsStrip" — opens the Compaction
         // preview for the active leaf; nothing is generated until the sheet's own confirm.
@@ -2163,7 +2162,7 @@ private fun TurnActionsSheet(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f),
                 )
-                Switch(checked = directive?.mustInclude == true, onCheckedChange = { onToggleMustInclude() })
+                HyleOnOffToggle(checked = directive?.mustInclude == true, onCheckedChange = { onToggleMustInclude() })
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             TextButton(onClick = onRewind, modifier = Modifier.fillMaxWidth()) {

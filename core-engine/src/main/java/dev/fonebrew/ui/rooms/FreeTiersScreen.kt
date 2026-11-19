@@ -31,7 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleSwitch
+import dev.aarso.hyle.component.HyleOnOffToggle
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.cost.FreeTierProvider
 import dev.fonebrew.ui.wire.WireBox
@@ -109,7 +109,7 @@ fun FreeTiersScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Auto-update on open", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                HyleSwitch(
+                HyleOnOffToggle(
                     checked = autoUpdate,
                     onCheckedChange = { want ->
                         if (want) pendingConsent = FtConsent.ENABLE_AUTO else session.setFreeTierAutoUpdate(false)

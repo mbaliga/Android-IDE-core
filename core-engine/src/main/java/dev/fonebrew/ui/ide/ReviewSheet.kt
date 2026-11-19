@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.aarso.hyle.cells.HyleButton
 import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleSwitch
+import dev.aarso.hyle.component.HyleOnOffToggle
 import dev.aarso.hyle.cells.HyleTitle
 import dev.aarso.hyle.theme.LocalHyleColors
 import dev.fonebrew.domain.diff.ChangeSet
@@ -133,7 +133,7 @@ private fun FileHunks(fc: FileChange, session: ReviewSession, approved: MutableL
                     modifier = Modifier.weight(1f),
                 )
                 Text(if (approved[j]) "apply" else "skip", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                HyleSwitch(checked = approved[j], onCheckedChange = { approved[j] = it })
+                HyleOnOffToggle(checked = approved[j], onCheckedChange = { approved[j] = it })
             }
             HunkLines(hunk)
         }
