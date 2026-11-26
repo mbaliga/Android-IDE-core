@@ -115,8 +115,9 @@ class AppContainer(context: Context) {
     val workspaceSearchIndex: dev.fonebrew.domain.search.WorkspaceSearchIndex by lazy {
         dev.fonebrew.domain.search.WorkspaceSearchIndex()
     }
-    val semanticSearchProvider: dev.fonebrew.domain.search.SemanticSearchProvider =
-        dev.fonebrew.domain.search.DisabledSemanticSearchProvider
+    val semanticSearchProvider: dev.fonebrew.domain.search.SemanticSearchProvider by lazy {
+        dev.fonebrew.data.search.semantic.EmbeddingSemanticSearchProvider(semanticSearchService)
+    }
 
     /** Fonebrew handoff-pack WP-4: the real authority policy engine (default-deny, no transitive
      *  delegation, purpose/target/time binding -- docs/ratified/CAPABILITY_AUTHORITY_MODEL.md).
@@ -558,4 +559,28 @@ class AppContainer(context: Context) {
         dev.fonebrew.data.search.SearchRepository(
             repository, sessionStore, ledgerStore, threadMarkerStore, loopStore, taskStore, searchDatabaseHandle.database,
         )
+
+    // --- Semantic search (docs/design/semantic-search.md). Everything is lazy: with the feature
+    // never touched, nothing is opened, loaded or allocated. Default OFF; the embedder loads only
+    // while the user has enabled it AND chosen an installed embedding model.
+    val semanticSettings: dev.fonebrew.data.search.semantic.SemanticSettings by lazy {
+        dev.fonebrew.data.search.semantic.PrefsSemanticSettings(context)
+    }
+    /** Embedding GGUFs, kept apart from [localModelStore] (which feeds the chat-model picker). */
+    val embeddingModelStore: dev.fonebrew.data.search.semantic.EmbeddingModelStore by lazy {
+        dev.fonebrew.data.search.semantic.EmbeddingModelStore(java.io.File(context.filesDir, "embedding-models"))
+    }
+    val embeddingModelDownloader: ModelDownloader by lazy {
+        ModelDownloader(embeddingModelStore.dir) { embeddingModelStore.afterDownload() }
+    }
+    val semanticSearchService: dev.fonebrew.data.search.semantic.SemanticSearchService by lazy {
+        dev.fonebrew.data.search.semantic.SemanticSearchService(
+            settings = semanticSettings,
+            models = embeddingModelStore,
+            store = dev.fonebrew.data.search.semantic.LazyVectorStore(java.io.File(context.filesDir, "semantic-vectors.db")),
+            corpus = dev.fonebrew.data.search.semantic.SearchProjectionCorpus(searchDatabaseHandle.database),
+            native = dev.fonebrew.embedding.LlamaEmbedNative(),
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        )
+    }
 }

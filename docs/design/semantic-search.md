@@ -182,3 +182,24 @@ whether fusion order feels right and where a similarity floor should sit.
 What IS machine-checked: vector math, top-k, chunking, fusion, state machine, resume, staleness,
 store round trip against real SQLite, provider states, presenters, and that the C++ compiles
 for arm64-v8a (task named in the lane report).
+
+## 12. As built (2026-11-26)
+
+- Native: `:core-engine:externalNativeBuildFullDebug` was run through gslot. `core-engine`'s own
+  CMake configure and build (`configureCMakeDebug[arm64-v8a]`, `buildCMakeDebug[arm64-v8a]`)
+  succeeded and `libaarso_llama.so` (arm64-v8a) exports `Java_dev_fonebrew_embedding_LlamaEmbedNative_native{Load,Embed,Dim,Pooling,Unload}`
+  (checked with `llvm-nm -D`). The aggregate task itself exited non-zero only because the
+  `sdengine` submodule (`stable-diffusion.cpp`) is not checked out in this lane's worktree - a
+  different module, not touched here. The library compiling is all that was verified; it has not
+  been loaded or run.
+- Semantic fusion is attached in `SearchViewModel` as a second stage over the unchanged lexical
+  `hits` flow. With the service null, inactive or the query ineligible, the lexical list and the
+  presenter output are the same values as before (`SearchProvenanceTest`).
+- The repo had no existing local `.gguf` import (only URL download), so the Settings section adds
+  a small file-picker import for embedding models (`EmbeddingModelStore.importFrom`).
+- `Clear` empties the index and leaves indexing paused so it does not silently refill; `Rebuild`
+  clears and re-embeds.
+- Known limits / follow-ups: no ANN or in-memory cache (section 6); chunk/overlap sizes and the
+  absence of a similarity floor are uncalibrated; the corpus is conversations, loops and tasks
+  from the FTS projections only (no workspace buffers); embedding runs on the app process
+  and is not scheduled around battery/thermal state (the lexical indexer has the same limit).

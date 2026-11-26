@@ -10,6 +10,8 @@ import app.cash.sqldelight.coroutines.mapToList
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.search.SearchDatabase
 import dev.fonebrew.data.search.SearchRepository
+import dev.fonebrew.data.search.semantic.SemanticSearchService
+import dev.fonebrew.domain.search.semantic.MatchSource
 import dev.fonebrew.domain.search.SearchHit
 import dev.fonebrew.domain.search.query.ParsedQuery
 import dev.fonebrew.domain.search.query.QueryParser
@@ -48,6 +50,9 @@ import kotlinx.coroutines.launch
 class SearchViewModel(
     private val repository: SearchRepository,
     private val database: SearchDatabase,
+    /** Optional semantic stage (docs/design/semantic-search.md). Null, or inactive, leaves the lexical
+     *  list and rows exactly as they were; see [shown]. */
+    private val semantic: SemanticSearchService? = null,
 ) : ViewModel() {
 
     private val zone = ZoneId.systemDefault()
@@ -91,6 +96,22 @@ class SearchViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** The lexical [hits], optionally fused with semantic hits. With [semantic] null or inactive this
+     *  is the lexical list untouched with empty provenance; an eligible plain-words query gets the
+     *  lexical list immediately and the fused one when the query has been embedded. */
+    private val shown: StateFlow<Shown> = hits
+        .flatMapLatest { lexical ->
+            flow {
+                emit(Shown(lexical, emptyMap()))
+                val svc = semantic
+                if (svc != null && svc.isActive && queryText.value.isNotBlank()) {
+                    val fused = svc.fuse(QueryParser.parse(queryText.value, System.currentTimeMillis(), zone), lexical)
+                    if (fused != null) emit(Shown(fused.hits, fused.provenance))
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Shown(emptyList(), emptyMap()))
+
     private val indexState: StateFlow<IndexState> = combine(indexing, indexedCount) { i, c -> IndexState(i, c) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, IndexState(indexing = true, count = 0L))
 
@@ -130,11 +151,12 @@ class SearchViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, Auxiliary())
 
     val uiState: StateFlow<SearchPresenter.UiState> = combine(
-        parsed, hits, indexState, auxiliary, expandedResultId,
-    ) { p, h, idx, aux, expanded ->
+        parsed, shown, indexState, auxiliary, expandedResultId,
+    ) { p, sh, idx, aux, expanded ->
         SearchPresenter.present(
             parsed = p,
-            hits = h,
+            hits = sh.hits,
+            provenance = sh.provenance,
             indexing = idx.indexing,
             indexedCount = idx.count,
             savedSearches = aux.savedSearches,
@@ -161,6 +183,7 @@ class SearchViewModel(
                 onIndexed = { count ->
                     indexedCount.value = count
                     indexing.value = false
+                    semantic?.requestSync()
                 },
             )
         }
@@ -251,7 +274,7 @@ class SearchViewModel(
     private fun recordSearch(openedConvId: String?) {
         val text = queryText.value.trim()
         if (text.isBlank()) return
-        val count = hits.value.size
+        val count = shown.value.hits.size
         if (openedConvId == null) {
             if (count == 0) return
             if (text == lastRecordedQuery) return
@@ -271,6 +294,8 @@ class SearchViewModel(
             }
         }
     }
+
+    private data class Shown(val hits: List<SearchHit>, val provenance: Map<String, MatchSource>)
 
     private data class IndexState(val indexing: Boolean, val count: Long)
 
@@ -295,7 +320,7 @@ class SearchViewModel(
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as FonebrewApp
                 val c = app.container
-                SearchViewModel(c.searchRepository, c.searchDatabaseHandle.database)
+                SearchViewModel(c.searchRepository, c.searchDatabaseHandle.database, c.semanticSearchService)
             }
         }
     }

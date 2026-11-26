@@ -11,7 +11,12 @@ data class GitRequest(
     val url: String,
     val headers: Map<String, String>,
     val body: String?,
-)
+) {
+    /** Header VALUES carry the token (Authorization), so they never reach a log or an exception
+     *  message through this type's string form. */
+    override fun toString(): String =
+        "GitRequest($method $url, headers=${headers.keys}, body=${if (body == null) "none" else "${body.length} chars"})"
+}
 
 /**
  * Builds the REST "contents API" requests for GitHub and Gitea/Forgejo (they share

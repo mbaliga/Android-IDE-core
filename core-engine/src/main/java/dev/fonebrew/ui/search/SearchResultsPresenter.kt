@@ -6,6 +6,7 @@ import dev.fonebrew.domain.search.MatchExplanation
 import dev.fonebrew.domain.search.MatchedIn
 import dev.fonebrew.domain.search.SearchHit
 import dev.fonebrew.domain.search.SearchKind
+import dev.fonebrew.domain.search.semantic.MatchSource
 import java.time.ZoneId
 import java.util.Locale
 
@@ -43,7 +44,23 @@ object SearchResultsPresenter {
          *  right way: a conversation into chat, a loop into LoopRoom, a task into the Project
          *  room ([dev.fonebrew.ui.search.SearchOverlay]'s `onOpenLoop`/`onOpenTask`). */
         val kind: SearchKind = SearchKind.TEXT,
-    )
+        /** How a semantic-search stage found this row; null whenever semantic search is off, in which
+         *  case no provenance chip is drawn and the row is exactly the lexical row. */
+        val matchedBy: MatchSource? = null,
+    ) {
+        /** Glyph + text chip for [matchedBy] -- state is never carried by colour alone. */
+        val provenanceChip: ProvenanceChip? get() = matchedBy?.let(ProvenanceChip::of)
+    }
+
+    data class ProvenanceChip(val glyph: String, val label: String) {
+        companion object {
+            fun of(source: MatchSource): ProvenanceChip = when (source) {
+                MatchSource.WORDS -> ProvenanceChip("Aa", "Matched by words")
+                MatchSource.MEANING -> ProvenanceChip("\u2248", "Matched by meaning")
+                MatchSource.BOTH -> ProvenanceChip("Aa\u2248", "Words and meaning")
+            }
+        }
+    }
 
     /**
      * @param queryText the plain lexical text of the query (facet/regex syntax stripped —
@@ -63,6 +80,7 @@ object SearchResultsPresenter {
         zone: ZoneId,
         locale: Locale,
         queryText: String = "",
+        provenance: Map<String, MatchSource> = emptyMap(),
     ): List<ResultRow> {
         val terms = LexicalSearch.tokenizeQuery(queryText)
         return hits.map { hit ->
@@ -81,6 +99,7 @@ object SearchResultsPresenter {
                 },
                 explanation = hit.explanation,
                 kind = hit.doc.kind,
+                matchedBy = provenance[hit.doc.id],
             )
         }
     }
