@@ -770,6 +770,18 @@ private fun ResultRowView(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 2.dp),
         )
+        // Semantic stage only (null when semantic search is off, so lexical rows are unchanged):
+        // glyph + words say how this hit was found; no colour carries the meaning.
+        row.provenanceChip?.let { chip ->
+            Text(
+                "${chip.glyph}  ${chip.label}",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textMid,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .semantics { contentDescription = chip.label },
+            )
+        }
         if (row.explanation != null) {
             Text(
                 if (expanded) "Hide why this matched" else "Why did this match?",

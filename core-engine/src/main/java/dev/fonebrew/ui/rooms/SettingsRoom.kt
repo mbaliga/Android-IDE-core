@@ -329,6 +329,8 @@ private fun ColumnScope.ModelsSettings(viewModel: SettingsViewModel) {
         ModelModality.OBJECT3D ->
             if (scope == ProviderScope.CLOUD) Object3dCloudSettings(viewModel) else Object3dOnDeviceSettings()
     }
+    // Lane A3: on-device semantic search (default off) -- its own section, not a fifth modality.
+    dev.fonebrew.ui.semantic.SemanticSettingsSection()
 }
 
 /**

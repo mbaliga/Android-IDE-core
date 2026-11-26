@@ -96,6 +96,7 @@ object SearchPresenter {
         recentSearches: List<String> = emptyList(),
         facetValues: QuerySuggestions.IndexedValues = QuerySuggestions.IndexedValues(),
         operatorsExpanded: Boolean = false,
+        provenance: Map<String, dev.fonebrew.domain.search.semantic.MatchSource> = emptyMap(),
     ): UiState {
         val findText = QueryCompiler.lexicalText(parsed.root)
         return UiState(
@@ -107,7 +108,7 @@ object SearchPresenter {
             findText = findText,
             // findText, not rawText: highlighting has to be told the plain words, or a query like
             // `gradle is:starred` would try to highlight the literal "is:starred".
-            rows = SearchResultsPresenter.present(hits, nowMillis, zone, locale, findText),
+            rows = SearchResultsPresenter.present(hits, nowMillis, zone, locale, findText, provenance),
             indexing = indexing,
             indexedCount = indexedCount,
             savedSearches = savedSearches,
