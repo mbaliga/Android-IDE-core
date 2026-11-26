@@ -16,7 +16,7 @@ class ServiceKeeper(private val controller: ForegroundServiceController) {
         private set
 
     /** Call whenever the live-session count changes (idempotent). */
-    fun onLiveCount(live: Int) {
+    @Synchronized fun onLiveCount(live: Int) {
         if (live > 0 && !running) {
             running = true
             controller.start()
@@ -27,7 +27,7 @@ class ServiceKeeper(private val controller: ForegroundServiceController) {
     }
 
     /** The platform stopped the service on its own (task removed, OEM kill): forget it so the next live count restarts it. */
-    fun onServiceDestroyed() { running = false }
+    @Synchronized fun onServiceDestroyed() { running = false }
 
     companion object {
         const val ACTION_CLOSE_ALL = "dev.fonebrew.terminal.CLOSE_ALL"
