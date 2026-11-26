@@ -101,11 +101,16 @@ class DiffModelTest {
             HunkIntent(m.hunks[0].id, HunkAction.STAGE), HunkIntent(m.hunks[1].id, HunkAction.DISCARD))))
     }
 
-    @Test fun `ReviewSession applied drops the final newline - an out-of-scope defect pinned so a fix is noticed`() {
+    @Test fun `ReviewSession applied keeps the final newline, matching this lane's model`() {
         val session = ReviewSession("p", "a\nb\n", "a\nB\n")
         session.approveAll()
-        assertEquals("a\nB", session.applied())                              // trailing newline lost (existing behaviour)
-        assertEquals("a\nB\n", DiffModel.of("a\nb\n", "a\nB\n").applyAll())   // this lane's model keeps it
+        assertEquals("a\nB\n", session.applied())
+        assertEquals("a\nB\n", DiffModel.of("a\nb\n", "a\nB\n").applyAll())
+        // a file without a final newline stays without one, and rejecting everything returns the original exactly
+        val noNl = ReviewSession("p", "a\nb", "a\nB"); noNl.approveAll(); assertEquals("a\nB", noNl.applied())
+        val rej = ReviewSession("p", "a\nb\n", "a\nB\n"); rej.rejectAll(); assertEquals("a\nb\n", rej.applied())
+        // a change that adds the final newline follows the proposal only when every hunk is approved
+        val add = ReviewSession("p", "a\nb", "a\nB\n"); add.approveAll(); assertEquals("a\nB\n", add.applied())
     }
 
     @Test fun `revert puts one hunk back and keeps the rest`() {

@@ -66,6 +66,11 @@ class FindTest {
         }
     }
 
+    @Test fun `deep regex recursion on a long line is a typed Timeout, not an uncaught StackOverflowError`() {
+        val o = FindEngine.findAll("a".repeat(5_000), FindQuery("(?:a|b)*c", FindMode.REGEX, allowRisky = true), budget = 50_000_000)
+        assertTrue("got $o", o is FindOutcome.Timeout || o is FindOutcome.Found)
+    }
+
     @Test fun `match cap truncates and says so`() {
         val o = FindEngine.findAll("a".repeat(100), FindQuery("a"), maxMatches = 10) as FindOutcome.Found
         assertEquals(10, o.matches.size)

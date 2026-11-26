@@ -131,14 +131,14 @@ class SearchInFiles(
             if (c.pattern != null) {
                 if (line.length > req.maxLineChars) { longLines++; continue }
                 val seq = BudgetCharSequence(line, req.regexBudgetPerLine, tick)
-                ranges = try { regexRanges(c.pattern.matcher(seq)) } catch (_: RegexBudgetExceeded) { throw LineBudgetExceeded(idx + 1) }
+                ranges = try { regexRanges(c.pattern.matcher(seq)) } catch (_: RegexBudgetExceeded) { throw LineBudgetExceeded(idx + 1) } catch (_: StackOverflowError) { throw LineBudgetExceeded(idx + 1) }
             } else {
                 ranges = literalRanges(line, c)
             }
             if (ranges.isEmpty()) continue
             val replaced = req.replacement?.let { rep ->
                 if (c.pattern != null) {
-                    try { replaceRegex(c.pattern, line, rep, req) } catch (_: RegexBudgetExceeded) { throw LineBudgetExceeded(idx + 1) }
+                    try { replaceRegex(c.pattern, line, rep, req) } catch (_: RegexBudgetExceeded) { throw LineBudgetExceeded(idx + 1) } catch (_: StackOverflowError) { throw LineBudgetExceeded(idx + 1) }
                 } else replaceRanges(line, ranges, rep)
             }
             val before = if (req.contextLines > 0) lines.subList(maxOf(0, idx - req.contextLines), idx).toList() else emptyList()

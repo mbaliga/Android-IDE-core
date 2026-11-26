@@ -69,7 +69,16 @@ class ReviewSession(
             newPos += h.newCount
         }
         while (oldPos < oldLines.size) { out.add(oldLines[oldPos]); oldPos++ }
-        return out.joinToString("\n")
+        val body = out.joinToString("\n")
+        if (body.isEmpty()) return body
+        // LineDiff drops one trailing newline and splits on '\n', so the join above has none. Put it back:
+        // when old and new agree it is preserved as-is; when the change itself adds or removes the final
+        // newline it follows the proposed text only if every hunk is approved, else the original's.
+        val oldNl = oldText.endsWith("\n")
+        val newNl = newText.endsWith("\n")
+        val allApproved = hunks.isNotEmpty() && decisions.all { it == Decision.APPROVED }
+        val endsWithNewline = if (oldNl == newNl) oldNl else if (allApproved) newNl else oldNl
+        return if (endsWithNewline) body + "\n" else body
     }
 
     /** The change reduced to only the approved hunks (for committing a partial apply). */

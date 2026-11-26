@@ -79,6 +79,8 @@ object FindEngine {
             }
         } catch (e: RegexBudgetExceeded) {
             return FindOutcome.Timeout
+        } catch (e: StackOverflowError) {
+            return FindOutcome.Timeout
         }
         return FindOutcome.Found(out, truncated = false)
     }

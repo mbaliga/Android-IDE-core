@@ -189,6 +189,14 @@ class RegexSafetyTest {
         // the same pattern with a generous budget still ends (quickly) because it is cancelled by the budget, not left to run
     }
 
+    @Test fun `a regex that recurses too deeply on a long line ends in a typed Timeout, never an uncaught StackOverflowError`() {
+        val f = Fixture()
+        f.file("long.txt", "a".repeat(5_000) + "\n")
+        // an alternation inside a repeat recurses once per character in java.util.regex; allowed past the lint on purpose
+        val d = f.done(SearchRequest("(?:a|b)*c", regex = true, allowRiskyRegex = true))
+        assertTrue("outcome was ${d.outcome}", d.outcome is SearchOutcome.Timeout || d.outcome == SearchOutcome.Completed)
+    }
+
     @Test fun `default budget stops the blow-up quickly`() {
         val f = Fixture(); f.file("evil.txt", "a".repeat(60) + "\n")
         val t0 = System.nanoTime()
