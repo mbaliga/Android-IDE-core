@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aarso.hyle.cells.HyleBottomTabBar
@@ -91,7 +102,33 @@ fun RegularShell() {
         destination = RegularDestination.CHAT
     }
 
-    Box(Modifier.fillMaxSize()) {
+    // Hardware Ctrl+K toggles the same SearchOverlay (SpatialRoot's one intercepted chord).
+    // The root is a focus target; "a descendant has focus" (a text field) means the keystroke is
+    // that field's, so the shortcut stands down — see RegularSearchShortcut.
+    val rootFocus = remember { FocusRequester() }
+    var rootIsFocused by remember { mutableStateOf(false) }
+    var rootHasFocus by remember { mutableStateOf(false) }
+    // Initial focus, and again after the overlay closes (its field held focus until it left).
+    LaunchedEffect(searchOpen) { if (!searchOpen) runCatching { rootFocus.requestFocus() } }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onFocusChanged { rootIsFocused = it.isFocused; rootHasFocus = it.hasFocus }
+            .focusRequester(rootFocus)
+            .focusTarget()
+            .onPreviewKeyEvent { event ->
+                val action = RegularSearchShortcut.decide(
+                    isKeyDown = event.type == KeyEventType.KeyDown,
+                    ctrl = event.isCtrlPressed,
+                    isK = event.key == Key.K,
+                    repeatCount = event.nativeKeyEvent.repeatCount,
+                    descendantHasFocus = rootHasFocus && !rootIsFocused,
+                )
+                if (action == RegularSearchShortcut.Action.ToggleSearch) searchOpen = !searchOpen
+                RegularSearchShortcut.consumes(action)
+            },
+    ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 when (destination) {
