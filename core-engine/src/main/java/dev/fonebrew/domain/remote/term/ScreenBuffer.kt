@@ -53,12 +53,6 @@ data class Cell(
     val glyph: String get() = cluster ?: char.toString()
 }
 
-/**
- * Filler a soft wrap leaves in the last column when a wide character did not fit: width 1, draws
- * as blank, but contributes no text to a copy and is dropped when lines are re-joined for reflow.
- */
-internal val PAD_CELL = Cell(' ', Sgr.DEFAULT, 1, "")
-
 /** Cursor position (0-based row/col). */
 data class Cursor(val row: Int = 0, val col: Int = 0)
 
@@ -182,7 +176,8 @@ class ScreenBuffer(
             }
         }
         if (line.isNotEmpty()) sb.append(line.toString().trimEnd()).append('\n')
-        return sb.toString()
+        // Blank lines at the very end (the empty cursor row after a final newline) are not content.
+        return sb.toString().trimEnd('\n').let { if (it.isEmpty()) it else it + "\n" }
     }
 
     private fun rowText(row: Row): String {
@@ -234,9 +229,9 @@ class ScreenBuffer(
             if (autoWrap) {
                 grid[cursor.row].let { r ->
                     // A wide char that cannot fit leaves a blank in the last cell.
-                    if (cursor.col < cols) r.cells[cursor.col] = PAD_CELL
+                    if (cursor.col < cols) r.cells[cursor.col] = Cell(sgr = pen)
                     r.wrapped = true
-                    r.pad = r.cells.size == cols
+                    r.pad = cursor.col < cols && w == 2
                 }
                 carriageReturn(); lineFeed()
             } else {
@@ -557,7 +552,7 @@ class ScreenBuffer(
                 val keep = if (isCursorRow) cur.col.coerceAtMost(n) else 0
                 while (n > keep && isBlankCell(row.cells[n - 1])) n--
             }
-            for (k in 0 until n) if (row.cells[k] !== PAD_CELL && row.cells[k].cluster != "") line.add(row.cells[k])
+            for (k in 0 until n) line.add(row.cells[k])
             // A cursor beyond the stored cells (pending wrap, or trimmed row) pads with blanks.
             if (isCursorRow) while (line.size < cursorOffset.coerceAtMost(line.size + 4096)) line.add(Cell())
             if (!row.wrapped || idx == src.size - 1) {
@@ -575,7 +570,9 @@ class ScreenBuffer(
             val row = out.getOrNull(top + rr)
             if (row == null) Row(blankCells(c)) else {
                 val cells = if (row.cells.size >= c) row.cells.copyOf(c).requireNoNulls() else Array(c) { k -> row.cells.getOrNull(k) ?: Cell() }
-                Row(cells, row.wrapped)
+                // A wrapped row that came out short (a wide character moved to the next row) is
+                // padded to the window width; that filler is not content.
+                Row(cells, row.wrapped).also { it.pad = row.pad || (row.wrapped && row.cells.size < c) }
             }
         }
         return newGrid to Cursor((cursorAbs - top).coerceIn(0, r - 1), cursorCol.coerceIn(0, c))
@@ -595,12 +592,12 @@ class ScreenBuffer(
             var end = minOf(pos + c, cells.size)
             if (end < cells.size && cells[end].width == 0 && end - 1 > pos) end-- // keep a wide char whole
             if (end == pos) end = pos + 1
-            val padded = end < pos + c && end < cells.size // moved a wide character to the next row
-            val chunk = Array(end - pos + (if (padded) 1 else 0)) { if (it < end - pos) cells[pos + it] else PAD_CELL }
+            val padWide = end < cells.size && end - pos == c - 1 && cells[end].width == 2
+            val chunk = Array(end - pos + if (padWide) 1 else 0) { if (it < end - pos) cells[pos + it] else Cell() }
             // A wide character cannot fit in a 1-column terminal: draw the lead narrow.
             if (c == 1 && chunk[0].width != 1) chunk[0] = chunk[0].copy(width = 1)
             val wrapped = end < cells.size
-            out.add(Row(chunk, wrapped))
+            out.add(Row(chunk, wrapped).also { it.pad = padWide })
             if (cursorOffset >= pos && (cursorOffset < end || !wrapped)) result = chunkIdx to (cursorOffset - pos)
             pos = end
             chunkIdx++
