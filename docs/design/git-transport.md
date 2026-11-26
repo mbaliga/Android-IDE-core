@@ -1,8 +1,9 @@
 # Git engine, part 3 (`domain/gitcore/transport/`, `domain/gitcore/client/`, `data/gitcore/`) — design note
 
-Status: wave-2 lane G3. This first version is the PLAN; the closing section is rewritten at the end
-of the lane with what was actually built. Part 1 (`docs/design/git-engine.md`) is the object model,
-packs, refs, index and work-tree operations; this part adds the network.
+Status: wave-2 lane G3, BUILT. The first commit of this file was the plan; the section "As built"
+at the end records what changed between plan and code. Part 1 (`docs/design/git-engine.md`) is the
+object model, packs, refs, index and work-tree operations; this part adds the network. Test counts are
+in the lane report, not frozen here.
 
 ## Why
 Part 1 can read, write and check out a repository but cannot get one. The owner's goal is "clone,
@@ -80,3 +81,71 @@ Real GitHub / GitLab / Gitea / Bitbucket behaviour (their token username rules, 
 the SSH adapter is compile-verified and its pure helpers are unit-tested only); large repositories
 on phone storage; cellular data cost (no metered-network guard exists); Android TLS trust store
 behaviour; time-to-first-byte and pack indexing speed on the phone.
+
+## As built (deviations from the plan, and facts the plan could not know)
+
+Protocol versions and why
+- **v2** (`ls-refs`, `fetch` with want/have/done, shallow, deepen, ofs-delta, thin-pack, include-tag) is
+  requested first (`Git-Protocol: version=2` over HTTP, `GIT_PROTOCOL` over SSH where the server accepts
+  the variable). It is the only version modern hosts optimise and it keeps ref listings small.
+- **v0/v1** is the fallback when the server answers in v0 (older servers, some proxies, and the
+  `v0Only` switch of the test server). Same code path above the codec.
+- **Push is v0** `receive-pack` with `report-status` (v2 has no push). `side-band-64k` is used when offered.
+- One negotiation **round with `done`**, no multi-ack. Measured against git 2.43: without `multi_ack`
+  the server ACKs every common `have` (not just the first) before the pack, so the client skips any
+  number of `ACK`/`NAK` lines and hands the first side-band frame on. Servers without side-band are
+  refused as UNSUPPORTED (named follow-up) instead of guessing where a raw pack starts.
+- `have` set: ref tips first (cap 128), then newest commits by committer time, 256 in total.
+
+Safety, as implemented
+- Order inside one fetch (`FetchEngine`): index the pack (trailer / base / malformed entry refused) ->
+  `Connectivity.verify` from every wanted tip (stops at trusted `have` commits and shallow roots, checks
+  every tree and blob of the new commits exists and parses; tag chains are followed) -> write
+  `.git/shallow` -> move refs with compare-and-swap. Refs are never created or moved before the check.
+  A refused pack can leave unreferenced objects in the store (no gc yet); they are never reachable.
+- Hostile ref names in an advertisement (`..`, `.git` components, bad characters) are skipped, never written.
+- Tags are never overwritten (a differing local tag is reported in `FetchOutcome.tagsNotUpdated`).
+- Push: `ForceMode.None` is the default and the ONLY thing that sends is an old/new pair the caller
+  allowed. A non-fast-forward without `Force`/`WithLease` is refused locally and nothing is sent (a test
+  asserts no receive-pack POST reaches the wire). Tags are never updated without force.
+  `WithLease(expectedOld)` is checked client-side against the advertised value, and the same old value
+  rides in the command so the server also compare-and-swaps. Server refusals come back verbatim
+  (sanitised, one line, 500 chars) as `Rejected` / `NonFastForward(remoteReason)`.
+- Credentials: asked only after a 401 with a Basic challenge, per origin; attached only to requests for
+  that origin; a 401 for another origin asks the provider again by that host name. A Bearer-only
+  challenge never calls the provider. `Credential`, `SshKeyMaterial` print as redacted; URLs with a
+  password are refused at parse time and addresses are stored/printed without userinfo.
+- Redirects: followed by us for the discovery GET only (5 max); a redirected data POST, an https -> http
+  step, or a target that does not end in `/info/refs` is `RedirectRefused`.
+- Cancellation / failure of a clone: work happens in `<target>.fonebrew-clone-<hex>` next to the target and
+  is renamed onto it only when checkout finished; everything else is deleted. NOT resumable (named
+  follow-up). A process kill can leave the staging directory (its name says what it is); the target
+  path is never a half repository.
+
+Facade notes
+- `pull` is fetch + fast-forward. The move uses the guarded `checkout` (dirty tree -> typed
+  `LocalChanges`, nothing changed) and then moves the branch ref and re-attaches HEAD; a crash between
+  those two steps leaves a detached HEAD at the fetched commit (recoverable, nothing lost). Diverged
+  histories return `PullOutcome.NeedsMerge(ours, theirs, base)`: the merge lane's tree-level merge is not on
+  the head yet (only the text merge is), so there is nothing to call.
+- `GitClient` is wired in `AppContainer.gitClient` (lazy). SSH has no key store yet, so ssh:// remotes
+  fail with a typed AuthRequired until the key-management package lands.
+- `gitcore` seam (part-1 file touched): `Revisions.kt` now asks `Shallow.kt` for the shallow set so
+  `log`, `ancestors`, `mergeBase` and `objectsToSend` treat a shallow commit as a root. Nothing else in
+  part 1 changed; the REST layer is untouched.
+- Progress events are measured values only: `Receiving(bytes, totalObjects)` where the object count is the
+  one the pack header declares, `ResolvingDeltas` as a phase marker (the indexer has no per-object callback;
+  adding one would change part 1), `CheckingOut` as start/end (no per-file counter).
+
+Test harness
+- `GitHttpFixture` serves bare repositories through `git http-backend` (CGI) behind a small socket-based
+  HTTP server (`MiniHttpServer`; the Android unit-test classpath has no `com.sun.net.httpserver`), with
+  switchable Basic auth, v0-only mode, redirect mode and an in-flight tamper hook. Every honest answer
+  comes from git 2.43; the hostile cases rewrite real answers. Tests skip with a stated reason when git
+  or `git http-backend` is missing. The SSH interop test is skipped when no sshd is present (none is in
+  the build container).
+
+Additional not-built items found while building
+Servers without side-band, multi-round negotiation, `--prune`, fetching namespaces other than branches and
+tags (notes, pull-request refs), `want-ref`, submodule recursion, reachable-SHA-1-in-want, per-file
+checkout progress, resuming a partial pack, a metered-network guard, proxy authentication.
