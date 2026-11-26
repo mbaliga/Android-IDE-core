@@ -100,6 +100,11 @@ kotlin {
                 val excluded = testExclusions.map { it.file.canonicalFile }.toSet()
                 exclude { element -> element.file.canonicalFile in excluded }
             }
+            // The domain tests may load fixture files from the classpath (for example the hand-authored
+            // git-contract/*.json). Android's unit-test lane gets core-engine/src/test/resources for free;
+            // this plain-JVM lane must be told, or every such test dies with a NullPointerException at
+            // the resource lookup. Kept outside mapping.txt (it is a resource root, not mapped sources).
+            resources.srcDir(File(repoRoot, "core-engine/src/test/resources"))
         }
     }
 }
