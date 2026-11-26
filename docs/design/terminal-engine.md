@@ -79,11 +79,14 @@ and wide characters will render wrongly (the unchanged UI draws a space for the 
 - OSC 52 write: event only. OSC 52 read: ignored.
 - Paste: `PasteEncoder` removes every ESC, C1 control and C0 control except TAB/CR/LF, so a paste
   cannot contain the bracketed-paste end marker, an escape sequence or a Ctrl-C.
-- Child environment is an allow-list (HOME, PATH, TMPDIR, LANG, TERM, COLORTERM, ENV, SHELL,
-  USER-less); nothing from the app process environment (which can hold ART/linker/loader
-  variables) is forwarded except `ANDROID_ROOT`, `ANDROID_DATA`, `ANDROID_STORAGE`,
+- Child environment is an allow-list built from nothing (`TerminalEnvironment`): HOME, PATH
+  (`/system/bin:/system/xbin:<app bin>`), TMPDIR, LANG=C.UTF-8, TERM, COLORTERM, ENV, SHELL, plus
+  - only if present in the app process - `ANDROID_ROOT`, `ANDROID_DATA`, `ANDROID_STORAGE`,
   `ANDROID_RUNTIME_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_TZDATA_ROOT`,
-  `EXTERNAL_STORAGE`, `BOOTCLASSPATH`-free. No API keys are ever placed in it.
+  `ANDROID_ASSETS`, `EXTERNAL_STORAGE`, `BOOTCLASSPATH`. Nothing else is forwarded (loader
+  variables, proxies, anything a library exported); no API key is ever placed in it. The native
+  child also resets signal dispositions/mask and closes every inherited descriptor above stderr.
+  Whether the pass-through set is enough for every Android tool is owner-verified.
 - Signals go only to the pty's foreground process group as reported by the kernel for **our**
   pty (`tcgetpgrp(master)`), refused if that group is <= 1 or our own group, whitelisted to
   INT/TSTP/QUIT/HUP. Ctrl-C through the line discipline (writing 0x03) stays the primary path;
@@ -103,6 +106,27 @@ and wide characters will render wrongly (the unchanged UI draws a space for the 
   notification permission denied hides the notification but not the service): the manager runs
   without it, no crash.
 - Snapshot write fails (disk full): ignored with a flagged status; never blocks the session.
+
+## Shape of the code
+- `domain/remote/term`: `ScreenBuffer` (grid of `Row`s, `LineRing` scrollback, reflow),
+  `VtParser`, `PtyChannel`, `TerminalModes`/`TerminalMetadata`/events/replies, `WcWidth`.
+- `domain/terminal` (pure): `KeyEncoder`, `PasteEncoder`, `MouseEncoder`, `Utf8StreamDecoder`,
+  `TerminalEnvironment`, `SessionRegistry` (state machine), `ServiceKeeper`, `TerminalHistory`.
+- `data/terminal`: `TerminalSessionManager`/`TerminalSession` over the `SessionBackend` seam
+  (fakes in tests), `NativePtyBackend`, `ProcInspector` (/proc), `TerminalHistoryStore`,
+  `TerminalFiles`, `TerminalPlatform` (Android seams). `service/TerminalSessionService`.
+- `TerminalSessionHolder` keeps one stable `PtyChannel` and drives one manager session at a time
+  for the existing screens; a shell that exits on its own reads as "closed" (so the existing
+  Reconnect screen shows). A local shell now starts in `<filesDir>/terminal/home`.
+- Exit and restart write a visible marker line into the transcript (`[session exited with
+  status N]`, `[session restarted]`) so a saved history can never look like a live shell.
+- The foreground indicator: `tcgetpgrp(master)`; if the shell's own group is in front it also
+  looks for children in /proc (a background job counts as busy), and reports Unknown when /proc
+  will not say. If the shell runs without job control, a foreground command shares the shell's
+  group and only the child scan can see it - owner-verified.
+- Persistence: `persistSnapshots` is called on app-background (activity lifecycle hook), on task
+  removal (service) and on session end/close; slots are per run and session, so repeated saves
+  overwrite; at most 20 files are kept.
 
 ## Flavors and the service type
 EXECUTION_CONTRACT 3.2: terminals have no standard FGS type and need `specialUse` with a
