@@ -83,3 +83,54 @@ JVM; the test asserts a generous 5 s and prints the measured time. The phone num
 Real file-system behaviour on Android storage (scoped storage reach, `WatchService` delivery
 latency, symlink behaviour on app-private vs shared storage), battery cost of polling, trash on
 removable storage (cross-filesystem move falls back to copy+delete), all scroll and typing feel.
+
+---
+
+## As built (updated at the end of the lane)
+
+All of the above exists as pure JVM code under `domain/workspace/{roots,tree,ignore,fuzzy,files,grep}`
+plus `data/workspace/WorkspaceFileStore`. No UI file, no `AppContainer` wiring, no Gradle change,
+and `LocalWorkspaceProvider` (parked) is untouched. Where the build departed from the plan:
+
+- `tree/` also gained `FileWalker` (lazy, iterative, ignore-aware walk shared by the quick-open
+  index and the search); symlinks are skipped there entirely.
+- Root listing through the provider interface uses the URI `local://.` (`ResourceUri` forbids an
+  empty path after the scheme); `.` normalises to the root.
+- Rename and move across roots are refused (`CROSS_ROOT`); copy across roots is allowed because
+  both ends are guarded independently.
+- `OpenDocuments` drives `DocumentBufferMachine` for every state change. A conflict is detected on
+  save as well as by `checkExternal`; `overwrite = true` is the user's explicit decision.
+- Fuzzy scoring: a run of consecutive matches inherits the bonus of the char that started the run
+  (so `abc` beats `a_b_c`), leading distance is counted from the basename when the match is
+  confined to the basename, and a basename-confined match gets +30. A strong word-boundary
+  abbreviation can tie with a camel-hump one (`mnact` ranks `src/main_activity_test.txt` and
+  `MainActivity.kt` as the top two, both far above scattered paths); this is a deliberate
+  property of the weights, pinned in `FuzzyGoldenTest`, not an accident.
+- Regex safety has TWO layers because one is not enough: `RegexLint` (engine independent, refuses
+  nested unbounded repeats and repeated alternations unless `allowRiskyRegex`), then the per-line
+  character-read budget (`BudgetCharSequence`).
+
+### Measured on the JVM (not a phone)
+- git interop: 120 random trees, 8,570 paths compared with `git check-ignore`, 2,571 of them
+  ignored, 0 mismatches (printed as `IGNORE-INTEROP` and written to
+  `core-engine/build/ignore-interop-count.txt`; skipped by assumption when no git CLI is present).
+- Quick-open: top-50 over 200,001 generated paths, five queries, 28 to 224 ms per query on the
+  shared build machine (printed as `QUICK-OPEN-PERF`, written to `core-engine/build/quickopen-perf.txt`);
+  the test asserts under 5 s. Scoring is exact DP per surviving candidate after a subsequence prefilter.
+- Regex budget: `a*a*a*a*a*a*a*a*a*a*b` on 60 `a` ends in a typed `Timeout` in about 50 ms with
+  the default budget. The JDK 21 engine on the build machine does NOT blow up on the textbook
+  `(a+)+$` family (it memoises them: those complete in milliseconds), so the lint is what stops
+  those shapes, and the polynomial pattern above is what proves the budget.
+
+### Known limits and named follow-ups
+- RESIDUAL RISK, owner-verified: Android's `java.util.regex` is believed to copy the input string
+  into a native engine, in which case the `charAt` budget does not see the engine's reads on a
+  phone. The lint still applies there; nothing here claims the budget works on a device. If a
+  device test shows a hang on a polynomial pattern (ten adjacent `a*`), the follow-up is a
+  wall-clock guard on a worker thread or an own non-backtracking matcher.
+- TOCTOU between a guard check and the use of the path cannot be closed with `java.io`.
+- The lint is conservative: `(foo|bar)+` is refused unless `allowRiskyRegex` is set.
+- No SAF provider, no multi-line regex, no apply-replace, no `.git/info/exclude`, no
+  case-insensitive-filesystem ignore matching, no persisted quick-open index.
+- Trash lives wherever the owner of the `Trash` instance puts it; it must be outside every root
+  (nothing enforces that yet, the UI lane wires it under app storage).
