@@ -90,13 +90,14 @@ data class LogOptions(
  * Not implemented: --follow renames, date ranges, topological/author-date orders.
  */
 fun Repository.log(start: List<ObjectId>, opts: LogOptions = LogOptions()): List<LogEntry> {
+    val shallow = shallowCommits()
     val hidden = HashSet<ObjectId>()
     if (opts.hide.isNotEmpty()) {
         val stack = ArrayDeque<ObjectId>(); opts.hide.forEach { stack.add(peel(it)) }
         while (stack.isNotEmpty()) {
             val id = stack.removeLast()
             if (!hidden.add(id)) continue
-            db.readCommit(id).parents.forEach(stack::add)
+            parentsOf(id, db.readCommit(id), shallow).forEach(stack::add)
         }
     }
     var seq = 0L
@@ -113,17 +114,18 @@ fun Repository.log(start: List<ObjectId>, opts: LogOptions = LogOptions()): List
     fun entryAt(commit: Commit): ObjectId? = pathTree.getOrPut(commit.tree) { opts.path?.let { pathEntry(commit.tree, it)?.id } }
     while (pq.isNotEmpty() && out.size < opts.limit) {
         val item = pq.poll()
-        var follow = item.commit.parents
+        val parentIds = parentsOf(item.id, item.commit, shallow)
+        var follow = parentIds
         if (opts.firstParent) follow = follow.take(1)
         var include = true
         if (opts.path != null) {
             val mine = entryAt(item.commit)
-            val parentCommits = item.commit.parents.map { db.readCommit(it) }
+            val parentCommits = parentIds.map { db.readCommit(it) }
             if (parentCommits.isEmpty()) include = mine != null
             else {
                 val same = parentCommits.indexOfFirst { entryAt(it) == mine }
                 include = same < 0
-                if (same >= 0 && !opts.firstParent) follow = listOf(item.commit.parents[same])
+                if (same >= 0 && !opts.firstParent) follow = listOf(parentIds[same])
             }
         }
         if (include) out.add(LogEntry(item.id, item.commit))
@@ -149,12 +151,13 @@ fun Repository.pathEntry(tree: ObjectId, path: String): TreeEntry? {
 
 /** All ancestors of [id] including itself. */
 fun Repository.ancestors(id: ObjectId): Set<ObjectId> {
+    val shallow = shallowCommits()
     val out = LinkedHashSet<ObjectId>()
     val stack = ArrayDeque<ObjectId>(); stack.add(peel(id))
     while (stack.isNotEmpty()) {
         val c = stack.removeLast()
         if (!out.add(c)) continue
-        db.readCommit(c).parents.forEach(stack::add)
+        parentsOf(c, db.readCommit(c), shallow).forEach(stack::add)
     }
     return out
 }
@@ -164,6 +167,7 @@ fun Repository.isAncestor(maybeAncestor: ObjectId, of: ObjectId): Boolean = mayb
 /** A common ancestor of [a] and [b] (the most recent one found; not guaranteed unique in criss-cross histories), or null. */
 fun Repository.mergeBase(a: ObjectId, b: ObjectId): ObjectId? {
     val ofA = ancestors(a)
+    val shallow = shallowCommits()
     val pq = PriorityQueue<Pair<Long, ObjectId>>(compareByDescending { it.first })
     val seen = HashSet<ObjectId>()
     fun push(id: ObjectId) { if (seen.add(id)) pq.add(db.readCommit(id).committer.epochSeconds to id) }
@@ -171,7 +175,7 @@ fun Repository.mergeBase(a: ObjectId, b: ObjectId): ObjectId? {
     while (pq.isNotEmpty()) {
         val (_, id) = pq.poll()
         if (id in ofA) return id
-        db.readCommit(id).parents.forEach(::push)
+        parentsOf(id, db.readCommit(id), shallow).forEach(::push)
     }
     return null
 }
@@ -183,6 +187,7 @@ fun Repository.mergeBase(a: ObjectId, b: ObjectId): ObjectId? {
  * it needs. For the push lane.
  */
 fun Repository.objectsToSend(tips: List<ObjectId>, have: List<ObjectId>): List<ObjectId> {
+    val shallow = shallowCommits()
     val haveSet = HashSet<ObjectId>()
     have.forEach { haveSet.addAll(ancestors(peel(it))) }
     val skip = HashSet<ObjectId>()
@@ -199,7 +204,7 @@ fun Repository.objectsToSend(tips: List<ObjectId>, have: List<ObjectId>): List<O
         val c = stack.removeLast()
         if (c in haveSet || !seenC.add(c)) continue
         commits.add(c); out.add(c)
-        db.readCommit(c).parents.forEach(stack::add)
+        parentsOf(c, db.readCommit(c), shallow).forEach(stack::add)
     }
     fun addTree(t: ObjectId) {
         if (t in skip || !out.add(t)) return
