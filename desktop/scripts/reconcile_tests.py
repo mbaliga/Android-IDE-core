@@ -117,10 +117,17 @@ def main() -> int:
         if tests == 0:
             p("MISMATCH: zero tests executed")
             status = 1
-        elif tests != expected:
-            p("MISMATCH: the lane executed a different number of tests than the mapped sources contain.")
-            p("  (> expected: inherited/parameterised tests; < expected: a class was not collected.)")
+        elif tests < expected:
+            p("MISMATCH: the lane executed FEWER tests than the mapped sources contain -- a class was not collected.")
             status = 1
+        elif tests > expected:
+            # More tests than @Test annotations is normal: parameterised runners and scenario tables (the git
+            # interop suites generate one JUnit test per scenario from a single annotation) expand at run time.
+            # Only a shortfall means a class went missing, so an excess is reported but is not a failure.
+            p(f"NOTE: {tests - expected} more tests ran than @Test annotations exist (parameterised/scenario-generated); not a failure.")
+            if failures or errors:
+                p("but there are failures/errors -- the lane is red.")
+                status = 1
         elif failures or errors:
             p("COUNT MATCHES but there are failures/errors -- the lane is red.")
             status = 1
