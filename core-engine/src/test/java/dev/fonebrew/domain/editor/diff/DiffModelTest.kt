@@ -101,6 +101,13 @@ class DiffModelTest {
             HunkIntent(m.hunks[0].id, HunkAction.STAGE), HunkIntent(m.hunks[1].id, HunkAction.DISCARD))))
     }
 
+    @Test fun `ReviewSession applied drops the final newline - an out-of-scope defect pinned so a fix is noticed`() {
+        val session = ReviewSession("p", "a\nb\n", "a\nB\n")
+        session.approveAll()
+        assertEquals("a\nB", session.applied())                              // trailing newline lost (existing behaviour)
+        assertEquals("a\nB\n", DiffModel.of("a\nb\n", "a\nB\n").applyAll())   // this lane's model keeps it
+    }
+
     @Test fun `revert puts one hunk back and keeps the rest`() {
         val m = DiffModel.of("a\nb\nc\nd\ne\n", "a\nB\nc\nD\ne\n")
         assertEquals("a\nb\nc\nD\ne\n", m.revert(m.hunks[0].id))
