@@ -22,6 +22,8 @@ object PktLimits {
     /** A whole frame, header included, may not exceed 65520 bytes (so 65516 of payload). */
     const val MAX_FRAME = 65520
     const val MAX_PAYLOAD = MAX_FRAME - 4
+    /** Ceiling for one buffered section (a ref advertisement, an ls-refs answer): a hostile server cannot make us hold more. */
+    const val MAX_SECTION_BYTES = 32L * 1024 * 1024
 }
 
 /** Reads pkt-lines strictly: a bad length, a short read or an oversize frame is a typed PROTOCOL error. */
@@ -51,11 +53,17 @@ class PktLineReader(private val input: InputStream) {
     fun require(): Pkt = read() ?: protocol("the server closed the connection before finishing its answer")
 
     /** Reads up to and excluding the next flush, returning data frames (delim is an error here). */
-    fun readUntilFlush(max: Int = 1_000_000): List<Pkt.Data> {
+    fun readUntilFlush(max: Int = 1_000_000, maxBytes: Long = PktLimits.MAX_SECTION_BYTES): List<Pkt.Data> {
         val out = ArrayList<Pkt.Data>()
+        var bytes = 0L
         while (true) {
             when (val p = require()) {
-                is Pkt.Data -> { if (out.size >= max) protocol("too many pkt-lines in one section"); out.add(p) }
+                is Pkt.Data -> {
+                    if (out.size >= max) protocol("too many pkt-lines in one section")
+                    bytes += p.bytes.size
+                    if (bytes > maxBytes) protocol("a section of the server's answer is larger than $maxBytes bytes")
+                    out.add(p)
+                }
                 Pkt.Flush -> return out
                 else -> protocol("unexpected $p inside a flush-terminated section")
             }

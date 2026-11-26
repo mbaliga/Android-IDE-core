@@ -159,6 +159,21 @@ class ProtocolCodecTest {
         expectKind(TransportErrorKind.PROTOCOL) { AdvertisementParser.parse(adv { data("$id1 refs/heads/a\u0000x\n".toByteArray()); data("$id1 refs/heads/b\u0000y\n".toByteArray()); flush() }) }
     }
 
+    @Test fun aHostileStreamOfMaximumSizeFramesIsCutOffByTheByteBudget() {
+        val frame = PktLineWriter.build { data(ByteArray(PktLimits.MAX_PAYLOAD) { 'x'.code.toByte() }) }
+        val endless = object : java.io.InputStream() {
+            var served = 0L; var pos = 0
+            override fun read(): Int { val b = ByteArray(1); return if (read(b, 0, 1) < 0) -1 else b[0].toInt() and 0xff }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (served > 300L * 1024 * 1024) return -1 // the test would fail by memory long before this
+                val n = minOf(len, frame.size - pos); System.arraycopy(frame, pos, b, off, n)
+                pos = (pos + n) % frame.size; served += n; return n
+            }
+        }
+        expectKind(TransportErrorKind.PROTOCOL) { PktLineReader(endless).readUntilFlush() }
+        assertTrue("stopped near the budget, read ${endless.served}", endless.served < 80L * 1024 * 1024)
+    }
+
     @Test fun refCountIsBounded() {
         // Not generating a million lines: prove the guard constant is enforced via the pure check.
         assertTrue(AdvertisementParser.MAX_REFS in 100_000..5_000_000)

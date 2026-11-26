@@ -151,9 +151,14 @@ class UploadPackConnection private constructor(
 
     private fun readSection(reader: PktLineReader, each: (String) -> Unit) {
         var n = 0
+        var bytes = 0L
         while (true) {
             when (val p = reader.require()) {
-                is Pkt.Data -> { if (++n > 1_000_000) protocol("section too long"); AdvertisementParser.checkErr(p); each(p.text()) }
+                is Pkt.Data -> {
+                    bytes += p.bytes.size
+                    if (++n > 1_000_000 || bytes > PktLimits.MAX_SECTION_BYTES) protocol("section too long")
+                    AdvertisementParser.checkErr(p); each(p.text())
+                }
                 Pkt.Delim -> return
                 Pkt.Flush, Pkt.ResponseEnd -> protocol("the fetch answer ended before a pack")
             }

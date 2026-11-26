@@ -54,7 +54,9 @@ object AdvertisementParser {
         var caps = Capabilities.EMPTY
         var seenCaps = false
         var pkt: Pkt = firstPkt ?: r.require()
+        var total = 0L
         while (true) {
+            if (pkt is Pkt.Data) { total += pkt.bytes.size; if (total > PktLimits.MAX_SECTION_BYTES) protocol("the ref advertisement is larger than ${PktLimits.MAX_SECTION_BYTES} bytes") }
             when (pkt) {
                 Pkt.Flush -> break
                 Pkt.Delim, Pkt.ResponseEnd -> protocol("unexpected $pkt in the ref advertisement")
