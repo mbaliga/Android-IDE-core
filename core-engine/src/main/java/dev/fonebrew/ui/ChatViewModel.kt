@@ -293,6 +293,13 @@ class ChatViewModel(
     /** Process-scoped mirror of [GenPhase] for the home-screen widgets (docs/widgets.md); null in
      *  callers that don't wire one. The chat stays the only writer and the source of truth. */
     private val generationStatus: dev.fonebrew.data.GenerationStatus? = null,
+    /** Test seam: the foreground service that keeps an on-device turn alive. Production default is [GenerationService]. */
+    private val startGenerationService: () -> Unit = { GenerationService.start(appContext) },
+    private val stopGenerationService: () -> Unit = { GenerationService.stop(appContext) },
+    /** Test seam: the one-shot `!` shell escape runner. Production default is [dev.fonebrew.data.remote.LocalExec]. */
+    private val shellExec: suspend (String, File) -> String = { command, dir -> dev.fonebrew.data.remote.LocalExec.run(command, dir) },
+    /** Test seam: replaces only the BitmapFactory decode/downscale/save step of a pending photo. Null = the real one. */
+    private val photoStore: ((ByteArray) -> String?)? = null,
 ) : ViewModel() {
 
     /** Content routed in from share / text-selection / assist (§7). */
@@ -770,8 +777,8 @@ class ChatViewModel(
         }
     }
 
-    private suspend fun addPendingAttachmentFromBytes(bytes: ByteArray) {
-        val path = withContext(Dispatchers.IO) { downscaleAndStore(bytes) } ?: return
+    internal suspend fun addPendingAttachmentFromBytes(bytes: ByteArray) {
+        val path = withContext(Dispatchers.IO) { if (photoStore != null) photoStore.invoke(bytes) else downscaleAndStore(bytes) } ?: return
         _pendingAttachments.value = _pendingAttachments.value +
             PendingAttachment(id = java.util.UUID.randomUUID().toString(), path = path, mime = "image/jpeg")
     }
@@ -928,7 +935,7 @@ class ChatViewModel(
                 repository.insert(userNode)
                 embeddingLogger.onMessageInserted(userNode)
                 moveLeaf(userNode.id)
-                val output = dev.fonebrew.data.remote.LocalExec.run(command, appContext.filesDir)
+                val output = shellExec(command, appContext.filesDir)
                 val resultNode = Nodes.child(
                     userNode, Role.ASSISTANT, output.ifBlank { "(no output)" }, System.currentTimeMillis(),
                     metadata = mapOf("shell" to "true"),
@@ -983,7 +990,7 @@ class ChatViewModel(
         // Echo/cloud turns don't hold a model process, so they never need the foreground service —
         // and starting one for them risks the framework's async "FGS did not start in time" crash
         // (it sits outside this try, so it can't be caught). This is the dev-Echo send crash.
-        if (isLocal) GenerationService.start(appContext)
+        if (isLocal) startGenerationService()
         stopRequested = false
         try {
             // Load the active model (idempotent; a local GGUF may take several
@@ -1131,7 +1138,7 @@ class ChatViewModel(
                 genPhase = GenPhase.IDLE,
             )
         } finally {
-            if (isLocal) GenerationService.stop(appContext)
+            if (isLocal) stopGenerationService()
         }
     }
 
@@ -1246,7 +1253,7 @@ class ChatViewModel(
             moveLeaf(userNode.id)
             clearPendingAttachments()
 
-            GenerationService.start(appContext)
+            startGenerationService()
             stopRequested = false
             // Home-screen widget provenance: a Council with any cloud voice is a cloud turn.
             turnRunOnDevice.value = voices.all { it.spec.isOnDevice }
@@ -1292,7 +1299,7 @@ class ChatViewModel(
                 transient.value = transient.value.copy(councilStreaming = null, genPhase = GenPhase.IDLE, error = t.message ?: "council failed")
             } finally {
                 turnRunOnDevice.value = null
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }
@@ -1335,7 +1342,7 @@ class ChatViewModel(
             }
             moveLeaf(userNode.id)
 
-            GenerationService.start(appContext)
+            startGenerationService()
             // Home-screen widget provenance: the image comes from on-device SD or a cloud provider,
             // never from the chat's text model.
             turnRunOnDevice.value = sdModel != null
@@ -1374,7 +1381,7 @@ class ChatViewModel(
                 )
             } finally {
                 turnRunOnDevice.value = null
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }
@@ -1408,7 +1415,7 @@ class ChatViewModel(
             }
             moveLeaf(userNode.id)
 
-            GenerationService.start(appContext)
+            startGenerationService()
             // Home-screen widget provenance: on-device 3D prompts the active model (null: describe it);
             // the cloud scope sends the prompt to a cloud 3D provider.
             turnRunOnDevice.value = if (scope == Object3dGenScope.CLOUD) false else null
@@ -1442,7 +1449,7 @@ class ChatViewModel(
                 )
             } finally {
                 turnRunOnDevice.value = null
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }
@@ -1551,7 +1558,7 @@ class ChatViewModel(
             if (userNode.role != Role.USER) return@launch
             val kids = tree.childrenOf(userNode.id).filter { it.metadata.containsKey("agent") }
             if (kids.isEmpty()) return@launch
-            GenerationService.start(appContext)
+            startGenerationService()
             stopRequested = false
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
@@ -1595,14 +1602,14 @@ class ChatViewModel(
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = t.message ?: "merge failed")
             } finally {
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }
 
     override fun onCleared() {
         // App task removed: don't leave a dangling foreground service.
-        GenerationService.stop(appContext)
+        stopGenerationService()
         // Whatever this chat was generating died with its scope; the widgets must not say otherwise.
         generationStatus?.chatGone()
     }
@@ -1688,7 +1695,7 @@ class ChatViewModel(
             }
             val compare = dev.fonebrew.domain.tree.SiblingCompares.build(tree, branchNodeId, activeChildId)
             if (compare.alternatives.size < 2) return@launch
-            GenerationService.start(appContext)
+            startGenerationService()
             stopRequested = false
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
@@ -1733,7 +1740,7 @@ class ChatViewModel(
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = t.message ?: "choose for me failed")
             } finally {
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }

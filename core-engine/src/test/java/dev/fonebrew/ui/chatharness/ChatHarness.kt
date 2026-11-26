@@ -38,6 +38,7 @@ import dev.fonebrew.domain.template.TemplateId
 import dev.fonebrew.embedding.Embedder
 import dev.fonebrew.embedding.EmbeddingLogger
 import dev.fonebrew.inference.ModelRegistry
+import java.io.File
 import dev.fonebrew.ui.ChatUiState
 import dev.fonebrew.ui.ChatViewModel
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +77,20 @@ internal val CLOUD_SPEC = ModelSpec(
     runtime = Runtime.CLOUD, providerId = "acme", watched = true,
 )
 
+/** An on-device llama.cpp-shaped spec: the only runtime that starts the foreground service and uses KV snapshots. */
+internal val LOCAL_SPEC = ModelSpec(
+    id = "local-gguf", displayName = "Local GGUF", family = "llama", contextWindow = 8192,
+    tokenizerId = "local:gguf", templateId = TemplateId.CHATML, runtime = Runtime.LOCAL_GGUF,
+    modelPath = "/models/local.gguf",
+)
+
+/** A runnable spec that can read images (the real vision-capable cloud shape, minus the network). */
+internal val VISION_SPEC = ModelSpec(
+    id = "vision-echo", displayName = "Vision Echo", family = "echo", contextWindow = 8192,
+    tokenizerId = "echo:vision", templateId = TemplateId.PLAIN, runtime = Runtime.ECHO_DEV,
+    supportsVision = true,
+)
+
 private class FixedEmbedder : Embedder {
     override val id = "fixed"
     override val dim = 2
@@ -101,40 +116,68 @@ internal class ChatHarness(
     val echoB = ScriptedEngine(tokenizerId = "echo:b").also { engines.bySpecId[ECHO_B.id] = it }
     val cloud = ScriptedEngine(tokenizerId = "cloud:big-model").also { engines.bySpecId[CLOUD_SPEC.id] = it }
 
+    /** One scripted engine per extra spec passed in (LOCAL_SPEC, VISION_SPEC, ...), keyed by spec id. */
+    val extraEngines: Map<String, ScriptedEngine> = specs
+        .filter { it.id !in engines.bySpecId }
+        .associate { spec -> spec.id to ScriptedEngine(tokenizerId = spec.tokenizerId).also { engines.bySpecId[spec.id] = it } }
+
+    /** Every engine, so a test can point them all at one shared [ScriptedEngine.trace]. */
+    val allEngines: List<ScriptedEngine> get() = listOf(echoA, echoB, cloud) + extraEngines.values
+
+    /** Records the foreground-service start/stop the view-model asked for (the real one needs an Intent). */
+    val service = ServiceSpy()
+    /** Records every `!` command the view-model handed to the one-shot runner. */
+    val shell = FakeShell()
+    /** Stands in for the BitmapFactory downscale of a pending photo. */
+    val photos = FakePhotoStore(context)
+    val kvCache = KvCacheStore(context)
+    val councilStore = CouncilStore(context)
+    val receiptDao = FakeReceiptDao()
+    val receipts = ReceiptStore(receiptDao)
+
     private val providers = ProviderStore(context)
     private val locals = LocalModelStore(context)
     private val registry = ModelRegistry(providers, locals, devSpecs = specs)
-    private val markerDao = FakeMarkerDao()
+    val markerDao = FakeMarkerDao()
     private val delegationDao = FakeDelegationDao()
     private val delegationStore = DelegationStore(delegationDao)
-    private val markerStore = ThreadMarkerStore(markerDao)
+    val markerStore = ThreadMarkerStore(markerDao)
     private val eventLog = AarsoEventLog(AarsoEventSink { }, { AarsoCaptureSettings.OFF })
 
     var session = SessionStore(context)
         private set
 
     /** Build a ChatViewModel over this harness's shared state; call again to simulate a relaunch. */
-    fun newViewModel(): ChatViewModel {
+    fun newViewModel(realPhotoDecode: Boolean = false): ChatViewModel {
         session = SessionStore(context) // re-read the persisted prefs, like a cold start
         return ChatViewModel(
             repository, registry, engines, providers, locals,
             EmbeddingLogger(FixedEmbedder(), repository),
-            KvCacheStore(context), SharedIntake(), session,
+            kvCache, SharedIntake(), session,
             DownloadCenter(context), ModelDownloader(context.filesDir) {},
             ImageStore(context), AttachmentStore(context), ImageProviderStore(context),
             Object3dStore(context), Object3dProviderStore(context), SdModelStore(context),
-            PricingStore(context), FreeTierUsageStore(context), CouncilStore(context),
+            PricingStore(context), FreeTierUsageStore(context), councilStore,
             LedgerStore(ledgerDao), ModelCatalogStore(context),
             CurationStore(
                 FakeVerdictDao(), FakeBookmarkDao(), FakeVersionDao(),
                 FakeDirectiveDao(), ghostDao, FakeFormStateDao(),
             ),
             markerStore, delegationStore, DelegationRecorder(delegationStore, eventLog),
-            ReceiptStore(FakeReceiptDao()), eventLog,
+            receipts, eventLog,
             ThreadObserver(repository, markerStore, delegationStore) { false },
             TaskStore(FakeTaskDao()), context,
             deviceSpecReader = { DeviceSpec(totalRamBytes = 8L shl 30, availRamBytes = 4L shl 30, abis = listOf("arm64-v8a")) },
+            startGenerationService = service::start,
+            stopGenerationService = service::stop,
+            shellExec = shell::run,
+            photoStore = if (realPhotoDecode) null else photos::store,
         )
+    }
+
+    /** Drop a fake SD checkpoint where [SdModelStore] scans, so the next [newViewModel] sees an on-device image model. */
+    fun installSdModel(name: String = "tiny.gguf") {
+        File(context.filesDir, "sd-models").apply { mkdirs() }.let { File(it, name).writeBytes(byteArrayOf(1)) }
     }
 
     /** Pre-load nodes with explicit `createdAt`s, for tests that need a tree whose branch order does not depend on the wall clock. */

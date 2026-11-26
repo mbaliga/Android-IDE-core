@@ -32,6 +32,13 @@ internal class ScriptedEngine(
 
     val loads = mutableListOf<Pair<String, Int>>()
     val prompts = mutableListOf<List<MessageNode>>()
+
+    /** The (sessionLoadPath, sessionSavePath) of every generate call — what the KV-cache wiring handed the engine. */
+    val sessionPaths = mutableListOf<Pair<String?, String?>>()
+
+    /** Optional shared event log: "<label>:load" / "<label>:generate" lines, interleaved with [ServiceSpy]'s. */
+    var trace: MutableList<String>? = null
+    var traceLabel: String = tokenizerId
     var generateCalls = 0
         private set
 
@@ -40,6 +47,7 @@ internal class ScriptedEngine(
 
     override suspend fun loadModel(modelPath: String, contextSize: Int) {
         loads += modelPath to contextSize
+        trace?.add("$traceLabel:load")
         failLoad?.let { throw it }
         isLoaded = true
     }
@@ -57,6 +65,8 @@ internal class ScriptedEngine(
     ): Flow<GeneratedToken> = flow {
         generateCalls++
         prompts += messages
+        sessionPaths += sessionLoadPath to sessionSavePath
+        trace?.add("$traceLabel:generate")
         script.forEachIndexed { index, token ->
             if (pauseAfter == index) gate.await()
             emit(token)
@@ -84,3 +94,38 @@ internal class FakeChatEngines : ChatEngines {
 }
 
 internal fun toks(vararg texts: String): List<GeneratedToken> = texts.map { GeneratedToken(it) }
+
+/** Stands in for `GenerationService.start/stop`: records the calls, in order, in [log] ("service:start"/"service:stop"). */
+internal class ServiceSpy(val log: MutableList<String> = mutableListOf()) {
+    var starts = 0
+        private set
+    var stops = 0
+        private set
+
+    fun start() { starts++; log += "service:start" }
+    fun stop() { stops++; log += "service:stop" }
+}
+
+/** Stands in for the one-shot `LocalExec.run`: records `(command, workingDir)` and returns [output] (or throws [failure]). */
+internal class FakeShell {
+    val calls = mutableListOf<Pair<String, java.io.File>>()
+    var output: String = ""
+    var failure: Throwable? = null
+
+    suspend fun run(command: String, dir: java.io.File): String {
+        calls += command to dir
+        failure?.let { throw it }
+        return output
+    }
+}
+
+/** Stands in for the BitmapFactory downscale: writes the bytes under the context's files dir and returns the path. */
+internal class FakePhotoStore(private val context: android.content.Context) {
+    var count = 0
+        private set
+
+    fun store(bytes: ByteArray): String {
+        count++
+        return java.io.File(context.filesDir, "photo-$count.jpg").apply { writeBytes(bytes) }.absolutePath
+    }
+}
