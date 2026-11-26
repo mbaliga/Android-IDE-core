@@ -99,7 +99,7 @@ Evaluated on the last step output (for a gateway right after a tool step: the to
 |---|---|
 | `approved`, `!approved` | unchanged: output begins with `APPROVE` (case-insensitive) / negation. `not approved` stays an alias. |
 | `contains(text)` / `!contains(text)` | case-**sensitive** substring |
-| `contains-ci(text)` / `!contains-ci(text)` | case-insensitive (Unicode simple case folding via `lowercase()` with the root locale) |
+| `contains-ci(text)` / `!contains-ci(text)` | case-insensitive (Kotlin `ignoreCase`: per-character, locale-independent; no regex) |
 | `equals(text)` / `equals-ci(text)` | whole output equals text (after trimming surrounding whitespace on the output only) |
 | `startsWith(text)` / `startsWith-ci(text)` | output (leading whitespace trimmed) starts with text |
 | `length>N` / `length<N` | length in Unicode code points of the (capped) output |
