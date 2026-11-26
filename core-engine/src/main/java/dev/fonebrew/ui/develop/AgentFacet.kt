@@ -52,7 +52,7 @@ fun AgentFacet() {
     val format: (Long) -> String = { LocaleFormat.currencyMinor(it, currencyCode, Locale.getDefault()) }
 
     var objective by remember { mutableStateOf("") }
-    var modelId by remember { mutableStateOf(runnable.firstOrNull()?.id) }
+    var modelId by remember { mutableStateOf(dev.fonebrew.domain.agent.AgentModelDefault.defaultModelId(runnable)) }
     var maxSteps by remember { mutableStateOf(AgentBudgets.DEFAULT_STEPS) }
     val picks = remember { mutableStateListOf<ContextPick>() }
     var status by remember { mutableStateOf<String?>(null) }
@@ -118,6 +118,9 @@ fun AgentFacet() {
     }
     val spec = runnable.firstOrNull { it.id == modelId }
     spec?.let { Hint(EngineBadge(it.displayName, cloud = !it.isOnDevice).let { b -> "${b.glyph} ${b.label}" }) }
+    if (spec == null && dev.fonebrew.domain.agent.AgentModelDefault.needsExplicitCloudChoice(runnable)) {
+        Hint("No on-device model is available. Choosing a ☁ model sends the files the agent reads to that provider - pick one to continue.")
+    }
     Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text("Step cap: $maxSteps (max ${AgentBudgets.HARD_MAX_STEPS})", style = MaterialTheme.typography.labelMedium)
