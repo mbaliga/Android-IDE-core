@@ -22,6 +22,6 @@ interface RecoverySnapshotDao {
      * workspace has no snapshot yet" case is a valid, expected outcome (WORKSPACE_KERNEL_SPEC.md
      * §6.2), not an error.
      */
-    @Query("SELECT * FROM recovery_snapshots WHERE workspaceId = :workspaceId ORDER BY takenAtUtcMillis DESC LIMIT 1")
+    @Query("SELECT * FROM recovery_snapshots WHERE workspaceId = :workspaceId ORDER BY takenAtUtcMillis DESC, id DESC LIMIT 1")
     suspend fun latestForWorkspace(workspaceId: String): RecoverySnapshotEntity?
 }
