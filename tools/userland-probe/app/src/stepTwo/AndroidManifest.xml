@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Merged ONLY into the stepTwo build type, which the owner must build by name. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application>
+        <activity android:name=".steptwo.StepTwoActivity" android:exported="false"
+            android:enabled="true" tools:replace="android:enabled" />
+    </application>
+</manifest>

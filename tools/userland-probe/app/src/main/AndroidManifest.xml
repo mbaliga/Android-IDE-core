@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Deliberately NO INTERNET permission: the default probe cannot open a TCP/UDP socket. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <package android:name="com.android.virtualization.terminal" />
+        <package android:name="com.google.android.virtualization.terminal" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:extractNativeLibs="true"
+        android:label="Userland probe"
+        android:theme="@android:style/Theme.Material.Light">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".ProbeService" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Measures whether child processes survive while a foreground service runs" />
+        </service>
+        <!-- Step two: present in the code, DISABLED here. Only the stepTwo build type enables it. -->
+        <activity android:name=".steptwo.StepTwoActivity" android:exported="false" android:enabled="false" />
+    </application>
+</manifest>
