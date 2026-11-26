@@ -53,8 +53,10 @@ larger font scales on a launcher whose rows really are that short, the second li
 - **Refresh:** any write to the task table (Room invalidation, so Studio's lenses writing the same
   table count too); plus one inexact, non-waking `AlarmManager.set(RTC, …)` at the next instant a due
   word changes (`NextUp.boundaryAfter`, tested to be exactly that instant); time / zone / locale change.
-- **Privacy:** a task made with "Convert → Task" (`TaskSource.CHAT`) has a title cut from a chat turn,
-  so it shows as "Task from a chat (title hidden here)" with `◌`. Notes are never read.
+- **Privacy:** task titles are **off by default** (Settings > Global, "Show task titles on the home-screen
+  widget"): rows read "Task (title hidden here)" with `◌` plus the due word. A task made with "Convert → Task"
+  (`TaskSource.CHAT`) has a title cut from a chat turn, so it shows as "Task from a chat (title hidden here)"
+  with `◌` even when the switch is on. Notes are never read.
 - **Empty:** "No open tasks. Your To-do list is clear."
 
 ### Model (`stat`)
@@ -113,6 +115,8 @@ larger font scales on a launcher whose rows really are that short, the second li
   word with `◇`; the loop's name ("Unsaved loop" when none); the step name (a node name from the loop
   editor, never a step's output); recorded spend in large (`~… (estimated)` when the ledger says so;
   no spend line when the ledger has none, never a made-up zero).
+- **Privacy:** loop and step names are **off by default** (own switch, Settings > Global): a row reads
+  "Loop run (name hidden here)" with its state glyph and word, and spend.
 - **Data:** the same assembly the watch uses, `WristSnapshots.loopRuns` (run log in the message tree,
   the usage ledger, live `BackgroundJobs`). It reads the whole tree, so it runs only when a widget is
   placed and a loop job starts or finishes, or a loop is renamed or deleted (`LoopStore.loops`), since

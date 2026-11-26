@@ -495,3 +495,13 @@ sizes and clipping), `:core-engine:checkLicense`, `:app:process{Full,Play}DebugR
 **Owner-verified only — nothing has been seen on a phone or a launcher:** rendering, resizing, previews,
 glyph fonts, day/night, taps in both interaction modes, TalkBack, the due-boundary alarm, and OEM battery
 managers (`docs/widgets.md`, Owner-verify).
+
+**Integrated into the dev branch 2026-11-26 (wave 2, lane W4; design note `docs/design/widgets-integration.md`).**
+Open core PR #26 merged `--no-ff`; the three conflicts (`ChatViewModel`, `DevelopRoom`, `RegularShell`) kept
+both sides. One behaviour change on top, from the privacy review: the two widget fields that are the user's
+own words, **task titles (Next up)** and **loop + step names (Loop runs)**, are **off the home screen by
+default** and each has its own switch in Settings > Global (`WidgetPrivacyStore`, default OFF, unreadable
+storage also OFF). Hidden rows read "Task (title hidden here)" / "Loop run (name hidden here)" and still
+carry due words, state glyphs, counts and spend. Chat-derived task titles stay hidden regardless. The six
+widgets are **OWNER-UNVERIFIED on a device or launcher**, including the new switches (do they flip a placed
+widget at once; do hidden rows read sensibly at 2x1).
