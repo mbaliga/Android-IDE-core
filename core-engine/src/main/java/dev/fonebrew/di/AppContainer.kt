@@ -414,6 +414,15 @@ class AppContainer(context: Context) {
             filesDir = context.applicationContext.filesDir,
             hostStore = remoteHostStore,
             newTransport = ::newSshTransport,
+            onLiveCount = terminalKeeper::onLiveCount,
+            platform = dev.fonebrew.data.terminal.AndroidTerminalPlatform(context.applicationContext as android.app.Application),
+        )
+    }
+
+    /** Mirrors the live terminal-session count onto the keep-alive foreground service (full flavor). */
+    private val terminalKeeper: dev.fonebrew.domain.terminal.ServiceKeeper by lazy {
+        dev.fonebrew.domain.terminal.ServiceKeeper(
+            dev.fonebrew.service.TerminalServiceController(context.applicationContext),
         )
     }
 

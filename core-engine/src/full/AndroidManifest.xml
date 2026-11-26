@@ -42,6 +42,18 @@
             android:name="dev.fonebrew.service.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Terminal keep-alive (docs/design/terminal-engine.md). specialUse per
+             docs/ratified/EXECUTION_CONTRACT.md 3.2 (terminals have no standard FGS type, and
+             dataSync has a hard 6h ceiling). Full flavor only until Play review of specialUse. -->
+        <service
+            android:name="dev.fonebrew.service.TerminalSessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="interactive terminal sessions kept alive while the app is in the background" />
+        </service>
     </application>
 
 </manifest>

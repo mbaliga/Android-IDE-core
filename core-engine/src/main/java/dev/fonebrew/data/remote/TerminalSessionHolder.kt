@@ -1,6 +1,16 @@
 package dev.fonebrew.data.remote
 
 import dev.fonebrew.data.RemoteHostStore
+import dev.fonebrew.data.terminal.PhoneShellLauncher
+import dev.fonebrew.data.terminal.SessionLauncher
+import dev.fonebrew.data.terminal.ShellSessionBackend
+import dev.fonebrew.data.terminal.TermSize
+import dev.fonebrew.data.terminal.TerminalFiles
+import dev.fonebrew.data.terminal.TerminalHistoryStore
+import dev.fonebrew.data.terminal.TerminalPlatform
+import dev.fonebrew.data.terminal.TerminalSession
+import dev.fonebrew.data.terminal.TerminalSessionManager
+import dev.fonebrew.domain.remote.ExecChunk
 import dev.fonebrew.domain.remote.Identity
 import dev.fonebrew.domain.remote.RemoteHost
 import dev.fonebrew.domain.remote.RemoteSessionDriver
@@ -8,10 +18,16 @@ import dev.fonebrew.domain.remote.RemoteTransport
 import dev.fonebrew.domain.remote.ShellSession
 import dev.fonebrew.domain.remote.Trust
 import dev.fonebrew.domain.remote.term.PtyChannel
+import dev.fonebrew.domain.remote.term.ScreenBuffer
+import dev.fonebrew.domain.remote.term.TerminalRenderer
+import dev.fonebrew.domain.terminal.KeyEvent
+import dev.fonebrew.domain.terminal.SessionState
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,52 +35,72 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * THE terminal session — exactly one per app process, owned by
- * [dev.fonebrew.di.AppContainer], never by a composable.
+ * THE terminal session as the current screens see it - exactly one per app process, owned by
+ * [dev.fonebrew.di.AppContainer], never by a composable. Since the terminal-engine work it is a
+ * **thin facade over [TerminalSessionManager]**: the pty/SSH shell, the screen, the key/paste
+ * encoders, history, the keep-alive service and the saved scrollback all live there, and this
+ * class keeps the public surface the Chat and Develop terminal doors already compile against
+ * (`pty`, `shell`, `mode`, `sendLine`, `sendRaw`, `resize`, `switchTo`, ...). More sessions, and
+ * real keystroke input, are available on [manager] / [sendKey] / [paste] for the terminal UI that
+ * is designed separately.
  *
  * The terminal is reachable from two doors (Chat's Terminal tab and Develop's Terminal tab), and
- * it used to die walking through either of them: every piece of session state — the pty screen,
- * the live [ShellSession], which machine you were on, even the half-typed input line — lived in
- * per-mount `remember {}` inside the facet, with a `DisposableEffect` closing the shell on
- * dispose. Net effect on the phone (owner report, 2026-08-21): "two terminals, idk how to use
- * either of them" — two doors that each spawned their *own* shell, and switching tabs killed the
- * transcript. Hoisting the whole session here means both doors now open onto the SAME live
- * shell and the SAME scrollback, and leaving the tab detaches the *view*, not the session — the
- * same relationship every desktop terminal has with its window.
+ * it used to die walking through either of them: every piece of session state lived in per-mount
+ * `remember {}` inside the facet, with a `DisposableEffect` closing the shell on dispose.
+ * Hoisting the whole session here means both doors open onto the SAME live shell and the SAME
+ * scrollback, and leaving the tab detaches the *view*, not the session. "Both doors" includes
+ * `ui/remote/RemoteScreen`, which used to build a third terminal of its own.
  *
- * The composable keeps only view concerns (colors, layout, which hint to show); every state
- * transition — open/close/switch/reconnect/trust, and now the window size and command history —
- * lives here on the holder's own scope, so an in-flight SSH connect also survives the user
- * wandering off mid-handshake.
+ * Behaviour that differs from before, deliberately: a local shell now starts in the terminal HOME
+ * (`<filesDir>/terminal/home`) with an explicit, allow-listed environment instead of the app's
+ * inherited one and `filesDir`; output is decoded as a UTF-8 *stream*; if the shell exits on its
+ * own the facade reports it as closed (so the existing "Session closed - Reconnect" screen shows)
+ * rather than leaving a dead shell looking live.
  *
- * "Both doors" is now genuinely all of them: `ui/remote/RemoteScreen` used to build a *third*
- * full terminal of its own (its own `PtyChannel(24, 80)`, its own `ShellSession`, its own
- * input — all per-mount `remember {}`, the exact shape this class exists to end). It routes here
- * too.
- *
- * Runtime behaviour (fork/exec pty, SSH, TIOCSWINSZ) is owner-verified — no device or SSH host in
+ * Runtime behaviour (fork/exec pty, SSH, TIOCSWINSZ) is owner-verified - no device or SSH host in
  * the build environment.
  */
 class TerminalSessionHolder(
     private val filesDir: File,
     private val hostStore: RemoteHostStore,
     private val newTransport: () -> RemoteTransport,
+    private val platform: TerminalPlatform = TerminalPlatform.Headless,
+    /** Live-session count changes (drives the keep-alive foreground service, wired in AppContainer). */
+    onLiveCount: (Int) -> Unit = {},
+    // Main.immediate to match the rememberCoroutineScope() the facet used to run these on -
+    // shell callbacks already hop threads internally; state writes stay on main.
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     companion object {
         const val PHONE = "phone"
         const val REMOTE = "remote"
 
-        /** How many past command lines ↑/↓ can walk back through. Bounded because this is held
+        /** How many past command lines up/down can walk back through. Bounded because this is held
          *  for the life of the process and nothing prunes it otherwise. */
         const val MAX_HISTORY = 200
     }
 
-    // Main.immediate to match the rememberCoroutineScope() the facet used to run these on —
-    // shell callbacks already hop threads internally; state writes stay on main.
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** Alias of [manager] (the keep-alive service reads `holder.sessions`). */
+    val sessions: TerminalSessionManager get() = manager
 
-    /** The screen grid + VT parser. One per process, like the shell it renders. */
-    val pty = PtyChannel(rows = 24, cols = 80)
+    /** The terminal's app-private tree (home, tmp, bin, rc, history). */
+    val files = TerminalFiles(File(filesDir, "terminal"))
+
+    /** Saved "previous session history" - text only, never a live shell. */
+    val historyStore = TerminalHistoryStore(files.historyDir)
+
+    /** All sessions. The facade's own shell is one of them; the new terminal UI may add more. */
+    val manager = TerminalSessionManager(
+        scope = scope,
+        io = ioDispatcher,
+        history = historyStore,
+        onLiveCount = onLiveCount,
+    )
+
+    /** The screen grid + VT parser. One per process, like the shell it renders; it outlives
+     *  individual shells (a reconnect keeps the transcript, a target switch resets it). */
+    val pty = PtyChannel(rows = 24, cols = 80, maxScrollback = ScreenBuffer.DEFAULT_SCROLLBACK)
 
     private val _mode = MutableStateFlow(PHONE)
     val mode: StateFlow<String> = _mode
@@ -85,9 +121,9 @@ class TerminalSessionHolder(
     private val _connectError = MutableStateFlow<String?>(null)
     val connectError: StateFlow<String?> = _connectError
 
-    /** Set only by the explicit Close button (not by [switchTo]'s close-before-reopen) so a
-     *  deliberate Close reads as "Session closed." + Reconnect, while switching target still
-     *  just reconnects immediately with no interstitial. */
+    /** Set by the explicit Close button, and by a shell that ended on its own (not by
+     *  [switchTo]'s close-before-reopen) so a Close reads as "Session closed." + Reconnect, while
+     *  switching target still just reconnects immediately with no interstitial. */
     private val _closedByUser = MutableStateFlow(false)
     val closedByUser: StateFlow<Boolean> = _closedByUser
 
@@ -95,24 +131,62 @@ class TerminalSessionHolder(
     val pendingTrust: StateFlow<Trust?> = _pendingTrust
     private var trustGate: CompletableDeferred<Boolean>? = null
 
-    /** The input line draft — session state, not view state: a half-typed command must survive
+    /** The input line draft - session state, not view state: a half-typed command must survive
      *  a tab switch (same bug class as the composer-draft-text fix). */
     private val _input = MutableStateFlow("")
     val input: StateFlow<String> = _input
     fun setInput(value: String) { _input.value = value }
 
-    /** Command history, oldest first. There was none at all — no up/down recall of any kind,
-     *  which on a phone (where retyping a long command is the expensive part) is the difference
-     *  between a usable shell and a novelty. It lives here rather than in the composable for the
-     *  same reason the draft does: navigating away must not erase it. */
+    /** Command history, oldest first. It lives here rather than in the composable for the same
+     *  reason the draft does: navigating away must not erase it. */
     private val _history = MutableStateFlow<List<String>>(emptyList())
     val history: StateFlow<List<String>> = _history
 
-    /** Where ↑/↓ currently sit in [history]; `size` means "not recalling — showing the draft". */
+    /** Where up/down currently sit in [history]; `size` means "not recalling - showing the draft". */
     private var historyCursor = 0
     private var draftBeforeRecall: String? = null
 
-    /** ↑ — step back to an older command, stashing whatever was being typed so ↓ can return it. */
+    /** The session the facade currently drives (null = no shell started / closed). */
+    private var current: TerminalSession? = null
+    private var launchFailed = false
+
+    init {
+        // Version bumps for the view, from the screen model itself (reader thread or main).
+        pty.attach(object : TerminalRenderer {
+            override fun onScreenChanged(screen: ScreenBuffer) { _screenVersion.update { it + 1 } }
+        })
+        // Mirror the manager's state into the flows the screens already observe.
+        scope.launch { manager.sessions.collect { syncFromManager() } }
+        // Bank bounded scrollback snapshots whenever the app leaves the foreground.
+        platform.registerBackgroundHook { manager.persistSnapshots("background") }
+    }
+
+    private fun syncFromManager() {
+        val cur = current ?: return
+        when (manager.info(cur.id)?.state) {
+            SessionState.Running -> {
+                _connecting.value = false
+                if (_shell.value == null) _shell.value = SessionShell(cur)
+            }
+            is SessionState.Exited -> {
+                _connecting.value = false
+                _shell.value = null
+                // A shell that ended on its own is "closed" (honest: not live). A failed launch is
+                // not - it keeps the retry-on-next-open behaviour with its error shown.
+                if (!launchFailed) _closedByUser.value = true
+            }
+            else -> {}
+        }
+    }
+
+    /** A [ShellSession] view of the current session, for callers that hold one. */
+    private inner class SessionShell(private val session: TerminalSession) : ShellSession {
+        override suspend fun send(text: String) = session.sendText(text)
+        override suspend fun resize(rows: Int, cols: Int) = session.resize(rows, cols)
+        override suspend fun close() { if (current === session) userCloseShell() }
+    }
+
+    /** Up arrow - step back to an older command, stashing whatever was being typed so down can return it. */
     fun historyBack() {
         val h = _history.value
         if (h.isEmpty()) return
@@ -121,7 +195,7 @@ class TerminalSessionHolder(
         _input.value = h[historyCursor]
     }
 
-    /** ↓ — step forward, past the newest entry back to the stashed draft. */
+    /** Down arrow - step forward, past the newest entry back to the stashed draft. */
     fun historyForward() {
         val h = _history.value
         if (historyCursor >= h.size) return
@@ -139,25 +213,24 @@ class TerminalSessionHolder(
         draftBeforeRecall = null
     }
 
-    private fun onOutput(bytes: ByteArray) {
-        pty.onOutput(String(bytes, Charsets.UTF_8))
-        _screenVersion.update { it + 1 }
-    }
-
-    private fun closeShell() {
-        val s = _shell.value
+    /** Tear down the current shell (if any) and forget it; the screen keeps its transcript. */
+    private fun dropCurrent() {
+        val s = current
+        current = null
         _shell.value = null
-        scope.launch { runCatching { s?.close() } }
+        if (s != null) manager.close(s.id, confirmed = true)
     }
 
-    /** The Close button's action: close, and say so — see [closedByUser]. */
+    private fun closeShell() { dropCurrent() }
+
+    /** The Close button's action: close, and say so - see [closedByUser]. */
     fun userCloseShell() {
         closeShell()
         _closedByUser.value = true
     }
 
     // Same identity resolution as DevicesFacet: a pinned key/password secret if present, else
-    // the ssh-agent — the host's trust decision belongs to the Remote screen, not this action.
+    // the ssh-agent - the host's trust decision belongs to the Remote screen, not this action.
     private fun identityFor(h: RemoteHost): Identity {
         val ref = hostStore.hostSecret(h.alias)
         return when {
@@ -167,26 +240,34 @@ class TerminalSessionHolder(
         }
     }
 
-    /**
-     * Adopt a freshly opened shell and immediately tell it the window size the phone is actually
-     * rendering. sshj's `allocateDefaultPTY()` is a fixed 80×24 and a local pty is only ever the
-     * size it was forked at, so without this the first prompt paints against the wrong width —
-     * which is the whole clipped-lines failure, just for one frame's worth of output.
-     */
-    private fun adoptShell(session: ShellSession) {
-        _shell.value = session
-        scope.launch { runCatching { session.resize(pty.screen.rows, pty.screen.cols) } }
-    }
-
-    private fun openPhone() {
-        _connecting.value = true; _connectError.value = null
-        scope.launch {
-            runCatching {
-                PtyShellSession.open(filesDir, rows = pty.screen.rows, cols = pty.screen.cols) { chunk -> onOutput(chunk.bytes) }
-            }.onSuccess { adoptShell(it) }.onFailure { _connectError.value = it.message ?: "couldn't open a shell" }
-            _connecting.value = false
+    /** Records a launch failure for the screens, then lets the manager report it in the transcript. */
+    private fun reporting(launcher: SessionLauncher, fallback: String) = SessionLauncher { size, io ->
+        try {
+            launcher.launch(size, io)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            launchFailed = true
+            _connectError.value = e.message ?: fallback
+            throw e
         }
     }
+
+    private fun start(title: String, launcher: SessionLauncher, fallback: String) {
+        dropCurrent()
+        _connecting.value = true
+        _connectError.value = null
+        launchFailed = false
+        current = manager.create(
+            defaultTitle = title,
+            launcher = reporting(launcher, fallback),
+            size = TermSize(pty.screen.rows, pty.screen.cols),
+            channel = pty,
+        )
+    }
+
+    private fun openPhone() =
+        start("This phone", PhoneShellLauncher(files) { platform.processEnvironment() }, "couldn't open a shell")
 
     private fun openRemote(alias: String) {
         val host = hostStore.hosts.value.firstOrNull { it.alias == alias }
@@ -194,31 +275,33 @@ class TerminalSessionHolder(
             _connectError.value = "no saved host named \"$alias\""
             return
         }
-        _connecting.value = true; _connectError.value = null
-        scope.launch {
-            val driver = RemoteSessionDriver(newTransport(), hostStore.knownHosts.value)
-            runCatching {
-                driver.open(host, identityFor(host)) { verdict ->
-                    val gate = CompletableDeferred<Boolean>()
-                    _pendingTrust.value = verdict; trustGate = gate
-                    val ok = gate.await()
-                    _pendingTrust.value = null; trustGate = null
-                    if (ok && verdict !is Trust.Vetted) {
-                        val key = (verdict as? Trust.Unknown)?.presented ?: (verdict as Trust.Changed).presented
-                        hostStore.pin(host.endpoint, key)
-                    }
-                    ok
-                }
-                driver.shell { chunk -> onOutput(chunk.bytes) }
-            }.onSuccess { adoptShell(it) }.onFailure { _connectError.value = it.message ?: "couldn't connect — is it trusted yet in Settings → Global?" }
-            _connecting.value = false
+        start(alias, remoteLauncher(host), "couldn't connect - is it trusted yet in Settings → Global?")
+    }
+
+    private fun remoteLauncher(host: RemoteHost) = SessionLauncher { size, io ->
+        val driver = RemoteSessionDriver(newTransport(), hostStore.knownHosts.value)
+        driver.open(host, identityFor(host)) { verdict ->
+            val gate = CompletableDeferred<Boolean>()
+            _pendingTrust.value = verdict; trustGate = gate
+            val ok = gate.await()
+            _pendingTrust.value = null; trustGate = null
+            if (ok && verdict !is Trust.Vetted) {
+                val key = (verdict as? Trust.Unknown)?.presented ?: (verdict as Trust.Changed).presented
+                hostStore.pin(host.endpoint, key)
+            }
+            ok
         }
+        val shell = driver.shell { chunk: ExecChunk -> io.onOutput(chunk.bytes, chunk.bytes.size) }
+        // sshj's allocateDefaultPTY() is a fixed 80x24; tell the channel the size the phone is
+        // actually rendering so the first prompt does not paint against the wrong width.
+        runCatching { shell.resize(size.rows, size.cols) }
+        ShellSessionBackend(shell) { s -> scope.launch { runCatching { s.close() } } }
     }
 
     /** The trust dialog's verdict lands here. */
     fun resolveTrust(accepted: Boolean) { trustGate?.complete(accepted) }
 
-    /** Reconnect to whatever's currently active (phone, or the same remote alias) — the
+    /** Reconnect to whatever's currently active (phone, or the same remote alias) - the
      *  Reconnect affordance after a Close, and Retry after a failed connect. */
     fun reconnect() {
         _closedByUser.value = false
@@ -234,7 +317,7 @@ class TerminalSessionHolder(
         _mode.value = newMode
         _remoteAlias.value = alias
         _connectError.value = null
-        // Switching target reconnects immediately (ensureOpen) — never show the "closed"
+        // Switching target reconnects immediately (ensureOpen) - never show the "closed"
         // interstitial for that path, only for an explicit Close.
         _closedByUser.value = false
     }
@@ -247,7 +330,7 @@ class TerminalSessionHolder(
         }
     }
 
-    /** Auto-connect on entering the terminal and whenever the target changes — no "Open shell"
+    /** Auto-connect on entering the terminal and whenever the target changes - no "Open shell"
      *  gate button. Deliberately a no-op after an explicit Close (that's Reconnect's job) and
      *  while a connect is already in flight (two doors may both call this on mount). */
     fun ensureOpen() {
@@ -258,41 +341,38 @@ class TerminalSessionHolder(
         }
     }
 
-    /** Send a line (Enter semantics — appends the newline itself), recording it for ↑ recall. */
+    /** Send a line (Enter semantics - appends the newline itself), recording it for up-arrow recall. */
     fun sendLine(line: String) {
         recordHistory(line)
-        scope.launch { runCatching { _shell.value?.send(line + "\n") } }
+        current?.sendText(line + "\n")
     }
 
     /**
-     * The rendered grid reported its real size — drive it into the screen model *and* the live
+     * The rendered grid reported its real size - drive it into the screen model *and* the live
      * shell (TIOCSWINSZ locally, SSH window-change remotely).
-     *
-     * Nothing ever called this before: the session was constructed 24×80 and stayed there, so on
-     * a phone showing roughly forty columns the right half of every line was cut off with no way
-     * to reach it — plain `ls -l` or `git status` output was destroyed. The plumbing to fix it
-     * (PtyShellSession.resize → NativePty.resize → ioctl, and sshj's changeWindowDimensions) was
-     * already complete and unused end to end.
      *
      * Idempotent, because the view re-reports on every layout pass and a redundant SIGWINCH makes
      * a full-screen app repaint for nothing. Whether the shell honours the new size on a real
-     * phone is owner-verified — there is no device here.
+     * phone is owner-verified - there is no device here.
      */
     fun resize(rows: Int, cols: Int) {
         if (rows < 1 || cols < 1) return
         if (rows == pty.screen.rows && cols == pty.screen.cols) return
-        pty.resize(rows, cols)
+        val s = current
+        if (s != null) s.resize(rows, cols) else pty.resize(rows, cols)
         _screenVersion.update { it + 1 }
-        val s = _shell.value ?: return
-        scope.launch { runCatching { s.resize(rows, cols) } }
     }
 
     /** Send raw text/control bytes exactly as given (Ctrl-C = 0x03 etc.). */
-    fun sendRaw(text: String) {
-        scope.launch { runCatching { _shell.value?.send(text) } }
-    }
+    fun sendRaw(text: String) { current?.sendText(text) }
 
-    /** /clear — wipe the grid without touching the shell. */
+    /** A key press, encoded for the application's current modes (cursor keys, keypad, ...). */
+    fun sendKey(event: KeyEvent): Boolean = current?.sendKey(event) ?: false
+
+    /** Pasted text: sanitised, and bracketed when the application asked for it. */
+    fun paste(text: String) { current?.paste(text) }
+
+    /** /clear - wipe the grid without touching the shell. */
     fun clearScreen() {
         pty.screen.clear()
         _screenVersion.update { it + 1 }

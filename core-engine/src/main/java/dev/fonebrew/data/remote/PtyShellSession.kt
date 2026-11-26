@@ -1,58 +1,34 @@
 package dev.fonebrew.data.remote
 
-import android.os.ParcelFileDescriptor
+import dev.fonebrew.data.terminal.NativePtyBackend
+import dev.fonebrew.data.terminal.ProcInspector
+import dev.fonebrew.data.terminal.PtySpec
+import dev.fonebrew.data.terminal.SessionIo
+import dev.fonebrew.data.terminal.TermSize
 import dev.fonebrew.domain.remote.ExecChunk
 import dev.fonebrew.domain.remote.ShellSession
+import dev.fonebrew.domain.terminal.SessionPaths
+import dev.fonebrew.domain.terminal.TerminalEnvironment
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * A real, local, on-device shell — no paired machine required, and a genuine controlling
- * terminal: real line discipline (ONLCR translation, echo, signal-driven job control), the same
- * class of session `/system/bin/sh` gets from any real terminal app. Replaces the earlier
- * `LocalShellSession`, which spawned the shell via plain `ProcessBuilder` pipes — no pty at all,
- * hence its "can't find tty fd" warning and the garbled line-wrapping a bare LF produces without
- * a tty's ONLCR translation. This session forks onto a real pty slave via [NativePty]
- * (`core-engine/src/main/cpp/pty_exec.cpp`), the same approach Termux's terminal-emulator uses.
- * Still runs at this app's own sandboxed uid — no root, no privilege escalation. Feeds the same
- * transport-agnostic [dev.fonebrew.domain.remote.term.PtyChannel]/[dev.fonebrew.domain.remote.term.VtParser]
- * the SSH-backed interactive shell in `RemoteScreen.kt` already uses. Owner-verified: there is
- * no device in this build environment — fork()/exec()/ioctl() behavior on a real device is
- * unverifiable here.
+ * A real, local, on-device shell on a genuine controlling terminal, as a plain [ShellSession].
+ * Kept for callers that want one shell without the session manager; the terminal screens now go
+ * through [TerminalSessionHolder] -> [dev.fonebrew.data.terminal.TerminalSessionManager], which
+ * uses the same [NativePtyBackend]. Raw bytes are handed to [onOutput] undecoded (decode them with
+ * a [dev.fonebrew.domain.terminal.Utf8StreamDecoder], not `String(bytes)` per chunk). The shell
+ * gets the allow-listed [TerminalEnvironment], with HOME/TMPDIR under [workingDir]. Owner-verified:
+ * there is no device in this build environment.
  */
-class PtyShellSession private constructor(
-    private val pfd: ParcelFileDescriptor,
-    private val masterOut: FileOutputStream,
-    private val masterFdRaw: Int,
-    private val pid: Int,
-    private val reader: Thread,
-    private val running: AtomicBoolean,
-) : ShellSession {
+class PtyShellSession private constructor(private val backend: NativePtyBackend) : ShellSession {
 
-    override suspend fun send(text: String) = withContext(Dispatchers.IO) {
-        runCatching {
-            masterOut.write(text.toByteArray(Charsets.UTF_8))
-            masterOut.flush()
-        }
-        Unit
-    }
+    override suspend fun send(text: String) = backend.write(text.toByteArray(Charsets.UTF_8))
 
-    override suspend fun resize(rows: Int, cols: Int) = withContext(Dispatchers.IO) {
-        runCatching { NativePty.resize(masterFdRaw, rows, cols) }
-        Unit
-    }
+    override suspend fun resize(rows: Int, cols: Int) = backend.resize(rows, cols)
 
-    override suspend fun close() = withContext(Dispatchers.IO) {
-        running.set(false)
-        reader.interrupt()
-        runCatching { pfd.close() } // closes the pty master fd -> the reader thread's read() unblocks with EOF/error
-        runCatching { NativePty.waitFor(pid) } // reap the child -- avoid a zombie across open/close cycles
-        Unit
-    }
+    override suspend fun close() = withContext(Dispatchers.IO) { backend.close() }
 
     companion object {
         /** [workingDir] should be a directory this app's uid can actually write to (e.g. filesDir). */
@@ -62,36 +38,26 @@ class PtyShellSession private constructor(
             cols: Int = 80,
             onOutput: (ExecChunk) -> Unit,
         ): PtyShellSession = withContext(Dispatchers.IO) {
-            val result = NativePty.spawn(
-                "/system/bin/sh",
-                arrayOf("/system/bin/sh", "-i"),
-                workingDir.absolutePath,
-                rows, cols,
+            val paths = SessionPaths(
+                home = workingDir.absolutePath,
+                tmp = File(workingDir, "tmp").also { it.mkdirs() }.absolutePath,
+                bin = File(workingDir, "bin").absolutePath,
+                rcFile = File(workingDir, "fonebrew.rc").absolutePath,
             )
-            check(result.size == 2 && result[0] >= 0 && result[1] > 0) {
-                "pty spawn failed (see logcat tag aarso-pty for errno)"
-            }
-            val masterFdRaw = result[0]
-            val pid = result[1]
-            val pfd = ParcelFileDescriptor.adoptFd(masterFdRaw)
-            val masterIn = FileInputStream(pfd.fileDescriptor)
-            val masterOut = FileOutputStream(pfd.fileDescriptor)
-            val running = AtomicBoolean(true)
-            // Pump the pty's output on a daemon thread (blocking reads) -> onOutput, same shape
-            // as SshjTransport.shell()'s reader thread.
-            val reader = Thread {
-                val buf = ByteArray(8 * 1024)
-                try {
-                    while (running.get()) {
-                        val n = masterIn.read(buf)
-                        if (n < 0) break
-                        if (n > 0) onOutput(ExecChunk(ExecChunk.StdStream.OUT, buf.copyOf(n)))
-                    }
-                } catch (_: Exception) {
-                    // fd closed on our own close()
+            val env = TerminalEnvironment.toEnvp(TerminalEnvironment.build(paths, System.getenv()))
+            val emit = onOutput
+            val io = object : SessionIo {
+                override fun onOutput(bytes: ByteArray, length: Int) {
+                    emit(ExecChunk(ExecChunk.StdStream.OUT, bytes.copyOf(length)))
                 }
-            }.apply { isDaemon = true; start() }
-            PtyShellSession(pfd, masterOut, masterFdRaw, pid, reader, running)
+                override fun onExit(status: Int?) {}
+            }
+            PtyShellSession(
+                NativePtyBackend.launch(
+                    PtySpec(TerminalEnvironment.SHELL, listOf(TerminalEnvironment.SHELL, "-i"), env, paths.home),
+                    TermSize(rows, cols), io, ProcInspector(),
+                ),
+            )
         }
     }
 }
