@@ -210,8 +210,7 @@ class ConflictSession private constructor(private val repo: Repository) {
         val wt = repo.workTreeFs()
         val exec = (s.stages[2] ?: s.stages[3])?.isExecutable == true
         wt.writeFile(path, res.bytes(), exec)
-        repo.add(listOf(path))
-        s.resolved = true
+        stage(path, s)
     }
 
     /** Takes a whole version (a missing version means the file is deleted) and stages the result. */
@@ -229,9 +228,16 @@ class ConflictSession private constructor(private val repo: Repository) {
             val st = wt.lstat(path)
             if (st?.kind == FileKind.DIRECTORY) throw SessionException(SessionErrorKind.VERSION_MISSING, "'${PathSafety.display(path)}' is a directory in the work tree", path)
             repo.writeEntry(wt, path, flat)
-            repo.add(listOf(path))
+            stage(path, s)
         }
-        s.resolved = true
+        if (entry == null) s.resolved = true
         s.choices.clear()
+    }
+
+    /** `git add` for one path, then proof that the index really holds a stage-0 entry now (an ignore rule can make add skip it). */
+    private fun stage(path: String, s: FileState) {
+        repo.add(listOf(path))
+        if (repo.readIndex().get(path, 0) == null) throw SessionException(SessionErrorKind.VERSION_MISSING, "'${PathSafety.display(path)}' could not be staged (is it ignored?)", path)
+        s.resolved = true
     }
 }

@@ -243,6 +243,14 @@ class MergeOpsTest {
         assertEquals(tenLines.replace("line 1\n", "ONE\n").replace("line 10", "TEN"), t.read("n.txt"))
     }
 
+    @Test fun `a rename colliding with another change at the same path is refused not merged by dropping one`() {
+        val t = fork(listOf("a" to tenLines, "k" to "k\n"), listOf("b" to tenLines, "a" to null), listOf("a" to tenLines.replace("line 5", "FIVE"), "b" to "something else entirely\n"))
+        val before = t.snapshot()
+        val e = expect(GitErrorKind.UNSUPPORTED) { t.repo.merge("topic") }
+        assertTrue(e.message!!.contains("collision"))
+        assertEquals(before, t.snapshot()); assertNull(t.repo.mergeState())
+    }
+
     // ------------------------------------------------------------------ safety
 
     @Test fun `staged changes and local edits to affected paths refuse before anything is written`() {

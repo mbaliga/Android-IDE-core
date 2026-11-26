@@ -84,6 +84,41 @@ class TextMergeTest {
         }
     }
 
+    @Test fun `render then parse then resolve gives the same text as resolving the original regions`() {
+        val rnd = Random(7)
+        repeat(300) {
+            val base = List(2 + rnd.nextInt(9)) { "l${rnd.nextInt(6)}\n" }
+            fun mut(src: List<String>): List<String> {
+                val o = src.toMutableList()
+                repeat(1 + rnd.nextInt(3)) {
+                    when (rnd.nextInt(3)) {
+                        0 -> if (o.isNotEmpty()) o[rnd.nextInt(o.size)] = "n${rnd.nextInt(5)}\n"
+                        1 -> o.add(rnd.nextInt(o.size + 1), "i${rnd.nextInt(5)}\n")
+                        else -> if (o.isNotEmpty()) o.removeAt(rnd.nextInt(o.size))
+                    }
+                }
+                return o
+            }
+            val ours = mut(base); val theirs = mut(base)
+            for (style in MarkerStyle.values()) {
+                val r = TextMerge.mergeLines(base, ours, theirs, TextMergeOptions(style))
+                if (r.isClean) continue
+                val raw = r.renderRaw()
+                val parsed = ConflictMarkers.parse(raw)
+                assertEquals(r.conflictCount, parsed.regions.size)
+                for (pick in listOf(Choice.Ours, Choice.Theirs, Choice.Both())) {
+                    val a = Resolver.apply(r.segments, r.regions.associate { it.index to pick }).raw
+                    val b = Resolver.apply(parsed.segments, parsed.regions.associate { it.index to pick }).raw
+                    assertEquals("$style $pick", a, b)
+                    assertTrue(Resolver.leftoverMarkers(a).isEmpty())
+                }
+                // re-render of the parsed structure reproduces the file byte for byte
+                val again = MarkerRenderer.render(parsed.segments, style, 7, parsed.oursLabel ?: "", parsed.baseLabel ?: "", parsed.theirsLabel ?: "")
+                assertEquals(raw, again)
+            }
+        }
+    }
+
     @Test fun `trivial cases short circuit`() {
         assertEquals("T\n", text(m("b\n", "b\n", "T\n")))
         assertEquals("O\n", text(m("b\n", "O\n", "b\n")))

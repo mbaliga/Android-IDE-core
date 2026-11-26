@@ -168,9 +168,13 @@ private class TreeMerger(
             val o = ours[oPath]; val t = theirs[tPath]
             // a path the side removed (not renamed) has no entry; a renamed one reads from its new path
             if (rO != null && rT != null && rO.to != rT.to) {
-                // rename/rename 1 to 2
-                val stages = listOfNotNull(b?.let { StageEntry(k, 1, it) }, StageEntry(rO.to, 2, o!!), StageEntry(rT.to, 3, t!!))
-                conflicts.add(PathConflict(ConflictKind.RENAME_RENAME, k, stages, listOf(rO.to to WorkContent.Version(o), rT.to to WorkContent.Version(t)),
+                // rename/rename 1 to 2. As git does, a content/mode change made on either side travels with
+                // the file: when the two versions merge cleanly the merged entry is what both names hold.
+                val merged = (mergeEntry(rO.to, b, o, t) as? Res.Done)?.entry
+                val eo = merged ?: o!!
+                val et = merged ?: t!!
+                val stages = listOfNotNull(b?.let { StageEntry(k, 1, it) }, StageEntry(rO.to, 2, eo), StageEntry(rT.to, 3, et))
+                conflicts.add(PathConflict(ConflictKind.RENAME_RENAME, k, stages, listOf(rO.to to WorkContent.Version(eo), rT.to to WorkContent.Version(et)),
                     "CONFLICT (rename/rename): ${PathSafety.display(k)} renamed to ${PathSafety.display(rO.to)} in ${labels.ours} and to ${PathSafety.display(rT.to)} in ${labels.theirs}"))
                 continue
             }
@@ -192,6 +196,7 @@ private class TreeMerger(
             }
         }
         resolveFileDirectory(clean, provenance, conflicts)
+        guardCollisions(clean, conflicts)
         return TreeMergeResult(clean, conflicts.sortedBy { it.path }, ro.renames.values.toList(), rt.renames.values.toList(), skipped)
     }
 
@@ -302,6 +307,19 @@ private class TreeMerger(
             occupied.add(np)
             conflicts[i] = PathConflict(ConflictKind.FILE_DIRECTORY, np, c.stages.map { StageEntry(np, it.stage, it.entry) }, c.work.map { np to it.second },
                 "CONFLICT (file/directory): directory in the way of ${PathSafety.display(p)} from $label; moving it to ${PathSafety.display(np)} instead.")
+        }
+    }
+
+    /**
+     * Two decisions about one path (a rename landing on a path another change also claims) would let
+     * the index silently keep only one of them. Refuse instead of dropping either.
+     */
+    private fun guardCollisions(clean: Map<String, FlatEntry>, conflicts: List<PathConflict>) {
+        val seen = HashMap<Pair<String, Int>, FlatEntry>()
+        for (c in conflicts) for (st in c.stages) {
+            if (st.path in clean) throw GitException(GitErrorKind.UNSUPPORTED, "'${PathSafety.display(st.path)}' is both merged cleanly and conflicted (rename collision is not built)", listOf(PathSafety.display(st.path)))
+            val prev = seen.put(st.path to st.stage, st.entry)
+            if (prev != null && prev != st.entry) throw GitException(GitErrorKind.UNSUPPORTED, "two conflicts claim stage ${st.stage} of '${PathSafety.display(st.path)}' (rename collision is not built)", listOf(PathSafety.display(st.path)))
         }
     }
 
