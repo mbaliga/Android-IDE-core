@@ -142,3 +142,20 @@ phantom-process killing; `tcgetpgrp` on a pty master and `/proc/<pgid>/comm` rea
 real Android; hardware- and soft-keyboard delivery of Ctrl/Alt/Esc/arrows (UI); vim, tmux, htop,
 less actually rendering correctly; mouse reporting feel; arm64 behaviour of the new JNI code
 (it is only compiled here, once, near the end).
+
+## Verification status (what was and was not machine-checked)
+- JVM gate green (full and play flavors, watch-bridge, watchbrew, checkLicense): core-engine 3772
+  tests per flavor (9 skipped), up from 3080. Includes parser golden transcripts (vim-like,
+  less-like, htop-like), key/paste/mouse tables, UTF-8 split fuzz at every split point, ring bounds,
+  reflow, registry, manager with a fake backend, history cap, service keeper, and one test that
+  pipes real shell output from a host pty (`script`) through the parser (skipped where `script` is
+  missing). A host pty is not Android's pty: that stays owner-verified.
+- Native: `pty_exec.cpp` was compiled for arm64-v8a / android-31 with the NDK 28.2 toolchain and the
+  same two CMake statements the module uses (`add_library(aarso_pty SHARED pty_exec.cpp)` +
+  `log`), clean with -Wall -Wextra; all eight `Java_dev_fonebrew_data_remote_NativePty_*` symbols are
+  exported. AGP exposes only whole-ABI CMake tasks (`buildCMakeDebug[arm64-v8a]`, which also builds
+  llama.cpp, and the submodule is not checked out in lane worktrees), so the Gradle-driven native
+  build was not run; nothing was executed on a device.
+- Not covered by a JVM test: `TerminalSessionHolder` (needs Main dispatcher and host store; it was
+  compiled and its old surface kept), `TerminalSessionService`, `AndroidTerminalPlatform`,
+  `NativePtyBackend` (JNI).
