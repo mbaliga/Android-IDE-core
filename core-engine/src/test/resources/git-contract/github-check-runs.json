@@ -1,0 +1,5 @@
+{"total_count":4,"check_runs":[
+{"id":1,"name":"build","status":"completed","conclusion":"success"},
+{"id":2,"name":"lint","status":"completed","conclusion":"skipped"},
+{"id":3,"name":"unit-tests","status":"completed","conclusion":"failure"},
+{"id":4,"name":"deploy","status":"in_progress","conclusion":null}]}
