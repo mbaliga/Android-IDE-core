@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +20,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aarso.hyle.cells.HyleBottomTabBar
@@ -25,13 +37,17 @@ import dev.aarso.hyle.cells.HyleTabSpec
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.ui.ChatScreen
 import dev.fonebrew.ui.ChatViewModel
+import dev.fonebrew.ui.develop.DEVELOP_TAB_AGENT
 import dev.fonebrew.ui.develop.DevelopRoom
 import dev.fonebrew.ui.loops.LoopRoom
 import dev.fonebrew.ui.rooms.ChatsRoom
 import dev.fonebrew.ui.rooms.ProductRoomFree
 import dev.fonebrew.ui.rooms.SettingsRoom
 import dev.fonebrew.ui.rooms.TreeRoom
+import dev.fonebrew.ui.search.SearchOverlay
+import dev.fonebrew.ui.search.SearchViewModel
 import dev.fonebrew.ui.spatial.ProjectRoomSlot
+import dev.fonebrew.widget.WidgetDestination
 
 /**
  * The Regular shell (bifurcation wave 1, lane R; owner ruling 2026-09-15): a conventional
@@ -63,24 +79,93 @@ fun RegularShell() {
     val context = LocalContext.current
     val container = (context.applicationContext as FonebrewApp).container
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
+    val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
 
     var destination by remember { mutableStateOf(RegularDestination.CHAT) }
     // Tree/Loops: full-screen overlays above the tab content, not destinations of their own —
     // see this file's own KDoc above for why.
     var showTree by remember { mutableStateOf(false) }
     var showLoops by remember { mutableStateOf(false) }
+    // Global search: the SAME SearchOverlay + one-shot hand-off values SpatialRoot holds (audit
+    // 2026-11-11: Regular mounted ChatsRoom/ChatScreen without the search callbacks, so the
+    // pill and the in-chat "Search all chats" row rendered and did nothing).
+    var searchOpen by remember { mutableStateOf(false) }
+    var pendingFind by remember { mutableStateOf<String?>(null) }
+    var pendingLoopId by remember { mutableStateOf<String?>(null) }
+    var pendingTaskId by remember { mutableStateOf<String?>(null) }
+
+    // Home-screen widget taps (docs/widgets.md): the same destinations SpatialRoot handles, mapped
+    // onto this shell's tabs and overlays. Consumed once.
+    var composerRequest by remember { mutableStateOf(false) }
+    var developTabRequest by remember { mutableStateOf<Int?>(null) }
+    var highlightTaskId by remember { mutableStateOf<String?>(null) }
+    val widgetRoute by container.widgetRoutes.pending.collectAsState()
+    LaunchedEffect(widgetRoute) {
+        val route = container.widgetRoutes.consume() ?: return@LaunchedEffect
+        showTree = false
+        showLoops = false
+        when (route.destination) {
+            WidgetDestination.NEW_CHAT -> {
+                chatViewModel.newChat()
+                destination = RegularDestination.CHAT
+                composerRequest = true
+            }
+            WidgetDestination.CHAT -> {
+                destination = RegularDestination.CHAT
+                composerRequest = true
+            }
+            WidgetDestination.CHATS -> destination = RegularDestination.CHATS
+            WidgetDestination.TASKS -> {
+                highlightTaskId = route.taskId
+                destination = RegularDestination.PROJECTS
+            }
+            WidgetDestination.AGENT_REVIEW -> {
+                developTabRequest = DEVELOP_TAB_AGENT
+                destination = RegularDestination.DEVELOP
+            }
+            WidgetDestination.LOOPS -> showLoops = true
+            WidgetDestination.MODELS -> destination = RegularDestination.SETTINGS
+        }
+    }
 
     // Closing an overlay takes priority over the tab-reset handler below; the two conditions are
     // mutually exclusive by construction, so registration order never matters here.
-    BackHandler(enabled = showTree || showLoops) {
+    BackHandler(enabled = searchOpen) { searchOpen = false }
+    BackHandler(enabled = !searchOpen && (showTree || showLoops)) {
         showTree = false
         showLoops = false
     }
-    BackHandler(enabled = !showTree && !showLoops && RegularShellPresenter.backTargetsChat(destination)) {
+    BackHandler(enabled = !searchOpen && !showTree && !showLoops && RegularShellPresenter.backTargetsChat(destination)) {
         destination = RegularDestination.CHAT
     }
 
-    Box(Modifier.fillMaxSize()) {
+    // Hardware Ctrl+K toggles the same SearchOverlay (SpatialRoot's one intercepted chord).
+    // The root is a focus target; "a descendant has focus" (a text field) means the keystroke is
+    // that field's, so the shortcut stands down — see RegularSearchShortcut.
+    val rootFocus = remember { FocusRequester() }
+    var rootIsFocused by remember { mutableStateOf(false) }
+    var rootHasFocus by remember { mutableStateOf(false) }
+    // Initial focus, and again after the overlay closes (its field held focus until it left).
+    LaunchedEffect(searchOpen) { if (!searchOpen) runCatching { rootFocus.requestFocus() } }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onFocusChanged { rootIsFocused = it.isFocused; rootHasFocus = it.hasFocus }
+            .focusRequester(rootFocus)
+            .focusTarget()
+            .onPreviewKeyEvent { event ->
+                val action = RegularSearchShortcut.decide(
+                    isKeyDown = event.type == KeyEventType.KeyDown,
+                    ctrl = event.isCtrlPressed,
+                    isK = event.key == Key.K,
+                    repeatCount = event.nativeKeyEvent.repeatCount,
+                    descendantHasFocus = rootHasFocus && !rootIsFocused,
+                )
+                if (action == RegularSearchShortcut.Action.ToggleSearch) searchOpen = !searchOpen
+                RegularSearchShortcut.consumes(action)
+            },
+    ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 when (destination) {
@@ -90,23 +175,41 @@ fun RegularShell() {
                         onOpenChats = { destination = RegularDestination.CHATS },
                         onOpenSettings = { destination = RegularDestination.SETTINGS },
                         onOpenTree = { showTree = true },
+                        findRequest = pendingFind,
+                        onFindRequestConsumed = { pendingFind = null },
+                        onSearchAllChats = { query ->
+                            searchViewModel.onQueryChange(query)
+                            searchOpen = true
+                        },
                         atHome = true,
+                        composerRequest = composerRequest,
+                        onComposerRequestConsumed = { composerRequest = false },
                     )
                     RegularDestination.CHATS -> ChatsRoom(
                         viewModel = chatViewModel,
                         onClose = { destination = RegularDestination.CHAT },
+                        onOpenSearch = { searchOpen = true },
                     )
                     // Same Studio seam SpatialRoot uses (docs/design/agentic-ide.md): the paid
                     // layer installs the real Project room; core falls back to the free To-do
                     // floor. Neither shell references Studio's type directly.
                     RegularDestination.PROJECTS -> (
-                        ProjectRoomSlot.content ?: { onClose -> ProductRoomFree(onClose) }
+                        ProjectRoomSlot.content ?: { onClose ->
+                            ProductRoomFree(
+                                onClose,
+                                // Two sources, one highlight: a search hit (pendingTaskId) or a widget tap.
+                                highlightTaskId = pendingTaskId ?: highlightTaskId,
+                                onHighlightConsumed = { pendingTaskId = null; highlightTaskId = null },
+                            )
+                        }
                     )(
                         { destination = RegularDestination.CHAT },
                     )
                     RegularDestination.DEVELOP -> DevelopRoom(
                         onClose = { destination = RegularDestination.CHAT },
                         onOpenLoops = { showLoops = true },
+                        tabRequest = developTabRequest,
+                        onTabRequestConsumed = { developTabRequest = null },
                     )
                     RegularDestination.SETTINGS -> SettingsRoom(
                         onShowSpatialMap = { container.sessionStore.setSpatialMapSeen(false) },
@@ -129,8 +232,44 @@ fun RegularShell() {
         }
         if (showLoops) {
             Box(Modifier.fillMaxSize()) {
-                LoopRoom(onClose = { showLoops = false })
+                LoopRoom(
+                    onClose = { showLoops = false },
+                    initialLoopId = pendingLoopId,
+                    onInitialLoopConsumed = { pendingLoopId = null },
+                )
             }
+        }
+        if (searchOpen) {
+            SearchOverlay(
+                viewModel = searchViewModel,
+                onOpenConversation = { rootId, findText ->
+                    chatViewModel.openConversation(rootId)
+                    val landing = RegularShellPresenter.landingForConversation(findText)
+                    pendingFind = landing.pendingFind
+                    destination = landing.destination
+                    showTree = false
+                    showLoops = false
+                    searchOpen = false
+                },
+                onOpenLoop = { loopId ->
+                    val landing = RegularShellPresenter.landingForLoop(loopId)
+                    pendingLoopId = landing.pendingLoopId
+                    destination = landing.destination
+                    showLoops = landing.showLoops
+                    searchOpen = false
+                },
+                onOpenTask = { taskId ->
+                    val landing = RegularShellPresenter.landingForTask(taskId)
+                    pendingTaskId = landing.pendingTaskId
+                    destination = landing.destination
+                    showLoops = false
+                    searchOpen = false
+                },
+                // Same ThreadGraphProjector path SpatialRoot and GraphRoom use — never a second
+                // projection.
+                onLoadThreadGraph = { chatViewModel.loadThreadGraph() },
+                onDismiss = { searchOpen = false },
+            )
         }
     }
 }

@@ -208,6 +208,13 @@ private fun AuthorityReviewLens(
                 preview.authorName?.let { Text("Author: $it", style = MaterialTheme.typography.labelSmall) }
             }
 
+            // Prominent, first: a package whose graph contacts the network says so before anything else.
+            // Informational — the runner itself refuses to execute any tool/host the user has not
+            // confirmed on the run-start sheet, however the loop got here.
+            if (preview.egress.present) {
+                HyleCard { EgressNoticeBlock(preview.egress) }
+            }
+
             if (preview.findings.isNotEmpty()) {
                 Text("Scan notes (non-blocking)", style = MaterialTheme.typography.labelMedium)
                 for (f in preview.findings) {

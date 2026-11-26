@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview: sample content only, never shown on a home screen. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:clipToOutline="true"
+    android:orientation="vertical"
+    android:padding="@dimen/widget_padding">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/header_title"
+            style="@style/FonebrewWidgetText.Label"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/widget_loops_label" />
+        <TextView
+            android:id="@+id/header_meta"
+            style="@style/FonebrewWidgetText.Meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_preview_as_of"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
+        <TextView
+            android:id="@+id/row1_glyph"
+            style="@style/FonebrewWidgetText.Glyph"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="▶" />
+        <TextView
+            android:id="@+id/row1_title"
+            style="@style/FonebrewWidgetText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/widget_preview_loop_1"
+            android:layout_marginStart="6dp" />
+        <TextView
+            android:id="@+id/row1_meta"
+            style="@style/FonebrewWidgetText.Meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_loop_running"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
+        <TextView
+            android:id="@+id/row2_glyph"
+            style="@style/FonebrewWidgetText.Glyph"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✓" />
+        <TextView
+            android:id="@+id/row2_title"
+            style="@style/FonebrewWidgetText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/widget_preview_loop_2"
+            android:layout_marginStart="6dp" />
+        <TextView
+            android:id="@+id/row2_meta"
+            style="@style/FonebrewWidgetText.Meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_loop_complete"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp">
+        <TextView
+            android:id="@+id/row3_glyph"
+            style="@style/FonebrewWidgetText.Glyph"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="■" />
+        <TextView
+            android:id="@+id/row3_title"
+            style="@style/FonebrewWidgetText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/widget_preview_loop_3"
+            android:layout_marginStart="6dp" />
+        <TextView
+            android:id="@+id/row3_meta"
+            style="@style/FonebrewWidgetText.Meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_loop_stopped"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+</LinearLayout>

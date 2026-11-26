@@ -132,6 +132,13 @@ abstract class CloudEngine(
                 ) {
                     wasPaused = true
                 }
+                // A provider can report a failure *inside* a 200 stream (overload, quota, safety).
+                // Without this the stream just ended and the user saw a silently truncated reply.
+                val streamError = runCatching { streamErrorOf(type, data) }.getOrNull()
+                if (streamError != null) {
+                    close(IllegalStateException("Cloud stream error: ${redact(streamError).take(500)}"))
+                    return
+                }
                 if (isDone(type, data)) {
                     close()
                     return
@@ -147,8 +154,10 @@ abstract class CloudEngine(
             }
 
             override fun onFailure(es: EventSource, t: Throwable?, response: Response?) {
+                // Providers may echo (part of) the submitted key in a 401 body; never let it
+                // reach the exception message (and from there the UI or a log).
                 val detail = response?.let { r ->
-                    runCatching { r.body?.string() }.getOrNull()?.take(500)
+                    runCatching { r.body?.string() }.getOrNull()?.let { redact(it) }?.take(500)
                 }
                 close(t ?: IllegalStateException("Cloud request failed: ${response?.code} $detail"))
             }
@@ -162,6 +171,13 @@ abstract class CloudEngine(
     /** True when this event marks end-of-stream. Default: OpenAI's "[DONE]". */
     protected open fun isDone(type: String?, data: String): Boolean = data.trim() == "[DONE]"
 
+    /**
+     * A provider-reported failure carried by one SSE event of an otherwise-200 stream (e.g.
+     * Anthropic's `event: error`), as a short human message, or null if this isn't an error
+     * event. Subclasses override per their response shape. Default: none.
+     */
+    protected open fun streamErrorOf(type: String?, data: String): String? = null
+
     /** Extract the text chunk from one SSE event, or null if it carries none. */
     protected abstract fun parseDelta(type: String?, data: String): String?
 
@@ -173,9 +189,17 @@ abstract class CloudEngine(
      */
     private fun logSseParseFailure(fn: String, type: String?, t: Throwable) {
         if (BuildConfig.DEBUG) {
-            android.util.Log.w("Fonebrew", "CloudEngine.$fn failed on event type=$type: $t")
+            // Logging must never be able to kill the stream (a JVM test's android.util.Log stub
+            // throws "not mocked"); the failure being logged is already tolerated above.
+            runCatching {
+                android.util.Log.w("Fonebrew", "CloudEngine.$fn failed on event type=$type: ${redact(t.toString())}")
+            }
         }
     }
+
+    /** Strip this engine's API key from any string headed for a message or a log line. */
+    private fun redact(text: String): String =
+        if (apiKey.isBlank()) text else text.replace(apiKey, "[redacted-key]")
 }
 
 /**

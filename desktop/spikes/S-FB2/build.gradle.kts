@@ -34,7 +34,7 @@ val mapRoom = tasks.register<Sync>("mapCoreRoomSources") {
     into(layout.buildDirectory.dir("mapped-core/room"))
 }
 val mapFactory = tasks.register<Sync>("mapCoreSearchDriverFactory") {
-    from(coreMain.dir("java/dev/fonebrew")) { include("data/search/SearchDriverFactory.kt") }
+    from(coreMain.dir("java/dev/fonebrew")) { include("data/search/SearchDriverFactory.kt", "data/search/SerializedSqlDriver.kt") }
     into(layout.buildDirectory.dir("mapped-core/factory"))
 }
 

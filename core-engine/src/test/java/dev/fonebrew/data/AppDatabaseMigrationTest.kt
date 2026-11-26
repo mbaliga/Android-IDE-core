@@ -4,48 +4,35 @@ import android.content.ContextWrapper
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import dev.fonebrew.data.entity.MessageEmbeddingEntity
-import dev.fonebrew.data.entity.MessageNodeEntity
-import dev.fonebrew.data.entity.TokenCountEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONObject
 import java.io.File
 
 /**
- * The real, JVM-only Room migration test the data-loss-fix lane exists for (CLAUDE.md
- * "Environment honesty"/binding rule 6 — no device or Robolectric here, and none is needed).
+ * The real, JVM-only Room migration test (CLAUDE.md "Environment honesty"/binding rule 6 — no
+ * device or Robolectric here, and none is needed).
  *
- * Earlier JVM tests in this package avoided Room's generated implementation entirely ("Room
- * needs a real SQLite binding this JVM gate doesn't have", see e.g. [CurationStoreTest]'s own
- * comment) and exercised stores against fake [dev.fonebrew.data.dao] implementations instead.
- * That workaround is correct for ordinary DAO logic, but it cannot prove a [Migration][androidx.room.migration.Migration]
- * actually runs against real SQLite — which is the whole point of this lane. The missing piece
- * turns out to already be on the test classpath: `androidx.sqlite:sqlite-bundled-jvm` (added for
- * [dev.fonebrew.data.search.SearchDatabaseFactoryTest]'s SQLDelight/FTS5 test) ships a real,
- * host-JVM SQLite engine that Room 2.7's [androidx.room.RoomDatabase.Builder.setDriver] can use
- * directly, bypassing the classic `SupportSQLiteOpenHelper`/`FrameworkSQLiteOpenHelperFactory`
- * path that needs a real Android `Context` (or Robolectric) to open a connection at all.
+ * Room 2.7's [androidx.room.RoomDatabase.Builder.setDriver] with `androidx.sqlite:sqlite-bundled-jvm`
+ * (already on the test classpath for [dev.fonebrew.data.search.SearchDatabaseFactoryTest]) runs the
+ * real generated [AppDatabase] against real SQLite on the host JVM. The one Android dependency,
+ * `Context.getDatabasePath(name)`, is satisfied by a [ContextWrapper] overriding only that method.
  *
- * The one remaining Android dependency, `Context.getDatabasePath(name)` (called internally by
- * Room's `RoomConnectionManager.resolveFileName`), is satisfied with a minimal hand-rolled
- * [ContextWrapper] that overrides only that one method — safe because driver-based Room never
- * reaches another `Context` method on a non-AUTOMATIC [RoomDatabase.JournalMode] with multi-
- * instance invalidation and asset/file pre-population unused (verified against the actual
- * room-runtime-2.7.1 bytecode, not assumed).
- *
- * The test: build a database with [AppDatabase]'s real schema (identical between v10 and v11 —
- * see [MIGRATION_10_11]'s KDoc), insert representative append-only message-tree rows (a node, its
- * token count, and its embedding), then force the on-disk `PRAGMA user_version` back down to 10
- * (an honest stand-in for "a database left over from the v10 release", since v10's and v11's
- * table structure do not differ at all) before reopening through [MIGRATION_10_11] — proving the
- * real migration path preserves user data end-to-end, which is exactly what
- * `fallbackToDestructiveMigration()` could never do.
+ * The v10 fixture is NOT built from today's entities: it is created from the committed
+ * `core-engine/schemas/dev.fonebrew.data.AppDatabase/10.json` (the Room export of the v10 entity
+ * set, re-derived from the tree before the v10->v11 bump) by executing that file's own `createSql`,
+ * index and `setupQueries` statements and stamping `PRAGMA user_version = 10`. One representative
+ * row is seeded into EVERY table the file declares, the database is reopened through
+ * [MIGRATION_10_11], and every row must come back byte-identical. When a future bump changes a
+ * table, add `<N>.json` and build that bump's test from it the same way.
  */
 class AppDatabaseMigrationTest {
 
@@ -88,25 +75,121 @@ class AppDatabaseMigrationTest {
             .setQueryCoroutineContext(Dispatchers.IO)
             // AUTOMATIC (the default) resolves via Context.getSystemService(ActivityManager),
             // which the fake Context above deliberately doesn't implement — pin a mode that
-            // short-circuits before touching Context at all (verified against the real
-            // RoomDatabase.JournalMode.resolve$room_runtime_release bytecode).
+            // short-circuits before touching Context at all.
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .addMigrations(*migrations.toTypedArray())
             .build()
 
-    /** Downgrades the on-disk schema version to simulate "a v10 database, as it would exist on
-     *  a real user's device before this upgrade" — legitimate here specifically because v10's
-     *  and v11's table structure are identical (see [MIGRATION_10_11]'s KDoc); a future bump
-     *  that actually changes a column/table needs its own fixture built from the real exported
-     *  v-N schema instead of this shortcut. */
-    private fun stampStoredVersion(version: Int) {
+    private fun schemaJson(version: Int): JSONObject {
+        // Gradle runs unit tests with the module directory as the working directory.
+        val f = File("schemas/dev.fonebrew.data.AppDatabase/$version.json")
+        assertTrue("missing committed schema export ${f.absolutePath}", f.isFile)
+        return JSONObject(f.readText()).getJSONObject("database")
+    }
+
+    /** One seeded row: column name -> value (null = SQL NULL). */
+    private class Seed(val table: String, val values: Map<String, Any?>)
+
+    /**
+     * Builds the on-disk database exactly as the v10 schema export describes it (create
+     * statements, indices, Room's master table + identity hash, `user_version = 10`) and seeds
+     * one row per table. Values are derived from each column's declared affinity; `parentId` is
+     * left NULL (root node) and every `nodeId` points at the seeded message node so the
+     * foreign keys the export declares are satisfied.
+     */
+    private fun createV10Database(): List<Seed> {
+        val db = schemaJson(10)
+        assertEquals(10, db.getInt("version"))
+        val entities = db.getJSONArray("entities")
+        val seeds = ArrayList<Seed>()
         val connection = BundledSQLiteDriver().open(dbFile.absolutePath)
         try {
-            val statement = connection.prepare("PRAGMA user_version = $version")
+            fun exec(sql: String) {
+                val s = connection.prepare(sql)
+                try { s.step() } finally { s.close() }
+            }
+            exec("PRAGMA foreign_keys = ON")
+            for (i in 0 until entities.length()) {
+                val e = entities.getJSONObject(i)
+                val table = e.getString("tableName")
+                exec(e.getString("createSql").replace("\${TABLE_NAME}", table))
+                val idx = e.optJSONArray("indices")
+                for (j in 0 until (idx?.length() ?: 0)) {
+                    exec(idx!!.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
+                }
+            }
+            val setup = db.getJSONArray("setupQueries")
+            for (i in 0 until setup.length()) exec(setup.getString(i))
+
+            // message_nodes first: token_counts / message_embeddings reference it.
+            val ordered = (0 until entities.length()).map { entities.getJSONObject(it) }
+                .sortedBy { if (it.getString("tableName") == "message_nodes") 0 else 1 }
+            for (e in ordered) {
+                val table = e.getString("tableName")
+                val fields = e.getJSONArray("fields")
+                val values = LinkedHashMap<String, Any?>()
+                for (k in 0 until fields.length()) {
+                    val f = fields.getJSONObject(k)
+                    val col = f.getString("columnName")
+                    values[col] = when {
+                        col == "parentId" -> null
+                        col == "nodeId" || (table == "message_nodes" && col == "id") -> "node-1"
+                        f.getString("affinity") == "TEXT" -> "seed-$table-$col"
+                        f.getString("affinity") == "INTEGER" -> 7L
+                        f.getString("affinity") == "REAL" -> 1.5
+                        else -> byteArrayOf(1, 2, 3, 4)
+                    }
+                }
+                val cols = values.keys.joinToString(",") { "`$it`" }
+                val marks = values.keys.joinToString(",") { "?" }
+                val stmt = connection.prepare("INSERT INTO `$table` ($cols) VALUES ($marks)")
+                try {
+                    values.values.forEachIndexed { n, v ->
+                        val p = n + 1
+                        when (v) {
+                            null -> stmt.bindNull(p)
+                            is String -> stmt.bindText(p, v)
+                            is Long -> stmt.bindLong(p, v)
+                            is Double -> stmt.bindDouble(p, v)
+                            is ByteArray -> stmt.bindBlob(p, v)
+                            else -> error("unseedable $v")
+                        }
+                    }
+                    stmt.step()
+                } finally {
+                    stmt.close()
+                }
+                seeds += Seed(table, values)
+            }
+            exec("PRAGMA user_version = 10")
+        } finally {
+            connection.close()
+        }
+        return seeds
+    }
+
+    /** Asserts [table] holds exactly one row and that it equals [expected], column by column. */
+    private fun assertSingleRowEquals(table: String, expected: Map<String, Any?>) {
+        val columns = expected.keys.toList()
+        val connection = BundledSQLiteDriver().open(dbFile.absolutePath)
+        try {
+            val stmt = connection.prepare("SELECT ${columns.joinToString(",") { "`$it`" }} FROM `$table`")
             try {
-                statement.step()
+                assertTrue("$table lost its row in the migration", stmt.step())
+                columns.forEachIndexed { i, c ->
+                    val label = "$table.$c"
+                    when (val want = expected[c]) {
+                        null -> assertTrue(label, stmt.isNull(i))
+                        is String -> assertEquals(label, want, stmt.getText(i))
+                        is Long -> assertEquals(label, want, stmt.getLong(i))
+                        is Double -> assertEquals(label, want, stmt.getDouble(i), 0.0)
+                        is ByteArray -> assertTrue(label, want.contentEquals(stmt.getBlob(i)))
+                        else -> error("unexpected seed type for $label")
+                    }
+                }
+                assertFalse("$table gained rows in the migration", stmt.step())
             } finally {
-                statement.close()
+                stmt.close()
             }
         } finally {
             connection.close()
@@ -114,87 +197,55 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun `migration from v10 to v11 preserves the append-only message tree`() = runTest {
-        val nodeId = "node-root-1"
-        val tokenizerId = "cl100k_base"
-        val vector = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8)
+    fun `the committed v10 and v11 schema exports differ only in version number`() {
+        // This is the evidence behind MIGRATION_10_11 being a no-op: if a future edit makes the
+        // entity set drift without a real migration, this fails.
+        val v10 = schemaJson(10)
+        val v11 = schemaJson(11)
+        assertEquals(v10.getString("identityHash"), v11.getString("identityHash"))
+        assertEquals(v10.getJSONArray("entities").toString(), v11.getJSONArray("entities").toString())
+        assertEquals(v10.getJSONArray("setupQueries").toString(), v11.getJSONArray("setupQueries").toString())
+    }
 
-        // Phase 1: a database that looks exactly like a shipped v10 install — built against
-        // AppDatabase's real (v11) schema, which is byte-for-byte what v10 already was.
-        openDatabase(migrations = emptyList()).useAndClose { db ->
-            db.messageNodeDao().insert(
-                MessageNodeEntity(
-                    id = nodeId,
-                    parentId = null,
-                    role = "user",
-                    content = "hello from before the v10->v11 upgrade",
-                    modelId = "local-gguf-test",
-                    createdAt = 1_700_000_000_000L,
-                    metadataJson = """{"source":"migration-test"}""",
-                ),
-            )
-            db.tokenCountDao().upsert(TokenCountEntity(nodeId = nodeId, tokenizerId = tokenizerId, count = 42))
-            db.embeddingDao().upsert(
-                MessageEmbeddingEntity(
-                    nodeId = nodeId,
-                    embedderId = "placeholder-embedder",
-                    dim = vector.size,
-                    vector = vector,
-                    createdAt = 1_700_000_000_500L,
-                ),
-            )
-        }
-        stampStoredVersion(10)
+    @Test
+    fun `every table in the real v10 schema keeps its seeded row through the v10 to v11 migration`() = runTest {
+        val seeds = createV10Database()
+        assertTrue("fixture should seed every declared table", seeds.size >= 17)
 
-        // Phase 2: reopen through the real migration path this lane exists to prove out.
+        // Opening runs MIGRATION_10_11 and Room's post-migration schema validation against v11.
         openDatabase(migrations = listOf(MIGRATION_10_11)).useAndClose { db ->
-            val node = db.messageNodeDao().getById(nodeId)
+            // Force the open (and therefore the migration) to happen.
+            assertNotNull(db.messageNodeDao().getById("node-1"))
+        }
+
+        for (seed in seeds) assertSingleRowEquals(seed.table, seed.values)
+    }
+
+    @Test
+    fun `message tree rows seeded on the real v10 schema are readable through the DAOs after migration`() = runTest {
+        createV10Database()
+        openDatabase(migrations = listOf(MIGRATION_10_11)).useAndClose { db ->
+            val node = db.messageNodeDao().getById("node-1")
             assertNotNull("message node must survive the v10->v11 migration", node)
-            assertEquals("user", node!!.role)
-            assertEquals("hello from before the v10->v11 upgrade", node.content)
-            assertEquals("local-gguf-test", node.modelId)
-            assertEquals(1_700_000_000_000L, node.createdAt)
-            assertEquals("""{"source":"migration-test"}""", node.metadataJson)
-
-            val allNodes = db.messageNodeDao().observeAll()
-            assertEquals(1, allNodes.first().size)
-
-            val tokenCount = db.tokenCountDao().forNode(nodeId)
-            assertEquals(1, tokenCount.size)
-            assertEquals(tokenizerId, tokenCount.first().tokenizerId)
-            assertEquals(42, tokenCount.first().count)
-
-            val embedding = db.embeddingDao().forNode(nodeId)
-            assertNotNull("embedding must survive the v10->v11 migration", embedding)
-            assertEquals("placeholder-embedder", embedding!!.embedderId)
-            assertEquals(vector.size, embedding.dim)
-            assertEquals(true, vector.contentEquals(embedding.vector))
+            assertEquals("seed-message_nodes-role", node!!.role)
+            assertEquals("seed-message_nodes-content", node.content)
+            assertEquals(7L, node.createdAt)
+            assertEquals(1, db.messageNodeDao().observeAll().first().size)
+            assertEquals(1, db.tokenCountDao().forNode("node-1").size)
+            assertNotNull(db.embeddingDao().forNode("node-1"))
         }
     }
 
     @Test
-    fun `migration from v10 to v11 preserves multiple nodes and row counts`() = runTest {
-        openDatabase(migrations = emptyList()).useAndClose { db ->
-            repeat(5) { i ->
-                db.messageNodeDao().insert(
-                    MessageNodeEntity(
-                        id = "node-$i",
-                        parentId = if (i == 0) null else "node-${i - 1}",
-                        role = if (i % 2 == 0) "user" else "assistant",
-                        content = "message #$i",
-                        modelId = null,
-                        createdAt = 1_700_000_000_000L + i,
-                        metadataJson = null,
-                    ),
-                )
-            }
-        }
-        stampStoredVersion(10)
-
-        openDatabase(migrations = listOf(MIGRATION_10_11)).useAndClose { db ->
-            val all = db.messageNodeDao().observeAll().first()
-            assertEquals(5, all.size)
-            assertEquals((0..4).map { "message #$it" }, all.map { it.content })
-        }
+    fun `opening the real v10 database without the migration fails instead of wiping it`() = runTest {
+        // The no-destructive-fallback policy (AppContainer.kt): a missing migration path must
+        // throw, never silently recreate the file.
+        createV10Database()
+        val failure = runCatching {
+            openDatabase(migrations = emptyList()).useAndClose { db -> db.messageNodeDao().getById("node-1") }
+        }.exceptionOrNull()
+        assertNotNull("opening v10 -> v11 with no migration must throw", failure)
+        // And the row is still on disk.
+        assertSingleRowEquals("message_nodes", mapOf("id" to "node-1"))
     }
 }

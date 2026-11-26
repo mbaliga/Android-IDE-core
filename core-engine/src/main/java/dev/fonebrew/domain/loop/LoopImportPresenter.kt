@@ -92,6 +92,10 @@ data class LoopImportPreview(
     val modelBindingSlots: List<ModelBindingSlot>,
     val requiresSimulationAcknowledgement: Boolean,
     val signaturePosture: String,
+    /** Tool/HTTP nodes the graph carries, computed from the graph itself (never from what the
+     *  manifest chose to declare). Informational on import: the runner refuses to execute them
+     *  without the run-start confirmation regardless. */
+    val egress: EgressNotice = EgressNotice.NONE,
 )
 
 /** The user's WAITING_AUTHORITY decision (§6) plus the always-required simulation-gap acknowledgement (§7) —
@@ -130,6 +134,7 @@ object LoopImportReview {
             findings = findings, capabilityItems = capItems, modelBindingSlots = slots,
             requiresSimulationAcknowledgement = true,
             signaturePosture = if (decoded.manifest.signatureRef != null) "signed (unverifiable — no publisher-key trust store in this build)" else "unsigned",
+            egress = EgressNotice.of(decoded.graph, LoopTools.describeOnly),
         )
     }
 
@@ -137,8 +142,10 @@ object LoopImportReview {
      *  no explicit model — always at least one slot, satisfying [BindingProfile]'s non-empty
      *  `slotBindings` requirement without inventing a placeholder this app has no other model of. */
     fun modelBindingSlots(graph: BpmnGraph): List<ModelBindingSlot> {
-        val byModel = graph.nodes.filter { !it.kind.name.contains("EVENT") && !it.kind.name.contains("GATEWAY") }
+        // Tool nodes call no model, so they need no model slot.
+        val byModel = graph.nodes.filter { !it.kind.name.contains("EVENT") && !it.kind.name.contains("GATEWAY") && !ToolNodes.isToolNode(it) }
             .groupBy { it.ext["model"] }
+        if (byModel.isEmpty()) return listOf(ModelBindingSlot("model.default", null, emptyList()))
         return byModel.entries.sortedBy { it.key ?: "" }.map { (modelId, nodes) ->
             val slotId = if (modelId != null) "model.$modelId" else "model.default"
             ModelBindingSlot(slotId, modelId, nodes.map { it.id })

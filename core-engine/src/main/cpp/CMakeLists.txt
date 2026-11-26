@@ -38,6 +38,10 @@ target_link_libraries(aarso_llama
     llama
     ${log-lib})
 
+# On-device embeddings (semantic search): a separate translation unit in the SAME library, so it
+# shares the one llama.cpp build and the -march flags above. Own context + mutex; see the file.
+target_sources(aarso_llama PRIVATE llama_embed_jni.cpp)
+
 # The PTY bridge is plain C/C++ against bionic -- no llama.cpp/GGML dependency, so it isn't
 # affected by the -march tuning above (harmless either way; it's a tiny, non-hot-path file).
 add_library(aarso_pty SHARED pty_exec.cpp)

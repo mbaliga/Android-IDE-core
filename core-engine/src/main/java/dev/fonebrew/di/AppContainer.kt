@@ -115,8 +115,9 @@ class AppContainer(context: Context) {
     val workspaceSearchIndex: dev.fonebrew.domain.search.WorkspaceSearchIndex by lazy {
         dev.fonebrew.domain.search.WorkspaceSearchIndex()
     }
-    val semanticSearchProvider: dev.fonebrew.domain.search.SemanticSearchProvider =
-        dev.fonebrew.domain.search.DisabledSemanticSearchProvider
+    val semanticSearchProvider: dev.fonebrew.domain.search.SemanticSearchProvider by lazy {
+        dev.fonebrew.data.search.semantic.EmbeddingSemanticSearchProvider(semanticSearchService)
+    }
 
     /** Fonebrew handoff-pack WP-4: the real authority policy engine (default-deny, no transitive
      *  delegation, purpose/target/time binding -- docs/ratified/CAPABILITY_AUTHORITY_MODEL.md).
@@ -358,6 +359,17 @@ class AppContainer(context: Context) {
     val gitTransport: dev.fonebrew.data.GitTransport = dev.fonebrew.data.GitTransport()
     val gitBackup: dev.fonebrew.data.GitBackup by lazy { dev.fonebrew.data.GitBackup(repository, gitTransport) }
     val gitBrowse: dev.fonebrew.data.GitBrowse = dev.fonebrew.data.GitBrowse(gitTransport)
+    /** The real git engine's network facade (clone/fetch/pull/push; docs/design/git-transport.md). Tokens stay
+     *  in [gitHostStore] and are handed over per host, only after a 401. SSH has no key store yet (a later
+     *  package), so ssh:// remotes are refused until one is wired. Runtime is owner-verified. */
+    val gitClient: dev.fonebrew.domain.gitcore.client.GitClient by lazy {
+        dev.fonebrew.domain.gitcore.client.GitClient(
+            dev.fonebrew.domain.gitcore.JvmFileSystem(),
+            dev.fonebrew.data.gitcore.GitTransports(
+                dev.fonebrew.data.gitcore.GitHostCredentialProvider({ gitHostStore.hosts.value }, { gitHostStore.token(it) }),
+            ),
+        )
+    }
     val buildsRepo: BuildsRepo = BuildsRepo(gitTransport, gitHostStore)
     /** Push/pull loop .bpmn files to the user's Git host (P6 made real). */
     val loopSyncRepo: dev.fonebrew.data.LoopSyncRepo =
@@ -413,6 +425,15 @@ class AppContainer(context: Context) {
             filesDir = context.applicationContext.filesDir,
             hostStore = remoteHostStore,
             newTransport = ::newSshTransport,
+            onLiveCount = terminalKeeper::onLiveCount,
+            platform = dev.fonebrew.data.terminal.AndroidTerminalPlatform(context.applicationContext as android.app.Application),
+        )
+    }
+
+    /** Mirrors the live terminal-session count onto the keep-alive foreground service (full flavor). */
+    private val terminalKeeper: dev.fonebrew.domain.terminal.ServiceKeeper by lazy {
+        dev.fonebrew.domain.terminal.ServiceKeeper(
+            dev.fonebrew.service.TerminalServiceController(context.applicationContext),
         )
     }
 
@@ -451,15 +472,60 @@ class AppContainer(context: Context) {
 
     val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore, context.applicationContext)
 
+    /** On-device benchmark (docs/design/on-device-benchmark.md): explicit-tap only, local models
+     *  only, results kept in a local bounded JSON file. Process-wide so a run survives leaving
+     *  the screen; holds the existing generation foreground service while it runs. */
+    val benchmarkHistoryStore: dev.fonebrew.data.benchmark.BenchmarkHistoryStore =
+        dev.fonebrew.data.benchmark.BenchmarkHistoryStore(
+            java.io.File(context.filesDir, dev.fonebrew.data.benchmark.BenchmarkHistoryStore.FILE_NAME),
+        )
+
+    val benchmarkController: dev.fonebrew.data.benchmark.BenchmarkController =
+        dev.fonebrew.data.benchmark.BenchmarkController(
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+            engineFor = { spec -> engineProvider.engineFor(spec)?.let { dev.fonebrew.data.benchmark.InferenceEngineBenchmarkAdapter(it) } },
+            unavailableReason = { engineProvider.unavailableReason(it) },
+            residentModelLoaded = { engineProvider.engineFor(it)?.isLoaded == true },
+            unloadResidentModel = { engineProvider.unloadLocalModel() },
+            store = benchmarkHistoryStore,
+            clock = dev.fonebrew.data.benchmark.Probes.systemClock(),
+            thermal = dev.fonebrew.data.benchmark.Probes.androidThermal(context.applicationContext),
+            memory = dev.fonebrew.data.benchmark.Probes.androidMemory(),
+            battery = dev.fonebrew.data.benchmark.Probes.androidBattery(context.applicationContext),
+            device = { dev.fonebrew.data.benchmark.Probes.androidFingerprint() },
+            foreground = object : dev.fonebrew.data.benchmark.ForegroundHold {
+                override fun acquire() = dev.fonebrew.service.GenerationService.start(context.applicationContext)
+                override fun release() = dev.fonebrew.service.GenerationService.stop(context.applicationContext)
+            },
+        )
+
     // Agentic repo loop (IA: agentic-ide #1): read repo → model proposes a ChangeSet → review → commit.
     // Graph-wave lane D: `repository` is wired so a successful commit mints a queryable
     // CommitAnchor node into the real message tree (dev.fonebrew.data.AgentRepoRunner's own KDoc).
     val agentRepoRunner: dev.fonebrew.data.AgentRepoRunner =
-        dev.fonebrew.data.AgentRepoRunner(gitTransport, gitHostStore, modelRegistry, engineProvider, repository)
+        dev.fonebrew.data.AgentRepoRunner(
+            gitTransport, gitHostStore, modelRegistry, engineProvider, repository,
+            appendLedger = { ledgerStore.append(it) },
+            priceFor = { pricingStore.book.value.priceFor(it) },
+            recordFreeTier = { providerId, tokensIn, tokensOut -> freeTierUsageStore.record(providerId, tokensIn, tokensOut) },
+        )
 
     // Concurrent work in progress elsewhere in the app (a Loop run, the Agent proposing a
     // change) — surfaced together in Chat's background-tasks strip.
     val backgroundJobs: dev.fonebrew.data.BackgroundJobs = dev.fonebrew.data.BackgroundJobs()
+
+    // Home-screen widgets (docs/widgets.md). Three small process-scoped holders the widgets read,
+    // each written by the screen that owns the data (the chat reports its generation phase, the
+    // Develop room offers/clears its pending proposal, MainActivity hands over a widget tap's route),
+    // plus the redraw hub, lazy so it is built only once a widget is actually placed.
+    val generationStatus: dev.fonebrew.data.GenerationStatus = dev.fonebrew.data.GenerationStatus()
+    val agentReview: dev.fonebrew.data.AgentReviewHolder = dev.fonebrew.data.AgentReviewHolder()
+    /** Per-widget privacy switches (task titles, loop names), default OFF. */
+    val widgetPrivacy: dev.fonebrew.data.WidgetPrivacyStore = dev.fonebrew.data.WidgetPrivacyStore.forContext(context)
+    val widgetRoutes: dev.fonebrew.widget.WidgetRouteInbox = dev.fonebrew.widget.WidgetRouteInbox()
+    val widgetUpdates: dev.fonebrew.widget.WidgetUpdates by lazy {
+        dev.fonebrew.widget.WidgetUpdates(context.applicationContext, this)
+    }
 
     // Device recipes over the SSH spine (IA: agentic-ide #3): RPi / Arduino-via-Pi / ESP-OTA.
     val deviceRepo: dev.fonebrew.data.DeviceRepo = dev.fonebrew.data.DeviceRepo { newSshTransport() }
@@ -540,4 +606,28 @@ class AppContainer(context: Context) {
         dev.fonebrew.data.search.SearchRepository(
             repository, sessionStore, ledgerStore, threadMarkerStore, loopStore, taskStore, searchDatabaseHandle.database,
         )
+
+    // --- Semantic search (docs/design/semantic-search.md). Everything is lazy: with the feature
+    // never touched, nothing is opened, loaded or allocated. Default OFF; the embedder loads only
+    // while the user has enabled it AND chosen an installed embedding model.
+    val semanticSettings: dev.fonebrew.data.search.semantic.SemanticSettings by lazy {
+        dev.fonebrew.data.search.semantic.PrefsSemanticSettings(context)
+    }
+    /** Embedding GGUFs, kept apart from [localModelStore] (which feeds the chat-model picker). */
+    val embeddingModelStore: dev.fonebrew.data.search.semantic.EmbeddingModelStore by lazy {
+        dev.fonebrew.data.search.semantic.EmbeddingModelStore(java.io.File(context.filesDir, "embedding-models"))
+    }
+    val embeddingModelDownloader: ModelDownloader by lazy {
+        ModelDownloader(embeddingModelStore.dir) { embeddingModelStore.afterDownload() }
+    }
+    val semanticSearchService: dev.fonebrew.data.search.semantic.SemanticSearchService by lazy {
+        dev.fonebrew.data.search.semantic.SemanticSearchService(
+            settings = semanticSettings,
+            models = embeddingModelStore,
+            store = dev.fonebrew.data.search.semantic.LazyVectorStore(java.io.File(context.filesDir, "semantic-vectors.db")),
+            corpus = dev.fonebrew.data.search.semantic.SearchProjectionCorpus(searchDatabaseHandle.database),
+            native = dev.fonebrew.embedding.LlamaEmbedNative(),
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+        )
+    }
 }

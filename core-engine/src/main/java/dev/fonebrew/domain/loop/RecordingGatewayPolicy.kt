@@ -38,8 +38,12 @@ class RecordingGatewayPolicy(
     /** Snapshot of every auto-choice recorded so far this run. */
     val recorded: List<Recorded> get() = _recorded.toList()
 
-    override fun choose(node: BpmnNode, lastOutput: String, outgoing: List<BpmnEdge>): BpmnEdge? {
-        val edge = inner.choose(node, lastOutput, outgoing) ?: return null
+    override fun choose(node: BpmnNode, lastOutput: String, outgoing: List<BpmnEdge>): BpmnEdge? =
+        decide(node, lastOutput, outgoing).edge
+
+    override fun decide(node: BpmnNode, lastOutput: String, outgoing: List<BpmnEdge>): GatewayChoice {
+        val choice = inner.decide(node, lastOutput, outgoing)
+        val edge = choice.edge ?: return choice
         if (outgoing.size > 1) {
             _recorded += Recorded(
                 nodeId = node.id,
@@ -47,6 +51,6 @@ class RecordingGatewayPolicy(
                 alternativeRefs = outgoing.filter { it.id != edge.id }.map { it.id },
             )
         }
-        return edge
+        return choice
     }
 }

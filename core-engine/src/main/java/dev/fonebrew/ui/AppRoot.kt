@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import dev.aarso.interactionmode.InteractionMode
 import dev.fonebrew.FonebrewApp
+import dev.fonebrew.ui.layout.ProvideDisplayEnvironment
 import dev.fonebrew.ui.regular.RegularShell
 import dev.fonebrew.ui.spatial.SpatialRoot
 
@@ -41,14 +42,18 @@ fun AppRoot(dark: Boolean) {
     val onboarded by container.sessionStore.onboardingDone.collectAsState()
     val interactionMode by container.interactionMode.mode.collectAsState()
     var showSplash by remember { mutableStateOf(true) }
-    Box(Modifier.fillMaxSize()) {
-        when {
-            showSplash -> FonebrewSplash(dark = dark, onFinished = { showSplash = false })
-            !onboarded -> OnboardingScreen(onDone = { container.sessionStore.setOnboardingDone() })
-            interactionMode == InteractionMode.REGULAR -> RegularShell()
-            else -> SpatialRoot()
+    // Resolver output only (LocalScreenClass / LocalDisplayState): nothing below reads it yet, so
+    // which shell shows is unchanged (docs/design/docked-layout.md; the desktop shell is later).
+    ProvideDisplayEnvironment {
+        Box(Modifier.fillMaxSize()) {
+            when {
+                showSplash -> FonebrewSplash(dark = dark, onFinished = { showSplash = false })
+                !onboarded -> OnboardingScreen(onDone = { container.sessionStore.setOnboardingDone() })
+                interactionMode == InteractionMode.REGULAR -> RegularShell()
+                else -> SpatialRoot()
+            }
+            // Visible-at-launch build-identity signal (permanent — keep in every build).
+            VersionBadge(modifier = Modifier.align(Alignment.BottomStart))
         }
-        // Visible-at-launch build-identity signal (permanent — keep in every build).
-        VersionBadge(modifier = Modifier.align(Alignment.BottomStart))
     }
 }

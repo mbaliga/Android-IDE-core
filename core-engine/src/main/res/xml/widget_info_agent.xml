@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget "agent" (docs/widgets.md). Resizable from 2x1 up; the layouts for each size
+     are sent together (RemoteViews size map) and the launcher picks one. No periodic updates: the app
+     pushes a redraw when the data changes (dev.fonebrew.widget.WidgetUpdates). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_agent_description"
+    android:initialLayout="@layout/widget_loading"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:previewImage="@drawable/widget_preview_stat"
+    android:previewLayout="@layout/widget_preview_agent"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

@@ -28,14 +28,21 @@ object SearchDriverFactory {
         return open(AndroidxSqliteDatabaseType.File(path))
     }
 
+    /** File-backed open at an explicit path: what [create] does, minus the Android [Context], so
+     *  JVM tests can exercise the real production (file, multi-connection) driver mode. */
+    internal fun createAt(path: String): SearchDatabaseHandle = open(AndroidxSqliteDatabaseType.File(path))
+
     /** JVM-testable / ephemeral: in-memory database, same driver artifact as production. */
     fun createInMemory(): SearchDatabaseHandle = open(AndroidxSqliteDatabaseType.Memory)
 
     private fun open(databaseType: AndroidxSqliteDatabaseType): SearchDatabaseHandle {
-        val driver = AndroidxSqliteDriver(
-            driver = BundledSQLiteDriver(),
-            databaseType = databaseType,
-            schema = SearchDatabase.Schema,
+        // Serialized: the driver itself is not thread-safe (see SerializedSqlDriver's KDoc).
+        val driver: SqlDriver = SerializedSqlDriver(
+            AndroidxSqliteDriver(
+                driver = BundledSQLiteDriver(),
+                databaseType = databaseType,
+                schema = SearchDatabase.Schema,
+            ),
         )
         // SQLite disables foreign-key enforcement by default, per connection — it is NOT a
         // property of the database file. Without this, conv_facets's `ON DELETE CASCADE`

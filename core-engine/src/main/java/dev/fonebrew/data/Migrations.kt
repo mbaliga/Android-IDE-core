@@ -13,7 +13,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * the v10->v11 comment on [AppDatabase]'s `@Database` annotation) — it exists only to prove the
  * real migration path end-to-end before any future bump actually needs one. A no-op body is
  * correct here specifically because v11's exported schema (core-engine/schemas/) is structurally
- * identical to v10's; Room validates the post-migration database against the target version's
+ * identical to v10's (10.json and 11.json differ only in the version number; the migration test
+ * pins that); Room validates the post-migration database against the target version's
  * schema, and an unchanged schema needs no statements to reach it.
  *
  * Every future schema bump MUST add its own `Migration` object here (plus a migration test) —

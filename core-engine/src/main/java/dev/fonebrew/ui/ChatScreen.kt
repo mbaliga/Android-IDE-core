@@ -187,6 +187,10 @@ fun ChatScreen(
      *  closes the open room first instead of silently switching this screen's lens. Defaults
      *  true so ChatScreen stays usable stand-alone (previews, tests) without a controller. */
     atHome: Boolean = true,
+    /** A home-screen widget asked for the composer (Quick start → New chat, or the Model widget):
+     *  switch this screen's lens back to Chat once, then [onComposerRequestConsumed]. */
+    composerRequest: Boolean = false,
+    onComposerRequestConsumed: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val instrumentsExpanded by viewModel.instrumentsExpanded.collectAsState()
@@ -451,6 +455,13 @@ fun ChatScreen(
         val hit = currentFindHit ?: return@LaunchedEffect
         val stepIndex = state.steps.indexOfFirst { it.node.id == hit.nodeId }
         if (stepIndex >= 0) listState.animateScrollToItem(findScrollPrefix + stepIndex)
+    }
+
+    LaunchedEffect(composerRequest) {
+        if (composerRequest) {
+            chatTab = ChatTab.CHAT
+            onComposerRequestConsumed()
+        }
     }
 
     // §7: text shared in / selected elsewhere arrives here — prefill the input, and land on

@@ -46,4 +46,42 @@ class RegularShellPresenterTest {
         assertTrue(RegularShellPresenter.backTargetsChat(RegularDestination.DEVELOP))
         assertTrue(RegularShellPresenter.backTargetsChat(RegularDestination.SETTINGS))
     }
+
+    // ── Global search routing (lane C1) ──────────────────────────────────────────────────────
+
+    @Test fun `a conversation hit lands on Chat carrying the query to the find bar`() {
+        val l = RegularShellPresenter.landingForConversation("kv cache")
+        assertEquals(RegularDestination.CHAT, l.destination)
+        assertEquals("kv cache", l.pendingFind)
+        assertFalse(l.showLoops)
+    }
+
+    @Test fun `a blank query carries no find text`() {
+        assertNull(RegularShellPresenter.landingForConversation("  ").pendingFind)
+    }
+
+    @Test fun `a loop hit opens the Loops overlay with the loop id`() {
+        val l = RegularShellPresenter.landingForLoop("loop-7")
+        assertTrue(l.showLoops)
+        assertEquals("loop-7", l.pendingLoopId)
+    }
+
+    @Test fun `a task hit lands on Projects with the task id`() {
+        val l = RegularShellPresenter.landingForTask("task-3")
+        assertEquals(RegularDestination.PROJECTS, l.destination)
+        assertEquals("task-3", l.pendingTaskId)
+        assertFalse(l.showLoops)
+    }
+
+    /** The audit defect was a rendered search affordance wired to ChatsRoom/ChatScreen's
+     *  empty-lambda default. Pin that the shell passes real handlers and mounts the overlay. */
+    @Test fun `RegularShell wires every search entry and mounts the shared overlay`() {
+        val src = java.io.File(
+            "src/main/java/dev/fonebrew/ui/regular/RegularShell.kt",
+        ).readText()
+        assertTrue(src.contains("onOpenSearch = { searchOpen = true }"))
+        assertTrue(src.contains("onSearchAllChats = { query ->"))
+        assertTrue(src.contains("SearchOverlay("))
+        assertTrue(!src.contains("onOpenSearch = {}") && !src.contains("onSearchAllChats = {}"))
+    }
 }

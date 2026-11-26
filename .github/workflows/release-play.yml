@@ -141,7 +141,7 @@ jobs:
           free -h; df -h "$TARGET"
 
       - name: Unit-test gate (both flavors) + license
-        run: ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :app:checkLicense
+        run: ./gradlew --no-daemon :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest :core-engine:checkLicense :watch-bridge:test :watchbrew:testFullDebugUnitTest :watchbrew:testPlayDebugUnitTest
 
       - name: Build signed Play bundle (AAB)
         env:

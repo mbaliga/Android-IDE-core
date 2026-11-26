@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget colours, night values: the Hyle dark register (Raised, Inset, Outline,
+     TextHigh, TextMid, Violet, OnViolet). See values/widget_colors.xml. -->
+<resources>
+    <color name="widget_surface">#FF16181D</color>
+    <color name="widget_inset">#FF20242B</color>
+    <color name="widget_outline">#FF262A31</color>
+    <color name="widget_text_high">#FFECEDEF</color>
+    <color name="widget_text_mid">#FF9CA3AF</color>
+    <color name="widget_accent">#FF8E7BFF</color>
+    <color name="widget_on_accent">#FF160F2E</color>
+    <color name="widget_ripple">#29ECEDEF</color>
+</resources>

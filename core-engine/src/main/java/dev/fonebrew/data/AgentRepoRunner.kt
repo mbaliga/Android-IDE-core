@@ -7,7 +7,28 @@ import dev.fonebrew.domain.diff.ChangeOp
 import dev.fonebrew.domain.diff.ChangeSet
 import dev.fonebrew.domain.diff.FileChange
 import dev.fonebrew.domain.git.GitContentsApi
+import dev.fonebrew.domain.cost.PricingBook
+import dev.fonebrew.domain.cost.UsagePricing
+import dev.fonebrew.domain.cost.UsageReport
+import dev.fonebrew.domain.agent.AgentBudgets
+import dev.fonebrew.domain.agent.AgentObserver
+import dev.fonebrew.domain.agent.AgentRunLog
+import dev.fonebrew.domain.agent.AgentSeed
+import dev.fonebrew.domain.agent.AgentSession
+import dev.fonebrew.domain.agent.AgentWorkspace
+import dev.fonebrew.domain.agent.BuiltinTools
+import dev.fonebrew.domain.agent.CancelToken
+import dev.fonebrew.domain.agent.ConsentGate
+import dev.fonebrew.domain.agent.ContextPick
+import dev.fonebrew.domain.agent.DispatchRequest
+import dev.fonebrew.domain.agent.EngineBadge
+import dev.fonebrew.domain.agent.PublishPlan
+import dev.fonebrew.domain.git.AgentTarget
+import dev.fonebrew.domain.git.CiState
 import dev.fonebrew.domain.git.GitHost
+import dev.fonebrew.domain.ledger.LedgerCapture
+import dev.fonebrew.domain.ledger.LedgerEntry
+import dev.fonebrew.domain.ledger.Tier
 import dev.fonebrew.domain.git.GitTreeApi
 import dev.fonebrew.domain.ide.CommitAnchor
 import dev.fonebrew.inference.EngineProvider
@@ -40,20 +61,38 @@ class AgentRepoRunner(
     private val treeRepository: MessageTreeRepository? = null,
     private val clock: () -> Long = System::currentTimeMillis,
     private val idGen: () -> String = { UUID.randomUUID().toString() },
+    /** Usage-ledger sink ("Myself" record). Wired in AppContainer; the default drops rows. */
+    private val appendLedger: suspend (LedgerEntry) -> Unit = {},
+    /** Price lookup by engine tokenizer id - the same book a chat turn prices through. */
+    private val priceFor: (String) -> UsagePricing = { PricingBook().priceFor(it) },
+    /** Counts a cloud call against the provider's free tier, as chat does. */
+    private val recordFreeTier: (providerId: String, tokensIn: Long, tokensOut: Long) -> Unit = { _, _, _ -> },
 ) {
-    data class Proposal(val changeSet: ChangeSet, val filesRead: List<String>, val rawModelOutput: String)
+    /** [log] is the multi-step run log kept with the proposal (null for the single-shot [propose]). */
+    data class Proposal(val changeSet: ChangeSet, val filesRead: List<String>, val rawModelOutput: String, val log: AgentRunLog? = null)
+
+    /** The host the user picked in the Agent tab (only consulted when several are connected). */
+    @Volatile var chosenHostId: String? = null
+
+    /** Which host Run/Commit will target - explicit, never "whichever is first" (see [AgentTarget]). */
+    fun target(): AgentTarget.Resolution = AgentTarget.resolve(hostStore.hosts.value, chosenHostId)
 
     private fun hostAndToken(): Pair<GitHost, String>? {
-        val host = hostStore.hosts.value.firstOrNull() ?: return null
+        val host = (target() as? AgentTarget.Resolution.Resolved)?.host ?: return null
         val token = hostStore.token(host.id) ?: return null
         return host to token
     }
 
-    val hasHost: Boolean get() = hostAndToken() != null
+    /** A read-only view of the resolved target's repo (for the context picker); null until a host is resolved. */
+    fun repoView(): dev.fonebrew.domain.agent.AgentRepo? =
+        hostAndToken()?.let { (host, token) -> AgentContentsRepo(transport, host, token) }
+
+    /** True when any Git host is connected (the target may still need choosing - see [target]). */
+    val hasHost: Boolean get() = hostStore.hosts.value.isNotEmpty()
 
     /** Read [paths] from the connected repo (the model's read-set — shown to the user). */
     suspend fun read(paths: List<String>): Map<String, String> {
-        val (host, token) = hostAndToken() ?: return emptyMap()
+        val (host, token) = hostAndToken() ?: return emptyMap() // ambiguous/none: the UI gates Run on target()
         val browse = GitBrowse(transport)
         val out = LinkedHashMap<String, String>()
         for (p in paths) browse.read(host, token, p).getOrNull()?.let { out[p] = it }
@@ -65,7 +104,7 @@ class AgentRepoRunner(
         val spec = registry.byId(modelId) ?: error("model not found")
         val engine = engines.engineFor(spec) ?: error("model not runnable")
         engine.loadModel(spec.modelPath ?: "(dev)", spec.contextWindow)
-        val now = System.currentTimeMillis()
+        val now = clock()
         val userMsg = buildString {
             append("Objective:\n").append(objective).append("\n\n")
             if (context.isEmpty()) append("(no files were provided as context)\n\n")
@@ -85,6 +124,23 @@ class AgentRepoRunner(
         val sb = StringBuilder()
         engine.generate(msgs, SamplingParams()).collect { sb.append(it.text) }
         val raw = sb.toString()
+        // Ledger: a write failure must never fail the proposal itself.
+        runCatching {
+            recordAgentUsage(
+                spec = spec,
+                tokenizerId = engine.tokenizerId,
+                reported = (engine as? dev.fonebrew.inference.cloud.CloudEngine)?.lastUsage,
+                countTokens = { engine.countTokens(it) },
+                promptText = msgs.joinToString("\n") { it.content },
+                outputText = raw,
+                startedAt = now,
+                finishedAt = clock(),
+                runId = idGen(),
+                appendLedger = appendLedger,
+                priceFor = priceFor,
+                recordFreeTier = recordFreeTier,
+            )
+        }
         val changes = parseFileBlocks(raw).map { (path, newText) ->
             FileChange(path = path, oldText = context[path] ?: "", newText = newText)
         }
@@ -108,11 +164,69 @@ class AgentRepoRunner(
      * is a no-op when it's null.
      */
     suspend fun commit(changeSet: ChangeSet, message: String): Result<List<String>> = runCatching {
-        val (host, token) = hostAndToken() ?: error("no Git host connected")
-        val ids = squashedCommit(transport, host, token, changeSet, message)
-            .getOrElse { perFileCommit(transport, host, token, changeSet, message).getOrThrow() }
-        recordCommitAnchors(treeRepository, host, ids, message, clock, idGen)
-        ids
+        val (host, token) = hostAndToken() ?: error("no Git host selected - choose which host to commit to")
+        commitTo(host, token, changeSet, message)
+    }
+
+    /** One squashed commit (per-file fallback) on [host]'s branch, then the tree anchors. */
+    private suspend fun commitTo(host: GitHost, token: String, changeSet: ChangeSet, message: String): List<String> =
+        AgentPublisher(transport, treeRepository, clock, idGen).commitTo(host, token, changeSet, message)
+
+    /**
+     * The multi-step agent (docs/design/agent-multistep.md). Reads and proposes only: the returned
+     * [Proposal] still goes through per-hunk review and [publish]; nothing here writes to the host.
+     * [picks] seed the context and the log says so. Engine selection is the caller's explicit
+     * [modelId]; a cloud engine is reported in the log as a watched object, never chosen silently.
+     */
+    suspend fun runAgent(
+        objective: String,
+        picks: List<ContextPick>,
+        modelId: String,
+        budgets: AgentBudgets = AgentBudgets(),
+        cancel: CancelToken = CancelToken(),
+        observer: AgentObserver = object : AgentObserver {},
+        gate: ConsentGate = ConsentGate.DENY_ALL,
+    ): Result<Proposal> = runCatching {
+        val (host, token) = hostAndToken() ?: error("no Git host selected - choose which host the agent targets")
+        val spec = registry.byId(modelId) ?: error("model not found")
+        val engine = engines.engineFor(spec) ?: error("model not runnable")
+        engine.loadModel(spec.modelPath ?: "(dev)", spec.contextWindow)
+        val ws = AgentWorkspace(AgentContentsRepo(transport, host, token), budgets)
+        val seed = AgentSeed.build(ws, picks)
+        val turns = AgentEngineTurnSource(
+            engine, spec, cancel, clock, idGen, appendLedger, priceFor, recordFreeTier,
+        )
+        val outcome = AgentSession(BuiltinTools.registry(ws), turns, budgets, gate = gate, cancel = cancel, observer = observer)
+            .run(objective, seed.files, ws)
+        val log = AgentRunLog(EngineBadge(spec.displayName, cloud = !spec.isOnDevice), objective, seed.notes, outcome)
+        Proposal(outcome.changeSet, outcome.filesRead, outcome.summary.orEmpty(), log)
+    }
+
+    private val publisher by lazy { AgentPublisher(transport, treeRepository, clock, idGen) }
+
+    /**
+     * Apply an explicit [PublishPlan] (only [dev.fonebrew.domain.agent.PublishPlanner] builds one,
+     * and only from a chosen option and a non-empty approved set). See [AgentPublisher.publish].
+     */
+    suspend fun publish(plan: PublishPlan, message: String, engine: EngineBadge, summary: String?): Result<AgentPublisher.Outcome> = runCatching {
+        val resolved = (target() as? AgentTarget.Resolution.Resolved)?.host
+            ?: error("no Git host selected - choose which host to publish to")
+        check(resolved.id == plan.host.id) { "the target host changed since review; start the publish again" }
+        val token = hostStore.token(resolved.id) ?: error("no token for ${resolved.displayName}")
+        publisher.publish(resolved, token, plan, message, engine, summary)
+    }
+
+    /** ONE explicit CI check (the user tapped Check CI): never polls. See [AgentPublisher.checkCi]. */
+    suspend fun checkCi(host: GitHost, sha: String): Result<CiState> = runCatching {
+        val token = hostStore.token(host.id) ?: error("no token for ${host.displayName}")
+        publisher.checkCi(host, token, sha)
+    }
+
+    /** Starts a workflow only for a prepared [DispatchRequest] the user confirmed; refuses otherwise. */
+    suspend fun runWorkflow(request: DispatchRequest, confirmed: Boolean): Result<Unit> = runCatching {
+        check(confirmed) { "workflow run not confirmed" }
+        val token = hostStore.token(request.host.id) ?: error("no token for ${request.host.displayName}")
+        publisher.runWorkflow(request, token, confirmed)
     }
 
     companion object {
@@ -146,7 +260,9 @@ class AgentRepoRunner(
          */
         internal suspend fun squashedCommit(transport: GitTransport, host: GitHost, token: String, changeSet: ChangeSet, message: String): Result<List<String>> = runCatching {
             val files = changeSet.effective.filter { it.op != ChangeOp.DELETE }.map { it.path to it.newText }
-            require(files.isNotEmpty()) { "nothing to commit" }
+            // A reviewed deletion is a real change: a tree entry with sha null on the base tree.
+            val deletions = changeSet.effective.filter { it.op == ChangeOp.DELETE }.map { it.path }
+            require(files.isNotEmpty() || deletions.isNotEmpty()) { "nothing to commit" }
             suspend fun exec(req: dev.fonebrew.domain.git.GitRequest): String {
                 val r = transport.execute(req)
                 if (r.code !in 200..299) error("HTTP ${r.code}: ${r.body.take(180)}")
@@ -154,13 +270,14 @@ class AgentRepoRunner(
             }
             val headSha = parseRefSha(exec(GitTreeApi.getRef(host, token)))
             val baseTree = JSONObject(exec(GitTreeApi.getCommit(host, headSha, token))).getJSONObject("tree").getString("sha")
-            val newTree = JSONObject(exec(GitTreeApi.createTree(host, baseTree, files, token))).getString("sha")
+            val newTree = JSONObject(exec(GitTreeApi.createTree(host, baseTree, files, token, deletions))).getString("sha")
             val newCommit = JSONObject(exec(GitTreeApi.createCommit(host, message, newTree, headSha, token))).getString("sha")
             exec(GitTreeApi.updateRef(host, newCommit, token))
             listOf(newCommit)
         }
 
-        /** Fallback: one Contents-API commit per file (CREATE/MODIFY; DELETE unsupported there).
+        /** Fallback: one Contents-API commit per file (CREATE/MODIFY via PUT, DELETE via the blob sha;
+         *  a delete that cannot be applied fails the whole call naming the file - never skipped).
          *  See [squashedCommit]'s own KDoc for why this moved to the companion object in lane D. */
         internal suspend fun perFileCommit(transport: GitTransport, host: GitHost, token: String, changeSet: ChangeSet, message: String): Result<List<String>> = runCatching {
             val edit = GitEdit(transport)
@@ -176,13 +293,69 @@ class AgentRepoRunner(
                         val state = edit.open(host, token, fc.path).getOrThrow()
                         ids += edit.commit(host, token, state, fc.newText, message).getOrThrow()
                     }
-                    ChangeOp.DELETE -> error("delete isn't supported via the Contents API yet (${fc.path})")
+                    ChangeOp.DELETE -> {
+                        val g = transport.execute(GitContentsApi.getFile(host, fc.path, token))
+                        if (g.code !in 200..299) error("delete ${fc.path}: could not read it (HTTP ${g.code})")
+                        val sha = JSONObject(g.body).optString("sha").ifBlank { error("delete ${fc.path}: no blob sha") }
+                        val r = transport.execute(GitContentsApi.deleteFile(host, fc.path, message, sha, token))
+                        if (r.code !in 200..299) error("delete ${fc.path}: HTTP ${r.code}")
+                        ids += JSONObject(r.body).optJSONObject("commit")?.optString("sha").orEmpty()
+                    }
                 }
             }
             ids
         }
 
-        private fun parseRefSha(body: String): String {
+        /** The success line for a commit: adds, changes and deletes stated separately (never a bare
+         *  file count that could hide a dropped deletion). Counts the effective, approved set. */
+        fun describeCommit(changeSet: ChangeSet, ids: List<String>): String {
+            val ops = changeSet.effective.groupingBy { it.op }.eachCount()
+            return "committed: ${ops[ChangeOp.CREATE] ?: 0} added, ${ops[ChangeOp.MODIFY] ?: 0} changed, " +
+                "${ops[ChangeOp.DELETE] ?: 0} deleted (${ids.size} commit${if (ids.size == 1) "" else "s"})"
+        }
+
+        /**
+         * Writes one `surface = "agent"` ledger row for a finished proposal call. Provider-reported
+         * usage when the engine gave any; otherwise the tokenizer's own counts flagged estimated;
+         * if neither is known, no row (see [LedgerCapture.agentRun]). On-device is recorded as
+         * on-device at zero cost. Companion + explicit deps so a JVM test drives it without Android.
+         */
+        internal suspend fun recordAgentUsage(
+            spec: dev.fonebrew.domain.model.ModelSpec,
+            tokenizerId: String,
+            reported: UsageReport?,
+            countTokens: suspend (String) -> Int,
+            promptText: String,
+            outputText: String,
+            startedAt: Long,
+            finishedAt: Long,
+            runId: String,
+            appendLedger: suspend (LedgerEntry) -> Unit,
+            priceFor: (String) -> UsagePricing,
+            recordFreeTier: (String, Long, Long) -> Unit,
+        ) {
+            val tier = if (spec.isOnDevice) Tier.ON_DEVICE else Tier.CLOUD
+            val usage = reported?.takeIf { it.totalTokens > 0 }
+            val estIn = if (usage == null) runCatching { countTokens(promptText).toLong() }.getOrNull() else null
+            val estOut = if (usage == null) runCatching { countTokens(outputText).toLong() }.getOrNull() else null
+            val entry = LedgerCapture.agentRun(
+                timestampMillis = finishedAt,
+                runId = runId,
+                projectId = null,
+                model = spec.id,
+                provider = spec.providerId ?: "on-device",
+                tier = tier,
+                reported = usage,
+                estimatedIn = estIn,
+                estimatedOut = estOut,
+                latencyMs = finishedAt - startedAt,
+                priceMinor = { u -> u.toAdviceCost(priceFor(tokenizerId)).moneyMinor },
+            ) ?: return
+            if (usage != null) spec.providerId?.let { recordFreeTier(it, usage.inputTokens, usage.outputTokens) }
+            appendLedger(entry)
+        }
+
+        internal fun parseRefSha(body: String): String {
             val trimmed = body.trimStart()
             val obj = if (trimmed.startsWith("[")) JSONArray(body).getJSONObject(0) else JSONObject(body)
             return obj.getJSONObject("object").getString("sha")

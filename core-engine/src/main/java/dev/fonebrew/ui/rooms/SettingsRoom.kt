@@ -329,6 +329,8 @@ private fun ColumnScope.ModelsSettings(viewModel: SettingsViewModel) {
         ModelModality.OBJECT3D ->
             if (scope == ProviderScope.CLOUD) Object3dCloudSettings(viewModel) else Object3dOnDeviceSettings()
     }
+    // Lane A3: on-device semantic search (default off) -- its own section, not a fifth modality.
+    dev.fonebrew.ui.semantic.SemanticSettingsSection()
 }
 
 /**
@@ -776,6 +778,46 @@ private fun GeneralSettings(
             )
         }
         HyleSwitch(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
+    }
+
+    // Home-screen widgets (docs/widgets.md) are glanced at by anyone holding the phone: the two
+    // fields that are your own words stay off them until you turn them on here. Default OFF.
+    val widgetPrivacy by container.widgetPrivacy.state.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Show task titles on the home-screen widget", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Off: Next up shows due words and counts only. Titles made from a chat are never shown.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HyleSwitch(
+            checked = widgetPrivacy.showTaskTitles,
+            onCheckedChange = { container.widgetPrivacy.setShowTaskTitles(it) },
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Show loop and step names on the home-screen widget", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Off: Loop runs shows states and spend only.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HyleSwitch(
+            checked = widgetPrivacy.showLoopNames,
+            onCheckedChange = { container.widgetPrivacy.setShowLoopNames(it) },
+        )
     }
 
     // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —
@@ -1327,10 +1369,15 @@ private fun GitConnect() {
     val transport = container.gitTransport
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()
-    val generator: Generator? = remember {
-        val spec = container.modelRegistry.allSpecs().firstOrNull { container.engineProvider.isRunnable(it) }
-        spec?.let { s -> container.engineProvider.engineFor(s)?.let { engine -> EngineGenerator(engine, s.modelPath) } }
+    // The spec CodeLens actually runs on, kept alongside its generator so the "watched" badge is
+    // derived from the same model (binding rule 2) — it can be a cloud model.
+    val generatorSpec = remember {
+        container.modelRegistry.allSpecs().firstOrNull { container.engineProvider.isRunnable(it) }
     }
+    val generator: Generator? = remember {
+        generatorSpec?.let { s -> container.engineProvider.engineFor(s)?.let { engine -> EngineGenerator(engine, s.modelPath) } }
+    }
+    val generatorWatched = codeLensWatched(generatorSpec)
 
     Text(
         "Connect a Git host you own — GitHub or Gitea/Forgejo — for tree backup and " +
@@ -1344,7 +1391,7 @@ private fun GitConnect() {
         var browsing by remember(h.id) { mutableStateOf(false) }
         var ciOpen by remember(h.id) { mutableStateOf(false) }
         if (browsing) {
-            GitBrowser(h, store.token(h.id).orEmpty(), container.gitBrowse, generator) { browsing = false }
+            GitBrowser(h, store.token(h.id).orEmpty(), container.gitBrowse, generator, generatorWatched) { browsing = false }
         }
         if (ciOpen) {
             CiPanel(h, store.token(h.id).orEmpty(), transport) { ciOpen = false }
@@ -1577,7 +1624,7 @@ private fun BuildsSection() {
  *  attach a named custom action to; see the inline note at the `HyleTree` call). [generator] is
  *  optional — if null the Lens shows the code without explanations. */
 @Composable
-private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generator: Generator?, onClose: () -> Unit) {
+private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generator: Generator?, watched: Boolean, onClose: () -> Unit) {
     // path ("" = root) -> that directory's listing, populated lazily as chevrons open it.
     val childrenByPath = remember { mutableStateMapOf<String, List<GitBrowse.Entry>>() }
     var expandedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -1674,7 +1721,7 @@ private fun GitBrowser(host: GitHost, token: String, browse: GitBrowse, generato
                         fileName = f.first.substringAfterLast('/'),
                         filePath = f.first,
                         explain = { lines, ext -> generator?.let { g -> CodeLens.explain(lines, ext, g) } },
-                        watched = false,
+                        watched = watched,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         onCommit = { newText, message ->
                             runCatching {

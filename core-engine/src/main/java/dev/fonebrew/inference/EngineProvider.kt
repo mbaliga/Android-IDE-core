@@ -28,8 +28,12 @@ class EngineProvider(
     // Lazily constructed so the native library is only loaded when a local model
     // is actually used; if libaarso_llama.so is missing/broken, this stays null
     // and local models report unavailable instead of crashing the app.
+    // It also stays null when the CPU lacks the extensions the native build assumes
+    // ([CpuFeatureCheck]) — loading would SIGILL — and the reason says so. No cloud fallback.
+    private val cpuSupport: CpuSupport by lazy { CpuFeatureCheck.ofThisDevice() }
+
     private val llama: InferenceEngine? by lazy {
-        runCatching { LlamaCppEngine() }.getOrNull()
+        if (cpuSupport.blockReason != null) null else runCatching { LlamaCppEngine() }.getOrNull()
     }
 
     // Lazily constructed for the same reason — AICore is only touched once a chat actually
@@ -72,7 +76,8 @@ class EngineProvider(
     /** Why a spec is not runnable, for the UI. Null when it is runnable. */
     fun unavailableReason(spec: ModelSpec): String? = when {
         isRunnable(spec) -> null
-        spec.runtime == Runtime.LOCAL_GGUF && llama == null -> "native engine unavailable on this device"
+        spec.runtime == Runtime.LOCAL_GGUF && llama == null ->
+            cpuSupport.blockReason ?: "native engine unavailable on this device"
         spec.runtime == Runtime.LOCAL_GGUF -> "no model file"
         spec.runtime == Runtime.AICORE_NANO -> "Gemini Nano unavailable on this device"
         spec.runtime == Runtime.CLOUD -> "add an API key for this provider in Settings"

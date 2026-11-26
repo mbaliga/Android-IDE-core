@@ -47,6 +47,27 @@ object GatewayConditionPresenter {
      *  draft edge itself). */
     data class PreviewResult(val chosenKey: String?, val sampleOutput: String)
 
+    /** The only conditions [ConditionGatewayPolicy] evaluates (it also accepts "not approved" as
+     *  an alias of "!approved" and ignores case/whitespace — see [isEvaluable]). The editor
+     *  offers exactly these; no expression language exists to offer more (audit 2026-11-11: the
+     *  old free-text field accepted anything and silently did nothing at run time). */
+    val EVALUABLE_CONDITIONS: List<String> = listOf("approved", "!approved")
+
+    /** Whether the runner can act on [condition]. Null/blank means "no condition", which is
+     *  trivially fine (nothing to evaluate). Mirrors [ConditionGatewayPolicy]'s own match. */
+    fun isEvaluable(condition: String?): Boolean =
+        condition.isNullOrBlank() || dev.fonebrew.domain.loop.ConditionSyntax.parse(condition) != null
+
+    /** Wave 2 (docs/design/loop-tools.md): the editor now offers the whole CLOSED set through
+     *  [ConditionDraft]; [EVALUABLE_CONDITIONS] stays the two parameterless chips for callers that
+     *  predate it. [isEvaluable] follows [dev.fonebrew.domain.loop.ConditionSyntax], the same
+     *  parser the runner uses, so the editor and the run can never disagree. */
+
+    /** Glyph + text marking a saved condition the runner will not evaluate; null when it is
+     *  evaluable or absent. Never colour alone (owner is red-green colorblind). */
+    fun notEvaluatedNote(condition: String?): String? =
+        if (isEvaluable(condition)) null else "⚠ not evaluated — runs as the default branch"
+
     /** The key [previewFor] reports for the edge being authored (never a real persisted edge id,
      *  so it can't collide with one of [previewFor]'s [existingEdges] keys unless the caller
      *  deliberately reuses it — callers should not). */

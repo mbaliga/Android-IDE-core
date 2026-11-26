@@ -42,6 +42,9 @@ import androidx.compose.ui.unit.dp
 import dev.fonebrew.FonebrewApp
 import kotlinx.coroutines.launch
 
+/** The Agent tab's index in [DevelopRoom]'s tab row (Hardware / Agent / Terminal / Audit). */
+const val DEVELOP_TAB_AGENT: Int = 1
+
 /**
  * The "develop on your repo" room — reskinned to Hyle. The header/tabs call
  * [dev.aarso.hyle.cells.HyleButton]/[dev.aarso.hyle.cells.HyleChip] directly; every facet below still
@@ -54,7 +57,7 @@ import kotlinx.coroutines.launch
  *  - **Agent**    → review changes to your repo per-hunk and commit (the agentic-coding
  *                   review path — this tab was labelled "Files" through 2026-09-15; renamed
  *                   per the asoc-reachability audit's item 3, since it's the Agent review flow,
- *                   not a file browser. Content/function name ([FilesFacet]) unchanged.)
+ *                   not a file browser. Content lives in [AgentFacet].)
  *  - **Terminal** → run a shell command over SSH on your homelab runner
  *  - **Audit**    → a to-do list of checks; "Run" fires a prompt that runs the test
  *
@@ -68,7 +71,14 @@ import kotlinx.coroutines.launch
  * Presented full-screen from Settings (like the Loop room). [onClose] returns.
  */
 @Composable
-fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
+fun DevelopRoom(
+    onClose: () -> Unit,
+    onOpenLoops: () -> Unit = {},
+    /** A tab to switch to once (a home-screen widget tap opening Develop → Agent); consumed via
+     *  [onTabRequestConsumed], the same one-shot shape as ChatScreen's findRequest. */
+    tabRequest: Int? = null,
+    onTabRequestConsumed: () -> Unit = {},
+) {
     BackHandler(onBack = onClose)
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     // Brief §7: Develop's tabs are exactly Hardware / Agent / Terminal / Audit (the brief itself
@@ -78,6 +88,12 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
     //  - Builds moved to the Tree (§6.1) — the Tree's Builds tab owns build history.
     //  - There's no tab separate from Agent for agentic changes — reviewing them IS this tab.
     var tab by remember { mutableStateOf(0) }
+    LaunchedEffect(tabRequest) {
+        if (tabRequest != null) {
+            tab = tabRequest
+            onTabRequestConsumed()
+        }
+    }
     // The paid Studio tab (Launch / store-publish) is contributed via DevelopTabs (S2 seam),
     // so core never references it directly.
     val studioTabs = remember { DevelopTabs.provider() }
@@ -88,7 +104,7 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
         dev.aarso.hyle.cells.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
         // Shipping-copy fix (asoc-reachability audit item 3, 2026-09-15): this tab shows the
         // agentic repo-review flow — labelling it "Files" read as a plain file browser. Content
-        // unchanged; see [FilesFacet] below.
+        // unchanged; see [AgentFacet].
         dev.aarso.hyle.cells.HyleTabSpec("Agent") { tint -> filesTabGlyph(tint) },
         dev.aarso.hyle.cells.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
         dev.aarso.hyle.cells.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
@@ -103,7 +119,7 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
     val contentBlock: @Composable () -> Unit = {
         when {
             tab == 0 -> HardwareFacet(onOpenTerminal = { tab = 2 })
-            tab == 1 -> FilesFacet()
+            tab == 1 -> AgentFacet()
             tab == 2 -> TerminalFacet()
             tab == 3 -> AuditFacet(onRunPrompt = { prompt ->
                 // Audit is a to-do list: "Run" fires the check as a prompt in Chat (§7.4).
@@ -330,13 +346,6 @@ fun Hint(text: String) {
 /* ---------------------------------------------------------------- Devices */
 
 /**
- * The one control path in [HardwareFacet] that needs no SSH host — named rather than written as a
- * bare `3` because "does this mode need a host" is now a real branch in three places, and a magic
- * number was how the host-less user got locked out of it in the first place.
- */
-private const val MODE_USB = 3
-
-/**
  * Devices (agentic-ide #3): run on a Pi/Dell over SSH, or flash an Arduino plugged into that
  * host via `arduino-cli` (the v1 delegate-to-Pi path — the phone never touches the board), or
  * push firmware to an ESP over the network. Recipes run through [dev.fonebrew.data.DeviceRepo];
@@ -355,14 +364,16 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     val store = container.remoteHostStore
     val hosts by store.hosts.collectAsState()
     val scope = rememberCoroutineScope()
+    val usbAvailable = dev.fonebrew.flavor.InvocationFeatures.USB_FLASH_AVAILABLE
 
     // Supported boards + quick troubleshooting — the Arduino-IDE-grade framing (§7.1). All local
     // and sovereign; the four control paths below are Pi-over-SSH, Arduino-via-Pi, ESP-OTA, and
     // on-phone USB flash (CDC/Stk500/IntelHex). Device interaction is owner-verified on hardware.
     Text("Hardware", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Supported: Raspberry Pi (SSH) · Arduino AVR — through a Pi running arduino-cli, or straight " +
-            "off this phone's USB port for a genuine Uno R3 · ESP32/8266 (OTA). Troubleshooting: no " +
+        "Supported: Raspberry Pi (SSH) · Arduino AVR — through a Pi running arduino-cli" +
+            (if (usbAvailable) ", or straight off this phone's USB port for a genuine Uno R3" else "") +
+            " · ESP32/8266 (OTA). Troubleshooting: no " +
             "port → check the cable/OTG + driver (CH340/CP210x clones need a vendor driver this app " +
             "doesn't ship); permission denied → re-trust the Pi in Settings; flash fails mid-way → " +
             "it's flagged, re-run before power-cycling.",
@@ -382,7 +393,10 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     }
     // Keyed on the boolean, not the list: the default mode is re-decided only when the host list
     // crosses empty↔non-empty, so an ordinary host edit never yanks you out of the mode you're in.
-    var mode by remember(hasHosts) { mutableStateOf(if (hasHosts) 0 else MODE_USB) }
+    var mode by remember(hasHosts) { mutableStateOf(HardwareModes.default(hasHosts, usbAvailable)) }
+    // Bounded: a long compile streams thousands of chunks; a String `+=` per chunk is quadratic.
+    // Append into a StringBuilder and publish the text only (same text shown as before).
+    val outputBuf = remember { StringBuilder() }
     var output by remember { mutableStateOf("") }
     var summary by remember { mutableStateOf<String?>(null) }
     var running by remember { mutableStateOf(false) }
@@ -402,10 +416,10 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
     }
     fun runRecipe(recipe: dev.fonebrew.domain.remote.ExecRequest, parse: ((String, Int) -> String)?) {
         val host = hosts.firstOrNull { it.alias == selected } ?: return
-        running = true; output = ""; summary = null
+        running = true; outputBuf.setLength(0); output = ""; summary = null
         scope.launch {
-            repo.exec(host, identityFor(host), store.knownHosts.value, recipe, { output += it }).fold(
-                { code -> summary = parse?.invoke(output, code) ?: "exit $code" },
+            repo.exec(host, identityFor(host), store.knownHosts.value, recipe, { outputBuf.append(it); output = outputBuf.toString() }).fold(
+                { code -> summary = parse?.invoke(outputBuf.toString(), code) ?: "exit $code" },
                 { summary = "failed: ${it.message} — is the host trusted? connect once in Settings → Remote." },
             )
             running = false
@@ -422,8 +436,9 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
 
     Text("Devices", style = MaterialTheme.typography.titleSmall)
     Hint(
-        "Run on a Pi/Dell over SSH, flash an Arduino plugged into that host, or flash one plugged " +
-            "straight into this phone. Output is shown verbatim.",
+        "Run on a Pi/Dell over SSH, flash an Arduino plugged into that host" +
+            (if (usbAvailable) ", or flash one plugged straight into this phone" else "") +
+            ". Output is shown verbatim.",
     )
     Spacer(Modifier.height(8.dp))
     if (hasHosts) {
@@ -434,28 +449,34 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
         Spacer(Modifier.height(8.dp))
     }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        WireButton("Raspberry Pi", selected = mode == 0, onClick = { mode = 0 })
-        WireButton("Arduino (via Pi)", selected = mode == 1, onClick = { mode = 1 })
-        WireButton("ESP-OTA", selected = mode == 2, onClick = { mode = 2 })
-        WireButton("This phone (USB)", selected = mode == MODE_USB, onClick = { mode = MODE_USB })
+        HardwareModes.available(usbAvailable).forEach { m ->
+            val label = when (m) {
+                HardwareMode.PI -> "Raspberry Pi"
+                HardwareMode.ARDUINO -> "Arduino (via Pi)"
+                HardwareMode.ESP -> "ESP-OTA"
+                HardwareMode.USB -> "This phone (USB)"
+            }
+            WireButton(label, selected = mode == m, onClick = { mode = m })
+        }
     }
     Spacer(Modifier.height(6.dp))
     Hint(
-        if (mode == MODE_USB) {
+        if (mode == HardwareMode.USB) {
             "⌂ on-device — flashes a board plugged into this phone. No network, no pairing."
         } else {
             "☁ watched — controls a paired host over SSH; credentials stay in the Keystore."
         },
     )
     Spacer(Modifier.height(8.dp))
-    if (mode != MODE_USB && !hasHosts) {
+    if (mode != HardwareMode.USB && !hasHosts) {
         Hint(
             "That path runs over SSH and there's no host saved yet. Add one in Settings → Global → " +
                 "your machines and connect once to trust it — then a Pi (or an Arduino plugged into " +
-                "it) shows up here. \"This phone (USB)\" is the one that needs no host at all.",
+                "it) shows up here." +
+                if (usbAvailable) " \"This phone (USB)\" is the one that needs no host at all." else "",
         )
     } else when (mode) {
-        0 -> {
+        HardwareMode.PI -> {
             Hint(
                 "Running one-off shell commands on a paired host now lives in the Terminal tab, so " +
                     "every command shares one running transcript instead of clearing per run.",
@@ -463,7 +484,7 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             WireButton("Open Terminal ▸", onClick = onOpenTerminal)
         }
-        1 -> {
+        HardwareMode.ARDUINO -> {
             dev.aarso.hyle.cells.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             dev.aarso.hyle.cells.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
@@ -491,7 +512,7 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
                 })
             }
         }
-        2 -> {
+        HardwareMode.ESP -> {
             dev.aarso.hyle.cells.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             dev.aarso.hyle.cells.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
@@ -500,7 +521,7 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
                 runRecipe(dev.fonebrew.domain.device.recipe.DeviceRecipes.espOta(espIp.trim(), espBin.trim()), null)
             })
         }
-        else -> UsbFlashPanel()
+        HardwareMode.USB -> if (usbAvailable) UsbFlashPanel()
     }
     summary?.let {
         Spacer(Modifier.height(8.dp))
@@ -730,123 +751,4 @@ private fun compileSummary(out: String): String {
 private fun uploadSummary(out: String): String {
     val r = dev.fonebrew.domain.device.ArduinoCli.parseUpload(out)
     return if (r.ok) "✓ uploaded" else "✗ upload failed"
-}
-
-/* ------------------------------------------------------------------ Agent */
-
-/**
- * The agentic repo loop (agentic-ide #1): give an objective + the files to read as context, the
- * model proposes a ChangeSet, you **review** it (shared ReviewSheet), and the approved subset is
- * committed to your connected repo. Review-first — nothing commits unseen. Network + generation
- * are owner-verified.
- */
-@Composable
-private fun FilesFacet() {
-    val container = (LocalContext.current.applicationContext as FonebrewApp).container
-    val runner = container.agentRepoRunner
-    val scope = rememberCoroutineScope()
-    val runnable = remember { container.modelRegistry.allSpecs().filter { container.engineProvider.isRunnable(it) } }
-
-    var objective by remember { mutableStateOf("") }
-    var pathsText by remember { mutableStateOf("") }
-    var modelId by remember { mutableStateOf(runnable.firstOrNull()?.id) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var proposal by remember { mutableStateOf<dev.fonebrew.data.AgentRepoRunner.Proposal?>(null) }
-    var reviewing by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-
-    if (!runner.hasHost) {
-        Hint("Connect a Git host (Settings → Global → Git & coding) — the agent reads and commits to your repo.")
-        return
-    }
-    Text("Files & changes", style = MaterialTheme.typography.titleSmall)
-    Hint(
-        "Review changes to your repo and commit them. Ask for a change here or in Chat → the model " +
-            "proposes edits → you review per-hunk → commit. Nothing commits without review; a " +
-            "cloud-proposed change is a watched object. (Accepted changes land as commits in the Tree.)",
-    )
-    if (runnable.isEmpty()) {
-        Spacer(Modifier.height(6.dp))
-        Hint("No runnable model. Download one (Models) or add a cloud provider (Settings → Text).")
-        return
-    }
-    Spacer(Modifier.height(8.dp))
-    dev.aarso.hyle.cells.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
-    Spacer(Modifier.height(6.dp))
-    dev.aarso.hyle.cells.HyleField(
-        pathsText, { pathsText = it },
-        label = "Context files — one path per line",
-        singleLine = false,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Spacer(Modifier.height(6.dp))
-    Text("Model", style = MaterialTheme.typography.labelMedium)
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        runnable.forEach { s ->
-            WireButton((if (s.isOnDevice) "⌂ " else "☁ ") + s.displayName, selected = s.id == modelId, onClick = { modelId = s.id })
-        }
-    }
-    Spacer(Modifier.height(8.dp))
-    WireButton(
-        if (busy) "Working…" else "Run",
-        enabled = !busy && objective.isNotBlank() && modelId != null,
-        onClick = {
-            val mid = modelId ?: return@WireButton
-            val paths = pathsText.split("\n", ",").map { it.trim() }.filter { it.isNotEmpty() }
-            busy = true; status = "reading ${paths.size} file(s)…"; proposal = null
-            scope.launch {
-                val jobId = container.backgroundJobs.start(
-                    "Agent: ${objective.take(40)}${if (objective.length > 40) "…" else ""}",
-                    "agent",
-                )
-                val ctx = runner.read(paths)
-                status = "proposing… (read ${ctx.size}/${paths.size})"
-                runner.propose(objective, ctx, mid).fold(
-                    { p ->
-                        proposal = p
-                        status = "proposed ${p.changeSet.effective.size} change(s) over files: ${p.filesRead.joinToString(", ").ifEmpty { "(none)" }}"
-                        container.backgroundJobs.finish(jobId)
-                    },
-                    {
-                        status = "failed: ${it.message}"
-                        container.backgroundJobs.finish(jobId, failed = true)
-                    },
-                )
-                busy = false
-            }
-        },
-    )
-    status?.let { Spacer(Modifier.height(8.dp)); Hint(it) }
-    proposal?.let { p ->
-        Spacer(Modifier.height(6.dp))
-        WireButton("Review ${p.changeSet.effective.size} change(s) ▸", enabled = !p.changeSet.isEmpty, onClick = { reviewing = true })
-    }
-
-    if (reviewing) {
-        val p = proposal
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { reviewing = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.fonebrew.ui.ide.ReviewSheet(
-                    changeSet = p?.changeSet ?: dev.fonebrew.domain.diff.ChangeSet(emptyList()),
-                    title = "Review — agent changes",
-                    commitLabel = "Commit",
-                    busy = busy,
-                    onCancel = { reviewing = false },
-                    onCommit = { approved ->
-                        busy = true
-                        scope.launch {
-                            runner.commit(approved, "Agent: ${objective.take(60)}").fold(
-                                { ids -> status = "committed ${ids.size} file(s)"; proposal = null; reviewing = false },
-                                { status = "commit failed: ${it.message}" },
-                            )
-                            busy = false
-                        }
-                    },
-                )
-            }
-        }
-    }
 }

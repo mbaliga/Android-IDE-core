@@ -11,6 +11,9 @@ object InvocationFeatures {
     const val BUBBLE_AVAILABLE: Boolean = true
     const val SCREEN_CAPTURE_AVAILABLE: Boolean = true
 
+    /** FULL: the phone-USB flasher is available (src/full/AndroidManifest.xml declares usb.host). */
+    const val USB_FLASH_AVAILABLE: Boolean = true
+
     /** Play GenAI policy affordance — not required in the sideload build. */
     const val FLAG_OUTPUT_ENABLED: Boolean = false
 

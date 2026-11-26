@@ -63,7 +63,9 @@ private class FakeRecoverySnapshotDao : RecoverySnapshotDao {
     }
 
     override suspend fun latestForWorkspace(workspaceId: String): RecoverySnapshotEntity? =
-        rows.filter { it.workspaceId == workspaceId }.maxByOrNull { it.takenAtUtcMillis }
+        // Same tie-break as the real query (newest timestamp, then newest insert): two checkpoints in
+        // the same millisecond must not return the older one (this made the restore test flaky).
+        rows.filter { it.workspaceId == workspaceId }.maxWithOrNull(compareBy({ it.takenAtUtcMillis }, { it.id }))
 }
 
 private class FakeBufferRegistryDao : BufferRegistryDao {

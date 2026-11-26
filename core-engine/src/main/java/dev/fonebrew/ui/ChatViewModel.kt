@@ -25,6 +25,7 @@ import dev.fonebrew.domain.catalog.CatalogModel
 import dev.fonebrew.domain.catalog.ModelCatalogMapper
 import dev.fonebrew.domain.catalog.StarterModels
 import dev.fonebrew.flavor.InvocationFeatures
+import dev.fonebrew.domain.device.DeviceSpec
 import dev.fonebrew.domain.device.ModelFit
 import dev.fonebrew.domain.GeneratedToken
 import dev.fonebrew.domain.MessageNode
@@ -74,11 +75,33 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * The slice of [EngineProvider] the chat loop uses. A seam so a JVM test can hand the real
+ * [ChatViewModel] a scripted engine (EngineProvider itself is final and reaches for native
+ * libraries and the Keystore); production wraps the real provider in [ProviderChatEngines].
+ */
+interface ChatEngines {
+    fun engineFor(spec: ModelSpec, webSearchEnabled: Boolean = false): InferenceEngine?
+    fun isRunnable(spec: ModelSpec): Boolean
+    fun unavailableReason(spec: ModelSpec): String?
+    suspend fun unloadLocalModel()
+}
+
+/** Pure delegation to the real [EngineProvider] — no behaviour of its own. */
+class ProviderChatEngines(private val provider: EngineProvider) : ChatEngines {
+    override fun engineFor(spec: ModelSpec, webSearchEnabled: Boolean): InferenceEngine? =
+        provider.engineFor(spec, webSearchEnabled)
+    override fun isRunnable(spec: ModelSpec): Boolean = provider.isRunnable(spec)
+    override fun unavailableReason(spec: ModelSpec): String? = provider.unavailableReason(spec)
+    override suspend fun unloadLocalModel() = provider.unloadLocalModel()
+}
 
 /** Where a turn is in its lifecycle, for the progress indicator. */
 enum class GenPhase { IDLE, LOADING, GENERATING }
@@ -236,7 +259,7 @@ private data class StreamState(
 class ChatViewModel(
     private val repository: MessageTreeRepository,
     private val registry: ModelRegistry,
-    private val engines: EngineProvider,
+    private val engines: ChatEngines,
     private val providers: ProviderStore,
     private val locals: LocalModelStore,
     private val embeddingLogger: EmbeddingLogger,
@@ -265,6 +288,18 @@ class ChatViewModel(
     private val threadObserver: dev.fonebrew.data.ThreadObserver,
     private val taskStore: dev.fonebrew.data.TaskStore,
     private val appContext: Context,
+    /** Test seam: the live hardware read. Production default is [DeviceInfo.read] on [appContext]. */
+    deviceSpecReader: () -> DeviceSpec = { DeviceInfo.read(appContext) },
+    /** Process-scoped mirror of [GenPhase] for the home-screen widgets (docs/widgets.md); null in
+     *  callers that don't wire one. The chat stays the only writer and the source of truth. */
+    private val generationStatus: dev.fonebrew.data.GenerationStatus? = null,
+    /** Test seam: the foreground service that keeps an on-device turn alive. Production default is [GenerationService]. */
+    private val startGenerationService: () -> Unit = { GenerationService.start(appContext) },
+    private val stopGenerationService: () -> Unit = { GenerationService.stop(appContext) },
+    /** Test seam: the one-shot `!` shell escape runner. Production default is [dev.fonebrew.data.remote.LocalExec]. */
+    private val shellExec: suspend (String, File) -> String = { command, dir -> dev.fonebrew.data.remote.LocalExec.run(command, dir) },
+    /** Test seam: replaces only the BitmapFactory decode/downscale/save step of a pending photo. Null = the real one. */
+    private val photoStore: ((ByteArray) -> String?)? = null,
 ) : ViewModel() {
 
     /** Content routed in from share / text-selection / assist (§7). */
@@ -277,6 +312,20 @@ class ChatViewModel(
     private val activeModelId = MutableStateFlow(
         DefaultModelPolicy.resolveActive(registry.allSpecs(), session.activeModelId.value)?.id,
     )
+    /**
+     * Where the turn in flight runs, for the home-screen widgets' provenance mark (binding rule 2), when
+     * it is not simply the active model: set by the image, 3D and Council paths before they start and
+     * cleared when they end. Null for every turn that runs on [activeModelId].
+     */
+    private val turnRunOnDevice = MutableStateFlow<Boolean?>(null)
+
+    private data class MirroredTurn(
+        val phase: GenPhase,
+        val mode: dev.fonebrew.data.GenerationStatus.Mode,
+        val modelId: String?,
+        val runOnDevice: Boolean?,
+    )
+
     private val transient = MutableStateFlow(
         // New conversations start in the owner's preferred council mode (Settings → Global).
         when (session.councilDefault.value) {
@@ -310,6 +359,34 @@ class ChatViewModel(
                     DefaultModelPolicy.resolveActive(registry.allSpecs(), session.activeModelId.value)
                         ?.let { spec -> setActiveModel(spec.id) }
                 }
+            }
+        }
+        // Home-screen widgets: mirror the phase (and which composer mode it belongs to) plus the
+        // active model id to process scope. Read-only from here on; no turn logic changes.
+        generationStatus?.let { status ->
+            viewModelScope.launch {
+                combine(
+                    transient.map { t ->
+                        val mode = when {
+                            t.imageMode -> dev.fonebrew.data.GenerationStatus.Mode.IMAGE
+                            t.object3dMode -> dev.fonebrew.data.GenerationStatus.Mode.OBJECT_3D
+                            t.councilMode -> dev.fonebrew.data.GenerationStatus.Mode.COUNCIL
+                            else -> dev.fonebrew.data.GenerationStatus.Mode.TEXT
+                        }
+                        t.genPhase to mode
+                    }.distinctUntilChanged(),
+                    activeModelId,
+                    turnRunOnDevice,
+                ) { (phase, mode), modelId, runOnDevice -> MirroredTurn(phase, mode, modelId, runOnDevice) }
+                    .distinctUntilChanged()
+                    .collect { t ->
+                        val mirrored = when (t.phase) {
+                            GenPhase.IDLE -> dev.fonebrew.data.GenerationStatus.Phase.IDLE
+                            GenPhase.LOADING -> dev.fonebrew.data.GenerationStatus.Phase.LOADING
+                            GenPhase.GENERATING -> dev.fonebrew.data.GenerationStatus.Phase.GENERATING
+                        }
+                        status.report(mirrored, t.mode, t.modelId, t.runOnDevice)
+                    }
             }
         }
     }
@@ -358,7 +435,7 @@ class ChatViewModel(
     // First-run setup card (§ usability rework): the one recommended starter
     // model for this device, and its download state. The init collector above
     // auto-activates it the moment the file lands.
-    val device = DeviceInfo.read(appContext)
+    val device = deviceSpecReader()
     private val catalog: List<CatalogModel> =
         ModelCatalogMapper.chatModels(catalogStore.catalog(), InvocationFeatures.CATALOG_POLICY_SAFE_ONLY)
     val starter: CatalogModel? = StarterModels.recommend(catalog, device)
@@ -700,8 +777,8 @@ class ChatViewModel(
         }
     }
 
-    private suspend fun addPendingAttachmentFromBytes(bytes: ByteArray) {
-        val path = withContext(Dispatchers.IO) { downscaleAndStore(bytes) } ?: return
+    internal suspend fun addPendingAttachmentFromBytes(bytes: ByteArray) {
+        val path = withContext(Dispatchers.IO) { if (photoStore != null) photoStore.invoke(bytes) else downscaleAndStore(bytes) } ?: return
         _pendingAttachments.value = _pendingAttachments.value +
             PendingAttachment(id = java.util.UUID.randomUUID().toString(), path = path, mime = "image/jpeg")
     }
@@ -858,7 +935,7 @@ class ChatViewModel(
                 repository.insert(userNode)
                 embeddingLogger.onMessageInserted(userNode)
                 moveLeaf(userNode.id)
-                val output = dev.fonebrew.data.remote.LocalExec.run(command, appContext.filesDir)
+                val output = shellExec(command, appContext.filesDir)
                 val resultNode = Nodes.child(
                     userNode, Role.ASSISTANT, output.ifBlank { "(no output)" }, System.currentTimeMillis(),
                     metadata = mapOf("shell" to "true"),
@@ -913,7 +990,7 @@ class ChatViewModel(
         // Echo/cloud turns don't hold a model process, so they never need the foreground service —
         // and starting one for them risks the framework's async "FGS did not start in time" crash
         // (it sits outside this try, so it can't be caught). This is the dev-Echo send crash.
-        if (isLocal) GenerationService.start(appContext)
+        if (isLocal) startGenerationService()
         stopRequested = false
         try {
             // Load the active model (idempotent; a local GGUF may take several
@@ -1033,7 +1110,9 @@ class ChatViewModel(
                         projectId = session.conversationProjects.value[chatId],
                         model = spec.id,
                         provider = spec.providerId ?: "on-device",
-                        tier = if (isLocal) dev.fonebrew.domain.ledger.Tier.ON_DEVICE else dev.fonebrew.domain.ledger.Tier.CLOUD,
+                        // Keyed on the spec, not on LOCAL_GGUF: Gemini Nano and the Echo dev engine also
+                        // never leave the device, and the ledger is the record of what did.
+                        tier = if (spec.isOnDevice) dev.fonebrew.domain.ledger.Tier.ON_DEVICE else dev.fonebrew.domain.ledger.Tier.CLOUD,
                         inputTokens = inCount,
                         outputTokens = outCount.toLong(),
                         estCostMinor = cloudCostMinor ?: 0L,
@@ -1059,7 +1138,7 @@ class ChatViewModel(
                 genPhase = GenPhase.IDLE,
             )
         } finally {
-            if (isLocal) GenerationService.stop(appContext)
+            if (isLocal) stopGenerationService()
         }
     }
 
@@ -1174,8 +1253,10 @@ class ChatViewModel(
             moveLeaf(userNode.id)
             clearPendingAttachments()
 
-            GenerationService.start(appContext)
+            startGenerationService()
             stopRequested = false
+            // Home-screen widget provenance: a Council with any cloud voice is a cloud turn.
+            turnRunOnDevice.value = voices.all { it.spec.isOnDevice }
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
                 val basePath = repository.path(userNode.id)
@@ -1217,7 +1298,8 @@ class ChatViewModel(
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(councilStreaming = null, genPhase = GenPhase.IDLE, error = t.message ?: "council failed")
             } finally {
-                GenerationService.stop(appContext)
+                turnRunOnDevice.value = null
+                stopGenerationService()
             }
         }
     }
@@ -1260,7 +1342,10 @@ class ChatViewModel(
             }
             moveLeaf(userNode.id)
 
-            GenerationService.start(appContext)
+            startGenerationService()
+            // Home-screen widget provenance: the image comes from on-device SD or a cloud provider,
+            // never from the chat's text model.
+            turnRunOnDevice.value = sdModel != null
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.GENERATING)
                 val (path, producerId) = if (sdModel != null) {
@@ -1295,7 +1380,8 @@ class ChatViewModel(
                     error = t.message ?: "image generation failed",
                 )
             } finally {
-                GenerationService.stop(appContext)
+                turnRunOnDevice.value = null
+                stopGenerationService()
             }
         }
     }
@@ -1329,7 +1415,10 @@ class ChatViewModel(
             }
             moveLeaf(userNode.id)
 
-            GenerationService.start(appContext)
+            startGenerationService()
+            // Home-screen widget provenance: on-device 3D prompts the active model (null: describe it);
+            // the cloud scope sends the prompt to a cloud 3D provider.
+            turnRunOnDevice.value = if (scope == Object3dGenScope.CLOUD) false else null
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.GENERATING)
                 val generated = when (scope) {
@@ -1359,7 +1448,8 @@ class ChatViewModel(
                     error = t.message ?: "3D generation failed",
                 )
             } finally {
-                GenerationService.stop(appContext)
+                turnRunOnDevice.value = null
+                stopGenerationService()
             }
         }
     }
@@ -1468,7 +1558,7 @@ class ChatViewModel(
             if (userNode.role != Role.USER) return@launch
             val kids = tree.childrenOf(userNode.id).filter { it.metadata.containsKey("agent") }
             if (kids.isEmpty()) return@launch
-            GenerationService.start(appContext)
+            startGenerationService()
             stopRequested = false
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
@@ -1512,14 +1602,16 @@ class ChatViewModel(
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = t.message ?: "merge failed")
             } finally {
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }
 
     override fun onCleared() {
         // App task removed: don't leave a dangling foreground service.
-        GenerationService.stop(appContext)
+        stopGenerationService()
+        // Whatever this chat was generating died with its scope; the widgets must not say otherwise.
+        generationStatus?.chatGone()
     }
 
     /**
@@ -1603,7 +1695,7 @@ class ChatViewModel(
             }
             val compare = dev.fonebrew.domain.tree.SiblingCompares.build(tree, branchNodeId, activeChildId)
             if (compare.alternatives.size < 2) return@launch
-            GenerationService.start(appContext)
+            startGenerationService()
             stopRequested = false
             try {
                 transient.value = transient.value.copy(genPhase = GenPhase.LOADING)
@@ -1648,7 +1740,7 @@ class ChatViewModel(
             } catch (t: Throwable) {
                 transient.value = transient.value.copy(genPhase = GenPhase.IDLE, error = t.message ?: "choose for me failed")
             } finally {
-                GenerationService.stop(appContext)
+                stopGenerationService()
             }
         }
     }
@@ -2372,7 +2464,7 @@ class ChatViewModel(
                 ChatViewModel(
                     c.repository,
                     c.modelRegistry,
-                    c.engineProvider,
+                    ProviderChatEngines(c.engineProvider),
                     c.providerStore,
                     c.localModelStore,
                     c.embeddingLogger,
@@ -2401,6 +2493,7 @@ class ChatViewModel(
                     c.threadObserver,
                     c.taskStore,
                     app.applicationContext,
+                    generationStatus = c.generationStatus,
                 )
             }
         }

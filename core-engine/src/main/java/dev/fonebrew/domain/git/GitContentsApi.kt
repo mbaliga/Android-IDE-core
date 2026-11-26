@@ -11,7 +11,12 @@ data class GitRequest(
     val url: String,
     val headers: Map<String, String>,
     val body: String?,
-)
+) {
+    /** Header VALUES carry the token (Authorization), so they never reach a log or an exception
+     *  message through this type's string form. */
+    override fun toString(): String =
+        "GitRequest($method $url, headers=${headers.keys}, body=${if (body == null) "none" else "${body.length} chars"})"
+}
 
 /**
  * Builds the REST "contents API" requests for GitHub and Gitea/Forgejo (they share
@@ -63,6 +68,23 @@ object GitContentsApi {
         if (sha != null) body.put("sha", sha)
         return GitRequest(
             "PUT",
+            "${repoBase(host)}/contents/${encodePath(path)}",
+            commonHeaders(host, token) + ("Content-Type" to "application/json"),
+            body.toString(),
+        )
+    }
+
+    /** DELETE a file; [sha] is the blob sha being removed (required by both hosts). */
+    fun deleteFile(host: GitHost, path: String, message: String, sha: String, token: String): GitRequest {
+        val author = JSONObject().put("name", host.authorName).put("email", host.authorEmail)
+        val body = JSONObject()
+            .put("message", message)
+            .put("sha", sha)
+            .put("branch", host.branch)
+            .put("author", author)
+            .put("committer", author)
+        return GitRequest(
+            "DELETE",
             "${repoBase(host)}/contents/${encodePath(path)}",
             commonHeaders(host, token) + ("Content-Type" to "application/json"),
             body.toString(),

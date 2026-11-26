@@ -22,6 +22,14 @@ plugins {
     alias(libs.plugins.sqldelight)
 }
 
+// CI-only emulator-smoke ABI (docs/ci/emulator-smoke.md). GitHub-hosted runners are x86_64, the
+// shipped app is arm64-v8a only. -Pfonebrew.smokeAbi=x86_64 swaps the ABI filter AND drops the
+// native engine build for that one invocation, so the smoke APK carries no libaarso_*.so at all
+// (which also makes every eager JNI load a hard crash the smoke test would catch). Absent -> the
+// property is null -> arm64-v8a + the full native build, exactly as before. Never set for release.
+val smokeAbi: String? = providers.gradleProperty("fonebrew.smokeAbi").orNull?.takeIf { it.isNotBlank() }
+require(smokeAbi == null || smokeAbi == "x86_64") { "fonebrew.smokeAbi only supports x86_64 (got '$smokeAbi')" }
+
 android {
     // Deliberately NOT "dev.fonebrew" — that namespace (== applicationId) belongs to the thin
     // :app that actually ships. Sharing it here would generate a second dev.fonebrew.R /
@@ -40,7 +48,7 @@ android {
 
         // arm64 is the only ABI the target device (and most modern phones) needs;
         // restricting it keeps the llama.cpp build and APK small.
-        ndk { abiFilters += "arm64-v8a" }
+        ndk { abiFilters += (smokeAbi ?: "arm64-v8a") }
 
         // Pin the NATIVE platform to this module's own minSdk. Left implicit, AGP
         // configured CMake at `android-22` (-DANDROID_PLATFORM=android-22,
@@ -49,8 +57,10 @@ android {
         // llama-mmap.cpp failed to compile ("use of undeclared identifier
         // 'POSIX_MADV_WILLNEED'"). Stating the level explicitly keeps the native headers
         // on the same contract the Kotlin side already declares.
-        externalNativeBuild {
-            cmake { arguments += listOf("-DANDROID_PLATFORM=android-31") }
+        if (smokeAbi == null) {
+            externalNativeBuild {
+                cmake { arguments += listOf("-DANDROID_PLATFORM=android-31") }
+            }
         }
     }
 
@@ -58,10 +68,12 @@ android {
     // src/main/cpp/llama.cpp; the JNI shim + CMake build it into libaarso_llama.so, which
     // ships inside this module's AAR (jni/<abi>/) for the consuming app to package.
     ndkVersion = "28.2.13676358"
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.31.6"
+    if (smokeAbi == null) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.31.6"
+            }
         }
     }
 

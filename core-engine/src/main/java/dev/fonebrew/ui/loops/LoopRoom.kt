@@ -94,6 +94,21 @@ import dev.aarso.hyle.cells.HyleChip
 import dev.aarso.hyle.cells.HyleDropdownField
 import dev.aarso.hyle.cells.HyleField
 import dev.aarso.hyle.theme.LocalHyleColors
+import dev.fonebrew.domain.loop.BudgetEnforcementPresenter
+import dev.fonebrew.domain.loop.BudgetInput
+import dev.fonebrew.domain.loop.LoopTools
+import dev.fonebrew.domain.loop.RunConfirmation
+import dev.fonebrew.domain.loop.RunConfirmationPresenter
+import dev.fonebrew.domain.loop.RunPlan
+import dev.fonebrew.domain.loop.RunSummaryPresenter
+import dev.fonebrew.domain.loop.StepCost
+import dev.fonebrew.domain.loop.StepCostResolver
+import dev.fonebrew.domain.loop.StepPricing
+import dev.fonebrew.domain.loop.ToolNodes
+import dev.fonebrew.domain.loop.ToolSideEffect
+import dev.fonebrew.domain.loop.WorkspaceHit
+import dev.fonebrew.data.loop.LoopEgressMemory
+import dev.fonebrew.data.loop.OkHttpLoopTransport
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -111,6 +126,7 @@ private const val DEFAULT_CRITIC_PROMPT =
 
 /** Icon+label for a run's stop reason (CORE_PHASES.md P3 "summary row") — never red (§1.4). */
 private fun stopLabel(reason: String): Pair<String, String> = when {
+    RunSummaryPresenter.stopLabel(reason) != null -> RunSummaryPresenter.stopLabel(reason)!!
     reason == "reached end" -> "✓" to "Reached end"
     reason == "cancelled" -> "⏹" to "Stopped"
     reason.startsWith("hit step cap") -> "⏹" to "Step cap"
@@ -123,7 +139,7 @@ private fun stopLabel(reason: String): Pair<String, String> = when {
 
 /** Role/model, tokens (with an "est." marker when not provider-authoritative), and duration —
  *  the live step list's per-row metadata (CORE_PHASES.md P3 "Live run view"). */
-private fun stepMeta(step: GraphStep): String = buildString {
+private fun stepMeta(step: GraphStep): String = RunSummaryPresenter.toolStepLine(step) ?: buildString {
     append(step.model ?: step.role)
     val tokens = step.tokensIn?.let { tin -> step.tokensOut?.let { tout -> tin + tout } }
     if (tokens != null) {
@@ -155,6 +171,8 @@ private data class LoopNode(
  *  it round-trips honestly as a BPMN `conditionExpression` but only actually drives branching
  *  when it's literally "approved"/"!approved" — [ConditionGatewayPolicy] has no expression
  *  evaluator, so anything else is authored for legibility, not evaluated. */
+private val LoopNode.isTool: Boolean get() = kind == BpmnNodeKind.SERVICE_TASK && !provenanceExt[ToolNodes.EXT_TOOL].isNullOrBlank()
+
 private data class LoopEdge(val from: String, val to: String, val label: String? = null, val condition: String? = null) {
     val accent: Boolean get() = label != null && !label.equals("else", ignoreCase = true)
 }
@@ -295,6 +313,8 @@ fun LoopRoom(
     var runJob by remember { mutableStateOf<Job?>(null) }
     var loggedNote by remember { mutableStateOf<String?>(null) }
 
+    val egressMemory = remember { LoopEgressMemory(context) }
+    val currency = remember { dev.fonebrew.domain.cost.CurrencyPref.DEFAULT }
     var configNodeId by remember { mutableStateOf<String?>(null) }
     var menuNodeId by remember { mutableStateOf<String?>(null) }
     var addAt by remember { mutableStateOf<Offset?>(null) }
@@ -592,7 +612,10 @@ fun LoopRoom(
      *  Also records every gateway auto-choice ([RecordingGatewayPolicy], WP8, owner decision 2's
      *  GATEWAY_AUTO surface) and brackets the whole run with [dev.fonebrew.data.BackgroundJobs]
      *  so it shows up wherever the app surfaces in-flight background work. */
-    fun startRun(params: Map<String, String>, budget: LoopBudget?) {
+    fun startRun(params: Map<String, String>, budget: LoopBudget?, confirmation: RunConfirmation) {
+        // Remember what the user just confirmed so the next sheet can flag NEW hosts. (The gate
+        // itself is GraphRunner's: it refuses any tool/host outside [confirmation].)
+        egressMemory.remember(loopId, confirmation.hosts)
         running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
         liveSteps = emptyList(); runBudget = budget; loggedNote = null
         forkedThisRun = false; runForkNote = null // §9: a fresh run gets its own fork-once gate
@@ -628,11 +651,35 @@ fun LoopRoom(
                 // same step completes and walks one step at a time (never concurrently), so the
                 // var still names the right engine when tokenCounter reads it.
                 var currentStepEngine: dev.fonebrew.inference.InferenceEngine? = null
+                var currentStepSpec: ModelSpec? = null
                 GraphRunner(
                     generatorFor = { bn ->
                         val spec = bn.ext["model"]?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: fallback
                         currentStepEngine = engineForSpec(spec)
+                        currentStepSpec = spec
                         genFor(spec)
+                    },
+                    // Tool nodes (docs/design/loop-tools.md): the only network edge is OkHttp behind
+                    // LoopHttpTransport; search reads the on-device index. Nothing else is registered.
+                    tools = LoopTools.registry(
+                        transport = OkHttpLoopTransport(),
+                        searcher = { q, limit ->
+                            val now = System.currentTimeMillis()
+                            container.searchRepository
+                                .search(dev.fonebrew.domain.search.query.QueryParser.parse(q, now), now, limit)
+                                .map { WorkspaceHit(it.doc.kind.name.lowercase(), it.doc.title, it.doc.snippet) }
+                        },
+                    ),
+                    // Money: on-device = zero; a cloud step is priced from provider-reported usage via
+                    // the user's explicit PricingBook price, else Unknown (which stops a money-budgeted run).
+                    stepCost = StepCostResolver { _, _ ->
+                        val cloud = currentStepEngine as? dev.fonebrew.inference.cloud.CloudEngine
+                        StepPricing.price(
+                            isCloud = cloud != null,
+                            usage = cloud?.lastUsage?.takeIf { it.totalTokens > 0 },
+                            tokenizerId = currentStepSpec?.tokenizerId,
+                            book = container.pricingStore.book.value,
+                        )
                     },
                     gatewayPolicy = recordingPolicy,
                     tokenCounter = { system, user, output ->
@@ -659,6 +706,7 @@ fun LoopRoom(
                     params = params,
                     budget = budget,
                     onStep = { step -> liveSteps = liveSteps + step },
+                    confirmation = confirmation,
                 ).let { Triple(it, recordingPolicy, fallback) }
             }.fold(
                 { (result, recordingPolicy, fallback) ->
@@ -906,10 +954,13 @@ fun LoopRoom(
                                 val label = when (kind) {
                                     BpmnNodeKind.END_EVENT -> "End"
                                     BpmnNodeKind.EXCLUSIVE_GATEWAY -> "Gateway"
+                                    BpmnNodeKind.SERVICE_TASK -> "Tool"
                                     else -> "Task"
                                 }
-                                nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
-                                if (kind == BpmnNodeKind.TASK) configNodeId = id
+                                // A tool node starts as the local-only search tool: no network until the user picks one.
+                                val ext = if (kind == BpmnNodeKind.SERVICE_TASK) ToolNodes.toExt("search_workspace", emptyMap()) else emptyMap()
+                                nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y, provenanceExt = ext))
+                                if (kind == BpmnNodeKind.TASK || kind == BpmnNodeKind.SERVICE_TASK) configNodeId = id
                             }
                             dev.aarso.hyle.cells.HyleRadialMenu(
                                 visible = true,
@@ -925,6 +976,10 @@ fun LoopRoom(
                                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.08f),
                                         )
                                     }, onClick = { addNode(BpmnNodeKind.TASK) }),
+                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Tool", glyph = { tint ->
+                                        drawCircle(tint, radius = size.width * 0.3f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f))
+                                        drawLine(tint, Offset(size.width * 0.5f, size.height * 0.2f), Offset(size.width * 0.5f, size.height * 0.8f), strokeWidth = size.width * 0.07f)
+                                    }, onClick = { addNode(BpmnNodeKind.SERVICE_TASK) }),
                                     dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Gateway", glyph = { tint ->
                                         val path = androidx.compose.ui.graphics.Path().apply {
                                             moveTo(size.width * 0.5f, size.height * 0.1f)
@@ -1064,7 +1119,16 @@ fun LoopRoom(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    Text(step.output, style = MaterialTheme.typography.bodySmall)
+                                    if (step.isTool) {
+                                        // Untrusted/tool data is shown quoted and clipped; the full result stays in the tree log.
+                                        val shown = if (step.output.length > 600) step.output.take(600) + "… (${step.output.length} chars)" else step.output
+                                        Text(
+                                            (if (step.sideEffect == ToolSideEffect.NETWORK) "⇄ network data (untrusted)\n" else "▤ local data\n") + shown,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    } else {
+                                        Text(step.output, style = MaterialTheme.typography.bodySmall)
+                                    }
                                 }
                             }
                         }
@@ -1074,6 +1138,12 @@ fun LoopRoom(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(glyph, color = LocalHyleColors.current.violet, modifier = Modifier.padding(end = 6.dp))
                                 Text(label, style = MaterialTheme.typography.labelMedium, color = LocalHyleColors.current.textHigh)
+                            }
+                            RunSummaryPresenter.lines(
+                                r, runBudget,
+                                formatMoney = { m -> dev.fonebrew.domain.format.LocaleFormat.currencyMinor(m, currency, java.util.Locale.getDefault()) },
+                            ).forEach {
+                                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             loggedNote?.let {
                                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1088,12 +1158,22 @@ fun LoopRoom(
     // ── Run sheet (P3): auto-generated params form + optional budget, refuse-to-start ────
     if (showRunSheet) {
         val graphForScan = toBpmnGraph(loopId ?: "loop", loopName, nodes.toList(), edges.toList())
+        val importedLoop = nodes.any { it.provenanceExt.containsKey("importedFrom") }
+        val cloudSteps = nodes.any { n ->
+            !isEvent(n.kind) && !n.kind.name.contains("GATEWAY") && !n.isTool &&
+                ((n.modelId?.let { mid -> runnable.firstOrNull { it.id == mid } } ?: runnable.firstOrNull())?.isOnDevice == false)
+        }
         RunSheetDialog(
             paramKeys = LoopParams.scan(graphForScan, objective),
+            planFor = { p -> RunPlan.of(graphForScan, LoopTools.describeOnly, p) },
+            lastConfirmedHosts = egressMemory.lastConfirmed(loopId),
+            imported = importedLoop,
+            hasCloudSteps = cloudSteps,
+            currencyCode = currency,
             onDismiss = { showRunSheet = false },
-            onRun = { params, budget ->
+            onRun = { params, budget, confirmation ->
                 showRunSheet = false
-                startRun(params, budget)
+                startRun(params, budget, confirmation)
             },
         )
     }
@@ -1122,10 +1202,32 @@ fun LoopRoom(
         fun edgeSuffix(e: LoopEdge) = buildString {
             e.label?.let { append(" ($it)") }
             e.condition?.let { append(" [if: $it]") }
+            GatewayConditionPresenter.notEvaluatedNote(e.condition)?.let { append(" $it") }
         }
         val connections = buildList {
             edges.filter { it.to == id }.forEach { e -> add("← ${nodeById(e.from)?.label ?: e.from}${edgeSuffix(e)}") }
             edges.filter { it.from == id }.forEach { e -> add("→ ${nodeById(e.to)?.label ?: e.to}${edgeSuffix(e)}") }
+        }
+        if (node.isTool) {
+            ToolNodeDialog(
+                name = node.label,
+                ext = node.provenanceExt,
+                onDismiss = { configNodeId = null },
+                onSave = { newName, toolExt ->
+                    guardEdit()
+                    val i = nodes.indexOfFirst { it.id == id }
+                    if (i >= 0) {
+                        nodes[i] = nodes[i].copy(
+                            label = newName.ifBlank { nodes[i].label },
+                            provenanceExt = nodes[i].provenanceExt.filterKeys { it != ToolNodes.EXT_TOOL && !it.startsWith(ToolNodes.ARG_PREFIX) } + toolExt,
+                        )
+                    }
+                    configNodeId = null
+                },
+                onConnect = { configNodeId = null; connectingFrom = id },
+                onDelete = { configNodeId = null; deleteNode(id) },
+            )
+            return@let
         }
         NodeConfigDialog(
             node = node,
@@ -1558,18 +1660,38 @@ private fun BudgetBar(usedFraction: Float, modifier: Modifier = Modifier) {
 @Composable
 private fun RunSheetDialog(
     paramKeys: List<String>,
+    planFor: (Map<String, String>) -> RunPlan,
+    lastConfirmedHosts: Set<String>?,
+    imported: Boolean,
+    hasCloudSteps: Boolean,
+    currencyCode: String,
     onDismiss: () -> Unit,
-    onRun: (params: Map<String, String>, budget: LoopBudget?) -> Unit,
+    onRun: (params: Map<String, String>, budget: LoopBudget?, confirmation: RunConfirmation) -> Unit,
 ) {
     var values by remember { mutableStateOf(paramKeys.associateWith { "" }) }
     var stepsText by remember { mutableStateOf("") }
     var wallSecText by remember { mutableStateOf("") }
+    var spendText by remember { mutableStateOf("") }
+    var confirmed by remember { mutableStateOf(false) }
     val missing = paramKeys.filter { values[it].isNullOrBlank() }
+
+    // The plan is recomputed from the CURRENT param values, and any change withdraws the
+    // confirmation: what the user ticked is exactly what will run (hosts can depend on params).
+    val currentParams = values.filterValues { it.isNotBlank() }
+    val plan = planFor(currentParams)
+    val sheet = RunConfirmationPresenter.present(plan, lastConfirmedHosts, imported, hasCloudSteps)
+    val spendMinor = BudgetInput.majorToMinor(spendText, currencyCode)
+    val spendInvalid = spendText.isNotBlank() && spendMinor == null
+    val budgetPreview = LoopBudget(
+        maxSteps = stepsText.toIntOrNull(),
+        maxWallMs = wallSecText.toLongOrNull()?.times(1000L),
+        maxSpendMinor = spendMinor,
+    )
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium) {
             Column(
-                Modifier.padding(16.dp).fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                Modifier.padding(16.dp).fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("Run", style = MaterialTheme.typography.titleMedium)
@@ -1582,7 +1704,7 @@ private fun RunSheetDialog(
                     for (key in paramKeys) {
                         HyleField(
                             values[key].orEmpty(),
-                            { values = values + (key to it) },
+                            { values = values + (key to it); confirmed = false },
                             label = key,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -1596,31 +1718,32 @@ private fun RunSheetDialog(
                     }
                     HorizontalDivider()
                 }
+                RunConfirmationBlock(sheet, confirmed, { confirmed = it })
+                if (sheet.needed) HorizontalDivider()
                 Text("Budget (optional)", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "The step that would exceed a limit is never started. Token budgets " +
-                        "arrive once on-device token counting is wired to Loops — steps and " +
-                        "wall time work today.",
+                    "The step that would exceed a limit is never started.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 HyleField(stepsText, { stepsText = it.filter(Char::isDigit) }, label = "Max steps", modifier = Modifier.fillMaxWidth())
                 HyleField(wallSecText, { wallSecText = it.filter(Char::isDigit) }, label = "Max wall time (seconds)", modifier = Modifier.fillMaxWidth())
+                HyleField(spendText, { spendText = it.filter { c -> c.isDigit() || c == '.' || c == ',' } }, label = "Max spend ($currencyCode)", modifier = Modifier.fillMaxWidth())
+                if (spendInvalid) {
+                    Text("⚠ Enter an amount in $currencyCode with no more decimals than the currency has.", style = MaterialTheme.typography.labelSmall, color = LocalHyleColors.current.violet)
+                }
+                BudgetEnforcementPresenter.lines(budgetPreview.takeIf { !it.isEmpty }).forEach {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     Spacer(Modifier.width(8.dp))
                     HyleButton(
                         "Run",
-                        enabled = missing.isEmpty(),
+                        enabled = missing.isEmpty() && !spendInvalid && !sheet.blocked && (!sheet.needed || confirmed),
                         onClick = {
-                            val budget = LoopBudget(
-                                maxSteps = stepsText.toIntOrNull(),
-                                maxWallMs = wallSecText.toLongOrNull()?.times(1000L),
-                            )
-                            onRun(
-                                values.filterValues { it.isNotBlank() },
-                                budget.takeIf { it.maxSteps != null || it.maxWallMs != null },
-                            )
+                            val confirmation = if (sheet.needed) RunConfirmation.accepting(plan) else RunConfirmation.NONE
+                            onRun(currentParams, budgetPreview.takeIf { !it.isEmpty }, confirmation)
                         },
                     )
                 }
@@ -1671,7 +1794,11 @@ private fun TaskCard(node: LoopNode, widthDp: androidx.compose.ui.unit.Dp, statu
     ) {
         HyleCard(selected = status == NodeStatus.ACTIVE) {
             Text(node.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1)
-            val sub = node.modelId?.substringAfter(':') ?: node.role.ifBlank { "task" }
+            val toolEffect = if (node.isTool) LoopTools.describeOnly.find(node.provenanceExt[ToolNodes.EXT_TOOL].orEmpty())?.sideEffect else null
+            val sub = if (node.isTool) {
+                // Glyph + label, never colour: ⇄ network (distinct from a cloud model's ☁ watched-object mark), ▤ local.
+                "${toolEffect?.glyph ?: "⛔"} ${toolEffect?.label ?: "unsupported in this version"} · ${node.provenanceExt[ToolNodes.EXT_TOOL]}"
+            } else node.modelId?.substringAfter(':') ?: node.role.ifBlank { "task" }
             Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             val foot = when (status) {
                 NodeStatus.ACTIVE -> "● running"
@@ -1722,6 +1849,8 @@ private fun GatewayConditionEditorDialog(
 ) {
     var draft by remember { mutableStateOf(GatewayConditionPresenter.start(sourceNodeId, destinationNodeId)) }
     var conditionText by remember { mutableStateOf("") }
+    // null = the structured condition builder is mid-edit (incomplete): never commit that.
+    var conditionIncomplete by remember { mutableStateOf(false) }
     var sampleOutput by remember { mutableStateOf("") }
     var errorNote by remember { mutableStateOf<String?>(null) }
 
@@ -1733,6 +1862,7 @@ private fun GatewayConditionEditorDialog(
     // the author — the grammar itself still sees every intermediate event, nothing is skipped.
     fun chooseLabelAndPreview(label: String) {
         errorNote = null
+        if (conditionIncomplete) { errorNote = "⚠ Finish the condition (or pick “none”) first."; return }
         val labelResult = GatewayConditionPresenter.chooseLabel(draft, label, conditionText.ifBlank { null })
         if (labelResult !is TouchConnectionGrammar.Result.Advanced) { errorNote = rejectionNote(labelResult); return }
         var next = labelResult.draft
@@ -1761,7 +1891,7 @@ private fun GatewayConditionEditorDialog(
                 if (draft.state == ConnectionDraftState.PREVIEWING) {
                     Text("Preview branch", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "The runner treats an output starting with “APPROVE” as approved; anything else counts as not-approved.",
+                        "“approved” = the output starts with APPROVE; other conditions test the output text literally. No match takes the default edge.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     HyleField(sampleOutput, { sampleOutput = it }, label = "Sample output to test", modifier = Modifier.fillMaxWidth())
@@ -1775,17 +1905,16 @@ private fun GatewayConditionEditorDialog(
                             val glyph = if (chosen) "✓" else "○"
                             val name = c.label ?: c.condition ?: "(unconditioned)"
                             Text(
-                                "$glyph $name" + (if (isDraft) " — this edge" else "") + (if (chosen) " — taken" else ""),
+                                "$glyph $name" + (if (isDraft) " — this edge" else "") + (if (chosen) " — taken" else "") +
+                                    (GatewayConditionPresenter.notEvaluatedNote(c.condition)?.let { " $it" } ?: ""),
                                 style = if (chosen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                                 color = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    val cond = draft.conditionExpression
-                    if (cond != null && cond.trim().lowercase() != "approved" && cond.trim().lowercase() != "!approved") {
+                    GatewayConditionPresenter.notEvaluatedNote(draft.conditionExpression)?.let {
                         Text(
-                            "This condition isn't one the runner evaluates — only exactly “approved”/“!approved” drive branching. " +
-                                "It's saved on the edge for readability; the preview above shows how it actually behaves (the default branch).",
+                            "$it. Only the listed conditions (approved, contains, equals, starts with, length, is-empty…) drive branching; this one is kept for readability only.",
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1811,12 +1940,13 @@ private fun GatewayConditionEditorDialog(
                     HyleButton("approve — when the last step begins APPROVE", onClick = { chooseLabelAndPreview("approve") })
                     HyleButton("refine — otherwise", onClick = { chooseLabelAndPreview("refine") })
                     HyleButton("else — default branch", onClick = { chooseLabelAndPreview("else") })
-                    HyleField(conditionText, { conditionText = it }, label = "Condition (advanced, optional)", modifier = Modifier.fillMaxWidth())
-                    Text(
-                        "Only exactly “approved”/“!approved” actually drive branching today — anything else is saved for " +
-                            "readability and behaves as the default branch (the next screen's Preview shows which).",
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text("Condition (optional)", style = MaterialTheme.typography.labelMedium)
+                    // Exactly the closed set the runner evaluates (ConditionSyntax) — structured chips
+                    // and fields, no free text and no patterns.
+                    ConditionBuilder(initial = conditionText, onChange = { t ->
+                        conditionIncomplete = t == null
+                        if (t != null) conditionText = t
+                    })
                     errorNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { GatewayConditionPresenter.cancel(draft); onDismiss() }) { Text("Cancel") }

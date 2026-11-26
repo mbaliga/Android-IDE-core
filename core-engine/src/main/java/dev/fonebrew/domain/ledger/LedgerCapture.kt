@@ -103,4 +103,61 @@ object LedgerCapture {
         surface = "loop",
         loopId = loopId,
     )
+
+    /**
+     * Build the ledger entry for one Develop -> Agent proposal call, tagged `surface = "agent"` so
+     * it is legible apart from a Chat turn (and from a loop step), never folded in silently.
+     * [runId] doubles as [LedgerEntry.chatId] and [LedgerEntry.nodeId] (an agent call is not a
+     * message-tree turn; one id per call keeps the row unique and groupable, as a loop run does).
+     *
+     * **Never invents a number (sovereignty rule):** token counts are exactly one of
+     *  - [reported] provider usage (authoritative, `estimated = false`), or
+     *  - the engine tokenizer's own counts [estimatedIn]/[estimatedOut] (`estimated = true`), or
+     *  - nothing known, in which case this returns `null` and NO row is written - a missing row is
+     *    honest, a zero-token row is a fabricated one.
+     * Cost is [priceMinor] over the tokens for a non-on-device [tier], and 0 for on-device (no
+     * money changed hands - the sovereignty record). Pure.
+     */
+    fun agentRun(
+        timestampMillis: Long,
+        runId: String,
+        projectId: String?,
+        model: String,
+        provider: String,
+        tier: Tier,
+        reported: dev.fonebrew.domain.cost.UsageReport?,
+        estimatedIn: Long?,
+        estimatedOut: Long?,
+        latencyMs: Long,
+        priceMinor: (dev.fonebrew.domain.cost.UsageReport) -> Long,
+    ): LedgerEntry? {
+        val usage: dev.fonebrew.domain.cost.UsageReport
+        val estimated: Boolean
+        if (reported != null && reported.totalTokens > 0) {
+            usage = reported; estimated = false
+        } else if (estimatedIn != null && estimatedOut != null) {
+            usage = dev.fonebrew.domain.cost.UsageReport(estimatedIn, estimatedOut); estimated = true
+        } else {
+            return null
+        }
+        return LedgerEntry(
+            timestampMillis = timestampMillis,
+            projectId = projectId,
+            chatId = runId,
+            nodeId = runId,
+            model = model,
+            provider = provider,
+            provenance = provenanceFor(tier),
+            interactionModel = InteractionModel.SINGLE,
+            councilMemberId = null,
+            inputTokens = usage.inputTokens.coerceAtLeast(0),
+            outputTokens = usage.outputTokens.coerceAtLeast(0),
+            estCostMinor = if (tier == Tier.ON_DEVICE) 0L else priceMinor(usage).coerceAtLeast(0),
+            latencyMs = latencyMs.coerceAtLeast(0),
+            tier = tier,
+            status = Status.COMPLETE,
+            estimated = estimated,
+            surface = "agent",
+        )
+    }
 }
