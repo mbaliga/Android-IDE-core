@@ -92,3 +92,101 @@ container has no device or emulator; JVM tests prove the **arithmetic and the ru
 
 See "Proposed decision table" below (added in a later commit of this lane). All thresholds are
 **proposals for the owner to ratify**, not facts.
+
+---
+
+# Proposed decision table
+
+**Everything in this section is a PROPOSAL for the owner to ratify.** None of it is a fact, a
+measurement or a requirement. No number below has been produced by this harness yet (it has never
+run on a device). Thresholds are placeholders chosen to make the *question* concrete; the owner
+should replace them with what feels acceptable on the target phone after seeing real results.
+Repeated runs on the same model should agree roughly before any single run is trusted (look at
+the spread and the drift column, not just the median).
+
+## How to read the numbers
+
+| Reading | Means | Does not mean |
+|---|---|---|
+| Decode tok/s (median, per prompt size) | Steady generation speed on CPU through the current llama.cpp build | Quality of output, or speed with a different quant/context |
+| Prefill tok/s | Speed of reading the prompt (slightly under-read, see above) | Pure prefill time; TTFT also includes template + first sample |
+| TTFT at ~2048 tokens | How long a long document/agent context makes you wait | Interactive latency for short chats (see the short prompt) |
+| Decode drift (last vs first repeat) | Sustained-load behaviour; negative = slowing down (heat is the usual suspect) | A diagnosis; correlate with the thermal before/after fields |
+| PSS after load / after generation | Memory this process holds | Total phone memory headroom (other apps, GPU memory not in PSS) |
+| Load time | Cold-ish load of this file now (OS page cache may make repeats faster) | First-boot cold-start |
+
+## Question 1: is a GPU/NPU path worth building?
+
+Proposed rule: *acceleration is only worth building if CPU is demonstrably the bottleneck for a
+model the owner actually wants to use, and the CPU number is below what is tolerable.*
+
+| Observation on the owner's phone (PROPOSED thresholds) | Proposed next step |
+|---|---|
+| Decode >= ~15 tok/s median on a model the owner would use daily, drift better than about -15% | **Do not build acceleration.** CPU is adequate; spend the effort elsewhere. |
+| Decode ~5 to ~15 tok/s, prefill >= ~100 tok/s | **Hold.** Usable; re-run after a model/quant change before committing to a backend. Consider a smaller or lower-bit quant first (cheaper than a new backend). |
+| Decode < ~5 tok/s on a model size the owner wants, or prefill < ~50 tok/s (2048-token TTFT of tens of seconds) | **Spike an acceleration backend** behind a flag, benchmarked with this same harness, before any product work. |
+| Drift worse than about -30% across repeats, or thermal reaches SEVERE | **Sustained load is the problem, not peak speed.** An accelerator that draws more power may make it worse; measure energy (battery delta) alongside before choosing. |
+| Battery drop per run large relative to the run's length | Treat power as a first-class cost; a faster path that burns more battery is not an unambiguous win. |
+
+Reasoning: decode on phones is usually memory-bandwidth-bound, so a GPU does not automatically
+beat a well-tuned CPU path for small models; prefill (compute-bound) is where an accelerator is
+most likely to help. That is why prefill and decode are reported separately.
+
+## Question 2: local vision
+
+Local vision needs a second file (a projector/"mmproj") plus an image encoder pass that adds
+prefill-like work and memory. Proposed gate, using the numbers this harness already records:
+
+| Observation (PROPOSED) | Proposed next step |
+|---|---|
+| PSS after load for the intended text model leaves roughly >= 2 GB headroom on the phone (owner reads free RAM separately) AND prefill at ~512 tokens >= ~100 tok/s | A vision spike is plausible; image encode cost then needs its own measurement (this harness does not measure it). |
+| Little headroom, or prefill < ~50 tok/s | **Defer local vision**; keep vision on an opt-in cloud provider (a watched object) as today. |
+
+This harness cannot measure image-encoder time. A vision benchmark would be a separate, later
+extension of the same runner; it is named here as a follow-up, not built.
+
+## Question 3: tool-capable models
+
+Tool use means longer prompts (tool schemas + results) and multi-turn agent loops, so what matters
+is prefill at 1024 to 2048 tokens and sustained drift. Proposed gate:
+
+| Observation (PROPOSED) | Proposed next step |
+|---|---|
+| TTFT at ~2048 tokens under ~20 s and drift better than about -20% | Local tool-using agent loops are plausibly tolerable; evaluate tool-call *reliability* separately (not a speed question, and not measured here). |
+| TTFT at ~2048 tokens above ~45 s | Local agent loops will feel stalled; keep agents on a smaller context budget or cloud (opt-in, watched). |
+
+Speed is necessary, not sufficient: whether a given small model emits valid tool calls is a
+quality question this harness does not and cannot answer.
+
+## What this table deliberately does not do
+
+- It names no model, quantisation or download link as recommended. The catalog is not touched.
+- It does not rank phones, generalise from one device, or treat one run as a verdict.
+- It is not a requirement on anyone: if the owner ratifies different thresholds, edit this table.
+
+## Secondary, unverified background (for context only)
+
+A web search was run once per topic during this lane. The pages were **not fetched or verified**;
+only search-result summaries were read. Treat as leads, not facts:
+
+- Qualcomm announced an OpenCL backend for Adreno GPUs in llama.cpp (summary says Q4_0 is the
+  optimised quantisation; no tok/s figures seen).
+  <https://www.qualcomm.com/developer/blog/2024/11/introducing-new-opn-cl-gpu-backend-llama-cpp-for-qualcomm-adreno-gpu>
+- A mobile study (an iPhone, not Android) reported multi-threaded CPU beating GPU for ~0.5-1B models
+  while GPUs held an edge above ~1.5B. <https://arxiv.org/html/2505.06461v1>
+- Community reports of poor Vulkan performance on some Android GPUs (older, possibly outdated).
+  <https://github.com/ggml-org/llama.cpp/discussions/9464>
+- No upstream Hexagon NPU path was seen in results; only an unofficial fork was mentioned. Not
+  verified.
+- llama.cpp multimodal splits a model into a language GGUF plus a projector GGUF (mmproj):
+  <https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md>. A VLM case study on a
+  OnePlus 13R exists: <https://arxiv.org/html/2507.08505v2>. Memory rule of thumb seen in a
+  third-party app README: model file + KV cache + a few hundred MB for the encoder.
+
+## Follow-ups named, not built
+
+- Image-encoder timing for a vision benchmark.
+- Energy measurement beyond battery percentage deltas (coarse; owner to judge usefulness).
+- Optional per-run thermal timeline (current record keeps before/after and per-repeat only).
+- A second runtime (non-llama.cpp) behind the same runner for comparison, once an accelerated
+  engine exists.
