@@ -452,6 +452,33 @@ class AppContainer(context: Context) {
 
     val engineProvider: EngineProvider = EngineProvider(echoEngine, providerStore, context.applicationContext)
 
+    /** On-device benchmark (docs/design/on-device-benchmark.md): explicit-tap only, local models
+     *  only, results kept in a local bounded JSON file. Process-wide so a run survives leaving
+     *  the screen; holds the existing generation foreground service while it runs. */
+    val benchmarkHistoryStore: dev.fonebrew.data.benchmark.BenchmarkHistoryStore =
+        dev.fonebrew.data.benchmark.BenchmarkHistoryStore(
+            java.io.File(context.filesDir, dev.fonebrew.data.benchmark.BenchmarkHistoryStore.FILE_NAME),
+        )
+
+    val benchmarkController: dev.fonebrew.data.benchmark.BenchmarkController =
+        dev.fonebrew.data.benchmark.BenchmarkController(
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
+            engineFor = { spec -> engineProvider.engineFor(spec)?.let { dev.fonebrew.data.benchmark.InferenceEngineBenchmarkAdapter(it) } },
+            unavailableReason = { engineProvider.unavailableReason(it) },
+            residentModelLoaded = { engineProvider.engineFor(it)?.isLoaded == true },
+            unloadResidentModel = { engineProvider.unloadLocalModel() },
+            store = benchmarkHistoryStore,
+            clock = dev.fonebrew.data.benchmark.Probes.systemClock(),
+            thermal = dev.fonebrew.data.benchmark.Probes.androidThermal(context.applicationContext),
+            memory = dev.fonebrew.data.benchmark.Probes.androidMemory(),
+            battery = dev.fonebrew.data.benchmark.Probes.androidBattery(context.applicationContext),
+            device = { dev.fonebrew.data.benchmark.Probes.androidFingerprint() },
+            foreground = object : dev.fonebrew.data.benchmark.ForegroundHold {
+                override fun acquire() = dev.fonebrew.service.GenerationService.start(context.applicationContext)
+                override fun release() = dev.fonebrew.service.GenerationService.stop(context.applicationContext)
+            },
+        )
+
     // Agentic repo loop (IA: agentic-ide #1): read repo → model proposes a ChangeSet → review → commit.
     // Graph-wave lane D: `repository` is wired so a successful commit mints a queryable
     // CommitAnchor node into the real message tree (dev.fonebrew.data.AgentRepoRunner's own KDoc).

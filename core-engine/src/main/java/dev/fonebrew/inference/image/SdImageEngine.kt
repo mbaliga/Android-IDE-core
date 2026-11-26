@@ -29,6 +29,9 @@ class SdImageEngine(
     private var handle = 0L
 
     override suspend fun generate(prompt: String, params: ImageParams): String = withContext(Dispatchers.Default) {
+        // Typed UnsupportedCpuException (or the loader's own error) — never reach a native method
+        // when the library was refused or failed to load.
+        loadFailure?.let { throw it }
         if (handle == 0L) {
             handle = nativeSdLoad(modelPath, threads)
             check(handle != 0L) { "failed to load SD model: $modelPath" }
@@ -63,8 +66,9 @@ class SdImageEngine(
     ): Boolean
 
     companion object {
-        init {
-            System.loadLibrary("aarso_sd")
-        }
+        // CpuFeatureCheck runs before System.loadLibrary (see SdNativeLoader). Recorded, not thrown:
+        // a throwing static init would poison the class; generate() rethrows it where callers
+        // already show load errors.
+        private val loadFailure: Throwable? = SdNativeLoader.attempt()
     }
 }

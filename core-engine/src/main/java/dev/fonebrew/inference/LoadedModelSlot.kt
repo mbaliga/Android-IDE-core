@@ -2,6 +2,9 @@ package dev.fonebrew.inference
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 /** The three native calls the resident-model state machine needs; [LlamaCppEngine] binds them to JNI. */
 internal interface ModelNative {
@@ -11,6 +14,9 @@ internal interface ModelNative {
 
     /** Ask a running decode on [handle] to stop. Must be safe to call from any thread, without the slot lock. */
     fun requestStop(handle: Long)
+
+    /** Token count of [utf8] under [handle]. Only ever called while [handle] is guaranteed live. */
+    fun countTokens(handle: Long, utf8: ByteArray): Int
 }
 
 /**
@@ -25,11 +31,19 @@ internal interface ModelNative {
  *    decode to stop, then wait for the lock the decode holds;
  *  - a failed load leaves the slot cleanly unloaded (handle 0, no path), never half-swapped.
  *
+ * [countTokens] must work while a reply streams (the generate lock is held for the whole stream),
+ * so it does not use the mutex. It takes the read side of [freeGuard] and re-reads the handle
+ * inside it; [freeResident] takes the write side around clear-and-free. A free therefore waits for
+ * an in-flight count, and a count that starts after the free sees 0 — never a freed handle. Because
+ * it never touches the mutex it cannot deadlock against [withHandle], even when called from inside
+ * a generation's own collector.
+ *
  * [handle] and [path] are readable without the lock for cheap state queries only; do not use them
  * to decide whether to act.
  */
 internal class LoadedModelSlot(private val native: ModelNative) {
     private val mutex = Mutex()
+    private val freeGuard = ReentrantReadWriteLock()
 
     @Volatile
     var handle: Long = 0L
@@ -72,7 +86,13 @@ internal class LoadedModelSlot(private val native: ModelNative) {
         block(h)
     }
 
-    private fun freeResident() {
+    /** Blocking, brief (a tokenize call). 0 when nothing is loaded, as before. */
+    fun countTokens(utf8: ByteArray): Int = freeGuard.read {
+        val h = handle
+        if (h == 0L) 0 else native.countTokens(h, utf8)
+    }
+
+    private fun freeResident() = freeGuard.write {
         val h = handle
         // Clear first: even if free() throws, the slot must not keep pointing at a dead handle.
         handle = 0L

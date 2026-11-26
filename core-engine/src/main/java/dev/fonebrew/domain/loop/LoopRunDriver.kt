@@ -51,6 +51,7 @@ class LoopRunDriver(
         resolveBinding: suspend () -> Boolean = { true },
         resolveAuthority: suspend () -> Boolean = { true },
         onStep: (suspend (GraphStep) -> Unit)? = null,
+        confirmation: RunConfirmation? = null,
     ): LoopRun {
         val runId = idGenerator()
         val definitionDigest = "sha256:" + Digest.ofUtf8(graph.toString() + "|" + objective).digestHex
@@ -110,12 +111,12 @@ class LoopRunDriver(
         emit(RunState.READY, "Ready to run.")
         emit(RunState.RUNNING, "Execution started.")
 
-        val result = graphRunner.run(graph, objective, hardCap, params, budget, onStep)
+        val result = graphRunner.run(graph, objective, hardCap, params, budget, onStep, confirmation)
 
         val nodeAttempts = result.steps.map { step ->
             NodeAttempt(
                 nodeId = step.nodeId, attemptNumber = 1, startedAtUtc = now().minusMillis(step.durationMs),
-                outcome = NodeAttemptOutcome.SUCCEEDED, endedAtUtc = now(),
+                outcome = if (step.failed) NodeAttemptOutcome.FAILED else NodeAttemptOutcome.SUCCEEDED, endedAtUtc = now(),
             )
         }
 
@@ -150,6 +151,10 @@ class LoopRunDriver(
             RunState.STOPPED_BUDGET to TerminalReasonCategory.BUDGET_STEPS_EXHAUSTED
         result.stoppedBecause == "budget:wall" -> RunState.STOPPED_BUDGET to TerminalReasonCategory.BUDGET_WALL_CLOCK_EXHAUSTED
         result.stoppedBecause == "budget:tokens" -> RunState.STOPPED_BUDGET to TerminalReasonCategory.BUDGET_TOKENS_EXHAUSTED
+        result.stoppedBecause == "budget:spend" || result.stoppedBecause == StepPricing.UNKNOWN_STOP_REASON ->
+            RunState.STOPPED_BUDGET to TerminalReasonCategory.BUDGET_COST_EXHAUSTED
+        result.stoppedBecause.startsWith("egress not confirmed") || result.stoppedBecause.startsWith("unsupported in this version") ->
+            RunState.STOPPED_POLICY to TerminalReasonCategory.POLICY_BOUNDARY
         else -> RunState.FAILED_SAFE to TerminalReasonCategory.VALIDATION_FAILURE
     }
 

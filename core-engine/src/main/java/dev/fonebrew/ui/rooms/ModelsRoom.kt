@@ -137,6 +137,7 @@ fun ChatOnDeviceShelf(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 ) { modelsViewModel.delete(local) }
             }
+            dev.fonebrew.ui.benchmark.BenchmarkEntry(downloaded)
         }
     }
 }

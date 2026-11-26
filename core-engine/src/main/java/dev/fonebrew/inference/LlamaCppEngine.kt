@@ -24,6 +24,7 @@ class LlamaCppEngine : InferenceEngine {
         override fun load(modelPath: String, contextSize: Int): Long = nativeLoadModel(modelPath, contextSize)
         override fun free(handle: Long) = nativeFree(handle)
         override fun requestStop(handle: Long) = nativeRequestStop(handle)
+        override fun countTokens(handle: Long, utf8: ByteArray): Int = nativeCountTokens(handle, utf8)
     })
 
     override val tokenizerId: String
@@ -41,11 +42,11 @@ class LlamaCppEngine : InferenceEngine {
         slot.unload()
     }
 
-    // Not behind the slot lock: callers count tokens while a reply is still streaming, and
-    // generate() holds the lock for the whole stream. Reads a snapshot of the handle, as before.
+    // Not behind the generate lock: callers count tokens while a reply is still streaming, and
+    // generate() holds that lock for the whole stream. The slot's free-guard keeps a concurrent
+    // unload from freeing the handle mid-count (see LoadedModelSlot).
     override suspend fun countTokens(text: String): Int = withContext(Dispatchers.Default) {
-        val handle = slot.handle
-        if (handle == 0L) 0 else nativeCountTokens(handle, text.toByteArray(Charsets.UTF_8))
+        slot.countTokens(text.toByteArray(Charsets.UTF_8))
     }
 
     override fun generate(

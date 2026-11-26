@@ -18,12 +18,14 @@ object LoopParams {
         PLACEHOLDER.findAll(text).map { it.groupValues[1] }.distinct().toList()
 
     /** Every distinct placeholder anywhere in [graph]: the [objective] plus each node's
-     *  `ext["systemPrompt"]`. Node names/labels are display text, never templated. */
+     *  `ext["systemPrompt"]` and tool-node `arg.*` values. Node names/labels are display text, never templated. */
     fun scan(graph: BpmnGraph, objective: String): List<String> {
         val keys = LinkedHashSet<String>()
         keys += placeholdersIn(objective)
         for (node in graph.nodes) {
             node.ext["systemPrompt"]?.let { keys += placeholdersIn(it) }
+            // A tool node's arguments (`arg.*`) may reference params, e.g. an http_request url.
+            for ((k, v) in node.ext) if (k.startsWith(ToolNodes.ARG_PREFIX)) keys += placeholdersIn(v)
         }
         return keys.toList()
     }
