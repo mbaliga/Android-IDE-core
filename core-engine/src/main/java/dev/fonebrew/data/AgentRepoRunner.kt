@@ -10,7 +10,21 @@ import dev.fonebrew.domain.git.GitContentsApi
 import dev.fonebrew.domain.cost.PricingBook
 import dev.fonebrew.domain.cost.UsagePricing
 import dev.fonebrew.domain.cost.UsageReport
+import dev.fonebrew.domain.agent.AgentBudgets
+import dev.fonebrew.domain.agent.AgentObserver
+import dev.fonebrew.domain.agent.AgentRunLog
+import dev.fonebrew.domain.agent.AgentSeed
+import dev.fonebrew.domain.agent.AgentSession
+import dev.fonebrew.domain.agent.AgentWorkspace
+import dev.fonebrew.domain.agent.BuiltinTools
+import dev.fonebrew.domain.agent.CancelToken
+import dev.fonebrew.domain.agent.ConsentGate
+import dev.fonebrew.domain.agent.ContextPick
+import dev.fonebrew.domain.agent.DispatchRequest
+import dev.fonebrew.domain.agent.EngineBadge
+import dev.fonebrew.domain.agent.PublishPlan
 import dev.fonebrew.domain.git.AgentTarget
+import dev.fonebrew.domain.git.CiState
 import dev.fonebrew.domain.git.GitHost
 import dev.fonebrew.domain.ledger.LedgerCapture
 import dev.fonebrew.domain.ledger.LedgerEntry
@@ -54,7 +68,8 @@ class AgentRepoRunner(
     /** Counts a cloud call against the provider's free tier, as chat does. */
     private val recordFreeTier: (providerId: String, tokensIn: Long, tokensOut: Long) -> Unit = { _, _, _ -> },
 ) {
-    data class Proposal(val changeSet: ChangeSet, val filesRead: List<String>, val rawModelOutput: String)
+    /** [log] is the multi-step run log kept with the proposal (null for the single-shot [propose]). */
+    data class Proposal(val changeSet: ChangeSet, val filesRead: List<String>, val rawModelOutput: String, val log: AgentRunLog? = null)
 
     /** The host the user picked in the Agent tab (only consulted when several are connected). */
     @Volatile var chosenHostId: String? = null
@@ -67,6 +82,10 @@ class AgentRepoRunner(
         val token = hostStore.token(host.id) ?: return null
         return host to token
     }
+
+    /** A read-only view of the resolved target's repo (for the context picker); null until a host is resolved. */
+    fun repoView(): dev.fonebrew.domain.agent.AgentRepo? =
+        hostAndToken()?.let { (host, token) -> AgentContentsRepo(transport, host, token) }
 
     /** True when any Git host is connected (the target may still need choosing - see [target]). */
     val hasHost: Boolean get() = hostStore.hosts.value.isNotEmpty()
@@ -146,10 +165,68 @@ class AgentRepoRunner(
      */
     suspend fun commit(changeSet: ChangeSet, message: String): Result<List<String>> = runCatching {
         val (host, token) = hostAndToken() ?: error("no Git host selected - choose which host to commit to")
-        val ids = squashedCommit(transport, host, token, changeSet, message)
-            .getOrElse { perFileCommit(transport, host, token, changeSet, message).getOrThrow() }
-        recordCommitAnchors(treeRepository, host, ids, message, clock, idGen)
-        ids
+        commitTo(host, token, changeSet, message)
+    }
+
+    /** One squashed commit (per-file fallback) on [host]'s branch, then the tree anchors. */
+    private suspend fun commitTo(host: GitHost, token: String, changeSet: ChangeSet, message: String): List<String> =
+        AgentPublisher(transport, treeRepository, clock, idGen).commitTo(host, token, changeSet, message)
+
+    /**
+     * The multi-step agent (docs/design/agent-multistep.md). Reads and proposes only: the returned
+     * [Proposal] still goes through per-hunk review and [publish]; nothing here writes to the host.
+     * [picks] seed the context and the log says so. Engine selection is the caller's explicit
+     * [modelId]; a cloud engine is reported in the log as a watched object, never chosen silently.
+     */
+    suspend fun runAgent(
+        objective: String,
+        picks: List<ContextPick>,
+        modelId: String,
+        budgets: AgentBudgets = AgentBudgets(),
+        cancel: CancelToken = CancelToken(),
+        observer: AgentObserver = object : AgentObserver {},
+        gate: ConsentGate = ConsentGate.DENY_ALL,
+    ): Result<Proposal> = runCatching {
+        val (host, token) = hostAndToken() ?: error("no Git host selected - choose which host the agent targets")
+        val spec = registry.byId(modelId) ?: error("model not found")
+        val engine = engines.engineFor(spec) ?: error("model not runnable")
+        engine.loadModel(spec.modelPath ?: "(dev)", spec.contextWindow)
+        val ws = AgentWorkspace(AgentContentsRepo(transport, host, token), budgets)
+        val seed = AgentSeed.build(ws, picks)
+        val turns = AgentEngineTurnSource(
+            engine, spec, cancel, clock, idGen, appendLedger, priceFor, recordFreeTier,
+        )
+        val outcome = AgentSession(BuiltinTools.registry(ws), turns, budgets, gate = gate, cancel = cancel, observer = observer)
+            .run(objective, seed.files, ws)
+        val log = AgentRunLog(EngineBadge(spec.displayName, cloud = !spec.isOnDevice), objective, seed.notes, outcome)
+        Proposal(outcome.changeSet, outcome.filesRead, outcome.summary.orEmpty(), log)
+    }
+
+    private val publisher by lazy { AgentPublisher(transport, treeRepository, clock, idGen) }
+
+    /**
+     * Apply an explicit [PublishPlan] (only [dev.fonebrew.domain.agent.PublishPlanner] builds one,
+     * and only from a chosen option and a non-empty approved set). See [AgentPublisher.publish].
+     */
+    suspend fun publish(plan: PublishPlan, message: String, engine: EngineBadge, summary: String?): Result<AgentPublisher.Outcome> = runCatching {
+        val resolved = (target() as? AgentTarget.Resolution.Resolved)?.host
+            ?: error("no Git host selected - choose which host to publish to")
+        check(resolved.id == plan.host.id) { "the target host changed since review; start the publish again" }
+        val token = hostStore.token(resolved.id) ?: error("no token for ${resolved.displayName}")
+        publisher.publish(resolved, token, plan, message, engine, summary)
+    }
+
+    /** ONE explicit CI check (the user tapped Check CI): never polls. See [AgentPublisher.checkCi]. */
+    suspend fun checkCi(host: GitHost, sha: String): Result<CiState> = runCatching {
+        val token = hostStore.token(host.id) ?: error("no token for ${host.displayName}")
+        publisher.checkCi(host, token, sha)
+    }
+
+    /** Starts a workflow only for a prepared [DispatchRequest] the user confirmed; refuses otherwise. */
+    suspend fun runWorkflow(request: DispatchRequest, confirmed: Boolean): Result<Unit> = runCatching {
+        check(confirmed) { "workflow run not confirmed" }
+        val token = hostStore.token(request.host.id) ?: error("no token for ${request.host.displayName}")
+        publisher.runWorkflow(request, token, confirmed)
     }
 
     companion object {
@@ -278,7 +355,7 @@ class AgentRepoRunner(
             appendLedger(entry)
         }
 
-        private fun parseRefSha(body: String): String {
+        internal fun parseRefSha(body: String): String {
             val trimmed = body.trimStart()
             val obj = if (trimmed.startsWith("[")) JSONArray(body).getJSONObject(0) else JSONObject(body)
             return obj.getJSONObject("object").getString("sha")
