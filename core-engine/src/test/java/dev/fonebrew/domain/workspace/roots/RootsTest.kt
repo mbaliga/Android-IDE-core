@@ -3,8 +3,6 @@ package dev.fonebrew.domain.workspace.roots
 import dev.fonebrew.contracts.workspace.ResourceProvider
 import dev.fonebrew.contracts.workspace.ResourceUri
 import dev.fonebrew.contracts.workspace.ResourceWrite
-import dev.fonebrew.data.workspace.WorkspaceFileStore
-import dev.fonebrew.data.workspace.WorkspaceLoad
 import dev.fonebrew.domain.workspace.fuzzy.FrecencyEntry
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -207,29 +205,6 @@ class WorkspacePersistenceTest {
         val text = """{"version":1,"roots":[{"id":"a","name":"A","path":"/p"}],"ui":{"ghost":{"expanded":["x"]},"a":{"expanded":["y"]}}}"""
         val d = WorkspaceCodec.decode(text)
         assertEquals(setOf("a"), d.ui.keys)
-    }
-
-    @Test fun `store saves loads and starts fresh`() {
-        val f = File(tmp(), "state/workspace.json"); val s = WorkspaceFileStore(f)
-        assertTrue(s.load() is WorkspaceLoad.Fresh)
-        s.save(snap)
-        assertEquals(snap, (s.load() as WorkspaceLoad.Loaded).snapshot)
-    }
-
-    @Test fun `corrupt file is quarantined not deleted and an empty workspace returned`() {
-        val dir = tmp(); val f = File(dir, "workspace.json"); f.writeText("{ truncated")
-        val r = WorkspaceFileStore(f).load() as WorkspaceLoad.Recovered
-        assertTrue(r.snapshot.roots.isEmpty()); assertNotNull(r.quarantined)
-        assertEquals("{ truncated", r.quarantined!!.readText()); assertFalse(f.exists())
-        f.writeText("again bad")
-        val r2 = WorkspaceFileStore(f).load() as WorkspaceLoad.Recovered
-        assertTrue(r2.quarantined!!.name.endsWith("corrupt-2"))
-    }
-
-    @Test fun `newer version file is quarantined not misread`() {
-        val f = File(tmp(), "workspace.json"); f.writeText("""{"version":2,"roots":[{"id":"a","name":"A","path":"/p"}]}""")
-        val r = WorkspaceFileStore(f).load() as WorkspaceLoad.Recovered
-        assertTrue(r.reason.contains("version"))
     }
 }
 

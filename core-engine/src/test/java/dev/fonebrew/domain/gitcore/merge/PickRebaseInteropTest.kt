@@ -17,6 +17,10 @@ import java.nio.file.Files
  * stopped (the state directory is git-compatible).
  */
 class PickRebaseInteropTest {
+    /** Rebase todo/done files differ cosmetically by git version: git 2.56 writes `pick <sha> # subject`, git 2.43 and this
+     *  engine write `pick <sha> subject`. Git reads both, so compare with the optional comment marker removed. */
+    private fun todo(f: File): String = f.readText().lines().joinToString("\n") { it.replace(Regex("^(\\w+ [0-9a-f]+) # "), "$1 ") }
+
     @Before fun requireGit() = assumeTrue("git CLI not available", GitTestSupport.gitAvailable())
 
     private fun w(d: File, p: String, t: String) { File(d, p).parentFile.mkdirs(); File(d, p).writeText(t) }
@@ -121,8 +125,8 @@ class PickRebaseInteropTest {
         for (f in listOf("head-name", "onto", "orig-head", "stopped-sha", "end", "msgnum")) {
             assertEquals(f, File(a, ".git/rebase-merge/$f").readText(), File(b, ".git/rebase-merge/$f").readText())
         }
-        assertEquals(File(a, ".git/rebase-merge/done").readText(), File(b, ".git/rebase-merge/done").readText())
-        assertEquals(File(a, ".git/rebase-merge/git-rebase-todo").readText(), File(b, ".git/rebase-merge/git-rebase-todo").readText())
+        assertEquals(todo(File(a, ".git/rebase-merge/done")), todo(File(b, ".git/rebase-merge/done")))
+        assertEquals(todo(File(a, ".git/rebase-merge/git-rebase-todo")), todo(File(b, ".git/rebase-merge/git-rebase-todo")))
         assertTrue(git(b, "status").contains("rebase in progress"))
         git(b, "rebase", "--abort")
         assertEquals(git(src, "rev-parse", "topic"), git(b, "rev-parse", "topic").trim().let { it + "\n" }.let { git(b, "rev-parse", "HEAD") })
