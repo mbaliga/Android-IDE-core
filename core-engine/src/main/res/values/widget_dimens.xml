@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget dimensions (docs/widgets.md). minSdk is 31, so the system's own widget corner
+     radii are always available and no values-v31 split is needed. -->
+<resources>
+    <dimen name="widget_radius">@android:dimen/system_app_widget_background_radius</dimen>
+    <dimen name="widget_inner_radius">@android:dimen/system_app_widget_inner_radius</dimen>
+    <dimen name="widget_padding">12dp</dimen>
+    <dimen name="widget_pad_gap">4dp</dimen>
+    <dimen name="widget_touch_min">48dp</dimen>
+</resources>

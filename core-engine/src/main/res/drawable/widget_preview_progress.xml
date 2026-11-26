@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview fallback for the downloads (progress) widget. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="220dp" android:height="110dp"
+    android:viewportWidth="220" android:viewportHeight="110">
+    <path android:fillColor="#FF16181D" android:pathData="M12,0h196a12,12 0,0 1,12 12v86a12,12 0,0 1,-12 12h-196a12,12 0,0 1,-12 -12v-86a12,12 0,0 1,12 -12z" />
+    <path android:fillColor="#FF9CA3AF" android:pathData="M14,14h70v6h-70z" />
+    <path android:fillColor="#FFECEDEF" android:pathData="M14,36h130v8h-130z" />
+    <path android:fillColor="#FF9CA3AF" android:pathData="M14,52h100v6h-100z" />
+    <path android:fillColor="#FF20242B" android:pathData="M14,70h192v6h-192z" />
+    <path android:fillColor="#FF8E7BFF" android:pathData="M14,70h110v6h-110z" />
+</vector>

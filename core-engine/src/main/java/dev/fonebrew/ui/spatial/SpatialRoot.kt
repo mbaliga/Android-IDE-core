@@ -79,6 +79,7 @@ import dev.fonebrew.ui.rooms.ChatsRoom
 import dev.fonebrew.ui.rooms.ProductRoomFree
 import dev.fonebrew.ui.rooms.SettingsRoom
 import dev.fonebrew.ui.rooms.TreeRoom
+import dev.fonebrew.widget.WidgetDestination
 import dev.fonebrew.ui.search.SearchOverlay
 import dev.fonebrew.ui.search.SearchViewModel
 import androidx.compose.foundation.border
@@ -267,6 +268,36 @@ fun SpatialRoot() {
         if (intake != null) controller.closeAll()
     }
 
+    // Home-screen widget taps (docs/widgets.md): MainActivity parks the route in the container;
+    // act on it once, with the same open()/state this shell already uses for its own entry points.
+    var composerRequest by remember { mutableStateOf(false) }
+    var developTabRequest by remember { mutableStateOf<Int?>(null) }
+    val widgetRoute by container.widgetRoutes.pending.collectAsState()
+    LaunchedEffect(widgetRoute) {
+        val route = container.widgetRoutes.consume() ?: return@LaunchedEffect
+        searchOpen = false
+        controller.closeAll()
+        when (route.destination) {
+            WidgetDestination.NEW_CHAT -> {
+                chatViewModel.newChat()
+                composerRequest = true
+            }
+            WidgetDestination.CHAT -> composerRequest = true
+            WidgetDestination.CHATS -> controller.open(SpatialTarget.CHATS)
+            WidgetDestination.TASKS -> {
+                pendingTaskId = route.taskId
+                controller.open(SpatialTarget.PROJECT)
+            }
+            WidgetDestination.AGENT_REVIEW -> {
+                developTabRequest = dev.fonebrew.ui.develop.DEVELOP_TAB_AGENT
+                controller.open(SpatialTarget.DEVELOP)
+            }
+            WidgetDestination.LOOPS -> controller.open(SpatialTarget.LOOPS)
+            // Models live in the Settings room (the chat's own "models" affordance opens it too).
+            WidgetDestination.MODELS -> controller.open(SpatialTarget.SETTINGS)
+        }
+    }
+
     val hProgress = controller.h.value
     val vProgress = controller.v.value
     val zProgress = controller.z.value
@@ -411,6 +442,8 @@ fun SpatialRoot() {
                     // asoc-reachability audit (2026-09-15) item 1c: Loops has no edge/pinch of
                     // its own reachable from here — this is its one predictable entry point.
                     onOpenLoops = { controller.open(SpatialTarget.LOOPS) },
+                    tabRequest = developTabRequest,
+                    onTabRequestConsumed = { developTabRequest = null },
                 )
             }
         }
@@ -460,6 +493,8 @@ fun SpatialRoot() {
                 // ChatScreen uses it to hide the ThreadRail whenever a room is open (WP5)
                 // and to keep its own tab-reset BackHandler from shadowing room-close.
                 atHome = controller.atHome,
+                composerRequest = composerRequest,
+                onComposerRequestConsumed = { composerRequest = false },
             )
             // While parked, the card is one big return affordance: tap or drag
             // it home; nothing inside it should react. A scrim quiets the

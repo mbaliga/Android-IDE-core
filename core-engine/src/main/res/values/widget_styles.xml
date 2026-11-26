@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget text and control styles (docs/widgets.md). Text is in sp, secondary text is
+     never below 12sp and body text never below 14sp; every line has a maxLines and an ellipsis so a
+     1.3-2x font scale truncates rather than overflowing. -->
+<resources>
+    <style name="FonebrewWidgetText" parent="">
+        <item name="android:textColor">@color/widget_text_high</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:textAlignment">viewStart</item>
+    </style>
+
+    <!-- A widget's own name, top-start. -->
+    <style name="FonebrewWidgetText.Label">
+        <item name="android:textColor">@color/widget_text_mid</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Secondary lines: due words, "as of" times, provenance. -->
+    <style name="FonebrewWidgetText.Meta">
+        <item name="android:textColor">@color/widget_text_mid</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <!-- The one value of a stat or card. -->
+    <style name="FonebrewWidgetText.Value">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- A shape that carries a state next to its word; decorative to TalkBack (the word is read). -->
+    <style name="FonebrewWidgetText.Glyph">
+        <item name="android:textColor">@color/widget_text_mid</item>
+        <item name="android:minWidth">18dp</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="android:textAlignment">center</item>
+    </style>
+
+    <!-- A pad: one action, at least 48dp tall (the pads breakpoints in WidgetModels.kt guarantee it).
+         In a row or grid the glyph sits over the label (two lines); the text shrinks to 12sp before it
+         would ellipsize, so a narrow pad keeps its whole label. -->
+    <style name="FonebrewWidgetPad" parent="FonebrewWidgetText">
+        <item name="android:background">@drawable/widget_pad_bg</item>
+        <item name="android:minHeight">@dimen/widget_touch_min</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textAlignment">center</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">12sp</item>
+        <item name="android:autoSizeMaxTextSize">14sp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+    </style>
+
+    <style name="FonebrewWidgetPad.Primary">
+        <item name="android:background">@drawable/widget_pad_primary_bg</item>
+        <item name="android:textColor">@color/widget_on_accent</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview fallback for stat and card widgets. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="110dp" android:height="110dp"
+    android:viewportWidth="110" android:viewportHeight="110">
+    <path android:fillColor="#FF16181D" android:pathData="M12,0h86a12,12 0,0 1,12 12v86a12,12 0,0 1,-12 12h-86a12,12 0,0 1,-12 -12v-86a12,12 0,0 1,12 -12z" />
+    <path android:fillColor="#FF9CA3AF" android:pathData="M14,14h40v6h-40z" />
+    <path android:fillColor="#FF8E7BFF" android:pathData="M14,34l10,6l-10,6z" />
+    <path android:fillColor="#FFECEDEF" android:pathData="M30,34h64v12h-64z" />
+    <path android:fillColor="#FFECEDEF" android:pathData="M14,60h76v6h-76z" />
+    <path android:fillColor="#FF9CA3AF" android:pathData="M14,76h56v6h-56z" />
+    <path android:fillColor="#FF9CA3AF" android:pathData="M14,92h40v6h-40z" />
+</vector>
