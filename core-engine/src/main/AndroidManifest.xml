@@ -38,10 +38,16 @@
     -->
     <application android:allowBackup="false" android:supportsRtl="true">
 
+        <!-- configChanges: docking, undocking, rotation and keyboard attach are delivered to
+             MainActivity.onConfigurationChanged / Compose instead of restarting it (docked-layout
+             lane; the restart audit is in docs/design/docked-layout.md). adjustResize is kept:
+             the soft keyboard is an inset change, not a configuration change. -->
         <activity
             android:name="dev.fonebrew.ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|density|orientation|keyboard|keyboardHidden|navigation|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Fonebrew">
             <intent-filter>

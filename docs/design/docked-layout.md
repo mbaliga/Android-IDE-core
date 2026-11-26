@@ -74,9 +74,66 @@ only in combination with Ctrl (focus-direction) or non-letter keys (Alt+PageDown
   change, so it is unaffected.
 
 ## Restart audit (what relied on recreate-on-rotation)
-Recorded in the final section of this note once the audit is done (see "Audit result").
+Adding `configChanges` stops the activity restarting on rotation, dock/undock, dark-mode flip and
+keyboard attach. What was checked (grep over `core-engine/src/{main,full,play}`):
+- `savedInstanceState` / `onSaveInstanceState`: only `MainActivity.onCreate` uses it, to run the
+  widget-tap handler once. Fewer recreations only makes that guard rarer; no behaviour lost.
+- `rememberSaveable`: zero uses, so no state was being restored across recreation; all UI state
+  was plain `remember` (lost on every rotation). **Behaviour change, deliberate and visible:** the
+  splash (`showSplash`), the spatial room position and similar `remember` state now **survive**
+  rotation instead of resetting. The brief's "byte-identical" holds for every screen's code; this
+  one runtime consequence of not restarting is called out here and for the owner.
+- Theme: `ThemeMode.SYSTEM` uses `isSystemInDarkTheme()` (reads `LocalConfiguration`), which
+  Compose updates without a restart. `enableEdgeToEdge()` resolves bar-icon style once, so
+  `MainActivity.onConfigurationChanged` re-calls it (the restart used to do that implicitly).
+- `LocalConfiguration.screenHeightDp` readers (`RemoteScreen`, `TerminalFacet`) recompose on change.
+- `resources.displayMetrics` readers are in `full` services (`ScreenCaptureService`,
+  `OverlayService`), not the activity; unaffected.
+- `TerminalPlatform` uses `isChangingConfigurations` in its lifecycle callbacks; fewer stop/start
+  pairs on rotation is the benign direction.
+- No `screenOrientation` or `resizeableActivity` anywhere else in any manifest.
+- `adjustResize` kept; soft-keyboard show/hide is an inset change and never a config change.
+Not audited (no device): that every Hyle/Material component tolerates a live density change.
 
 ## Owner-verified only (nothing here is device-verified)
 Whether the RedMagic mirrors or extends; the density it reports on the G9; whether
 `setLaunchDisplayId` works on its software; input-device detection for keyboard/mouse; refresh
 behaviour; that docking no longer restarts the activity. Exact checklist at the end of this note.
+
+## G9 dp table (PROPOSED thresholds; pinned by `ScreenClassTest`)
+5120x1440 external display, resolved with `ScreenClassResolver`:
+
+| density | dp size | class |
+|---|---|---|
+| 0.7 | 7314 x 2057 | ULTRAWIDE |
+| 1.0 | 5120 x 1440 | ULTRAWIDE |
+| 1.5 | 3413 x 960 | ULTRAWIDE |
+| 2.0 | 2560 x 720 | ULTRAWIDE |
+| 2.5 | 2048 x 576 | ULTRAWIDE (height < 600 but external and wide, so not PHONE) |
+| 3.0 | 1707 x 480 | ULTRAWIDE |
+| 3.5 | 1463 x 411 | DESKTOP (under the 1600 dp ultrawide width floor) |
+
+1920x1080 monitor: densities 1.0, 1.25, 1.5, 1.75 give DESKTOP; 2.0 (960 x 540) gives TABLET.
+Thresholds (600 / 840 / 1000 / 1600 dp, aspect 2.4) are **proposals**, not facts.
+
+## Owner checklist when docked (nothing below has been observed)
+1. `adb shell dumpsys display` (or Settings > About): does the G9 appear as a second display
+   (EXTENDED) or does the phone mirror at the phone's own size (no second display)?
+2. What density does the phone report for the G9 (`wm density`, or the debug state)? The
+   table above only says what each density would resolve to.
+3. Does docking/undocking keep the app alive (no restart, chat not reset, splash not replayed)?
+4. Rotation on the handset: splash no longer replays; room position retained; bars readable in
+   both system themes (toggle system dark mode while the app is open).
+5. Plug in a USB/Bluetooth keyboard and mouse: are they detected (keyboard + pointer)? A media-key
+   dongle must not count as a keyboard.
+6. Soft keyboard still resizes the chat composer (`adjustResize`) in portrait and landscape.
+7. `LaunchOnDisplay` (not called by anything yet): whether `setLaunchDisplayId` works on this
+   phone's software, and what `singleTask` does when the app is already open on the other display.
+8. Refresh rate / frame pacing on the 32:9 panel once a real pane UI exists.
+
+## Follow-ups (named, not done)
+- SharedPreferences `LayoutStore` and shortcut-override store, with the pane UI.
+- Hardware-key capture wired to `ShortcutMap.resolve` and the terminal's key encoder.
+- Selecting the desktop shell by `LocalScreenClass`; adjusting the placeholder presets after the
+  owner approves this design.
+- Pane UI and any divider thickness (min sizes here exclude dividers).

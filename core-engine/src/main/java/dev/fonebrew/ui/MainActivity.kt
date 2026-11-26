@@ -1,6 +1,7 @@
 package dev.fonebrew.ui
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,6 +53,17 @@ class MainActivity : ComponentActivity() {
             // so the next launch is normal. A composition crash skips this, keeping the flag set.
             androidx.compose.runtime.LaunchedEffect(Unit) { CrashRecovery.clear(applicationContext) }
         }
+    }
+
+    /**
+     * The manifest handles uiMode/orientation/size/density/keyboard changes here instead of
+     * restarting the activity (docked-layout lane). `enableEdgeToEdge()` resolves the system-bar
+     * icon style once, at call time, so it is re-applied on a change - that is what the restart
+     * used to do for free (a system dark-mode flip would otherwise leave stale bar icons).
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enableEdgeToEdge()
     }
 
     override fun onNewIntent(intent: Intent) {
