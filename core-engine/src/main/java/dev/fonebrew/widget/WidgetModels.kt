@@ -87,15 +87,20 @@ enum class DueKind { OVERDUE, SOON, TODAY, IN_DAYS, NONE }
 
 data class NextUpRow(
     val taskId: String,
-    /** Null when withheld: the title was cut from a chat turn, which is conversation text. */
+    /** Null when withheld: cut from a chat turn (conversation text), or the user keeps titles off the home screen. */
     val title: String?,
     val state: TaskState,
     val due: DueKind,
     /** Whole days until due, for [DueKind.IN_DAYS]; 0 otherwise. */
     val inDays: Int = 0,
+    /** Why [title] is null, for the words the widget prints in its place. */
+    val withheldBy: Withheld? = if (title == null) Withheld.CHAT else null,
 ) {
     val withheld: Boolean get() = title == null
 }
+
+/** Why a task's title is not on the home screen. */
+enum class Withheld { CHAT, PRIVACY }
 
 data class NextUpModel(
     val rows: List<NextUpRow>,
@@ -120,13 +125,18 @@ object NextUp {
      * Open tasks only: those due within a day (overdue first, then the soonest) come first, then the
      * rest in the user's own To-do order, so the widget is the top of the list the app shows.
      */
-    fun build(tasks: List<TaskEntity>, now: Long, maxRows: Int = MAX_ROWS): NextUpModel {
+    fun build(
+        tasks: List<TaskEntity>,
+        now: Long,
+        maxRows: Int = MAX_ROWS,
+        privacy: WidgetPrivacy = WidgetPrivacy.OFF,
+    ): NextUpModel {
         val open = tasks.filter { it.state != TaskState.DONE && it.id.isNotBlank() }
         val dueSoon = open.filter { it.dueAt != null && it.dueAt - now < DAY_MS }.sortedBy { it.dueAt }
         val dueIds = dueSoon.mapTo(HashSet()) { it.id }
         val ordered = dueSoon + open.filterNot { it.id in dueIds }
         return NextUpModel(
-            rows = ordered.take(maxRows.coerceAtLeast(0)).map { row(it, now) },
+            rows = ordered.take(maxRows.coerceAtLeast(0)).map { row(it, now, privacy) },
             openCount = open.size,
             overdueCount = dueSoon.count { (it.dueAt ?: now) < now },
             dueCount = dueSoon.count { (it.dueAt ?: now) >= now },
@@ -134,14 +144,21 @@ object NextUp {
         )
     }
 
-    private fun row(task: TaskEntity, now: Long): NextUpRow {
+    private fun row(task: TaskEntity, now: Long, privacy: WidgetPrivacy): NextUpRow {
         val (kind, days) = dueKind(task.dueAt, now)
+        // Chat-derived titles stay off the home screen whatever the switch says (conversation text).
+        val withheldBy = when {
+            task.source == TaskSource.CHAT -> Withheld.CHAT
+            !privacy.showTaskTitles -> Withheld.PRIVACY
+            else -> null
+        }
         return NextUpRow(
             taskId = task.id,
-            title = if (task.source == TaskSource.CHAT) null else oneLine(task.title, MAX_TITLE_CHARS),
+            title = if (withheldBy == null) oneLine(task.title, MAX_TITLE_CHARS) else null,
             state = task.state,
             due = kind,
             inDays = days,
+            withheldBy = withheldBy,
         )
     }
 
@@ -412,6 +429,8 @@ data class LoopRunRow(
     /** The loop step's name (a node name from the loop editor), never a step's output. */
     val step: String?,
     val spend: SpendText?,
+    /** The loop and step names are withheld (the user keeps them off the home screen): [loopName] and [step] are null. */
+    val namesHidden: Boolean = false,
 )
 
 object LoopRuns {
@@ -424,11 +443,13 @@ object LoopRuns {
      * Rows from the same assembly the watch uses ([WristSnapshots.loopRuns]: running runs, runs that
      * died early, then finished runs newest first, read from the run log and the ledger).
      */
-    fun build(snapshots: List<LoopRunSnapshot>, max: Int = MAX_ROWS): List<LoopRunRow> =
+    fun build(snapshots: List<LoopRunSnapshot>, max: Int = MAX_ROWS, privacy: WidgetPrivacy = WidgetPrivacy.OFF): List<LoopRunRow> =
         snapshots.take(max.coerceAtLeast(0)).map { s ->
+            val show = privacy.showLoopNames
             LoopRunRow(
                 runId = s.runId,
-                loopName = s.loopName.takeUnless { it == WristSnapshots.UNSAVED_LOOP_NAME || it.isBlank() }
+                namesHidden = !show,
+                loopName = if (!show) null else s.loopName.takeUnless { it == WristSnapshots.UNSAVED_LOOP_NAME || it.isBlank() }
                     ?.let { oneLine(it, MAX_NAME_CHARS) },
                 state = when (s.stateGlyphKey) {
                     StateGlyphKeys.RUNNING -> LoopRunState.RUNNING
@@ -438,7 +459,7 @@ object LoopRuns {
                     else -> LoopRunState.OTHER
                 },
                 stateKey = s.stateGlyphKey,
-                step = s.stepName?.let { oneLine(it, MAX_NAME_CHARS) }?.takeIf { it.isNotBlank() },
+                step = if (!show) null else s.stepName?.let { oneLine(it, MAX_NAME_CHARS) }?.takeIf { it.isNotBlank() },
                 spend = s.spend?.let(::spend),
             )
         }

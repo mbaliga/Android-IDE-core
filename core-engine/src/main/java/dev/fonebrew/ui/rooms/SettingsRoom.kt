@@ -778,6 +778,46 @@ private fun GeneralSettings(
         HyleSwitch(checked = observerEnabled, onCheckedChange = { session.setObserverEnabled(it) })
     }
 
+    // Home-screen widgets (docs/widgets.md) are glanced at by anyone holding the phone: the two
+    // fields that are your own words stay off them until you turn them on here. Default OFF.
+    val widgetPrivacy by container.widgetPrivacy.state.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Show task titles on the home-screen widget", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Off: Next up shows due words and counts only. Titles made from a chat are never shown.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HyleSwitch(
+            checked = widgetPrivacy.showTaskTitles,
+            onCheckedChange = { container.widgetPrivacy.setShowTaskTitles(it) },
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Show loop and step names on the home-screen widget", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Off: Loop runs shows states and spend only.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HyleSwitch(
+            checked = widgetPrivacy.showLoopNames,
+            onCheckedChange = { container.widgetPrivacy.setShowLoopNames(it) },
+        )
+    }
+
     // Loops (pinch-in) and Develop (bottom edge) are spatial rooms, not Settings entries —
     // reach them from the map (see "How to move around" above). Settings is config only.
     // Git & coding / Builds / Remote / Instruments live under the Dev tab.

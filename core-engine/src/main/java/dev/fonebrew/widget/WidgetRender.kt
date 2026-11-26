@@ -226,7 +226,8 @@ internal object WidgetRender {
 
     private fun taskRow(context: Context, row: NextUpRow): RowText {
         val title = when {
-            row.withheld -> context.getString(R.string.widget_task_withheld)
+            row.withheldBy == Withheld.CHAT -> context.getString(R.string.widget_task_withheld)
+            row.withheldBy == Withheld.PRIVACY -> context.getString(R.string.widget_task_private)
             row.title.isNullOrBlank() -> context.getString(R.string.widget_task_untitled)
             else -> row.title
         }
@@ -557,7 +558,10 @@ internal object WidgetRender {
         val header = context.getString(R.string.widget_loops_label)
         val asOf = asOf(context, now)
         val empty = context.getString(R.string.widget_loops_empty)
-        fun name(r: LoopRunRow) = r.loopName ?: context.getString(R.string.widget_loop_unsaved)
+        fun name(r: LoopRunRow) = when {
+            r.namesHidden -> context.getString(R.string.widget_loop_private)
+            else -> r.loopName ?: context.getString(R.string.widget_loop_unsaved)
+        }
         val rows = runs.map { r ->
             val (glyph, word) = loopState(context, r)
             RowText(glyph, name(r), word)

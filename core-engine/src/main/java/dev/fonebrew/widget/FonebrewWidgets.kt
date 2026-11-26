@@ -166,7 +166,7 @@ object FonebrewWidgets {
     private suspend fun gather(context: Context, c: AppContainer, kind: WidgetKind, now: Long): Gathered =
         when (kind) {
             WidgetKind.NEXT_UP -> {
-                val model = NextUp.build(c.taskStore.tasks.first(), now)
+                val model = NextUp.build(c.taskStore.tasks.first(), now, privacy = c.widgetPrivacy.state.value)
                 Gathered(draw { id -> WidgetRender.nextUp(context, id, model, now) }, reschedule = true, tickAt = model.nextBoundaryAt)
             }
             WidgetKind.MODEL -> {
@@ -203,6 +203,7 @@ object FonebrewWidgets {
                         currencyCode = c.pricingStore.currencyCode.value,
                         maxRuns = LoopRuns.MAX_ROWS,
                     ),
+                    privacy = c.widgetPrivacy.state.value,
                 )
                 Gathered(draw { id -> WidgetRender.loopRuns(context, id, rows, now) })
             }

@@ -32,17 +32,17 @@ class LoopRunsTest {
 
     @Test
     fun anUnsavedLoop_hasNoName_soTheWidgetSaysSoInItsOwnWords() {
-        assertNull(LoopRuns.build(listOf(snap(StateGlyphKeys.COMPLETE, name = WristSnapshots.UNSAVED_LOOP_NAME))).single().loopName)
-        assertEquals("Nightly triage", LoopRuns.build(listOf(snap(StateGlyphKeys.COMPLETE))).single().loopName)
+        assertNull(LoopRuns.build(listOf(snap(StateGlyphKeys.COMPLETE, name = WristSnapshots.UNSAVED_LOOP_NAME)), privacy = WidgetPrivacy.ALL_SHOWN).single().loopName)
+        assertEquals("Nightly triage", LoopRuns.build(listOf(snap(StateGlyphKeys.COMPLETE)), privacy = WidgetPrivacy.ALL_SHOWN).single().loopName)
     }
 
     @Test
     fun rowsAreCapped_andStepNamesAreOneLine() {
         val many = (1..9).map { snap(StateGlyphKeys.COMPLETE, id = "r$it", step = "Step\n$it") }
-        val rows = LoopRuns.build(many)
+        val rows = LoopRuns.build(many, privacy = WidgetPrivacy.ALL_SHOWN)
         assertEquals(LoopRuns.MAX_ROWS, rows.size)
         assertEquals("Step 1", rows.first().step)
-        assertNull(LoopRuns.build(listOf(snap(StateGlyphKeys.RUNNING, step = null))).single().step)
+        assertNull(LoopRuns.build(listOf(snap(StateGlyphKeys.RUNNING, step = null)), privacy = WidgetPrivacy.ALL_SHOWN).single().step)
     }
 
     @Test

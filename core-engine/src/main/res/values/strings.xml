@@ -29,6 +29,7 @@
 
     <string name="widget_next_up_empty">No open tasks. Your To-do list is clear.</string>
     <string name="widget_task_withheld">Task from a chat (title hidden here)</string>
+    <string name="widget_task_private">Task (title hidden here)</string>
     <string name="widget_task_untitled">Untitled task</string>
     <string name="widget_due_overdue">overdue</string>
     <string name="widget_due_soon">due soon</string>
@@ -114,6 +115,7 @@
 
     <string name="widget_loops_empty">No loop runs yet.</string>
     <string name="widget_loop_unsaved">Unsaved loop</string>
+    <string name="widget_loop_private">Loop run (name hidden here)</string>
     <string name="widget_loop_running">running</string>
     <string name="widget_loop_complete">complete</string>
     <string name="widget_loop_stopped">stopped</string>

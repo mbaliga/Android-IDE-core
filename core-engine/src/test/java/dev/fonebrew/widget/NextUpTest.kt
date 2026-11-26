@@ -89,6 +89,7 @@ class NextUpTest {
                 task("audit", title = "Fix lint", source = TaskSource.AUDIT),
             ),
             now,
+            privacy = WidgetPrivacy.ALL_SHOWN,
         )
         val byId = m.rows.associateBy { it.taskId }
         assertNull("conversation text never reaches the home screen", byId.getValue("chat").title)
@@ -100,7 +101,7 @@ class NextUpTest {
     @Test
     fun titlesAreFlattenedToOneLine_andCapped() {
         val long = "word ".repeat(60)
-        val m = NextUp.build(listOf(task("a", title = "Line one\nline\ttwo  "), task("b", title = long)), now)
+        val m = NextUp.build(listOf(task("a", title = "Line one\nline\ttwo  "), task("b", title = long)), now, privacy = WidgetPrivacy.ALL_SHOWN)
         assertEquals("Line one line two", m.rows[0].title)
         val capped = m.rows[1].title!!
         assertEquals(NextUp.MAX_TITLE_CHARS, capped.length)

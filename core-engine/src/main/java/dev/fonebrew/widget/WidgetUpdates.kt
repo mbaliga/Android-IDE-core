@@ -40,7 +40,10 @@ class WidgetUpdates(private val app: Context, private val c: AppContainer) {
 
     fun ensureStarted() {
         if (!started.compareAndSet(false, true)) return
-        watch(WidgetKind.NEXT_UP, c.taskStore.tasks)
+        watch(
+            WidgetKind.NEXT_UP,
+            combine(c.taskStore.tasks, c.widgetPrivacy.state.map { it.showTaskTitles }) { tasks, show -> tasks to show },
+        )
         watch(
             WidgetKind.MODEL,
             combine(
@@ -75,7 +78,9 @@ class WidgetUpdates(private val app: Context, private val c: AppContainer) {
                 c.backgroundJobs.jobs.map { jobs -> jobs.filter { it.kind == LoopRuns.LOOP_JOB_KIND } },
                 // Finished rows take their loop's current name at draw time: a rename or delete redraws.
                 c.loopStore.loops.map { loops -> loops.map { it.id to it.name } },
-            ) { jobs, names -> jobs to names },
+                // Turning names off must take them off the home screen at once.
+                c.widgetPrivacy.state.map { it.showLoopNames },
+            ) { jobs, names, show -> Triple(jobs, names, show) },
         )
         // Quick start has no data; it is drawn by its provider's own update only.
     }

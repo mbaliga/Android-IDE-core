@@ -472,6 +472,8 @@ class AppContainer(context: Context) {
     // plus the redraw hub, lazy so it is built only once a widget is actually placed.
     val generationStatus: dev.fonebrew.data.GenerationStatus = dev.fonebrew.data.GenerationStatus()
     val agentReview: dev.fonebrew.data.AgentReviewHolder = dev.fonebrew.data.AgentReviewHolder()
+    /** Per-widget privacy switches (task titles, loop names), default OFF. */
+    val widgetPrivacy: dev.fonebrew.data.WidgetPrivacyStore = dev.fonebrew.data.WidgetPrivacyStore.forContext(context)
     val widgetRoutes: dev.fonebrew.widget.WidgetRouteInbox = dev.fonebrew.widget.WidgetRouteInbox()
     val widgetUpdates: dev.fonebrew.widget.WidgetUpdates by lazy {
         dev.fonebrew.widget.WidgetUpdates(context.applicationContext, this)
