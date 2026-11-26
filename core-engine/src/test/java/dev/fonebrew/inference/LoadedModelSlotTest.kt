@@ -38,14 +38,27 @@ class LoadedModelSlotTest {
                 events += "load:$modelPath"
                 if (failNextLoad) { failNextLoad = false; error("boom") }
                 if (returnZeroNextLoad) { returnZeroNextLoad = false; return 0L }
-                return next.incrementAndGet().toLong()
+                return next.incrementAndGet().toLong().also { live += it }
             } finally {
                 inLoad.decrementAndGet()
             }
         }
 
-        override fun free(handle: Long) { events += "free:$handle" }
+        override fun free(handle: Long) { live -= handle; events += "free:$handle" }
         override fun requestStop(handle: Long) { events += "stop:$handle" }
+
+        // Handle validity: a handle is live from load until free. Using a dead one is the
+        // use-after-free the slot must make impossible; count slowly so a racing free would land
+        // in the middle of a call.
+        val live: MutableSet<Long> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
+        val useAfterFree = AtomicInteger(0)
+        var countDelayMs = 0L
+        override fun countTokens(handle: Long, utf8: ByteArray): Int {
+            if (handle !in live) useAfterFree.incrementAndGet()
+            if (countDelayMs > 0) Thread.sleep(countDelayMs)
+            if (handle !in live) useAfterFree.incrementAndGet()
+            return utf8.size
+        }
     }
 
     @Test fun `concurrent loads of one model load it exactly once`() = runBlocking {
@@ -164,5 +177,53 @@ class LoadedModelSlotTest {
         gen.await(); again.join()
         assertEquals(1, native.loads.get())
         withContext(Dispatchers.Default) { slot.unload() }
+    }
+
+    @Test fun `countTokens is zero when nothing is loaded and counts when loaded`() = runBlocking {
+        val slot = LoadedModelSlot(FakeNative())
+        assertEquals(0, slot.countTokens("abc".toByteArray()))
+        slot.load("/m/a.gguf", 4096)
+        assertEquals(3, slot.countTokens("abc".toByteArray()))
+        slot.unload()
+        assertEquals(0, slot.countTokens("abc".toByteArray()))
+    }
+
+    @Test fun `unload waits for an in-flight count and never frees under it`() = runBlocking {
+        val native = FakeNative().apply { countDelayMs = 150 }
+        val slot = LoadedModelSlot(native)
+        slot.load("/m/a.gguf", 4096)
+        val counting = async(Dispatchers.Default) { slot.countTokens("hello".toByteArray()) }
+        delay(40) // the count is now inside native
+        slot.unload()
+        assertEquals(5, counting.await())
+        assertEquals(0, native.useAfterFree.get())
+        assertFalse(slot.isLoaded)
+    }
+
+    @Test fun `hammering count against unload and reload never uses a freed handle`() = runBlocking {
+        val native = FakeNative().apply { countDelayMs = 1 }
+        val slot = LoadedModelSlot(native)
+        slot.load("/m/a.gguf", 4096)
+        val jobs = (1..4).map {
+            async(Dispatchers.Default) { repeat(200) { slot.countTokens("x".toByteArray()) } }
+        } + async(Dispatchers.Default) {
+            repeat(40) { slot.unload(); slot.load("/m/a.gguf", 4096) }
+        }
+        withTimeout(20_000) { jobs.awaitAll() }
+        assertEquals(0, native.useAfterFree.get())
+    }
+
+    @Test fun `countTokens from inside a running generation does not deadlock or wait for it`() = runBlocking {
+        val native = FakeNative()
+        val slot = LoadedModelSlot(native)
+        slot.load("/m/a.gguf", 4096)
+        val counted = CompletableDeferred<Int>()
+        withTimeout(5_000) {
+            slot.withHandle { _ ->
+                // The collector of generate's own flow counts while the stream (lock) is held.
+                counted.complete(withContext(Dispatchers.Default) { slot.countTokens("abcd".toByteArray()) })
+            }
+        }
+        assertEquals(4, counted.await())
     }
 }
