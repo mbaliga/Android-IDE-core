@@ -21,6 +21,10 @@ object GraphRunLog {
     const val TAG_STEP = "stepIndex"
     const val TAG_BPMN_NODE = "bpmnNodeId"
     const val TAG_STOPPED = RunLog.TAG_STOPPED
+    const val TAG_TOOL = "toolId"
+    const val TAG_HOSTS = "hostsContacted"
+    const val TAG_ARGS = "toolArgs"
+    const val TAG_FAILED = "toolFailed"
 
     /** Map [result] to its sub-tree nodes, parent-before-child (insert in order). */
     fun toNodes(
@@ -56,7 +60,14 @@ object GraphRunLog {
                 createdAt = now,
                 metadata = tag(
                     step.role,
-                    mapOf(TAG_STEP to step.index.toString(), TAG_BPMN_NODE to step.nodeId),
+                    buildMap {
+                        put(TAG_STEP, step.index.toString())
+                        put(TAG_BPMN_NODE, step.nodeId)
+                        step.toolId?.let { put(TAG_TOOL, it) }
+                        step.argsSummary?.let { put(TAG_ARGS, it) }
+                        if (step.hosts.isNotEmpty()) put(TAG_HOSTS, step.hosts.joinToString(","))
+                        if (step.failed) put(TAG_FAILED, "true")
+                    },
                 ),
             )
             nodes += node

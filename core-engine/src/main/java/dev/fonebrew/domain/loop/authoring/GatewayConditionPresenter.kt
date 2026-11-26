@@ -56,7 +56,12 @@ object GatewayConditionPresenter {
     /** Whether the runner can act on [condition]. Null/blank means "no condition", which is
      *  trivially fine (nothing to evaluate). Mirrors [ConditionGatewayPolicy]'s own match. */
     fun isEvaluable(condition: String?): Boolean =
-        condition.isNullOrBlank() || condition.trim().lowercase() in setOf("approved", "!approved", "not approved")
+        condition.isNullOrBlank() || dev.fonebrew.domain.loop.ConditionSyntax.parse(condition) != null
+
+    /** Wave 2 (docs/design/loop-tools.md): the editor now offers the whole CLOSED set through
+     *  [ConditionDraft]; [EVALUABLE_CONDITIONS] stays the two parameterless chips for callers that
+     *  predate it. [isEvaluable] follows [dev.fonebrew.domain.loop.ConditionSyntax], the same
+     *  parser the runner uses, so the editor and the run can never disagree. */
 
     /** Glyph + text marking a saved condition the runner will not evaluate; null when it is
      *  evaluable or absent. Never colour alone (owner is red-green colorblind). */

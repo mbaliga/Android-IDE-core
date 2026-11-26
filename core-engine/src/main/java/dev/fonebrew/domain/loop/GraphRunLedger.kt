@@ -51,6 +51,7 @@ object GraphRunLedger {
     ): List<LedgerEntry> {
         val stepNodes = treeNodes.drop(1) // drop the objective root — it has no GraphStep
         return result.steps.mapIndexed { i, step ->
+            if (step.isTool) return@mapIndexed toolEntry(step, stepNodes.getOrNull(i)?.id ?: "$runId:${step.index}", loopId, runId, projectId, timestampMillis)
             val tier = if (step.estimated) Tier.ON_DEVICE else Tier.CLOUD
             val estCostMinor = if (tier == Tier.CLOUD) {
                 val tokenizerId = resolveTokenizerId(step.model)
@@ -74,5 +75,22 @@ object GraphRunLedger {
                 estCostMinor = estCostMinor,
             )
         }
+    }
+
+    /**
+     * A tool/HTTP step: zero tokens, zero money, but RECORDED — so a run's egress is auditable from
+     * the ledger. Tier is ON_DEVICE (no cloud *model* ran); a network step's provider is
+     * `network` and its model names the tool and host(s), distinct from a cloud model's marking.
+     */
+    private fun toolEntry(
+        step: GraphStep, nodeId: String, loopId: String?, runId: String, projectId: String?, timestampMillis: Long,
+    ): LedgerEntry {
+        val base = LedgerCapture.loopStep(
+            timestampMillis = timestampMillis, runId = runId, loopId = loopId, nodeId = nodeId, projectId = projectId,
+            model = "tool:${step.toolId}" + if (step.hosts.isNotEmpty()) "@${step.hosts.joinToString(",")}" else "",
+            tier = Tier.ON_DEVICE, inputTokens = 0L, outputTokens = 0L, latencyMs = step.durationMs,
+            estimated = false, estCostMinor = 0L,
+        )
+        return if (step.sideEffect == ToolSideEffect.NETWORK) base.copy(provider = "network") else base
     }
 }
