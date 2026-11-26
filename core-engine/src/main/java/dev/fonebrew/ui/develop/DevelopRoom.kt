@@ -54,7 +54,7 @@ import kotlinx.coroutines.launch
  *  - **Agent**    → review changes to your repo per-hunk and commit (the agentic-coding
  *                   review path — this tab was labelled "Files" through 2026-09-15; renamed
  *                   per the asoc-reachability audit's item 3, since it's the Agent review flow,
- *                   not a file browser. Content/function name ([FilesFacet]) unchanged.)
+ *                   not a file browser. Content lives in [AgentFacet].)
  *  - **Terminal** → run a shell command over SSH on your homelab runner
  *  - **Audit**    → a to-do list of checks; "Run" fires a prompt that runs the test
  *
@@ -88,7 +88,7 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
         dev.aarso.hyle.cells.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
         // Shipping-copy fix (asoc-reachability audit item 3, 2026-09-15): this tab shows the
         // agentic repo-review flow — labelling it "Files" read as a plain file browser. Content
-        // unchanged; see [FilesFacet] below.
+        // unchanged; see [AgentFacet].
         dev.aarso.hyle.cells.HyleTabSpec("Agent") { tint -> filesTabGlyph(tint) },
         dev.aarso.hyle.cells.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
         dev.aarso.hyle.cells.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
@@ -103,7 +103,7 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
     val contentBlock: @Composable () -> Unit = {
         when {
             tab == 0 -> HardwareFacet(onOpenTerminal = { tab = 2 })
-            tab == 1 -> FilesFacet()
+            tab == 1 -> AgentFacet()
             tab == 2 -> TerminalFacet()
             tab == 3 -> AuditFacet(onRunPrompt = { prompt ->
                 // Audit is a to-do list: "Run" fires the check as a prompt in Chat (§7.4).
@@ -735,148 +735,4 @@ private fun compileSummary(out: String): String {
 private fun uploadSummary(out: String): String {
     val r = dev.fonebrew.domain.device.ArduinoCli.parseUpload(out)
     return if (r.ok) "✓ uploaded" else "✗ upload failed"
-}
-
-/* ------------------------------------------------------------------ Agent */
-
-/**
- * The agentic repo loop (agentic-ide #1): give an objective + the files to read as context, the
- * model proposes a ChangeSet, you **review** it (shared ReviewSheet), and the approved subset is
- * committed to your connected repo. Review-first — nothing commits unseen. Network + generation
- * are owner-verified.
- */
-@Composable
-private fun FilesFacet() {
-    val container = (LocalContext.current.applicationContext as FonebrewApp).container
-    val runner = container.agentRepoRunner
-    val scope = rememberCoroutineScope()
-    val runnable = remember { container.modelRegistry.allSpecs().filter { container.engineProvider.isRunnable(it) } }
-
-    var objective by remember { mutableStateOf("") }
-    var pathsText by remember { mutableStateOf("") }
-    var modelId by remember { mutableStateOf(runnable.firstOrNull()?.id) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var proposal by remember { mutableStateOf<dev.fonebrew.data.AgentRepoRunner.Proposal?>(null) }
-    var reviewing by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    // The target is explicit: with several Git hosts connected the user picks one (never the
-    // implicit first), and the resolved host/repo/branch is shown before Run and before Commit.
-    val hosts by container.gitHostStore.hosts.collectAsState()
-    var chosenId by remember { mutableStateOf(runner.chosenHostId) }
-    val target = dev.fonebrew.domain.git.AgentTarget.resolve(hosts, chosenId)
-    val resolvedHost = (target as? dev.fonebrew.domain.git.AgentTarget.Resolution.Resolved)?.host
-    val targetLabel = resolvedHost?.let { dev.fonebrew.domain.git.AgentTarget.label(it) }
-
-    if (hosts.isEmpty()) {
-        Hint("Connect a Git host (Settings → Global → Git & coding) — the agent reads and commits to your repo.")
-        return
-    }
-    Text("Files & changes", style = MaterialTheme.typography.titleSmall)
-    Hint(
-        "Review changes to your repo and commit them. Ask for a change here or in Chat → the model " +
-            "proposes edits → you review per-hunk → commit. Nothing commits without review; a " +
-            "cloud-proposed change is a watched object. (Accepted changes land as commits in the Tree.)",
-    )
-    if (runnable.isEmpty()) {
-        Spacer(Modifier.height(6.dp))
-        Hint("No runnable model. Download one (Models) or add a cloud provider (Settings → Text).")
-        return
-    }
-    Spacer(Modifier.height(8.dp))
-    if (hosts.size > 1) {
-        Text("Git host", style = MaterialTheme.typography.labelMedium)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            hosts.forEach { h ->
-                WireButton(
-                    (if (h.id == resolvedHost?.id) "● " else "○ ") + dev.fonebrew.domain.git.AgentTarget.label(h),
-                    selected = h.id == resolvedHost?.id,
-                    onClick = { chosenId = h.id; runner.chosenHostId = h.id; proposal = null; status = null },
-                )
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-    }
-    Hint(
-        targetLabel?.let { "Will read from and commit to: $it" }
-            ?: "Several Git hosts are connected - choose which one the agent targets before Run.",
-    )
-    Spacer(Modifier.height(6.dp))
-    dev.aarso.hyle.cells.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
-    Spacer(Modifier.height(6.dp))
-    dev.aarso.hyle.cells.HyleField(
-        pathsText, { pathsText = it },
-        label = "Context files — one path per line",
-        singleLine = false,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Spacer(Modifier.height(6.dp))
-    Text("Model", style = MaterialTheme.typography.labelMedium)
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        runnable.forEach { s ->
-            WireButton((if (s.isOnDevice) "⌂ " else "☁ ") + s.displayName, selected = s.id == modelId, onClick = { modelId = s.id })
-        }
-    }
-    Spacer(Modifier.height(8.dp))
-    WireButton(
-        if (busy) "Working…" else "Run",
-        enabled = !busy && objective.isNotBlank() && modelId != null && resolvedHost != null,
-        onClick = {
-            val mid = modelId ?: return@WireButton
-            val paths = pathsText.split("\n", ",").map { it.trim() }.filter { it.isNotEmpty() }
-            busy = true; status = "reading ${paths.size} file(s)…"; proposal = null
-            scope.launch {
-                val jobId = container.backgroundJobs.start(
-                    "Agent: ${objective.take(40)}${if (objective.length > 40) "…" else ""}",
-                    "agent",
-                )
-                val ctx = runner.read(paths)
-                status = "proposing… (read ${ctx.size}/${paths.size})"
-                runner.propose(objective, ctx, mid).fold(
-                    { p ->
-                        proposal = p
-                        status = "proposed ${p.changeSet.effective.size} change(s) over files: ${p.filesRead.joinToString(", ").ifEmpty { "(none)" }}"
-                        container.backgroundJobs.finish(jobId)
-                    },
-                    {
-                        status = "failed: ${it.message}"
-                        container.backgroundJobs.finish(jobId, failed = true)
-                    },
-                )
-                busy = false
-            }
-        },
-    )
-    status?.let { Spacer(Modifier.height(8.dp)); Hint(it) }
-    proposal?.let { p ->
-        Spacer(Modifier.height(6.dp))
-        WireButton("Review ${p.changeSet.effective.size} change(s) ▸", enabled = !p.changeSet.isEmpty, onClick = { reviewing = true })
-    }
-
-    if (reviewing) {
-        val p = proposal
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { reviewing = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                dev.fonebrew.ui.ide.ReviewSheet(
-                    changeSet = p?.changeSet ?: dev.fonebrew.domain.diff.ChangeSet(emptyList()),
-                    title = "Review — agent changes" + (targetLabel?.let { " → $it" } ?: ""),
-                    commitLabel = "Commit",
-                    busy = busy,
-                    onCancel = { reviewing = false },
-                    onCommit = { approved ->
-                        busy = true
-                        scope.launch {
-                            runner.commit(approved, "Agent: ${objective.take(60)}").fold(
-                                { ids -> status = dev.fonebrew.data.AgentRepoRunner.describeCommit(approved, ids); proposal = null; reviewing = false },
-                                { status = "commit failed: ${it.message}" },
-                            )
-                            busy = false
-                        }
-                    },
-                )
-            }
-        }
-    }
 }
