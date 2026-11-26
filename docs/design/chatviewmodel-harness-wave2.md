@@ -27,7 +27,7 @@ expressions the code used before.
 
 1. `startGenerationService: () -> Unit = { GenerationService.start(appContext) }`
 2. `stopGenerationService: () -> Unit = { GenerationService.stop(appContext) }`
-   (every one of the 12 former `GenerationService.*(appContext)` call sites, including `onCleared`).
+   (every one of the 13 former `GenerationService.*(appContext)` call sites, including `onCleared`).
 3. `shellExec: suspend (String, File) -> String = { c, d -> LocalExec.run(c, d) }`.
 4. `photoStore: ((ByteArray) -> String?)? = null`: when null the existing `downscaleAndStore`
    (BitmapFactory) runs; when set it replaces only the decode/scale/save step.
