@@ -463,7 +463,7 @@ class AppContainer(context: Context) {
     val benchmarkController: dev.fonebrew.data.benchmark.BenchmarkController =
         dev.fonebrew.data.benchmark.BenchmarkController(
             scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default),
-            engineFor = { engineProvider.engineFor(it) },
+            engineFor = { spec -> engineProvider.engineFor(spec)?.let { dev.fonebrew.data.benchmark.InferenceEngineBenchmarkAdapter(it) } },
             unavailableReason = { engineProvider.unavailableReason(it) },
             residentModelLoaded = { engineProvider.engineFor(it)?.isLoaded == true },
             unloadResidentModel = { engineProvider.unloadLocalModel() },

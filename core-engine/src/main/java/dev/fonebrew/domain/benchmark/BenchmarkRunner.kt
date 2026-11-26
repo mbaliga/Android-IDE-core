@@ -1,9 +1,5 @@
 package dev.fonebrew.domain.benchmark
 
-import dev.fonebrew.domain.MessageNode
-import dev.fonebrew.domain.Role
-import dev.fonebrew.domain.SamplingParams
-import dev.fonebrew.inference.InferenceEngine
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -20,7 +16,7 @@ data class BenchmarkProgress(
 }
 
 /**
- * Drives an [InferenceEngine] through a [BenchmarkPlan] and records what the injected [clock] saw.
+ * Drives a [BenchmarkEngine] through a [BenchmarkPlan] and records what the injected [clock] saw.
  * Pure: all time, thermal, memory and battery input arrives through interfaces, so the arithmetic
  * is exact in JVM tests. It makes no network call and has no cloud path: the engine it is handed
  * is whatever [BenchmarkPreflight] allowed, a local model.
@@ -37,7 +33,7 @@ data class BenchmarkProgress(
  *    completed so far.
  */
 class BenchmarkRunner(
-    private val engine: InferenceEngine,
+    private val engine: BenchmarkEngine,
     private val clock: BenchmarkClock,
     private val thermal: ThermalProbe,
     private val memory: MemoryProbe,
@@ -206,17 +202,12 @@ class BenchmarkRunner(
                 "${plan.contextSize}-token context; engine behaviour at the limit is unmeasured."
         }
 
-        val messages = listOf(
-            MessageNode(id = "bench-${prompt.id}-$repeatIndex", parentId = null, role = Role.USER, content = prompt.text, createdAt = 0L),
-        )
-        // Fixed seed and zero temperature: the same work every run, so differences are the device's.
-        val params = SamplingParams(temperature = 0f, topK = 1, maxTokens = plan.decodeTokens, seed = SEED)
-
+        // Fixed seed and greedy decoding (the adapter's job): the same work every run.
         var emitted = 0
         var firstAt = 0L
         var lastAt = 0L
         val startAt = clock.nanos()
-        engine.generate(messages, params).collect {
+        engine.generate(prompt.text, plan.decodeTokens, SEED).collect {
             val now = clock.nanos()
             if (emitted == 0) firstAt = now
             lastAt = now

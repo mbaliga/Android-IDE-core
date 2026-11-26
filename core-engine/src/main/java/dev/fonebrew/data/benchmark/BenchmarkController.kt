@@ -2,6 +2,7 @@ package dev.fonebrew.data.benchmark
 
 import dev.fonebrew.domain.benchmark.BatteryProbe
 import dev.fonebrew.domain.benchmark.BenchmarkClock
+import dev.fonebrew.domain.benchmark.BenchmarkEngine
 import dev.fonebrew.domain.benchmark.BenchmarkPlan
 import dev.fonebrew.domain.benchmark.BenchmarkPreflight
 import dev.fonebrew.domain.benchmark.BenchmarkProgress
@@ -12,7 +13,6 @@ import dev.fonebrew.domain.benchmark.MemoryProbe
 import dev.fonebrew.domain.benchmark.Preflight
 import dev.fonebrew.domain.benchmark.ThermalProbe
 import dev.fonebrew.domain.model.ModelSpec
-import dev.fonebrew.inference.InferenceEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -49,7 +49,7 @@ interface ForegroundHold {
  */
 class BenchmarkController(
     private val scope: CoroutineScope,
-    private val engineFor: (ModelSpec) -> InferenceEngine?,
+    private val engineFor: (ModelSpec) -> BenchmarkEngine?,
     private val unavailableReason: (ModelSpec) -> String?,
     private val residentModelLoaded: (ModelSpec) -> Boolean,
     private val unloadResidentModel: suspend () -> Unit,

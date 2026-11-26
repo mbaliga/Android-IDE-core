@@ -1,9 +1,5 @@
 package dev.fonebrew.domain.benchmark
 
-import dev.fonebrew.domain.GeneratedToken
-import dev.fonebrew.domain.MessageNode
-import dev.fonebrew.domain.SamplingParams
-import dev.fonebrew.inference.InferenceEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -42,17 +38,16 @@ class ScriptedEngine(
     private val countFails: Boolean = false,
     private val loadFails: Throwable? = null,
     private val gens: (callIndex: Int) -> Gen,
-) : InferenceEngine {
+) : BenchmarkEngine {
     override val tokenizerId = "fake-tok"
-    override val supportsLogprobs = false
-    override val supportsSamplingParams = true
-    override var isLoaded = false
+    var isLoaded = false
         private set
 
     var loadCalls = 0
     var unloadCalls = 0
     var generateCalls = 0
-    val seenParams = mutableListOf<SamplingParams>()
+    val seenMaxTokens = mutableListOf<Int>()
+    val seenSeeds = mutableListOf<Long>()
     var lastLoadedPath: String? = null
     var lastLoadedCtx: Int? = null
 
@@ -75,18 +70,14 @@ class ScriptedEngine(
         return promptTokens.entries.firstOrNull { (k, _) -> text.startsWith(k) }?.value ?: 100
     }
 
-    override fun generate(
-        messages: List<MessageNode>,
-        params: SamplingParams,
-        sessionLoadPath: String?,
-        sessionSavePath: String?,
-    ): Flow<GeneratedToken> {
-        seenParams += params
+    override fun generate(promptText: String, maxTokens: Int, seed: Long): Flow<Unit> {
+        seenMaxTokens += maxTokens
+        seenSeeds += seed
         val g = gens(generateCalls++)
         return flow {
             g.gapsMs.forEachIndexed { i, gap ->
                 clock.advanceMs(gap)
-                emit(GeneratedToken(text = "t$i"))
+                emit(Unit)
                 g.onToken(i + 1)
             }
         }
@@ -102,7 +93,7 @@ fun onePrompt(repeats: Int, decode: Int = 8, ctx: Int = 4096) = BenchmarkPlan(
 )
 
 fun runner(
-    engine: InferenceEngine,
+    engine: BenchmarkEngine,
     clock: FakeClock,
     thermal: ThermalProbe = FakeThermal(),
     memory: MemoryProbe = FakeMemory(),

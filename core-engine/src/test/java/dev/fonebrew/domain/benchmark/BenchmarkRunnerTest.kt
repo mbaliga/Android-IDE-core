@@ -54,10 +54,8 @@ class BenchmarkRunnerTest {
         runner(engine, clock).run(TARGET, onePrompt(1, decode = 8, ctx = 2048), DEVICE)
         assertEquals(TARGET.modelPath, engine.lastLoadedPath)
         assertEquals(2048, engine.lastLoadedCtx)
-        val p = engine.seenParams.single()
-        assertEquals(8, p.maxTokens)
-        assertEquals(0f, p.temperature, 0f)
-        assertEquals(42L, p.seed)
+        assertEquals(listOf(8), engine.seenMaxTokens)
+        assertEquals(listOf(42L), engine.seenSeeds)
     }
 
     @Test fun recordsWallTimesProbesAndUnloads() = runTest {
@@ -251,16 +249,11 @@ class BenchmarkRunnerTest {
     @Test fun coroutineCancellationUnloadsAndRethrowsInsteadOfReturningAResult() = runTest {
         val clock = FakeClock()
         val gate = CompletableDeferred<Unit>()
-        val engine = object : dev.fonebrew.inference.InferenceEngine by ScriptedEngine(clock, gens = { gen5(1, 1) }) {
+        val engine = object : BenchmarkEngine by ScriptedEngine(clock, gens = { gen5(1, 1) }) {
             var unloaded = 0
             override suspend fun unload() { unloaded++ }
             override suspend fun loadModel(modelPath: String, contextSize: Int) {}
-            override fun generate(
-                messages: List<dev.fonebrew.domain.MessageNode>,
-                params: dev.fonebrew.domain.SamplingParams,
-                sessionLoadPath: String?,
-                sessionSavePath: String?,
-            ) = flow<dev.fonebrew.domain.GeneratedToken> { gate.await() }
+            override fun generate(promptText: String, maxTokens: Int, seed: Long) = flow<Unit> { gate.await() }
         }
         var outcome: Result<BenchmarkResult>? = null
         val job = launch {
