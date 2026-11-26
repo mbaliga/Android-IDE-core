@@ -359,6 +359,17 @@ class AppContainer(context: Context) {
     val gitTransport: dev.fonebrew.data.GitTransport = dev.fonebrew.data.GitTransport()
     val gitBackup: dev.fonebrew.data.GitBackup by lazy { dev.fonebrew.data.GitBackup(repository, gitTransport) }
     val gitBrowse: dev.fonebrew.data.GitBrowse = dev.fonebrew.data.GitBrowse(gitTransport)
+    /** The real git engine's network facade (clone/fetch/pull/push; docs/design/git-transport.md). Tokens stay
+     *  in [gitHostStore] and are handed over per host, only after a 401. SSH has no key store yet (a later
+     *  package), so ssh:// remotes are refused until one is wired. Runtime is owner-verified. */
+    val gitClient: dev.fonebrew.domain.gitcore.client.GitClient by lazy {
+        dev.fonebrew.domain.gitcore.client.GitClient(
+            dev.fonebrew.domain.gitcore.JvmFileSystem(),
+            dev.fonebrew.data.gitcore.GitTransports(
+                dev.fonebrew.data.gitcore.GitHostCredentialProvider({ gitHostStore.hosts.value }, { gitHostStore.token(it) }),
+            ),
+        )
+    }
     val buildsRepo: BuildsRepo = BuildsRepo(gitTransport, gitHostStore)
     /** Push/pull loop .bpmn files to the user's Git host (P6 made real). */
     val loopSyncRepo: dev.fonebrew.data.LoopSyncRepo =
