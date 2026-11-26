@@ -101,6 +101,22 @@ catastrophic-backtracking protection as the workspace search lane), the `"UTF-8"
 * `ReviewSession.applied()` joins with `"\n"` and drops a trailing newline: noted as an
   out-of-scope defect (reported, not edited); `DiffModel.apply` tracks the final newline itself.
 
+## Stated limits (found by the tests)
+
+* `LineDiff` bounds its LCS table at 8M cells (after trimming common head and tail). A file whose
+  changed core exceeds about 2800 x 2800 lines gets one whole-region hunk instead of fine hunks. The
+  display model inherits that; it stays lossless but coarse. Raising it is a `domain/diff` decision.
+* `java.util.regex` MULTILINE `^` does not match at the very end of the text after a final line
+  terminator, so a "prefix every line" replace does not touch the empty last line.
+* Find regexes run per call against a character budget (50M reads by default); the lint screens the
+  classic nested-quantifier shapes, the budget catches high-degree polynomial blow-ups the lint
+  cannot see. JDK 17 memoises some nested-quantifier patterns, so those can finish instead of timing
+  out: a test only requires "terminates quickly" for them.
+* Pairing of changed lines in the side-by-side view is positional (i-th removed against i-th added),
+  not similarity-based.
+* Raw Python strings that span lines (`r"""..."""`) lex their continuation lines with escapes on.
+* The line moves (up/down) act on the primary selection and collapse the set to it.
+
 ## Owner-verified only (never claimed here)
 
 * Feel on a real touch screen (caret placement, scroll, long-press, drag handles).
