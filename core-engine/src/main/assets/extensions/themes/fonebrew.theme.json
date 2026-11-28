@@ -1,0 +1,19 @@
+{
+  "format": "fonebrew-extension",
+  "formatVersion": 1,
+  "id": "dev.fonebrew.theme.fonebrew",
+  "name": "Fonebrew",
+  "version": "1.0.0",
+  "kind": "theme",
+  "author": "Fonebrew",
+  "license": "Apache-2.0",
+  "description": "The Fonebrew violet on AMOLED black.",
+  "capabilities": [
+    "appearance.write"
+  ],
+  "theme": {
+    "mode": "DARK",
+    "accent": "#8E7BFF",
+    "texture": 0.35
+  }
+}

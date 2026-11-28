@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.fonebrew.FonebrewApp
+import dev.fonebrew.data.ThemePackAssets
 import com.asystemofcells.hyle.cells.HyleColorPicker3D
 
 /** Curated quick-start accents — the "floor" of customization. Each is mid-bright so
@@ -62,8 +64,34 @@ fun ThemePicker(modifier: Modifier = Modifier) {
     val texture by session.textureIntensity.collectAsState()
 
     val accent = parseHexColor(accentStr) ?: Violet
+    val gradientNow by session.gradientColor.collectAsState()
+    val packs = remember { ThemePackAssets.load(context).packs }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // Theme packs: declarative extensions (docs/design/extensions.md) — each one sets exactly
+        // the four knobs below and nothing else, so picking one is always reversible by hand.
+        if (packs.isNotEmpty()) {
+            SectionLabel("Theme packs", c.textMid)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                packs.forEach { pack ->
+                    ModeChip(
+                        pack.manifest.name,
+                        pack.isActive(modeStr, accentStr, texture, gradientNow),
+                        c,
+                    ) {
+                        val a = pack.toApply()
+                        session.setThemeMode(a.mode)
+                        session.setAccentColor(a.accent)
+                        session.setTextureIntensity(a.texture)
+                        session.setGradientColor(a.gradient)
+                    }
+                }
+            }
+        }
+
         SectionLabel("Mode", c.textMid)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ModeChip("System", modeStr == "SYSTEM", c) { session.setThemeMode("SYSTEM") }
@@ -98,7 +126,7 @@ fun ThemePicker(modifier: Modifier = Modifier) {
         )
 
         SectionLabel("Ambient gradient", c.textMid)
-        val gradientStr by session.gradientColor.collectAsState()
+        val gradientStr = gradientNow
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp),

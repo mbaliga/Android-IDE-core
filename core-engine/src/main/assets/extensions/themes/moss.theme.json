@@ -1,0 +1,19 @@
+{
+  "format": "fonebrew-extension",
+  "formatVersion": 1,
+  "id": "dev.fonebrew.theme.moss",
+  "name": "Moss",
+  "version": "1.0.0",
+  "kind": "theme",
+  "author": "Fonebrew",
+  "license": "Apache-2.0",
+  "description": "Quiet green on black, low texture.",
+  "capabilities": [
+    "appearance.write"
+  ],
+  "theme": {
+    "mode": "DARK",
+    "accent": "#5BD16A",
+    "texture": 0.15
+  }
+}

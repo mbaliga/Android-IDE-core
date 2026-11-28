@@ -1,0 +1,19 @@
+{
+  "format": "fonebrew-extension",
+  "formatVersion": 1,
+  "id": "dev.fonebrew.theme.paper",
+  "name": "Paper",
+  "version": "1.0.0",
+  "kind": "theme",
+  "author": "Fonebrew",
+  "license": "Apache-2.0",
+  "description": "A clean light theme with a slate accent.",
+  "capabilities": [
+    "appearance.write"
+  ],
+  "theme": {
+    "mode": "LIGHT",
+    "accent": "#9AA7B8",
+    "texture": 0.1
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "format": "fonebrew-extension",
+  "formatVersion": 1,
+  "id": "dev.fonebrew.theme.abyss",
+  "name": "Abyss",
+  "version": "1.0.0",
+  "kind": "theme",
+  "author": "Fonebrew",
+  "license": "Apache-2.0",
+  "description": "Deep teal over black with a cool blue ambient glow.",
+  "capabilities": [
+    "appearance.write"
+  ],
+  "theme": {
+    "mode": "DARK",
+    "accent": "#2DD4BF",
+    "texture": 0.3,
+    "gradient": "#4DA3FF"
+  }
+}

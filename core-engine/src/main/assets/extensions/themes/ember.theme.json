@@ -1,0 +1,20 @@
+{
+  "format": "fonebrew-extension",
+  "formatVersion": 1,
+  "id": "dev.fonebrew.theme.ember",
+  "name": "Ember",
+  "version": "1.0.0",
+  "kind": "theme",
+  "author": "Fonebrew",
+  "license": "Apache-2.0",
+  "description": "Coral and amber, warm on black.",
+  "capabilities": [
+    "appearance.write"
+  ],
+  "theme": {
+    "mode": "DARK",
+    "accent": "#FF7A66",
+    "texture": 0.4,
+    "gradient": "#F2B53B"
+  }
+}
