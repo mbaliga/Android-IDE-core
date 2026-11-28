@@ -1,6 +1,6 @@
 # Extensions and themes
 
-Status: **declarative layer + themes built and JVM-tested; script runtime designed, not built.**
+Status: **declarative layer + themes built and JVM-tested; script runtime designed (QuickJS-NG confirmed), not built.**
 Owner rulings (2026-11-28): extensions are *declarative packs plus sandboxed scripts*; themes are one
 extension kind; Android first, iOS next, so nothing here may depend on Android-only machinery.
 
@@ -55,9 +55,9 @@ palette overrides: Hyle's ramp derivation and contrast clamp keep any accent AA-
 exactly why a pack cannot produce an unreadable UI. Per-token overrides (Hyle `tokens/*.json`) are a
 later, separately-reviewed kind because they bypass that clamp.
 
-## 4. Sandboxed scripts (design — needs owner confirmation before code)
+## 4. Sandboxed scripts (design — engine confirmed by the owner 2026-11-28, not yet built)
 
-**Recommendation: QuickJS-NG (JavaScript), one engine on Android, iOS and desktop.**
+**Decision: QuickJS-NG (JavaScript), one engine on Android, iOS and desktop.**
 
 - *Why JS:* extensions are authored on a phone, in the IDE. JavaScript needs no toolchain; WebAssembly
   does. One small embeddable interpreter (MIT, a few hundred KB, no JIT) builds for arm64 Android and
@@ -110,7 +110,6 @@ workspace-write grants without an extra confirmation.
 
 ## 7. Open decisions
 
-1. Confirm QuickJS-NG as the script engine (adds a native dependency; MIT).
-2. Where installed (non-bundled) packs live on disk, and whether they sync through the tree-sync repo.
-3. Signing scheme: reuse the `.floop` signature fields, or a separate extension signing key.
-4. Whether `loop` extensions replace the current import dialog or sit beside it.
+1. Where installed (non-bundled) packs live on disk, and whether they sync through the tree-sync repo.
+2. Signing scheme: reuse the `.floop` signature fields, or a separate extension signing key.
+3. Whether `loop` extensions replace the current import dialog or sit beside it.
