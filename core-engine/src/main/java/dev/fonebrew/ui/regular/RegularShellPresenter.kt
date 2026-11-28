@@ -33,4 +33,41 @@ object RegularShellPresenter {
      *  semantics: Back always returns to the first/home tab before it ever falls through to the
      *  system default (process exit). False only for CHAT itself, where Back should fall through. */
     fun backTargetsChat(current: RegularDestination): Boolean = current != RegularDestination.CHAT
+
+    /** What system Back does, in strict precedence — the topmost layer closes first. Search is
+     *  a dialog above everything, then the Tree/Loops overlays, then the tab-reset to Chat; only
+     *  Chat itself falls through to the system default (exit). The shell registers one
+     *  `BackHandler` per action, each enabled only when it is THE action, so they are mutually
+     *  exclusive by construction (registration order never matters). */
+    fun backAction(
+        searchOpen: Boolean,
+        overlayOpen: Boolean,
+        current: RegularDestination,
+    ): BackAction = when {
+        searchOpen -> BackAction.CLOSE_SEARCH
+        overlayOpen -> BackAction.CLOSE_OVERLAY
+        backTargetsChat(current) -> BackAction.GO_CHAT
+        else -> BackAction.FALL_THROUGH
+    }
+
+    enum class BackAction { CLOSE_SEARCH, CLOSE_OVERLAY, GO_CHAT, FALL_THROUGH }
+
+    /**
+     * Where opening a search hit should land the Regular shell. Mirrors what
+     * [dev.fonebrew.ui.spatial.SpatialRoot] does with `SpatialTarget` for the same three hit
+     * kinds: a conversation returns to the Chat tab (with its find bar primed), a task opens the
+     * Projects tab's To-do floor, and a loop is a full-screen overlay (Loops is not a tab here).
+     */
+    fun landingFor(kind: SearchLanding): RegularLanding = when (kind) {
+        SearchLanding.CONVERSATION -> RegularLanding.Tab(RegularDestination.CHAT)
+        SearchLanding.TASK -> RegularLanding.Tab(RegularDestination.PROJECTS)
+        SearchLanding.LOOP -> RegularLanding.LoopsOverlay
+    }
+
+    enum class SearchLanding { CONVERSATION, TASK, LOOP }
+
+    sealed interface RegularLanding {
+        data class Tab(val destination: RegularDestination) : RegularLanding
+        data object LoopsOverlay : RegularLanding
+    }
 }
