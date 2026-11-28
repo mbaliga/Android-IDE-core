@@ -26,7 +26,7 @@ class EngineProvider(
 ) {
 
     // Lazily constructed so the native library is only loaded when a local model
-    // is actually used; if libaarso_llama.so is missing/broken, this stays null
+    // is actually used; if libfonebrew_llama.so is missing/broken, this stays null
     // and local models report unavailable instead of crashing the app.
     private val llama: InferenceEngine? by lazy {
         runCatching { LlamaCppEngine() }.getOrNull()

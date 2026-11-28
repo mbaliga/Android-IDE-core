@@ -20,7 +20,7 @@ import java.util.UUID
 class ProviderStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.providers", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.providers", Context.MODE_PRIVATE)
 
     private val _providers = MutableStateFlow(load())
     val providers: StateFlow<List<CloudProvider>> = _providers.asStateFlow()

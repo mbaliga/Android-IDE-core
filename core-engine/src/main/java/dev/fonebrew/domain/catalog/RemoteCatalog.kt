@@ -6,7 +6,7 @@ import org.json.JSONObject
 /**
  * The shared, cross-app catalog of downloadable AI models. Per the owner's constellation-wide
  * data-sharing model, Nooz owns this list (its `ai-catalogue/models.json`, see that repo's
- * `ai-catalogue/README.md` for the consumer contract) and every app — Aarso included — consumes
+ * `ai-catalogue/README.md` for the consumer contract) and every app — Fonebrew included — consumes
  * it rather than hand-maintaining its own. This file is a straight mirror of that schema: `kind`
  * discriminates chat GGUFs from single-file SD checkpoints, `policySafe` is the flag a
  * policy-restricted storefront build filters on (see

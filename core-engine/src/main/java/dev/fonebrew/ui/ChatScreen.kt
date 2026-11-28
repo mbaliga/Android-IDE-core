@@ -106,23 +106,23 @@ import dev.fonebrew.domain.tree.Conversations
 import dev.fonebrew.domain.tree.PathView
 import dev.fonebrew.domain.tree.Sources
 import dev.fonebrew.flavor.InvocationFeatures
-import dev.aarso.hyle.cells.HeaderGlyph
-import dev.aarso.hyle.cells.HyleBottomTabBar
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleChip
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.cells.HyleHeaderButton
-import dev.aarso.hyle.cells.HyleTabSpec
-import dev.aarso.hyle.cells.FileImage
-import dev.aarso.hyle.cells.HyleFocusLens
-import dev.aarso.hyle.cells.HyleLensActions
-import dev.aarso.hyle.cells.HyleLensHeading
-import dev.aarso.hyle.cells.HyleRadialMenu
-import dev.aarso.hyle.cells.HyleRadialMenuItem
-import dev.aarso.hyle.cells.HyleSealedLens
-import dev.aarso.hyle.cells.HyleSwitch
-import dev.aarso.hyle.cells.hylePulse
-import dev.aarso.hyle.cells.rememberHyleHaptics
+import com.asystemofcells.hyle.cells.HeaderGlyph
+import com.asystemofcells.hyle.cells.HyleBottomTabBar
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleChip
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.cells.HyleHeaderButton
+import com.asystemofcells.hyle.cells.HyleTabSpec
+import com.asystemofcells.hyle.cells.FileImage
+import com.asystemofcells.hyle.cells.HyleFocusLens
+import com.asystemofcells.hyle.cells.HyleLensActions
+import com.asystemofcells.hyle.cells.HyleLensHeading
+import com.asystemofcells.hyle.cells.HyleRadialMenu
+import com.asystemofcells.hyle.cells.HyleRadialMenuItem
+import com.asystemofcells.hyle.cells.HyleSealedLens
+import com.asystemofcells.hyle.cells.HyleSwitch
+import com.asystemofcells.hyle.cells.hylePulse
+import com.asystemofcells.hyle.cells.rememberHyleHaptics
 import dev.fonebrew.ui.components.MentionPopup
 import dev.fonebrew.ui.components.MentionTarget
 import dev.fonebrew.ui.components.SlashCommand
@@ -141,7 +141,7 @@ import dev.fonebrew.ui.search.InChatFindPresenter
 import dev.fonebrew.ui.state.CostLinePresenter
 import dev.fonebrew.ui.state.TurnCostMetadata
 import dev.fonebrew.ui.state.TurnProvenance
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -1371,11 +1371,11 @@ private fun HomeHeader(
         HeaderIndicator(state)
         // asoc-reachability audit (2026-09-15) item 1b: the Tree was pinch-in ONLY — no tappable
         // entry anywhere in the app. [HyleHeaderButton]'s glyph enum lives in the Hyle submodule
-        // (dev.aarso:hyle) and adding a case there is out of this lane's scope, so this reuses
-        // [dev.aarso.hyle.cells.HyleNavChip] instead — the same header-chip idiom (slant-edged,
+        // (com.asystemofcells:hyle) and adding a case there is out of this lane's scope, so this reuses
+        // [com.asystemofcells.hyle.cells.HyleNavChip] instead — the same header-chip idiom (slant-edged,
         // accent-adjacent, already carries its own contentDescription param), already exported
         // by Hyle and otherwise unused in this app.
-        dev.aarso.hyle.cells.HyleNavChip(
+        com.asystemofcells.hyle.cells.HyleNavChip(
             label = "Tree",
             onClick = onOpenTree,
             contentDescription = "Conversation tree",
@@ -2446,9 +2446,9 @@ private fun StreamingBubble(
 
     Row(modifier = Modifier.fillMaxWidth()) {
         Card(
-            // Hyle's material language (dev.aarso.hyle.Finish): a watched, from-elsewhere
+            // Hyle's material language (com.asystemofcells.hyle.Finish): a watched, from-elsewhere
             // generation is Radiant — it emits its own light, breathing on the "heartbeat, not
-            // weather" cycle (dev.aarso.hyle.Pulse.WATCHED); local work is Reflective and stays
+            // weather" cycle (com.asystemofcells.hyle.Pulse.WATCHED); local work is Reflective and stays
             // still. Motion is never the only provenance signal — the "☁"/"⌂" glyph carries it too.
             modifier = if (watched) Modifier.hylePulse() else Modifier,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),

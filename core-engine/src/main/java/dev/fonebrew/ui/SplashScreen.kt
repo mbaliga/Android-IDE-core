@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.core_engine.R
 import kotlinx.coroutines.delay
 
@@ -47,7 +47,7 @@ private const val GAP_BOTTOM_WEIGHT = 0.0813f
  * The brand ceremony shown once per cold start — full-bleed ground, the FoneBrew
  * glass-on-a-lanyard mark, the wordmark pinned low — reproducing the owner's splash
  * mockup. [dark] selects the asset pair: white-outlined glyph + white "FONE" on the
- * near-black [dev.aarso.hyle.theme.HyleColors.ink], vs. black-outlined glyph + black
+ * near-black [com.asystemofcells.hyle.theme.HyleColors.ink], vs. black-outlined glyph + black
  * "FONE" on the light ink. Both wordmark variants keep "BREW" the same orange either
  * way — that part of the mark never changes with theme.
  *

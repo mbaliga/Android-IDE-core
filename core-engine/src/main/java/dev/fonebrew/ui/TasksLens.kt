@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.fonebrew.data.DownloadCenter
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.theme.LocalHyleColors
 
 /**
  * The **Tasks** lens of the chat room's tab row (Chat / Terminal / Tasks): what is running

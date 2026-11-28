@@ -158,7 +158,7 @@ fun RunPanel() {
     }
     Spacer(Modifier.height(8.dp))
 
-    dev.aarso.hyle.cells.HyleField(
+    com.asystemofcells.hyle.cells.HyleField(
         command, { command = it },
         label = if (target is RunTarget.Ci) "Workflow file (e.g. ci.yml)" else "Command",
         modifier = Modifier.fillMaxWidth(),

@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import dev.aarso.hyle.component.HyleContextMenu
+import com.asystemofcells.hyle.component.HyleContextMenu
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.bpmn.BpmnArchive
 import dev.fonebrew.domain.bpmn.BpmnEdge
@@ -88,12 +88,12 @@ import dev.fonebrew.domain.model.ModelSpec
 import dev.fonebrew.domain.thread.DelegationKind
 import dev.fonebrew.contracts.loops.SideEffectClass
 import dev.fonebrew.inference.EngineGenerator
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleChip
-import dev.aarso.hyle.cells.HyleDropdownField
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.cells.HyleChip
+import com.asystemofcells.hyle.cells.HyleDropdownField
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -911,13 +911,13 @@ fun LoopRoom(
                                 nodes.add(LoopNode(id, kind, label, xPx = at.x, yPx = at.y))
                                 if (kind == BpmnNodeKind.TASK) configNodeId = id
                             }
-                            dev.aarso.hyle.cells.HyleRadialMenu(
+                            com.asystemofcells.hyle.cells.HyleRadialMenu(
                                 visible = true,
                                 anchor = at,
                                 onDismiss = { addAt = null },
                                 modifier = Modifier.fillMaxSize(),
                                 items = listOf(
-                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Task", glyph = { tint ->
+                                    com.asystemofcells.hyle.cells.HyleRadialMenuItem(label = "Task", glyph = { tint ->
                                         drawRoundRect(
                                             tint,
                                             topLeft = Offset(size.width * 0.2f, size.height * 0.3f),
@@ -925,7 +925,7 @@ fun LoopRoom(
                                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.08f),
                                         )
                                     }, onClick = { addNode(BpmnNodeKind.TASK) }),
-                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Gateway", glyph = { tint ->
+                                    com.asystemofcells.hyle.cells.HyleRadialMenuItem(label = "Gateway", glyph = { tint ->
                                         val path = androidx.compose.ui.graphics.Path().apply {
                                             moveTo(size.width * 0.5f, size.height * 0.1f)
                                             lineTo(size.width * 0.9f, size.height * 0.5f)
@@ -935,7 +935,7 @@ fun LoopRoom(
                                         }
                                         drawPath(path, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.09f))
                                     }, onClick = { addNode(BpmnNodeKind.EXCLUSIVE_GATEWAY) }),
-                                    dev.aarso.hyle.cells.HyleRadialMenuItem(label = "End", glyph = { tint ->
+                                    com.asystemofcells.hyle.cells.HyleRadialMenuItem(label = "End", glyph = { tint ->
                                         drawCircle(tint, radius = size.width * 0.32f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.1f))
                                     }, onClick = { addNode(BpmnNodeKind.END_EVENT) }),
                                 ),
@@ -946,14 +946,14 @@ fun LoopRoom(
                             val node = nodeById(id)
                             val nodeAnchor = node?.let { Offset(it.xPx, it.yPx) } ?: Offset.Zero
                             val canEdit = node != null && !isEvent(node.kind)
-                            dev.aarso.hyle.cells.HyleRadialMenu(
+                            com.asystemofcells.hyle.cells.HyleRadialMenu(
                                 visible = true,
                                 anchor = nodeAnchor,
                                 onDismiss = { menuNodeId = null },
                                 modifier = Modifier.fillMaxSize(),
                                 items = buildList {
                                     add(
-                                        dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Connect", glyph = { tint ->
+                                        com.asystemofcells.hyle.cells.HyleRadialMenuItem(label = "Connect", glyph = { tint ->
                                             drawLine(tint, Offset(size.width * 0.15f, size.height * 0.5f), Offset(size.width * 0.75f, size.height * 0.5f), strokeWidth = size.width * 0.09f)
                                             val arrow = androidx.compose.ui.graphics.Path().apply {
                                                 moveTo(size.width * 0.55f, size.height * 0.3f)
@@ -965,13 +965,13 @@ fun LoopRoom(
                                     )
                                     if (canEdit) {
                                         add(
-                                            dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Edit", glyph = { tint ->
+                                            com.asystemofcells.hyle.cells.HyleRadialMenuItem(label = "Edit", glyph = { tint ->
                                                 drawLine(tint, Offset(size.width * 0.25f, size.height * 0.75f), Offset(size.width * 0.75f, size.height * 0.25f), strokeWidth = size.width * 0.1f)
                                             }, onClick = { configNodeId = id }),
                                         )
                                     }
                                     add(
-                                        dev.aarso.hyle.cells.HyleRadialMenuItem(label = "Delete", destructive = true, glyph = { tint ->
+                                        com.asystemofcells.hyle.cells.HyleRadialMenuItem(label = "Delete", destructive = true, glyph = { tint ->
                                             drawLine(tint, Offset(size.width * 0.28f, size.height * 0.28f), Offset(size.width * 0.72f, size.height * 0.72f), strokeWidth = size.width * 0.1f)
                                             drawLine(tint, Offset(size.width * 0.72f, size.height * 0.28f), Offset(size.width * 0.28f, size.height * 0.72f), strokeWidth = size.width * 0.1f)
                                         }, onClick = { deleteNode(id) }),

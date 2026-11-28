@@ -1,6 +1,6 @@
 package dev.fonebrew.ui.loops
 
-import dev.aarso.hyle.component.HyleContextMenuItem
+import com.asystemofcells.hyle.component.HyleContextMenuItem
 
 /**
  * Desktop-class kit §3 ("Loop editor node long-press" → keep the existing gesture menu primary,

@@ -75,14 +75,14 @@ import dev.fonebrew.domain.tree.Conversations
 import dev.fonebrew.domain.tree.TreeFork
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.domain.library.Conversations as LibConversations
-import dev.aarso.hyle.component.HyleContextMenu
-import dev.aarso.hyle.component.HyleField
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleChip
-import dev.aarso.hyle.cells.HyleTitle
-import dev.aarso.hyle.cells.FileImage
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.component.HyleContextMenu
+import com.asystemofcells.hyle.component.HyleField
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.cells.HyleChip
+import com.asystemofcells.hyle.cells.HyleTitle
+import com.asystemofcells.hyle.cells.FileImage
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.ui.search.SearchEntryPill
 
 private enum class ChatsTab(val label: String) {
@@ -304,8 +304,8 @@ private fun List<Conversations.Summary>.filterByPreset(
 // One HyleTabSpec per ChatsTab, glyphs unchanged from the original hand-rolled ChatsTabGlyph —
 // this bar now consumes the shared HyleTabBar (Aeon.kt) instead of keeping its own parallel copy
 // (2026-07-19 tab-bar consolidation).
-private val ChatsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ChatsTab.entries.map { tab ->
-    dev.aarso.hyle.cells.HyleTabSpec(tab.label) { tint ->
+private val ChatsTabSpecs: List<com.asystemofcells.hyle.cells.HyleTabSpec> = ChatsTab.entries.map { tab ->
+    com.asystemofcells.hyle.cells.HyleTabSpec(tab.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = Stroke(width = sw)
@@ -369,8 +369,8 @@ private val ChatsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ChatsTab.ent
 }
 
 /**
- * The Chats-room tab bar: the shared [dev.aarso.hyle.cells.HyleTabBar], plus a trailing funnel icon
- * (via [dev.aarso.hyle.cells.HyleTabBar]'s own `trailing` slot) that reveals the Sort row (the
+ * The Chats-room tab bar: the shared [com.asystemofcells.hyle.cells.HyleTabBar], plus a trailing funnel icon
+ * (via [com.asystemofcells.hyle.cells.HyleTabBar]'s own `trailing` slot) that reveals the Sort row (the
  * owner's "filters behind an icon" request). The 36dp slot stays reserved even when the funnel
  * isn't interactive — a conditionally-present trailing composable was the original "tab bar
  * fluctuates" bug (Compose redistributes the weighted tabs' width whenever a sibling enters/
@@ -385,7 +385,7 @@ private fun ChatsTabBar(
     onToggleSort: () -> Unit,
 ) {
     val c = LocalHyleColors.current
-    dev.aarso.hyle.cells.HyleTabBar(
+    com.asystemofcells.hyle.cells.HyleTabBar(
         tabs = ChatsTabSpecs,
         selected = ChatsTab.entries.indexOf(selected),
         onSelect = { onSelect(ChatsTab.entries[it]) },
@@ -469,7 +469,7 @@ private fun ConversationList(p: ConversationListProps) {
         return
     }
     val listState = rememberLazyListState()
-    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    val haptics = com.asystemofcells.hyle.cells.rememberHyleHaptics()
     // The design kit's "haptic effect on scroll": one light tick per row scrolled past, driven
     // off the first-visible-item index (not raw scroll delta) so it fires once per threshold
     // crossing rather than continuously while dragging.
@@ -586,7 +586,7 @@ private fun FolderTabRow(p: ConversationListProps, conv: Conversations.Summary, 
     val shape = RoundedCornerShape(10.dp)
     val leaning = index % 2 == 0
     var menuOpen by remember { mutableStateOf(false) }
-    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    val haptics = com.asystemofcells.hyle.cells.rememberHyleHaptics()
     Box(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(
@@ -719,7 +719,7 @@ private fun ImageList(
 /**
  * The plain divider threading between two consecutive flat-list rows — "simple dividers instead
  * of boxes" (owner ask). [ConversationCard] itself now carries the tab identity (clipped to
- * [dev.aarso.hyle.cells.HyleFieldShape], the same "/" file-tab silhouette as a nav chip), so this
+ * [com.asystemofcells.hyle.cells.HyleFieldShape], the same "/" file-tab silhouette as a nav chip), so this
  * connector no longer needs its own accent bar — the row's slant already reads as a tab without
  * a redundant flag beside it.
  */
@@ -731,7 +731,7 @@ private fun ConversationRowConnector() {
 
 /**
  * The flat "All conversations" row — a genuine file-tab silhouette
- * ([dev.aarso.hyle.cells.HyleFieldShape], the exact "/" shape a nav chip clips to), not a boxed
+ * ([com.asystemofcells.hyle.cells.HyleFieldShape], the exact "/" shape a nav chip clips to), not a boxed
  * [Card] and not [FolderTabRow]'s separate flag-bar-beside-a-rounded-rect (that read as "a card
  * with a colored stripe," not a tab — owner-flagged twice). The slant IS the tab; active state is
  * a solid violet fill of that same shape, exactly like an active nav chip. A leading
@@ -747,10 +747,10 @@ private fun ConversationRowConnector() {
 private fun ConversationCard(p: ConversationListProps, conv: Conversations.Summary, index: Int) {
     val c = LocalHyleColors.current
     val active = p.isActive(conv)
-    val shape = dev.aarso.hyle.cells.HyleFieldShape
+    val shape = com.asystemofcells.hyle.cells.HyleFieldShape
     val lineage = p.lineageByRoot[conv.rootId]
     var menuOpen by remember { mutableStateOf(false) }
-    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    val haptics = com.asystemofcells.hyle.cells.rememberHyleHaptics()
     Box(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -972,7 +972,7 @@ private fun ImageNodeCard(
 ) {
     val c = LocalHyleColors.current
     var menuOpen by remember { mutableStateOf(false) }
-    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    val haptics = com.asystemofcells.hyle.cells.rememberHyleHaptics()
     Box(Modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier.fillMaxWidth().combinedClickable(

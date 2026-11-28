@@ -18,7 +18,7 @@ import org.json.JSONObject
 class OperationQueueStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.opqueue", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.opqueue", Context.MODE_PRIVATE)
 
     private val _queue = MutableStateFlow(load())
     val queue: StateFlow<OperationQueue> = _queue.asStateFlow()

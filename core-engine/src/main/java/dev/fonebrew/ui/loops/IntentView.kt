@@ -13,9 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.domain.loop.LoopBudget
 
 /**

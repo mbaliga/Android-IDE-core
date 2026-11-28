@@ -1,7 +1,7 @@
 # Design: Interaction modes — Regular / asoc
 
 > Status: **built (bifurcation wave 1, lane R).** The mode-resolution logic
-> (`dev.aarso:interaction-mode`'s `ModeDefaults` + this repo's own
+> (`com.asystemofcells:interaction-mode`'s `ModeDefaults` + this repo's own
 > `domain/mode/ModeLegacySignal.kt`, `domain/mode/GestureModeDefaults.kt`, and
 > `ui/regular/RegularShellPresenter.kt`) is pure and JVM-tested. The two shells themselves
 > (`ui/spatial/SpatialRoot.kt`, `ui/regular/RegularShell.kt`) and everything about how they
@@ -16,7 +16,7 @@
 
 Naming is exactly **"Regular"** and **"asoc"** (lowercase `asoc`) at the UI layer — never
 "Spatial", "Classic", or any other synonym. This is a constellation-wide split, not a
-Fonebrew-only one: the shared choice lives in `dev.aarso:interaction-mode`
+Fonebrew-only one: the shared choice lives in `com.asystemofcells:interaction-mode`
 (`mbaliga/Shared-Libraries-asoc`) precisely so every app in the constellation can adopt the
 same enum, store, and picker rather than re-deriving its own.
 
@@ -53,7 +53,7 @@ SpatialRoot.kt`, **unchanged** by this lane.
 
 ## Defaults policy
 
-`dev.aarso.interactionmode.ModeDefaults.defaultFor(hasExplicitChoice, legacySignal)`:
+`com.asystemofcells.interactionmode.ModeDefaults.defaultFor(hasExplicitChoice, legacySignal)`:
 
 - No explicit choice, no legacy signal → **REGULAR**. Every fresh install starts here.
 - No explicit choice, legacy signal → **ASOC**. Continuity for an install that was already
@@ -99,7 +99,7 @@ layer rather than as a change to the shared, dependency-free module.
 
 ## Constellation adoption note
 
-`dev.aarso:interaction-mode` and Hyle's `HyleModePicker` are built generic on purpose — plain
+`com.asystemofcells:interaction-mode` and Hyle's `HyleModePicker` are built generic on purpose — plain
 `InteractionMode.REGULAR`/`.ASOC` and caller-supplied `HyleModeOption` copy, no Fonebrew-only
 assumptions. This repo is the first adopter; wiring the other constellation apps onto the same
 enum/store/picker (per the ruling's "this goes to the other apps as well") is a follow-up

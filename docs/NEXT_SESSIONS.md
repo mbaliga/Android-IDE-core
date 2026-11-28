@@ -23,7 +23,7 @@ computed against a real `.git` working tree today.
 **Seam:** `FB-RAT-WS-NEW-1` (`docs/non_ratified/EXPERIMENTAL_DECISIONS.md`) already names the
 proposed shape — JGit for read/status/commit, evaluate libgit2-JNI (`git24j`) for merge/rebase/
 conflict, route history-rewriting through the already-real SSH lane
-(`core-engine/src/main/java/dev/aarso/domain/remote/`, adapted by WP-5's
+(`core-engine/src/main/java/dev/fonebrew/domain/remote/`, adapted by WP-5's
 `SshExecutionProvider`). This is a **PROPOSED, not owner-ratified** decision — the first step is
 an owner call on adding a JGit dependency (a real change to "no third-party git library," WP-0's
 recorded current state), not a unilateral implementation.

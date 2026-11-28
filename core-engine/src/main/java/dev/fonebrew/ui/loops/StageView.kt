@@ -26,11 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.component.HyleContextMenu
-import dev.aarso.hyle.component.HyleContextMenuItem
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.component.HyleContextMenu
+import com.asystemofcells.hyle.component.HyleContextMenuItem
+import com.asystemofcells.hyle.theme.LocalHyleColors
 
 /**
  * `LOOP_PHONE_AUTHORING_SPEC.md` §3.2 — Stage View, the primary phone editing surface

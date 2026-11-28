@@ -64,11 +64,11 @@ import dev.fonebrew.domain.thread.ThreadGraphExplainPath
 import dev.fonebrew.domain.thread.ThreadGraphNode
 import dev.fonebrew.domain.thread.ThreadMapLayout
 import dev.fonebrew.domain.thread.ThreadNodeKind
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleChip
-import dev.aarso.hyle.cells.HyleRadialMenu
-import dev.aarso.hyle.cells.HyleRadialMenuItem
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleChip
+import com.asystemofcells.hyle.cells.HyleRadialMenu
+import com.asystemofcells.hyle.cells.HyleRadialMenuItem
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.ui.ChatViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.atan2
@@ -647,7 +647,7 @@ private fun Legend(modifier: Modifier = Modifier) {
 }
 
 /** Shape (never colour alone — binding constraint 6) + colour per [ThreadNodeKind]. */
-private fun glyphFor(kind: ThreadNodeKind, colors: dev.aarso.hyle.theme.HyleColors): DrawScope.() -> Unit = when (kind) {
+private fun glyphFor(kind: ThreadNodeKind, colors: com.asystemofcells.hyle.theme.HyleColors): DrawScope.() -> Unit = when (kind) {
     ThreadNodeKind.MESSAGE -> { { drawCircle(colors.textMid, radius = size.minDimension / 2f) } }
     ThreadNodeKind.FORK_ROOT -> {
         {
@@ -736,7 +736,7 @@ private fun glyphFor(kind: ThreadNodeKind, colors: dev.aarso.hyle.theme.HyleColo
  */
 private fun outcomeBadge(
     outcome: dev.fonebrew.domain.thread.DelegationOutcome,
-    colors: dev.aarso.hyle.theme.HyleColors,
+    colors: com.asystemofcells.hyle.theme.HyleColors,
 ): DrawScope.() -> Unit = {
     val r = size.minDimension * 0.16f
     val center = Offset(size.width - r * 1.1f, r * 1.1f)

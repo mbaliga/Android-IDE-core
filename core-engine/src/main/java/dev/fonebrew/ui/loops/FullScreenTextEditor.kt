@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleField
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleField
 
 /**
  * `LOOP_PHONE_AUTHORING_SPEC.md` §3.4 — "Any Node Sheet text field whose content commonly exceeds

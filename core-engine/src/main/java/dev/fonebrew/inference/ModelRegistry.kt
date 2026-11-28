@@ -23,7 +23,7 @@ class ModelRegistry(
     private val providers: ProviderStore,
     private val locals: LocalModelStore,
     private val devSpecs: List<ModelSpec> = emptyList(),
-    /** True once the onboarding wizard's [dev.aarso.ui.onboarding.AiCoreAvailability] probe has
+    /** True once the onboarding wizard's [dev.fonebrew.ui.onboarding.AiCoreAvailability] probe has
      *  confirmed on-device Gemini Nano actually works on this phone — never assumed. */
     private val aiCoreEnabled: () -> Boolean = { false },
 ) {

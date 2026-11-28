@@ -3,7 +3,7 @@ package dev.fonebrew.inference.image
 /**
  * SPIKE BINDING CLASS, not core's SdImageEngine: same package, class name and `external` signatures
  * as sdengine's JNI symbols (Java_dev_fonebrew_inference_image_SdImageEngine_*), same loader call
- * as core (System.loadLibrary("aarso_sd")).
+ * as core (System.loadLibrary("fonebrew_sd")).
  */
 class SdImageEngine {
     fun load(modelPath: String, threads: Int): Long = nativeSdLoad(modelPath, threads)
@@ -19,7 +19,7 @@ class SdImageEngine {
 
     companion object {
         init {
-            System.loadLibrary("aarso_sd")
+            System.loadLibrary("fonebrew_sd")
         }
     }
 }

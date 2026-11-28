@@ -1,9 +1,9 @@
 package dev.fonebrew.ui.theme
 
 import androidx.compose.ui.graphics.toArgb
-import dev.aarso.crashrecovery.CrashRecoveryStyle
-import dev.aarso.hyle.theme.darkHyleColors
-import dev.aarso.hyle.theme.lightHyleColors
+import com.asystemofcells.crashrecovery.CrashRecoveryStyle
+import com.asystemofcells.hyle.theme.darkHyleColors
+import com.asystemofcells.hyle.theme.lightHyleColors
 
 /**
  * The app's own accent, translated for the design-system-agnostic crash-recovery module

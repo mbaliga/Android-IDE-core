@@ -33,9 +33,9 @@ language**, not a flat UI kit:
 
 1. **Palette** — dark AMOLED field + violet `#8E7BFF` accent. ✔ (via `AeonColors`/tokens)
 2. **Glass pane** — the single place the app imports the Hyle library:
-   `app/src/main/java/dev/aarso/ui/hyle/HyleGlass.kt:24` → `HyleTokens.Color.colorPaletteGlassPane`.
+   `app/src/main/java/dev/fonebrew/ui/hyle/HyleGlass.kt:24` → `HyleTokens.Color.colorPaletteGlassPane`.
    This *is* the "pane treatment" the owner already recognised.
-3. **A background grain you can't really see** — `app/src/main/java/dev/aarso/ui/theme/Texture.kt`
+3. **A background grain you can't really see** — `app/src/main/java/dev/fonebrew/ui/theme/Texture.kt`
    draws a single flat random-noise tile, hard-capped at ~14% alpha
    (`alpha = (strength * 0.14f * 255f)…coerceIn(0, 36)`), and its own comment says
    *"Keep this on the base background only."* So it is off the controls entirely — the
@@ -45,9 +45,9 @@ Everything else was never built.
 
 ## 3. Root cause — two "Hyle"s that don't meet
 
-- **The library `dev.aarso:hyle`** (the split-out repo, `hyle-design-system/`) shipped
+- **The library `com.asystemofcells:hyle`** (the split-out repo, `hyle-design-system/`) shipped
   only the abstract layer. Its own header says so verbatim
-  (`hyle/src/main/java/dev/aarso/hyle/Hyle.kt`):
+  (`hyle/src/main/java/com/asystemofcells/hyle/Hyle.kt`):
   > *"this module owns the render side — the tokens and the contract… this first cut is
   > deliberately pure data + contract (JVM-tested), no Compose… It will grow the Compose
   > `Modifier`s and AGSL shaders next."*
@@ -56,12 +56,12 @@ Everything else was never built.
   `controlGroove #050506`, `controlRim`, `controlEdge`, `controlScreen #141210`,
   `controlIndicator #6B6760` map 1:1 to the kit's `--srf / --groove / --rim / --edge /
   --screen / --glyph`. The paint exists; the brushwork doesn't.
-- **The app** renders through `app/src/main/java/dev/aarso/ui/aeon/Aeon.kt` (package
-  `dev.aarso.ui.hyle` — a folder/package mismatch, and a *different thing* from the
+- **The app** renders through `app/src/main/java/dev/fonebrew/ui/aeon/Aeon.kt` (package
+  `dev.fonebrew.ui.hyle` — a folder/package mismatch, and a *different thing* from the
   library). Its components — `HyleButton`, `HyleCard`, `HyleField`, `HyleChip`,
   `HyleTabBar` — are flat, conventional Compose. They predate the tokens and reference
   none of the `control*` tokens. The colour picker
-  (`app/src/main/java/dev/aarso/ui/hyle/HyleColorPicker.kt`) is a generic HSV square +
+  (`app/src/main/java/dev/fonebrew/ui/hyle/HyleColorPicker.kt`) is a generic HSV square +
   rainbow hue slider with a plain white thumb — none of the kit's accent chips or
   material swatches.
 
@@ -97,7 +97,7 @@ device** — CI never launches the app.
 
 **Phase B — the control components (bigger):**
 Knob, fader/vertical fader, crater button, segmented transport, LCD screen, VU meter —
-built into the **library** (`dev.aarso:hyle`), so they are the single source, then
+built into the **library** (`com.asystemofcells:hyle`), so they are the single source, then
 `Aeon.kt` re-exports/points at them. This is where the "control panel" feel actually
 lands, and where AGSL is load-bearing.
 

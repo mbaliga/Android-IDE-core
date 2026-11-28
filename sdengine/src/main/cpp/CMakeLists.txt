@@ -1,8 +1,8 @@
-# Builds libaarso_sd.so: stable-diffusion.cpp + its own ggml + the JNI shim.
+# Builds libfonebrew_sd.so: stable-diffusion.cpp + its own ggml + the JNI shim.
 # Separate from :app so sd.cpp's ggml fork never collides with llama.cpp's ggml.
 
 cmake_minimum_required(VERSION 3.22.1)
-project(aarso_sd LANGUAGES C CXX)
+project(fonebrew_sd LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,14 +19,14 @@ set(SD_WEBM              OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(stable-diffusion.cpp)
 
-add_library(aarso_sd SHARED sd_jni.cpp)
+add_library(fonebrew_sd SHARED sd_jni.cpp)
 
-target_include_directories(aarso_sd PRIVATE
+target_include_directories(fonebrew_sd PRIVATE
     stable-diffusion.cpp/include
     stable-diffusion.cpp/thirdparty)
 
 find_library(log-lib log)
 
-target_link_libraries(aarso_sd
+target_link_libraries(fonebrew_sd
     stable-diffusion
     ${log-lib})

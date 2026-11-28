@@ -31,7 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleSwitch
+import com.asystemofcells.hyle.cells.HyleSwitch
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.cost.FreeTierProvider
 import dev.fonebrew.ui.wire.WireBox

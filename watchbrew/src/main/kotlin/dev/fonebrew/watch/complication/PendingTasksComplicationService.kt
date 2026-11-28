@@ -10,7 +10,7 @@ import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
-import dev.aarso.watch.R
+import dev.fonebrew.watch.R
 import dev.fonebrew.watch.MainActivity
 import dev.fonebrew.watch.core.ComplicationContent
 import dev.fonebrew.watch.core.ComplicationText

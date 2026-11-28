@@ -1,7 +1,7 @@
 package dev.fonebrew.ui.theme
 
-import dev.aarso.hyle.cells.HyleSlider
-import dev.aarso.hyle.theme.*
+import com.asystemofcells.hyle.cells.HyleSlider
+import com.asystemofcells.hyle.theme.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.fonebrew.FonebrewApp
-import dev.aarso.hyle.cells.HyleColorPicker3D
+import com.asystemofcells.hyle.cells.HyleColorPicker3D
 
 /** Curated quick-start accents — the "floor" of customization. Each is mid-bright so
  *  the ramp derivation + contrast clamp keep it AA-safe in both light and dark. */

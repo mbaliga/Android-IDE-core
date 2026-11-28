@@ -23,8 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleTitle
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleTitle
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.domain.provenance.ProvenanceState
 import dev.fonebrew.ui.components.ByProviderList

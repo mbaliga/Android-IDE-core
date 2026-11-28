@@ -23,7 +23,7 @@ Fonebrew/Aarso's spine is one append-only, git-like message tree. The owner want
 
 ## What already exists (verified inventory — reuse, don't rebuild)
 
-| Need | Existing (all `core-engine/src/main/java/dev/aarso/` unless noted) |
+| Need | Existing (all `core-engine/src/main/java/dev/fonebrew/` unless noted) |
 |---|---|
 | Branch ops | `ChatViewModel.branchFrom/switchAlternative/rewindFrom`; `PathView.Step(alternativeCount, activeAlternative)`; inline `‹ n/m ›` pager |
 | Spawn payload | **`domain/bridge/SummaryBridge.kt` — fully built, zero callers** (+ unmounted `SummaryNodeCard` in `ui/components/InspectComponents.kt:204`) |

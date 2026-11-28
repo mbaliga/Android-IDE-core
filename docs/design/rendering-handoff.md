@@ -160,7 +160,7 @@ So the target for action surfaces (buttons, the back "shoulder", chips):
 
 ### A. Ferrofluid bead (AGSL) — the *material reference* for buttons
 
-**File:** `hyle-probe/src/main/java/dev/aarso/hyleprobe/FerrofluidProbe.kt`
+**File:** `hyle-probe/src/main/java/com/asystemofcells/hyleprobe/FerrofluidProbe.kt`
 **Intent:** an inky, mirror-bright liquid bead: 3D-hemisphere specular (round
 highlight, not a wedge), cool fresnel rim, an 8-spike crown that grows on press.
 **Uniforms:** `iResolution`, `iCenter`, `iRadius`, `iSpikeAmp` (0 rest → 0.22 press),
@@ -216,7 +216,7 @@ spike headroom.
 
 ### B. Glass → sand (AGSL) — material transformation
 
-**File:** `hyle-probe/src/main/java/dev/aarso/hyleprobe/GlassSandProbe.kt`
+**File:** `hyle-probe/src/main/java/com/asystemofcells/hyleprobe/GlassSandProbe.kt`
 **Intent:** a refractive glass pane over a dot-grid "room"; a top→bottom wave
 **un-forms** the glass into **granular dark silica**. **Owner feedback (addressed,
 verify on device):** it read as *cracked glass* because the silica was shaded by
@@ -355,7 +355,7 @@ half4 main(float2 fragCoord) {
 
 ### C. Aeon palette + spec constants (locked)
 
-**File:** `app/src/main/java/dev/aarso/ui/theme/AeonColors.kt` (runtime-swappable in
+**File:** `app/src/main/java/dev/fonebrew/ui/theme/AeonColors.kt` (runtime-swappable in
 the app); mirrored as constants in the probe. The violet ramp derives from the one
 Fonebrew violet `#8E7BFF`. Dark baseline:
 
@@ -442,7 +442,7 @@ Brush.verticalGradient(0f to Color(0x40FFFFFF), 0.45f to Color(0x00FFFFFF), 1f t
 
 ### G. The Lens — legibility through *focus*, not a status word
 
-**Files:** `app/src/main/java/dev/aarso/ui/codelens/CodeLensScreen.kt` (real, model-
+**Files:** `app/src/main/java/dev/fonebrew/ui/codelens/CodeLensScreen.kt` (real, model-
 driven) + `hyle-probe/.../LensProbe.kt` (canned feel). **Intent:** a draggable
 "smart glass" you pass over a file; the lines under it are replaced **on the glass**
 by a plain-English reading. **The thesis fix (done):** it must never print

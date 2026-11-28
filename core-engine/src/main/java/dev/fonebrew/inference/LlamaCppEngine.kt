@@ -134,7 +134,7 @@ class LlamaCppEngine : InferenceEngine {
 
     companion object {
         init {
-            System.loadLibrary("aarso_llama")
+            System.loadLibrary("fonebrew_llama")
         }
     }
 }

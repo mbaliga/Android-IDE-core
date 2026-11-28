@@ -1,5 +1,5 @@
 // JNI bridge for on-device image generation via stable-diffusion.cpp (§4c).
-// Built into libaarso_sd.so (its own ggml). Runs txt2img on CPU and writes a PNG.
+// Built into libfonebrew_sd.so (its own ggml). Runs txt2img on CPU and writes a PNG.
 // Symbol names match dev.fonebrew.inference.image.SdImageEngine in :app.
 
 #include <jni.h>

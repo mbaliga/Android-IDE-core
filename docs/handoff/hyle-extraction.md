@@ -13,7 +13,7 @@ Three things wear the name; the extraction must keep them straight.
 
 | Piece | Where | What it is | Goes to new repo? |
 |---|---|---|---|
-| `:hyle` module (`dev.aarso.hyle`) | `hyle/` | **Render-side tokens + contract** — `Finish`, `Pulse`, `RadiantHues`. Pure data, JVM-tested (`FinishTest`). Android library, no Compose. | **Yes — core** |
+| `:hyle` module (`com.asystemofcells.hyle`) | `hyle/` | **Render-side tokens + contract** — `Finish`, `Pulse`, `RadiantHues`. Pure data, JVM-tested (`FinishTest`). Android library, no Compose. | **Yes — core** |
 | `:hyle-probe` app (`dev.fonebrew.hyleprobe`) | `hyle-probe/` | Standalone **render harness** APK: `FerrofluidProbe`, `AeonAtomsProbe`, `LensProbe`, `RadiantGlowProbe`, `GlassSandProbe`. The device-verification surface for the look. | **Yes — the gallery** |
 | Compose components | app `ui/aeon/Aeon.kt`, `ui/theme/*`, `ui/wire/*` | The actual `Hyle*` widgets (`HyleButton`, `HyleChip`, `HyleField`, `HyleDropdownField`, `HyleTitle`, `HyleNavChip`), `AeonColors`/`FonebrewTheme`/`ThemePicker`, the wire primitives. | **Phased** — see §4 |
 | The **semantic** | app `domain/material` + `material-language.md` | "local vs from-elsewhere" meaning (a watched object reads differently). App-specific policy, **not** render. | **No — stays in app** |
@@ -35,15 +35,15 @@ hyle/                         # new standalone repo
   docs/material-language.md   # the render half of the language (copy; the semantic stays in app)
 ```
 
-Group/artifact: `dev.aarso:hyle:<version>` to start (zero churn). The neutral rename
-(`dev.aarso.hyle` → e.g. `dev.hyle` / `io.hyle`) is **deferred** to align with the app's own
+Group/artifact: `com.asystemofcells:hyle:<version>` to start (zero churn). The neutral rename
+(`com.asystemofcells.hyle` → e.g. `dev.hyle` / `io.hyle`) is **deferred** to align with the app's own
 Sprint R package rename — do it once, later, not now.
 
 ## 3. Consumption model — pick one (recommendation: B then A)
 
-- **A. Maven publication (end state).** New repo publishes `dev.aarso:hyle` to **GitHub Packages**
+- **A. Maven publication (end state).** New repo publishes `com.asystemofcells:hyle` to **GitHub Packages**
   (private, same account) or Maven Local for dev. App swaps `implementation(project(":hyle"))` →
-  `implementation("dev.aarso:hyle:<v>")` + the repo in `dependencyResolutionManagement`. Clean
+  `implementation("com.asystemofcells:hyle:<v>")` + the repo in `dependencyResolutionManagement`. Clean
   versioning; the app pins a version. Best once the API has stabilised.
 - **B. Composite build (bridge, do this first).** App keeps building Hyle from source during the
   transition via `includeBuild("../hyle")` (Gradle composite build) **or** a git **submodule** at
@@ -61,7 +61,7 @@ header says so). Two-phase:
   except the dependency source (project → includeBuild/artifact). Low risk, fully testable.
 - **Phase 2 (after device-verify):** move the render layer into the new repo as a
   `hyle-compose` artifact: `ui/aeon/Aeon.kt` (the `Hyle*` atoms), `ui/theme/AeonColors`,
-  `AccentRamp`, `ThemePicker`, `ui/wire/*`. App then depends on `dev.aarso:hyle-compose`.
+  `AccentRamp`, `ThemePicker`, `ui/wire/*`. App then depends on `com.asystemofcells:hyle-compose`.
   **Keep in the app:** anything that knows about *Aarso domain* (watched-object semantic,
   `LocalHyleColors` wiring to `SessionStore`, screen-specific composition). Hyle ships the
   *vocabulary*; the app composes sentences.
@@ -101,7 +101,7 @@ header says so). Two-phase:
 ## 7. Definition of done
 - [ ] `hyle` repo exists with `hyle/` (lib) + `probe/` (harness), history preserved.
 - [ ] `:hyle:test` green in the new repo's CI; `:probe:assembleDebug` builds.
-- [ ] `hyle` publishes `dev.aarso:hyle:<v>` (Maven Local at minimum; GitHub Packages ideally).
+- [ ] `hyle` publishes `com.asystemofcells:hyle:<v>` (Maven Local at minimum; GitHub Packages ideally).
 - [ ] App consumes it (composite build first), green on both flavors, render-neutral.
 - [ ] App `CLAUDE.md` + `docs/status.md` note Hyle as an external dependency.
 - [ ] (Phase 2, later) `hyle-compose` extracted; `ui/aeon`/`ui/wire` Hyle atoms moved out.

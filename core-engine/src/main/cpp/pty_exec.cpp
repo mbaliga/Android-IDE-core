@@ -27,7 +27,7 @@
 #include <vector>
 #include <string>
 
-#define LOG_TAG "aarso-pty"
+#define LOG_TAG "fonebrew-pty"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 extern "C" JNIEXPORT jintArray JNICALL

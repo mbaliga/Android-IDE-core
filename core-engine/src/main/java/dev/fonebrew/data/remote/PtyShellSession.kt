@@ -69,7 +69,7 @@ class PtyShellSession private constructor(
                 rows, cols,
             )
             check(result.size == 2 && result[0] >= 0 && result[1] > 0) {
-                "pty spawn failed (see logcat tag aarso-pty for errno)"
+                "pty spawn failed (see logcat tag fonebrew-pty for errno)"
             }
             val masterFdRaw = result[0]
             val pid = result[1]

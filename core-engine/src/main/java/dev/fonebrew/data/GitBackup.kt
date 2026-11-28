@@ -42,15 +42,24 @@ class GitBackup(
      */
     suspend fun pull(host: GitHost, token: String): Result<PullReport> = runCatching {
         val files = LinkedHashMap<String, String>()
-        val dir = transport.execute(GitContentsApi.listDir(host, "aarso/nodes", token))
-        if (dir.code !in 200..299) error("HTTP ${dir.code} listing nodes — nothing to restore")
-        val arr = runCatching { JSONArray(dir.body) }.getOrNull() ?: JSONArray()
-        for (i in 0 until arr.length()) {
-            val path = arr.getJSONObject(i).optString("path")
-            if (path.isBlank() || !path.endsWith(".json")) continue
-            val f = transport.execute(GitContentsApi.getFile(host, path, token))
-            if (f.code in 200..299) decodeContentsBody(f.body)?.let { files[path] = it }
+        // Current layout first, then the pre-rename `aarso/` layout (read-only): a repo synced by an
+        // older build must still restore. Either directory may be absent; only both failing is an error.
+        var lastCode = 0
+        var listed = false
+        for (nodesDir in listOf(TreeArchive.NODES_DIR_PATH, TreeArchive.LEGACY_NODES_DIR_PATH)) {
+            val dir = transport.execute(GitContentsApi.listDir(host, nodesDir, token))
+            lastCode = dir.code
+            if (dir.code !in 200..299) continue
+            listed = true
+            val arr = runCatching { JSONArray(dir.body) }.getOrNull() ?: JSONArray()
+            for (i in 0 until arr.length()) {
+                val path = arr.getJSONObject(i).optString("path")
+                if (path.isBlank() || !path.endsWith(".json")) continue
+                val f = transport.execute(GitContentsApi.getFile(host, path, token))
+                if (f.code in 200..299) decodeContentsBody(f.body)?.let { files[path] = it }
+            }
         }
+        if (!listed) error("HTTP $lastCode listing nodes — nothing to restore")
         val incoming = TreeArchive.read(files)
         val existing = repository.tree().allNodes().map { it.id }.toSet()
         val plan = TreeBackup.importPlan(incoming, existing)
@@ -61,7 +70,7 @@ class GitBackup(
     /** Repo-relative paths already present (the nodes dir listing + the manifest). */
     private suspend fun remoteExisting(host: GitHost, token: String): Set<String> {
         val out = HashSet<String>()
-        val dir = transport.execute(GitContentsApi.listDir(host, "aarso/nodes", token))
+        val dir = transport.execute(GitContentsApi.listDir(host, TreeArchive.NODES_DIR_PATH, token))
         if (dir.code in 200..299) {
             runCatching { JSONArray(dir.body) }.getOrNull()?.let { arr ->
                 for (i in 0 until arr.length()) {

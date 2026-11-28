@@ -47,9 +47,9 @@ import dev.fonebrew.domain.loop.Distiller
 import dev.fonebrew.domain.loop.DocumentExtract
 import dev.fonebrew.domain.loop.Loop
 import dev.fonebrew.domain.model.ModelSpec
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleDropdownField
-import dev.aarso.hyle.cells.HyleField
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleDropdownField
+import com.asystemofcells.hyle.cells.HyleField
 import dev.fonebrew.inference.EngineGenerator
 import dev.fonebrew.service.OnDeviceDictation
 import kotlinx.coroutines.launch

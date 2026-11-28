@@ -216,15 +216,15 @@ class AppContainer(context: Context) {
     /** Content routed in from share / process-text / assist (§7). */
     val sharedIntake: SharedIntake = SharedIntake()
 
-    /** The shared Regular/asoc interaction-mode choice (2026-09-15 ruling; `dev.aarso:
+    /** The shared Regular/asoc interaction-mode choice (2026-09-15 ruling; `com.asystemofcells:
      *  interaction-mode`, composited exactly like `:crash-recovery` above — see
      *  settings.gradle.kts). `legacySignal` is read directly off [SessionStore]'s own prefs file
      *  via [SessionStore.legacySignal] (a static helper, not a full [SessionStore] instance) —
      *  [sessionStore] itself is constructed just below and needs the resolved mode back, for its
      *  own mode-aware gesture-toggle defaults (see that constructor's KDoc). */
-    val interactionModeStore: dev.aarso.interactionmode.InteractionModeStore =
-        dev.aarso.interactionmode.PrefsInteractionModeStore(
-            prefs = context.applicationContext.getSharedPreferences("aarso.interaction_mode", Context.MODE_PRIVATE),
+    val interactionModeStore: com.asystemofcells.interactionmode.InteractionModeStore =
+        com.asystemofcells.interactionmode.PrefsInteractionModeStore(
+            prefs = context.applicationContext.getSharedPreferences("fonebrew.interaction_mode", Context.MODE_PRIVATE),
             legacySignal = SessionStore.legacySignal(context.applicationContext),
         )
 
@@ -324,7 +324,7 @@ class AppContainer(context: Context) {
     val freeTierUpdater: dev.fonebrew.data.FreeTierUpdater = dev.fonebrew.data.FreeTierUpdater(context)
 
     /** The shared model catalog (bundled JSON, Nooz-refreshed — see docs/STATE.md): one-click
-     *  download entries for chat GGUFs and SD checkpoints alike. Aarso no longer hand-maintains
+     *  download entries for chat GGUFs and SD checkpoints alike. Fonebrew no longer hand-maintains
      *  its own model list. */
     val modelCatalogStore: dev.fonebrew.data.ModelCatalogStore = dev.fonebrew.data.ModelCatalogStore(context)
     /** Consented online refresh of the model catalog (never automatic without opt-in).

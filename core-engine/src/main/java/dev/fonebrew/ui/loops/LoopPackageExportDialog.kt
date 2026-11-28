@@ -22,13 +22,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleChip
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.cells.HyleFocusLens
-import dev.aarso.hyle.cells.HyleLensActions
-import dev.aarso.hyle.cells.HyleLensHeading
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleChip
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.cells.HyleFocusLens
+import com.asystemofcells.hyle.cells.HyleLensActions
+import com.asystemofcells.hyle.cells.HyleLensHeading
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.domain.bpmn.BpmnGraph
 import dev.fonebrew.domain.loop.LoopPackageCodec
 

@@ -59,7 +59,7 @@ GMS-free transport (raw BLE GATT) is a real alternative and a real project; park
 follow-up, not silently dismissed.
 
 **Consequence of matching appIds:** `:watchbrew` declares the same `dist` flavor pair as the
-phone app — `full` → `dev.aarso.full`, `play` → `dev.aarso` — and must be signed with the same
+phone app — `full` → `dev.fonebrew.full`, `play` → `dev.fonebrew` — and must be signed with the same
 key as the phone build it pairs with. Watch version spine starts fresh at **0.1.0 (1)**
 (different device, independent monotonic line).
 

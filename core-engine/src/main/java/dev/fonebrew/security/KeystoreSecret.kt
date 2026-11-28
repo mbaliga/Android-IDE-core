@@ -21,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec
 object KeystoreSecret {
 
     private const val KEYSTORE = "AndroidKeyStore"
-    private const val ALIAS = "aarso.cloud.apikeys"
+    private const val ALIAS = "fonebrew.cloud.apikeys"
     private const val TRANSFORM = "AES/GCM/NoPadding"
     private const val GCM_TAG_BITS = 128
 

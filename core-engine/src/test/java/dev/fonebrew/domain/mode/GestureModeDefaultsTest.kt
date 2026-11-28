@@ -1,6 +1,6 @@
 package dev.fonebrew.domain.mode
 
-import dev.aarso.interactionmode.InteractionMode
+import com.asystemofcells.interactionmode.InteractionMode
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

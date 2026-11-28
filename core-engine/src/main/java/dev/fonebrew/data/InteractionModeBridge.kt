@@ -1,13 +1,13 @@
 package dev.fonebrew.data
 
-import dev.aarso.interactionmode.InteractionMode
-import dev.aarso.interactionmode.InteractionModeStore
+import com.asystemofcells.interactionmode.InteractionMode
+import com.asystemofcells.interactionmode.InteractionModeStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * App-side, Compose-observable wrapper around [InteractionModeStore]. `dev.aarso:interaction-mode`
+ * App-side, Compose-observable wrapper around [InteractionModeStore]. `com.asystemofcells:interaction-mode`
  * deliberately ships [InteractionModeStore.mode] as a plain getter rather than a `Flow`, to stay
  * dependency-free (see that interface's own KDoc, which names a reactive wrapper as a NAMED
  * FOLLOW-UP for "once a real consumer needs to react to changes instead of re-reading" — this is

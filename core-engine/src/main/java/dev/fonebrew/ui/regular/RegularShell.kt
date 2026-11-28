@@ -20,8 +20,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aarso.hyle.cells.HyleBottomTabBar
-import dev.aarso.hyle.cells.HyleTabSpec
+import com.asystemofcells.hyle.cells.HyleBottomTabBar
+import com.asystemofcells.hyle.cells.HyleTabSpec
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.ui.ChatScreen
 import dev.fonebrew.ui.ChatViewModel

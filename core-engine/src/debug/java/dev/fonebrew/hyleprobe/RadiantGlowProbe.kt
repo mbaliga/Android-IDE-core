@@ -31,8 +31,8 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.aarso.hyle.Pulse
-import dev.aarso.hyle.RadiantHues
+import com.asystemofcells.hyle.Pulse
+import com.asystemofcells.hyle.RadiantHues
 import kotlin.math.min
 
 // AGSL: a soft radial glow whose intensity breathes on a slow sinusoid (the Pulse

@@ -1,8 +1,8 @@
 package dev.fonebrew.ui.rooms
 
-import dev.aarso.hyle.component.HyleContextMenuItem
-import dev.aarso.hyle.component.HyleTreeIconKind
-import dev.aarso.hyle.component.HyleTreeItem
+import com.asystemofcells.hyle.component.HyleContextMenuItem
+import com.asystemofcells.hyle.component.HyleTreeIconKind
+import com.asystemofcells.hyle.component.HyleTreeItem
 import dev.fonebrew.data.GitBrowse
 
 /**
@@ -34,7 +34,7 @@ internal fun buildGitBrowseForest(childrenByPath: Map<String, List<GitBrowse.Ent
 }
 
 /**
- * The long-press [dev.aarso.hyle.component.HyleContextMenu] for one tree row, gated on node
+ * The long-press [com.asystemofcells.hyle.component.HyleContextMenu] for one tree row, gated on node
  * kind — mapped ONLY to operations `GitBrowser` already performs: a directory offers
  * Expand/Collapse (the same toggle its chevron drives), a file offers Open (the same
  * [GitBrowse.read] its row tap already does); both kinds offer Copy path, the same

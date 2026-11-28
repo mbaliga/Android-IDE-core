@@ -11,8 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.theme.LocalHyleColors
 
 /**
  * The input-prefix ("sigil") family a composer/terminal input recognizes. Each one is a

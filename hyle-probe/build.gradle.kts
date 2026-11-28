@@ -29,7 +29,7 @@ android {
 
 dependencies {
     // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts).
-    implementation("dev.aarso:hyle:0.2.0")
+    implementation("com.asystemofcells:hyle:0.2.0")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

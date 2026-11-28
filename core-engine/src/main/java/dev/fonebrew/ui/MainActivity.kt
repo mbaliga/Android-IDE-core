@@ -7,9 +7,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import dev.aarso.crashrecovery.CrashRecovery
-import dev.aarso.hyle.theme.DefaultAccent
-import dev.aarso.hyle.theme.parseHexColor
+import com.asystemofcells.crashrecovery.CrashRecovery
+import com.asystemofcells.hyle.theme.DefaultAccent
+import com.asystemofcells.hyle.theme.parseHexColor
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.Intake
 import dev.fonebrew.ui.theme.FonebrewCrashRecoveryStyle

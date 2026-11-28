@@ -116,7 +116,7 @@ data class CouncilCard(
 /**
  * A photo picked or captured but not yet sent (daily-driver.md W1 — vision input): already
  * downscaled + re-encoded and saved via [AttachmentStore] (so the strip can thumbnail it via
- * [dev.aarso.hyle.cells.FileImage] like any other on-disk image), just not yet attached to a
+ * [com.asystemofcells.hyle.cells.FileImage] like any other on-disk image), just not yet attached to a
  * sent user node. [id] is a local-only key for the composer strip's remove action, not a tree id.
  */
 data class PendingAttachment(

@@ -1,6 +1,6 @@
 package dev.fonebrew.ui.rooms
 
-import dev.aarso.hyle.component.HyleContextMenuItem
+import com.asystemofcells.hyle.component.HyleContextMenuItem
 
 /**
  * Desktop-class kit §3 ("TreeRoom chain rows" → long-press `HyleContextMenu`) — the long-press

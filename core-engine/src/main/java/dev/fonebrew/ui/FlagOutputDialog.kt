@@ -19,11 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleFocusLens
-import dev.aarso.hyle.cells.HyleLensActions
-import dev.aarso.hyle.cells.HyleLensHeading
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.cells.HyleFocusLens
+import com.asystemofcells.hyle.cells.HyleLensActions
+import com.asystemofcells.hyle.cells.HyleLensHeading
 import dev.fonebrew.flavor.InvocationFeatures
 
 /**

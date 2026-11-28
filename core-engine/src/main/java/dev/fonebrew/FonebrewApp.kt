@@ -1,7 +1,7 @@
 package dev.fonebrew
 
 import android.app.Application
-import dev.aarso.crashrecovery.CrashRecovery
+import com.asystemofcells.crashrecovery.CrashRecovery
 import dev.fonebrew.di.AppContainer
 
 /** Holds the single [AppContainer] for the process. Open so a consumer's own thin :app can

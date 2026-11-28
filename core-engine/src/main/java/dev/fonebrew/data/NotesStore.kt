@@ -18,7 +18,7 @@ data class Note(val id: String, val text: String, val updatedAt: Long)
 class NotesStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.notes", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.notes", Context.MODE_PRIVATE)
 
     private val _notes = MutableStateFlow(load())
     val notes: StateFlow<List<Note>> = _notes.asStateFlow()

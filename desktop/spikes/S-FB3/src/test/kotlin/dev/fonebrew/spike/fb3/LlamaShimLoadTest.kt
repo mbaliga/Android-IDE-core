@@ -17,7 +17,7 @@ class LlamaShimLoadTest {
     private val variant = System.getProperty("spike.variant")
     private val nativeDir = File(System.getProperty("spike.nativeDir"))
     private val logDir = File(System.getProperty("spike.logDir"))
-    private val shim = File(nativeDir, "libaarso_llama.so")
+    private val shim = File(nativeDir, "libfonebrew_llama.so")
 
     private fun run(vararg cmd: String): String {
         val p = ProcessBuilder(*cmd).redirectErrorStream(true).start()
@@ -37,11 +37,11 @@ class LlamaShimLoadTest {
         assertTrue("ELF64" in header && "X86-64" in header && "DYN" in header, header)
     }
 
-    @Test fun `System_loadLibrary aarso_llama loads the shim and its ggml code into this JVM`() {
-        LlamaCppEngine() // companion init => System.loadLibrary("aarso_llama"), exactly as core does
+    @Test fun `System_loadLibrary fonebrew_llama loads the shim and its ggml code into this JVM`() {
+        LlamaCppEngine() // companion init => System.loadLibrary("fonebrew_llama"), exactly as core does
         val mapped = mappedPaths().toSet()
         println("S-FB3 [$variant] mapped native libs: ${mapped.filter { Regex("\\.so(\\.\\d+)*$").containsMatchIn(it) && ("aarso" in it || "ggml" in it || "llama" in it) }.sorted()}")
-        assertTrue(mapped.any { it.endsWith("/libaarso_llama.so") }, "shim not mapped into the JVM")
+        assertTrue(mapped.any { it.endsWith("/libfonebrew_llama.so") }, "shim not mapped into the JVM")
         if (variant == "shared") {
             // ggml's CMake installs versioned sonames (libllama.so.0 ...) into <build>/bin
             for (lib in listOf("libllama", "libggml", "libggml-base", "libggml-cpu"))

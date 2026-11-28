@@ -29,7 +29,7 @@ data class Incident(
 class IncidentsStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.incidents", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.incidents", Context.MODE_PRIVATE)
 
     private val _incidents = MutableStateFlow(load())
     val incidents: StateFlow<List<Incident>> = _incidents.asStateFlow()

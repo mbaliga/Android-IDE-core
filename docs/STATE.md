@@ -15,7 +15,7 @@ on-device Claude Code with loop engineering," extending into a real **agentic ID
 propose+review+commit changes, drive devices like a Pi/Arduino), with **deterministic on-device
 search** across everything you've ever said to a model. Free and open to *build*; a paid
 "Studio" layer to *ship & sell* a product. Current shipped build: **v0.13.0** on the `apk-dist`
-branch (`aarso-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
+branch (`fonebrew-sd.apk`). The app compiles, all JVM tests pass, the full APK assembles; everything
 runtime/device-side is **owner-verified only** (no device, board, or SSH host in CI).
 
 ---
@@ -38,7 +38,7 @@ the dependency direction sinks toward the routing engine.
 | Component | What it is | Source | Status |
 |---|---|---|---|
 | **Aarso / Workbench** (main app) | The computing environment: chat, models, loops, tree, agentic IDE | **Open core** (this repo, `mbaliga/mobile-llm`) | Shipping (v0.13.0) |
-| **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | **Done** — its own repo `mbaliga/Hyle-Design-System`, single source of `dev.aarso:hyle:0.2.0`, consumed here via git submodule + includeBuild (vendored copy deleted; `0.1.0` retired) |
+| **Hyle** | The render-side **design system** (tokens + contract; later the Compose atoms) | **Open** | **Done** — its own repo `mbaliga/Hyle-Design-System`, single source of `com.asystemofcells:hyle:0.2.0`, consumed here via git submodule + includeBuild (vendored copy deleted; `0.1.0` retired) |
 | **PM + authoring** | A companion project-management surface | not in this repo | New repo pending owner; code mostly lives in main today, to be carved out |
 | **Sound & haptics authoring** | A companion authoring app | **Open** | Not started here |
 
@@ -94,7 +94,7 @@ owner-verified only.**
   crash's trace; the next launch shows a minimal **Recovery screen** (Continue / Share report /
   Reset data) instead of bricking — stock Material only, can't re-trigger a theming crash.
 - **Hyle** design-system module: pure tokens (`Finish`/`Pulse`/`RadiantHues`), JVM-tested,
-  publishable as `dev.aarso:hyle:0.1.0`; `:hyle-probe` render harness.
+  publishable as `com.asystemofcells:hyle:0.1.0`; `:hyle-probe` render harness.
 - **Build**: two flavors (full sideload / play policy-safe), `arm64-v8a`, NDK r28; CI runs the JVM
   unit-test gate (the native APK assemble is disabled to avoid runner OOM — **CI never launches
   the app**, which is why device-only crashes were invisible).
@@ -191,7 +191,7 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 ## 4. What's PENDING
 ### Tracked as owner-blocked (need an owner action)
 - ~~**Hyle repo split** (task #2)~~ **DONE (2026-07-02):** Hyle lives in its own repo
-  `mbaliga/Hyle-Design-System` (`dev.aarso:hyle:0.2.0`); core consumes it via git submodule
+  `mbaliga/Hyle-Design-System` (`com.asystemofcells:hyle:0.2.0`); core consumes it via git submodule
   (`hyle-design-system/`) + `includeBuild`, and the vendored `:hyle` module is deleted.
 - **PM/authoring repo**: owner creates the closed repo → carve the Studio layer (Project room,
   Develop→Launch pipeline, playbooks) out of main.
@@ -285,19 +285,19 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 ---
 
 ## 10. Where things live (map)
-- `app/src/main/java/dev/aarso/` — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
+- `app/src/main/java/dev/fonebrew/` — `domain/` (pure, JVM-tested: tree, council, bpmn, loop, diff,
   device, git, ide, remote, **search** + `search/query/`), `data/` (Room tree, stores, repos,
   transports, AgentRepoRunner, DeviceRepo, **search/** — the FTS5 index, projector, indexer,
   retrieval), `inference/` (engines, cloud), `ui/` (rooms, loops, develop, codelens,
   ide, remote, theme, aeon, spatial, **search/**), `service/`, `security/`.
-  Search's SQL schema lives at `src/main/sqldelight/dev/aarso/data/search/Search.sq` — the second,
+  Search's SQL schema lives at `src/main/sqldelight/dev/fonebrew/data/search/Search.sq` — the second,
   FTS5-capable database, separate from Room's.
 - `hyle/` design-system module · `hyle-probe/` render harness · `sdengine/` Stable-Diffusion module.
 - `watch-bridge/` WatchBrew wire contract (pure Kotlin) · `watchbrew/` the Wear OS app · phone relay in
   `core-engine/.../data/watch/` — section 12.
 - `docs/` — `design/` (per-surface specs incl. `agentic-ide.md`, `information-architecture.md`),
   `handoff/hyle-extraction.md`, **this file**.
-- `apk-dist` branch — the installable `fonebrew-sd.apk` (the older `aarso-sd.apk` name above is the
+- `apk-dist` branch — the installable `fonebrew-sd.apk` (the older `fonebrew-sd.apk` name above is the
   pre-rename file) and, once published, `fonebrew-watch.apk`; the two are always rebuilt together from
   one container so the debug signatures match (section 12, "The signing trap").
 
@@ -425,7 +425,7 @@ ProtoLayout) and the complication actually render; and battery over a day.
   tagged `via=watchbrew` at insert time; nothing is written retroactively.
 
 **The signing trap.** The Data Layer delivers only between a phone app and a watch app with the same
-applicationId **and** the same signing key (`full` = `dev.aarso.full`, `play` = `dev.aarso`). Debug builds
+applicationId **and** the same signing key (`full` = `dev.fonebrew.full`, `play` = `dev.fonebrew`). Debug builds
 are signed by the building machine's debug keystore, so `fonebrew-watch.apk` and `fonebrew-sd.apk` must be
 rebuilt together from one container in one session and published to `apk-dist` together; one refreshed
 alone (or one from CI and one from a laptop) installs cleanly and then never talks. Check with

@@ -1,9 +1,9 @@
-# S-FB3 part B -- Linux x86_64 CPU build of sdengine's JNI shim (libaarso_sd.so), out of tree.
+# S-FB3 part B -- Linux x86_64 CPU build of sdengine's JNI shim (libfonebrew_sd.so), out of tree.
 #
 # A SEPARATE CMake project from ../CMakeLists.txt on purpose: stable-diffusion.cpp carries its own
 # ggml fork whose targets (`ggml`, `ggml-base`, `ggml-cpu`) collide with llama.cpp's if both are
 # add_subdirectory()'d into one project. core avoids that the same way (two Gradle modules,
-# two CMake projects: :core-engine -> libaarso_llama.so, :sdengine -> libaarso_sd.so), and this
+# two CMake projects: :core-engine -> libfonebrew_llama.so, :sdengine -> libfonebrew_sd.so), and this
 # spike mirrors it. Mirrors sdengine/src/main/cpp/CMakeLists.txt minus the arm64 -march flags
 # and the Android `log` library. Nothing under sdengine/ is edited.
 cmake_minimum_required(VERSION 3.22)
@@ -34,10 +34,10 @@ find_package(JNI REQUIRED)
 
 # The UNMODIFIED sd_jni.cpp; its only Android dependency is <android/log.h>, satisfied by the same
 # compat header S-FB3 part A uses (see ../compat/android/log.h and the README finding F6).
-add_library(aarso_sd SHARED "${SD_CPP}/sd_jni.cpp")
-target_include_directories(aarso_sd PRIVATE
+add_library(fonebrew_sd SHARED "${SD_CPP}/sd_jni.cpp")
+target_include_directories(fonebrew_sd PRIVATE
   "${JNI_INCLUDE_DIRS}"
   "${CMAKE_CURRENT_LIST_DIR}/../compat"
   "${SD_CPP}/stable-diffusion.cpp/include"
   "${SD_CPP}/stable-diffusion.cpp/thirdparty")
-target_link_libraries(aarso_sd PRIVATE stable-diffusion)
+target_link_libraries(fonebrew_sd PRIVATE stable-diffusion)

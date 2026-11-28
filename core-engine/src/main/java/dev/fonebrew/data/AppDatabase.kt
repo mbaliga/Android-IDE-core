@@ -113,6 +113,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun delegationEventDao(): DelegationEventDao
 
     companion object {
-        const val NAME = "aarso.db"
+        const val NAME = "fonebrew.db"
     }
 }

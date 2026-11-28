@@ -33,7 +33,7 @@ data class Participant(
 class CouncilStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.council", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.council", Context.MODE_PRIVATE)
 
     private val _participants = MutableStateFlow(load())
     val participants: StateFlow<List<Participant>> = _participants.asStateFlow()

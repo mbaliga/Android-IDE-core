@@ -19,7 +19,7 @@ import java.util.UUID
  */
 class LoopStore(context: Context) {
 
-    private val prefs = context.applicationContext.getSharedPreferences("aarso.loops", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences("fonebrew.loops", Context.MODE_PRIVATE)
 
     private val _loops = MutableStateFlow(load())
     val loops: StateFlow<List<Loop>> = _loops.asStateFlow()

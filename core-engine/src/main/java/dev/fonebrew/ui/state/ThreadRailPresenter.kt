@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
  * render-ready rows out, no ViewModel/Android dependency).
  *
  * See `ui/components/ThreadRail.kt` for the Compose renderer, which drives
- * [dev.aarso.hyle.cells.hylePulse] off [Dash.pulseWatched].
+ * [com.asystemofcells.hyle.cells.hylePulse] off [Dash.pulseWatched].
  *
  * **Binding constraint 6 (WCAG 1.4.1)**: colour is never the sole carrier. [Dash.thicknessDp]
  * (fidelity) and [Dash.provenance] (which already carries a machine-enforced, distinct
@@ -82,7 +82,7 @@ object ThreadRailPresenter {
         val compactionDiamond: Boolean,
         /** Set only on the root step of a forked/spawned conversation (`TreeFork.LINEAGE_KIND_KEY` metadata) — null everywhere else, including every other step of the same path. */
         val lineageBranch: TreeFork.LineageKind?,
-        /** [dev.aarso.hyle.Pulse.WATCHED] applies only when true — see the class doc's motion note. */
+        /** [com.asystemofcells.hyle.Pulse.WATCHED] applies only when true — see the class doc's motion note. */
         val pulseWatched: Boolean,
         val isBranchPoint: Boolean,
         /** True only for the single transient dash appended by [LiveGeneration] — see [LIVE_DASH_ID]. */

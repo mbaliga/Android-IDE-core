@@ -24,7 +24,7 @@ class WatchbrewModuleGuardTest {
     fun theOnlyProjectDependencyIsWatchBridge_neverCoreEngine_neverTheApp_neverHyle() {
         val projectDeps = Regex("""project\(\s*"([^"]+)"\s*\)""").findAll(build).map { it.groupValues[1] }.toList()
         assertEquals(listOf(":watch-bridge"), projectDeps)
-        for (forbidden in listOf("core-engine", "core_engine", "dev.aarso:hyle", "hyle", "crash-recovery", "interaction-mode", "sdengine", ":app")) {
+        for (forbidden in listOf("core-engine", "core_engine", "com.asystemofcells:hyle", "hyle", "crash-recovery", "interaction-mode", "sdengine", ":app")) {
             assertFalse("build.gradle.kts must not mention '$forbidden'", build.contains(forbidden))
         }
     }
@@ -35,7 +35,7 @@ class WatchbrewModuleGuardTest {
             for (line in SourceTree.codeOnly(file).lines().filter { it.trim().startsWith("import ") }) {
                 val target = line.trim().removePrefix("import ")
                 assertFalse("${file.name}: $target", target.startsWith("dev.fonebrew.core_engine") || target.startsWith("dev.fonebrew.data") ||
-                    target.startsWith("dev.fonebrew.domain") || target.startsWith("dev.fonebrew.inference") || target.startsWith("dev.aarso.hyle") ||
+                    target.startsWith("dev.fonebrew.domain") || target.startsWith("dev.fonebrew.inference") || target.startsWith("com.asystemofcells.hyle") ||
                     target.startsWith("androidx.compose.material3"))
             }
         }
@@ -166,10 +166,10 @@ class WatchbrewModuleGuardTest {
     }
 
     @Test
-    fun applicationIds_matchThePhonePerFlavor_fullIsDevAarsoFull_playIsDevAarso() {
+    fun applicationIds_matchThePhonePerFlavor_fullIsDevFonebrewFull_playIsDevFonebrew() {
         val phone = appId(SourceTree.repoFile("app/build.gradle.kts").path)
         val watch = appId(SourceTree.file("build.gradle.kts").path)
-        assertEquals("dev.aarso", phone.base) // the phone's own contract, asserted so a phone change is noticed here
+        assertEquals("dev.fonebrew", phone.base) // the phone's own contract, asserted so a phone change is noticed here
         assertEquals(phone, watch)
         assertEquals(".full", watch.fullSuffix)
         assertEquals("dist", watch.dimension)
@@ -184,7 +184,7 @@ class WatchbrewModuleGuardTest {
         assertEquals("30", Regex("""minSdk\s*=\s*(\d+)""").find(gradle)!!.groupValues[1])
         assertEquals("36", Regex("""compileSdk\s*=\s*(\d+)""").find(gradle)!!.groupValues[1])
         assertEquals("36", Regex("""targetSdk\s*=\s*(\d+)""").find(gradle)!!.groupValues[1])
-        assertEquals("dev.aarso.watch", Regex("""namespace\s*=\s*"([^"]+)"""").find(gradle)!!.groupValues[1])
+        assertEquals("dev.fonebrew.watch", Regex("""namespace\s*=\s*"([^"]+)"""").find(gradle)!!.groupValues[1])
     }
 
     // ---- APK budget: no native code of ours, no big assets ----

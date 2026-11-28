@@ -30,14 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.FileImage
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleDropdownField
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.cells.HyleSegmentedToggle
-import dev.aarso.hyle.cells.HyleTitle
-import dev.aarso.hyle.component.HyleField as DesktopHyleField
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.FileImage
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleDropdownField
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.cells.HyleSegmentedToggle
+import com.asystemofcells.hyle.cells.HyleTitle
+import com.asystemofcells.hyle.component.HyleField as DesktopHyleField
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.Participant
 import dev.fonebrew.domain.MessageNode

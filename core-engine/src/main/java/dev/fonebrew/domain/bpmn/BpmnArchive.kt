@@ -10,7 +10,8 @@ import javax.xml.parsers.DocumentBuilderFactory
  * library — same minimal-surface stance as `TreeArchive`/`Converters`).
  *
  * A `.bpmn` opens in any BPMN tool; Fonebrew's own data rides in a single
- * `<aarso:meta …/>` extension element per node, so the file stays valid-standard.
+ * `<fonebrew:meta …/>` extension element per node (files written before the rename carry
+ * the same element under the legacy `aarso` namespace; [write] never emits it, [read] still accepts it), so the file stays valid-standard.
  */
 object BpmnArchive {
 
@@ -19,7 +20,10 @@ object BpmnArchive {
     private const val DC = "http://www.omg.org/spec/DD/20100524/DC"
     private const val DI = "http://www.omg.org/spec/DD/20100524/DI"
     private const val XSI = "http://www.w3.org/2001/XMLSchema-instance"
-    private const val AARSO = "https://aarso.dev/bpmn"
+    private const val FONEBREW = "https://fonebrew.dev/bpmn"
+
+    /** Pre-rename namespace — read-only, never written. Files and `.floop` packages in the wild carry it. */
+    private const val LEGACY_AARSO = "https://aarso.dev/bpmn"
 
     fun write(g: BpmnGraph): String {
         val s = StringBuilder()
@@ -30,9 +34,9 @@ object BpmnArchive {
             .append("xmlns:dc=\"").append(DC).append("\" ")
             .append("xmlns:di=\"").append(DI).append("\" ")
             .append("xmlns:xsi=\"").append(XSI).append("\" ")
-            .append("xmlns:aarso=\"").append(AARSO).append("\" ")
+            .append("xmlns:fonebrew=\"").append(FONEBREW).append("\" ")
             .append("id=\"defs_").append(esc(g.id)).append("\" ")
-            .append("targetNamespace=\"https://aarso.dev/loops\">").append('\n')
+            .append("targetNamespace=\"https://fonebrew.dev/loops\">").append('\n')
         s.append("  <bpmn:process id=\"").append(esc(g.id)).append("\" name=\"").append(esc(g.name))
             .append("\" isExecutable=\"false\">").append('\n')
 
@@ -41,7 +45,7 @@ object BpmnArchive {
             if (n.name.isNotEmpty()) s.append(" name=\"").append(esc(n.name)).append('"')
             s.append('>').append('\n')
             if (n.ext.isNotEmpty()) {
-                s.append("      <bpmn:extensionElements><aarso:meta")
+                s.append("      <bpmn:extensionElements><fonebrew:meta")
                 for ((k, v) in n.ext) s.append(' ').append(k).append("=\"").append(esc(v)).append('"')
                 s.append("/></bpmn:extensionElements>").append('\n')
             }
@@ -128,7 +132,7 @@ object BpmnArchive {
                 val kind = BpmnNodeKind.fromElement(c.localName) ?: continue
                 val ext = LinkedHashMap<String, String>()
                 childNS(c, BPMN, "extensionElements")?.let { ee ->
-                    childNS(ee, AARSO, "meta")?.let { meta ->
+                    (childNS(ee, FONEBREW, "meta") ?: childNS(ee, LEGACY_AARSO, "meta"))?.let { meta ->
                         val attrs = meta.attributes
                         for (j in 0 until attrs.length) {
                             val a = attrs.item(j)

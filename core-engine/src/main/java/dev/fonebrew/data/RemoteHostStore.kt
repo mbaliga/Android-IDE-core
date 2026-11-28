@@ -22,7 +22,7 @@ import java.util.UUID
 class RemoteHostStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.remote", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.remote", Context.MODE_PRIVATE)
 
     private val _hosts = MutableStateFlow(loadHosts())
     val hosts: StateFlow<List<RemoteHost>> = _hosts.asStateFlow()

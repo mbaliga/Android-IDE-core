@@ -23,7 +23,7 @@ data class ProviderUsage(
 class FreeTierUsageStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.freetierusage", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.freetierusage", Context.MODE_PRIVATE)
 
     private val _usage = MutableStateFlow(load())
     val usage: StateFlow<Map<String, ProviderUsage>> = _usage.asStateFlow()

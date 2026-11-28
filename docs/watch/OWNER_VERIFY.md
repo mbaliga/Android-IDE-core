@@ -29,7 +29,7 @@ symptom from the Data Layer's rules, not one observed here.
 
 - [ ] The two APKs you are installing were **built together, from one container, in the same session**:
       `fonebrew-sd.apk` (phone) and `fonebrew-watch.apk` (watch), both the **`full`** flavor
-      (`dev.aarso.full`). Neither was refreshed alone. (The WatchBrew closeout lane did **not** build
+      (`dev.fonebrew.full`). Neither was refreshed alone. (The WatchBrew closeout lane did **not** build
       or publish either APK to `apk-dist`: the phone's native cross-compile was not attempted there
       and the container has no CMake. The first pair on `apk-dist` must be built together; see
       `CLAUDE.md` "APK delivery". The watch APK builds with `./gradlew :watchbrew:assembleFullDebug`,
@@ -40,7 +40,7 @@ symptom from the Data Layer's rules, not one observed here.
       `certificate SHA-256 digest` lines are **identical**. If they differ, stop: rebuild both from one
       machine and reinstall both.
 - [ ] Phone: install `fonebrew-sd.apk`. Watch: `adb -s <watch-address> install -r fonebrew-watch.apk`.
-      Both report the package `dev.aarso.full` (`adb shell pm list packages dev.aarso`).
+      Both report the package `dev.fonebrew.full` (`adb shell pm list packages dev.fonebrew`).
 - [ ] You did not mix flavors (a `full` phone with a `play` watch is a different applicationId: the
       Data Layer delivers nothing).
 - [ ] Open Fonebrew on the phone once and make sure a model is chosen (section 1 needs one).
@@ -104,7 +104,7 @@ to see the watched glyph on a real reply today, and this checklist does not pret
       shows as watched. Cannot be exercised today; recorded so the glyph is not forgotten.
 - [ ] No API key, token or provider secret is ever visible on the watch, anywhere (it has no
       settings for one, and the wire contract has no field that could carry one). Confirm the watch app
-      requests **no network permission**: `adb -s <watch-address> shell dumpsys package dev.aarso.full`
+      requests **no network permission**: `adb -s <watch-address> shell dumpsys package dev.fonebrew.full`
       lists no `android.permission.INTERNET`. (The only permission expected is the app-private
       `...DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` that AndroidX injects.)
 

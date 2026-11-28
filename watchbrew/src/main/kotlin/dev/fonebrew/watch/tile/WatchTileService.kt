@@ -20,7 +20,7 @@ import dev.fonebrew.watch.core.TileContent
 import dev.fonebrew.watch.core.TilePresenter
 import dev.fonebrew.watch.core.WatchPalette
 import dev.fonebrew.watch.watchRuntime
-import dev.aarso.watch.R
+import dev.fonebrew.watch.R
 
 /**
  * The one Tile: an **Ask** shortcut (tapping anywhere opens the Ask screen) and a snippet of the last

@@ -1,5 +1,5 @@
 // On-device image generation engine: stable-diffusion.cpp (with its OWN ggml)
-// built as a separate native library, libaarso_sd.so. Kept in its own module so
+// built as a separate native library, libfonebrew_sd.so. Kept in its own module so
 // its ggml fork never collides with llama.cpp's ggml in the :app module.
 plugins {
     alias(libs.plugins.android.library)

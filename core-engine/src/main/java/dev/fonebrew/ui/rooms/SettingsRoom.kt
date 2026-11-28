@@ -53,9 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aarso.hyle.cells.HyleSwitch
-import dev.aarso.hyle.component.HyleContextMenu
-import dev.aarso.hyle.component.HyleTree
+import com.asystemofcells.hyle.cells.HyleSwitch
+import com.asystemofcells.hyle.component.HyleContextMenu
+import com.asystemofcells.hyle.component.HyleTree
 import dev.fonebrew.data.GitBrowse
 import dev.fonebrew.data.GitTransport
 import dev.fonebrew.domain.builds.Build
@@ -78,13 +78,13 @@ import dev.fonebrew.data.Object3dProviderConfig
 import dev.fonebrew.domain.object3d.Object3dCloudProvider
 import dev.fonebrew.flavor.InvocationFeatures
 import dev.fonebrew.ui.SettingsViewModel
-import dev.aarso.hyle.component.HyleField as DesktopHyleField
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleChip
-import dev.aarso.hyle.cells.HyleDropdownField
-import dev.aarso.hyle.cells.HyleTitle
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.component.HyleField as DesktopHyleField
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.cells.HyleChip
+import com.asystemofcells.hyle.cells.HyleDropdownField
+import com.asystemofcells.hyle.cells.HyleTitle
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.ui.theme.ThemePicker
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -183,8 +183,8 @@ fun SettingsRoom(
 // One HyleTabSpec per SettingsTab, glyphs unchanged from the original hand-rolled TabGlyph —
 // this IS the bar HyleTabBar (Aeon.kt) was extracted from; now it consumes the shared component
 // instead of keeping its own parallel copy (2026-07-19 tab-bar consolidation).
-private val SettingsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = SettingsTab.entries.map { t ->
-    dev.aarso.hyle.cells.HyleTabSpec(t.label) { tint ->
+private val SettingsTabSpecs: List<com.asystemofcells.hyle.cells.HyleTabSpec> = SettingsTab.entries.map { t ->
+    com.asystemofcells.hyle.cells.HyleTabSpec(t.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
@@ -234,7 +234,7 @@ private val SettingsTabSpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = SettingsT
 
 @Composable
 private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSelect: (SettingsTab) -> Unit) {
-    dev.aarso.hyle.cells.HyleTabBar(
+    com.asystemofcells.hyle.cells.HyleTabBar(
         tabs = SettingsTabSpecs,
         selected = SettingsTab.entries.indexOf(selected),
         onSelect = { onSelect(SettingsTab.entries[it]) },
@@ -245,8 +245,8 @@ private fun SettingsTabBar(selected: SettingsTab, position: String = "TOP", onSe
 // One HyleTabSpec per ModelModality — the exact glyphs the top-level Image/Text/Video/3D tabs
 // used before the Global/Image/Text/Video/3D → General/Models/Dev/About regroup, now nested
 // one level down inside the Models tab.
-private val ModelModalitySpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ModelModality.entries.map { t ->
-    dev.aarso.hyle.cells.HyleTabSpec(t.label) { tint ->
+private val ModelModalitySpecs: List<com.asystemofcells.hyle.cells.HyleTabSpec> = ModelModality.entries.map { t ->
+    com.asystemofcells.hyle.cells.HyleTabSpec(t.label) { tint ->
         val w = size.width; val h = size.height
         val sw = w * 0.09f
         val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
@@ -295,7 +295,7 @@ private val ModelModalitySpecs: List<dev.aarso.hyle.cells.HyleTabSpec> = ModelMo
 
 @Composable
 private fun ModelModalityTabBar(selected: ModelModality, onSelect: (ModelModality) -> Unit) {
-    dev.aarso.hyle.cells.HyleTabBar(
+    com.asystemofcells.hyle.cells.HyleTabBar(
         tabs = ModelModalitySpecs,
         selected = ModelModality.entries.indexOf(selected),
         onSelect = { onSelect(ModelModality.entries[it]) },
@@ -642,7 +642,7 @@ private fun GeneralSettings(
         Column(Modifier.weight(1f)) {
             Text("Interaction style", style = MaterialTheme.typography.bodyMedium)
             Text(
-                if (currentInteractionMode == dev.aarso.interactionmode.InteractionMode.ASOC) {
+                if (currentInteractionMode == com.asystemofcells.interactionmode.InteractionMode.ASOC) {
                     "asoc — the spatial rooms + gesture grammar"
                 } else {
                     "Regular — familiar tabs and buttons"
@@ -810,11 +810,11 @@ private fun InteractionModePickerSheet(onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
-            dev.aarso.hyle.cells.HyleModePicker(
+            com.asystemofcells.hyle.cells.HyleModePicker(
                 selected = if (container.interactionMode.hasExplicitChoice) currentMode.name else null,
                 options = dev.fonebrew.ui.mode.InteractionModeOptions,
                 onSelect = { id ->
-                    container.interactionMode.setMode(dev.aarso.interactionmode.InteractionMode.valueOf(id))
+                    container.interactionMode.setMode(com.asystemofcells.interactionmode.InteractionMode.valueOf(id))
                     onDismiss()
                 },
             )
@@ -908,14 +908,14 @@ private fun AboutSettings() {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         // Debug-only: long-press the version to preview the crash-recovery screen without
-        // actually crashing (dev.aarso:crash-recovery — see that repo's README). Never
+        // actually crashing (com.asystemofcells:crash-recovery — see that repo's README). Never
         // reachable from a release build.
         modifier = if (dev.fonebrew.core_engine.BuildConfig.DEBUG) {
             Modifier.combinedClickable(
                 onClick = {},
                 onLongClick = {
                     context.startActivity(
-                        dev.aarso.crashrecovery.CrashRecovery.previewIntent(
+                        com.asystemofcells.crashrecovery.CrashRecovery.previewIntent(
                             context,
                             appLabel = "Fonebrew",
                             style = dev.fonebrew.ui.theme.FonebrewCrashRecoveryStyle,
@@ -1350,7 +1350,7 @@ private fun GitConnect() {
             CiPanel(h, store.token(h.id).orEmpty(), transport) { ciOpen = false }
         }
         var showActions by remember(h.id) { mutableStateOf(false) }
-        val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+        val haptics = com.asystemofcells.hyle.cells.rememberHyleHaptics()
         HyleCard(
             modifier = Modifier.combinedClickable(
                 onClick = {},

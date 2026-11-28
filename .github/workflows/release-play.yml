@@ -1,6 +1,6 @@
 name: Release (Play AAB)
 
-# Builds a SIGNED Play bundle — the `play` flavor AAB (appId dev.aarso) — for upload
+# Builds a SIGNED Play bundle — the `play` flavor AAB (appId dev.fonebrew) — for upload
 # to the Google Play Console. The upload key lives ENTIRELY in repository Secrets and
 # is decoded to an ephemeral file at build time; it is never committed and never lands
 # in an artifact. Google's Play App Signing holds the real app-signing key — this key

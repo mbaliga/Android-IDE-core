@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class PricingStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.pricing", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.pricing", Context.MODE_PRIVATE)
 
     private val _book = MutableStateFlow(load())
     val book: StateFlow<PricingBook> = _book.asStateFlow()

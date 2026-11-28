@@ -44,9 +44,9 @@ import kotlinx.coroutines.launch
 
 /**
  * The "develop on your repo" room — reskinned to Hyle. The header/tabs call
- * [dev.aarso.hyle.cells.HyleButton]/[dev.aarso.hyle.cells.HyleChip] directly; every facet below still
+ * [com.asystemofcells.hyle.cells.HyleButton]/[com.asystemofcells.hyle.cells.HyleChip] directly; every facet below still
  * calls the same-named [WireBox]/[WireButton]/[Hint] atoms it always has, but those now delegate
- * to [dev.aarso.hyle.cells.HyleCard]/[dev.aarso.hyle.cells.HyleChip] so the whole room picks up the
+ * to [com.asystemofcells.hyle.cells.HyleCard]/[com.asystemofcells.hyle.cells.HyleChip] so the whole room picks up the
  * design system without a per-call-site rewrite. Per brief §7 the free-core facets are exactly:
  *
  *  - **Hardware** → supported boards + detect/troubleshoot + the four control paths
@@ -85,20 +85,20 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
     // any Studio-contributed tab past those four gets a neutral diamond so this room never needs to
     // know Studio's icon set.
     val tabSpecs = listOf(
-        dev.aarso.hyle.cells.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
+        com.asystemofcells.hyle.cells.HyleTabSpec("Hardware") { tint -> hardwareTabGlyph(tint) },
         // Shipping-copy fix (asoc-reachability audit item 3, 2026-09-15): this tab shows the
         // agentic repo-review flow — labelling it "Files" read as a plain file browser. Content
         // unchanged; see [FilesFacet] below.
-        dev.aarso.hyle.cells.HyleTabSpec("Agent") { tint -> filesTabGlyph(tint) },
-        dev.aarso.hyle.cells.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
-        dev.aarso.hyle.cells.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
-    ) + studioTabs.map { st -> dev.aarso.hyle.cells.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
+        com.asystemofcells.hyle.cells.HyleTabSpec("Agent") { tint -> filesTabGlyph(tint) },
+        com.asystemofcells.hyle.cells.HyleTabSpec("Terminal") { tint -> terminalTabGlyph(tint) },
+        com.asystemofcells.hyle.cells.HyleTabSpec("Audit") { tint -> auditTabGlyph(tint) },
+    ) + studioTabs.map { st -> com.asystemofcells.hyle.cells.HyleTabSpec(st.label) { tint -> genericTabGlyph(tint) } }
 
     val universalTabBarPosition by container.sessionStore.tabBarPosition.collectAsState()
     val roomTabBarOverrides by container.sessionStore.roomTabBarPosition.collectAsState()
     val tabBarPosition = roomTabBarOverrides["develop"] ?: universalTabBarPosition
     val tabBarBlock: @Composable () -> Unit = {
-        dev.aarso.hyle.cells.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
+        com.asystemofcells.hyle.cells.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
     }
     val contentBlock: @Composable () -> Unit = {
         when {
@@ -122,13 +122,13 @@ fun DevelopRoom(onClose: () -> Unit, onOpenLoops: () -> Unit = {}) {
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            dev.aarso.hyle.cells.HyleButton("‹ Close", onClick = onClose, secondary = true)
+            com.asystemofcells.hyle.cells.HyleButton("‹ Close", onClick = onClose, secondary = true)
             Spacer(Modifier.width(12.dp))
             Text("Develop", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             // asoc-reachability audit (2026-09-15) item 1c: Loops' one predictable entry point —
             // it's a full spatial room (z-axis), not something that fits this room's own
             // content-swapping tab row (see the class KDoc above).
-            dev.aarso.hyle.cells.HyleButton("Loops ▸", onClick = onOpenLoops, secondary = true)
+            com.asystemofcells.hyle.cells.HyleButton("Loops ▸", onClick = onOpenLoops, secondary = true)
         }
         Spacer(Modifier.height(12.dp))
 
@@ -298,7 +298,7 @@ internal fun BuildsFacet() {
 }
 
 /**
- * A grouped-content box — delegates to [dev.aarso.hyle.cells.HyleCard].
+ * A grouped-content box — delegates to [com.asystemofcells.hyle.cells.HyleCard].
  *
  * Public (not internal): a future dependent module's `StudioDevelopFacets` needs this
  * unqualified, the same as [WireButton]/[Hint] below. No behaviour change.
@@ -308,10 +308,10 @@ fun WireBox(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    dev.aarso.hyle.cells.HyleCard(modifier.padding(vertical = 4.dp), content = content)
+    com.asystemofcells.hyle.cells.HyleCard(modifier.padding(vertical = 4.dp), content = content)
 }
 
-/** A tappable label; [selected] marks tab/segment/toggle state — delegates to [dev.aarso.hyle.cells.HyleChip]. */
+/** A tappable label; [selected] marks tab/segment/toggle state — delegates to [com.asystemofcells.hyle.cells.HyleChip]. */
 @Composable
 fun WireButton(
     label: String,
@@ -319,12 +319,12 @@ fun WireButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    dev.aarso.hyle.cells.HyleChip(selected = selected, onClick = onClick, label = label, enabled = enabled)
+    com.asystemofcells.hyle.cells.HyleChip(selected = selected, onClick = onClick, label = label, enabled = enabled)
 }
 
 @Composable
 fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = dev.aarso.hyle.theme.LocalHyleColors.current.textMid)
+    Text(text, style = MaterialTheme.typography.bodySmall, color = com.asystemofcells.hyle.theme.LocalHyleColors.current.textMid)
 }
 
 /* ---------------------------------------------------------------- Devices */
@@ -464,11 +464,11 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             WireButton("Open Terminal ▸", onClick = onOpenTerminal)
         }
         1 -> {
-            dev.aarso.hyle.cells.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
+            com.asystemofcells.hyle.cells.HyleField(fqbn, { fqbn = it }, label = "FQBN (packager:arch:board)", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            dev.aarso.hyle.cells.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
+            com.asystemofcells.hyle.cells.HyleField(port, { port = it }, label = "Serial port on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            dev.aarso.hyle.cells.HyleField(sketch, { sketch = it }, label = "Sketch path on the host", modifier = Modifier.fillMaxWidth())
+            com.asystemofcells.hyle.cells.HyleField(sketch, { sketch = it }, label = "Sketch path on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 WireButton("List boards", enabled = !running, onClick = {
@@ -492,9 +492,9 @@ private fun HardwareFacet(onOpenTerminal: () -> Unit) {
             }
         }
         2 -> {
-            dev.aarso.hyle.cells.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
+            com.asystemofcells.hyle.cells.HyleField(espIp, { espIp = it }, label = "ESP device IP", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            dev.aarso.hyle.cells.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
+            com.asystemofcells.hyle.cells.HyleField(espBin, { espBin = it }, label = "Firmware .bin path on the host", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
             WireButton(if (running) "Flashing…" else "Flash over network", enabled = !running && espIp.isNotBlank() && espBin.isNotBlank(), onClick = {
                 runRecipe(dev.fonebrew.domain.device.recipe.DeviceRecipes.espOta(espIp.trim(), espBin.trim()), null)
@@ -667,7 +667,7 @@ private fun UsbFlashPanel() {
     hexName?.let { Spacer(Modifier.height(4.dp)); Hint("Picked: $it") }
     if (showPathField) {
         Spacer(Modifier.height(6.dp))
-        dev.aarso.hyle.cells.HyleField(
+        com.asystemofcells.hyle.cells.HyleField(
             hexPath,
             { hexPath = it; if (it.isNotBlank()) { hexUri = null; hexName = null } },
             label = "Absolute path (this app's storage only)",
@@ -771,9 +771,9 @@ private fun FilesFacet() {
         return
     }
     Spacer(Modifier.height(8.dp))
-    dev.aarso.hyle.cells.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
+    com.asystemofcells.hyle.cells.HyleField(objective, { objective = it }, label = "Objective", singleLine = false, modifier = Modifier.fillMaxWidth())
     Spacer(Modifier.height(6.dp))
-    dev.aarso.hyle.cells.HyleField(
+    com.asystemofcells.hyle.cells.HyleField(
         pathsText, { pathsText = it },
         label = "Context files — one path per line",
         singleLine = false,

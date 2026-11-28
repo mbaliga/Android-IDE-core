@@ -6,7 +6,7 @@ package dev.fonebrew.domain.catalog
  * accepted — model selection is the user's, per §3.
  *
  * The curated list itself comes from Nooz's shared `ai-catalogue/models.json` (see
- * [dev.fonebrew.data.ModelCatalogStore] / [ModelCatalogMapper]) — Aarso does not hand-maintain its
+ * [dev.fonebrew.data.ModelCatalogStore] / [ModelCatalogMapper]) — Fonebrew does not hand-maintain its
  * own model list anymore; the per-flavor split is now a runtime [policySafe] filter rather than
  * two separate hardcoded lists.
  */

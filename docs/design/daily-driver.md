@@ -67,7 +67,7 @@ it today).
 so provider drift stops degrading silently. Keep unknown event/block tolerance exactly as is.
 
 **Tests.** Golden-JSON request-builder tests per engine (new
-`app/src/test/java/dev/aarso/inference/cloud/`), following `domain/cost/ProviderUsageTest.kt`
+`app/src/test/java/dev/fonebrew/inference/cloud/`), following `domain/cost/ProviderUsageTest.kt`
 style: assert `max_tokens`/`maxOutputTokens` present, assert flags flow `CloudProvider→ModelSpec`.
 
 ---
@@ -314,7 +314,7 @@ commit.
    limitation in the plan's decision register rather than engineering around it now.
 
 **Studio surface (`/workspace/android-ide-studio`, new unique files only):**
-- `app/src/full/java/dev/aarso/studio/call/CallSurface.kt` (+ controller): full-screen call UI
+- `app/src/full/java/dev/fonebrew/studio/call/CallSurface.kt` (+ controller): full-screen call UI
   (avatar, state label, hold-to-talk button, hang-up, speaker toggle), installed into core's
   `CallSlot` from `StudioEntryPoint.kt:36/47` (`installStudioEntryPoint`/`reinstallStudioSeams`
   — the existing pattern at those exact lines).
@@ -325,7 +325,7 @@ commit.
   carries an image node (`IMAGE_KEY`) or an artifact block, show it full-bleed in the call
   surface. Flavor-safe (no mediaProjection — that's user-screen-sharing, not this).
 - Tests: FSM tests live in **core** (`domain/call/`); Studio adds a seam test mirroring
-  `DevelopTabsTest.kt:10` under `app/src/testFull/java/dev/aarso/studio/`.
+  `DevelopTabsTest.kt:10` under `app/src/testFull/java/dev/fonebrew/studio/`.
 - Gate in Studio: `./gradlew :app:testFullDebugUnitTest :app:testPlayDebugUnitTest :hyle:test
   :app:checkLicense` (its CI shape).
 

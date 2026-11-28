@@ -1,7 +1,7 @@
 package dev.fonebrew.data
 
 import android.content.Context
-import dev.aarso.interactionmode.InteractionMode
+import com.asystemofcells.interactionmode.InteractionMode
 import dev.fonebrew.domain.mode.GestureModeDefaults
 import dev.fonebrew.domain.mode.ModeLegacySignal
 import dev.fonebrew.domain.tree.Bookmarks
@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class SessionStore(context: Context, private val modeProvider: () -> InteractionMode = { InteractionMode.ASOC }) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.session", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.session", Context.MODE_PRIVATE)
 
     private val _activeLeafId = MutableStateFlow(prefs.getString(KEY_LEAF, null))
     val activeLeafId: StateFlow<String?> = _activeLeafId.asStateFlow()
@@ -413,12 +413,12 @@ class SessionStore(context: Context, private val modeProvider: () -> Interaction
         /**
          * Reads the pre-bifurcation legacy signal ([ModeLegacySignal]) directly off this store's
          * own SharedPreferences file, WITHOUT constructing a full [SessionStore] — used by
-         * [dev.fonebrew.di.AppContainer] to resolve `dev.aarso:interaction-mode`'s `legacySignal`
+         * [dev.fonebrew.di.AppContainer] to resolve `com.asystemofcells:interaction-mode`'s `legacySignal`
          * before [SessionStore] itself exists (that constructor, in turn, needs the resolved mode
          * back, for [GestureModeDefaults] — see its own KDoc for why the two are ordered this way).
          */
         fun legacySignal(context: Context): Boolean {
-            val prefs = context.applicationContext.getSharedPreferences("aarso.session", Context.MODE_PRIVATE)
+            val prefs = context.applicationContext.getSharedPreferences("fonebrew.session", Context.MODE_PRIVATE)
             return ModeLegacySignal.resolve(
                 onboardingDone = prefs.getBoolean(KEY_ONBOARDED, false),
                 spatialMapSeen = prefs.getBoolean(KEY_SPATIAL_MAP, false),
@@ -431,7 +431,7 @@ class SessionStore(context: Context, private val modeProvider: () -> Interaction
 
         // Default free-tier source: Nooz's shared `ai-catalogue/free-tiers.json` — the
         // constellation's canonical, continually-refreshed copy (see that repo's
-        // ai-catalogue/README.md); Aarso no longer hand-maintains its own free-tier pipeline.
+        // ai-catalogue/README.md); Fonebrew no longer hand-maintains its own free-tier pipeline.
         // Editable in the UI (point it at wherever the list is published). The fetch only
         // happens with consent. `main` is nooz's real canonical branch as of nooz PR #1 (its
         // pre-init placeholder history and the short-lived `claude/app-build-d1f9s6` line are

@@ -6,7 +6,7 @@ package dev.fonebrew.inference
  * core-engine/src/main/java/dev/fonebrew/inference/LlamaCppEngine.kt, because JNI resolves
  * `Java_dev_fonebrew_inference_LlamaCppEngine_*` by exactly that name. `TokenSink` is the same
  * shape too (the shim looks up onToken/onDone/onError by name + descriptor).
- * The loader is the same call core makes: System.loadLibrary("aarso_llama").
+ * The loader is the same call core makes: System.loadLibrary("fonebrew_llama").
  */
 class LlamaCppEngine {
 
@@ -40,7 +40,7 @@ class LlamaCppEngine {
 
     companion object {
         init {
-            System.loadLibrary("aarso_llama")
+            System.loadLibrary("fonebrew_llama")
         }
     }
 }

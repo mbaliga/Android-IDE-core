@@ -100,7 +100,7 @@ object MessageDragLogic {
          *  composer (Owner decision 1). */
         data object Quote : Intent
 
-        /** Pull-right held ≥400ms: fan Branch/Fork/Spawn ([dev.aarso.hyle.cells.HyleRadialMenu]).
+        /** Pull-right held ≥400ms: fan Branch/Fork/Spawn ([com.asystemofcells.hyle.cells.HyleRadialMenu]).
          *  `anchorDxDp`/`anchorDyDp` are the current offset from the down point, in case the
          *  caller wants to anchor the fan at the drag position rather than the original touch. */
         data class OpenRadial(val anchorDxDp: Float, val anchorDyDp: Float) : Intent

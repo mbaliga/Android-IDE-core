@@ -1,11 +1,11 @@
-# Native build for the llama.cpp JNI bridge (aarso_llama) and the local-terminal PTY bridge
-# (aarso_pty). Both are wired into app/build.gradle.kts via the same externalNativeBuild block
+# Native build for the llama.cpp JNI bridge (fonebrew_llama) and the local-terminal PTY bridge
+# (fonebrew_pty). Both are wired into app/build.gradle.kts via the same externalNativeBuild block
 # (one CMakeLists.txt, two SHARED library targets -- AGP packages every target this file
-# produces). aarso_llama requires the NDK and the llama.cpp submodule checked out at
-# ./llama.cpp; aarso_pty has no external dependency beyond bionic's POSIX pty calls.
+# produces). fonebrew_llama requires the NDK and the llama.cpp submodule checked out at
+# ./llama.cpp; fonebrew_pty has no external dependency beyond bionic's POSIX pty calls.
 
 cmake_minimum_required(VERSION 3.22.1)
-project(aarso_llama LANGUAGES C CXX)
+project(fonebrew_llama LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,17 +30,17 @@ set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(llama.cpp)
 
-add_library(aarso_llama SHARED llama_jni.cpp)
+add_library(fonebrew_llama SHARED llama_jni.cpp)
 
 find_library(log-lib log)
 
-target_link_libraries(aarso_llama
+target_link_libraries(fonebrew_llama
     llama
     ${log-lib})
 
 # The PTY bridge is plain C/C++ against bionic -- no llama.cpp/GGML dependency, so it isn't
 # affected by the -march tuning above (harmless either way; it's a tiny, non-hot-path file).
-add_library(aarso_pty SHARED pty_exec.cpp)
+add_library(fonebrew_pty SHARED pty_exec.cpp)
 
-target_link_libraries(aarso_pty
+target_link_libraries(fonebrew_pty
     ${log-lib})

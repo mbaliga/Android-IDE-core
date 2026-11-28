@@ -22,11 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleSwitch
-import dev.aarso.hyle.cells.HyleTitle
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.cells.HyleSwitch
+import com.asystemofcells.hyle.cells.HyleTitle
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.domain.diff.ChangeSet
 import dev.fonebrew.domain.diff.Decision
 import dev.fonebrew.domain.diff.FileChange

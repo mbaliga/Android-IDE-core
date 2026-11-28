@@ -20,7 +20,7 @@ import java.util.UUID
 class GitHostStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.git", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.git", Context.MODE_PRIVATE)
 
     private val _hosts = MutableStateFlow(load())
     val hosts: StateFlow<List<GitHost>> = _hosts.asStateFlow()

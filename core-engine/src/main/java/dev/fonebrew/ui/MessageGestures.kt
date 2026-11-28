@@ -19,8 +19,8 @@ import dev.fonebrew.domain.curation.CompactionContract
 import dev.fonebrew.domain.curation.Fates
 import dev.fonebrew.domain.curation.Verdict
 import dev.fonebrew.domain.gesture.MessageDragLogic
-import dev.aarso.hyle.cells.HyleHaptics
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleHaptics
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 

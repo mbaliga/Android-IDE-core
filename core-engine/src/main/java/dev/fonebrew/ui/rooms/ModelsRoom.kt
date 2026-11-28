@@ -44,11 +44,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aarso.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleButton
 import androidx.compose.ui.platform.LocalContext
-import dev.aarso.hyle.cells.HyleCard
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleCard
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.domain.device.FitVerdict
 import dev.fonebrew.ui.ImagesViewModel
@@ -410,7 +410,7 @@ private fun PagerPositionIndicator(state: PagerState, count: Int, modifier: Modi
  * typographic hierarchy (name → spec → a coloured fit-status badge, not cramped default `Text`
  * stacking) and the inline download lifecycle.
  *
- * Container colour is [dev.aarso.hyle.theme.HyleColors.inset] rather than the M3
+ * Container colour is [com.asystemofcells.hyle.theme.HyleColors.inset] rather than the M3
  * `colorScheme.surfaceVariant` this used to read (owner ask #2's root-cause diagnosis:
  * [dev.fonebrew.ui.theme.FonebrewTheme] maps `surfaceVariant` to the SAME `c.raised` token the
  * surrounding page background derives from — `ink`/`raised` sit one hair-step apart, e.g.

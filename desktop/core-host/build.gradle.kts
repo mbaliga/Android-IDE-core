@@ -21,7 +21,7 @@
 //     1. domain/authority/AuditedAuthorityEngine.kt        -> imports data/ReceiptStore   (plan-named)
 //     2. domain/execution/CiActionsExecutionProvider.kt    -> imports data/GitTransport   (plan-named)
 //     3. domain/mode/GestureModeDefaults.kt                -> imports shared-libraries'
-//        dev.aarso.interactionmode.InteractionMode (NOT plan-named: appeared after the plan was
+//        com.asystemofcells.interactionmode.InteractionMode (NOT plan-named: appeared after the plan was
 //        written; reported as a finding, not silently absorbed)
 //   EXCLUDED test files: the tests of the three above, plus LoopTemplateCatalogTest (imports the
 //   Context-bound data/LoopTemplateAssets). LX-3 (Android-side, gated) removes the first two

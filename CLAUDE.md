@@ -1,9 +1,9 @@
-# CLAUDE.md — Fonebrew (formerly "Aarso/Workbench") build handoff
+# CLAUDE.md — Fonebrew build handoff
 
-**Aarso** (*mirror*; package `dev.fonebrew`) is a local-first Android app for working with multiple
-AI models. Its design thesis is **legibility + cognitive sovereignty** — a *tool-as-argument*
-artifact, not a generic chat client. Where a fork exists, prefer the option that makes
-routing/influence visible and keeps the user in the loop, even at some cost to convenience.
+**Fonebrew** (package and application id `dev.fonebrew`) is a local-first Android app for working
+with multiple AI models. Its design thesis is **legibility + cognitive sovereignty** — a
+*tool-as-argument* artifact, not a generic chat client. Where a fork exists, prefer the option that
+makes routing/influence visible and keeps the user in the loop, even at some cost to convenience.
 
 > **Read `docs/STATE.md` first.** It is the living index of *what's done / pending / the end
 > goal* across the whole constellation. This file is the **build rules + how-to-continue**;
@@ -15,17 +15,22 @@ The product is a **post-desktop, touch-native computing environment** that makes
 **sovereign primary device** — sovereign because every layer is legible, not because the work is
 effortless. The agent is what lets you do real computing work without desktop fluency.
 
-Two names, two scopes (do not conflate):
-- **Fonebrew** — the **host app** (the computing environment) — **owner-decided, final** (was the
-  placeholder "Workbench"; that name is retired, don't reintroduce it). Everything that isn't the
-  lens is Fonebrew. The launcher label (`core-engine/src/main/res/values/strings.xml` /
-  `src/full/…`) reads "Fonebrew" — **do not revert it to "Aarso."**
-- **Aarso** (*mirror*) — the **within-axis self-reflection lens** only. Bounded `domain/mirror/`
-  seam, ships **inert**, carries **no §5b/§5c metric logic** — ⛔ blocked on Issue #2 (rule 4).
-  Package name (`dev.fonebrew`), class names (`FonebrewApp`, `Theme.Aarso`), and repo names are
-  **unchanged for now** — the rename is decoupled from the app-facing name above, deferred to a
-  late "Sprint R." Don't let that stale internal naming pull the *user-facing* label back to
-  "Aarso"; the two are independent axes.
+Names, one scope each (do not conflate):
+- **Fonebrew** — the **host app** (the computing environment) — **owner-decided, final**. The old
+  placeholders ("Workbench", "FoneBru", "Phonebrew") are retired; don't reintroduce them. Everything
+  that isn't the lens is Fonebrew: package/appId `dev.fonebrew`, native libs `libfonebrew_*.so`,
+  `fonebrew-sd.apk`, the tree-sync layout `fonebrew/`, the BPMN namespace `fonebrew.dev`.
+- **Aarso** (*mirror*) — a **distinct module**: the within-axis self-reflection lens, shared across
+  repos and **separate from Fonebrew**. Here it is only the bounded `domain/mirror/` seam, ships
+  **inert**, carries **no §5b/§5c metric logic** — ⛔ blocked on Issue #2 (rule 4). Its names
+  (`AarsoEventLog`, `AarsoCaptureSettings`, `aarso/events.jsonl`) are intentional and stay.
+- **Hyle**, **crash-recovery**, **interaction-mode** and the other shared libraries are their own
+  things (Hyle is the design system and the font family). They live under the Maven group and
+  Kotlin package root **`com.asystemofcells`** — *not* `dev.aarso`; Aarso is not a namespace for
+  shared infrastructure.
+- **Legacy reads (never writes):** the pre-rename tree-sync layout `aarso/` + format `aarso-tree`,
+  and the BPMN namespace `https://aarso.dev/bpmn`, are still **read** so existing repos and `.floop`
+  packages load. Do not remove that read path without an owner-run migration.
 
 ## Binding rules (owner-set, do not relax)
 1. **No telemetry, analytics, or phoning home. Ever.** Zero such dependencies.
@@ -43,14 +48,14 @@ Two names, two scopes (do not conflate):
    behaviour works — the build env has no device/emulator; the owner tests on the phone.
 
 ## Target device & conventions
-- Naming register: follow the codebase (e.g. *Fonebrew*, *Hyle*).
+- Naming register: follow the codebase (e.g. *Fonebrew*, *Hyle*, *Aarso* for the lens only).
 - Target: **a high-end arm64-v8a Android phone** (large unified RAM, recent Android). `minSdk 31`,
   `targetSdk/compileSdk 36`, single ABI `arm64-v8a`.
 
 ## Repo map
 ```
 app/                        main module (Kotlin + Compose, manual DI — no Hilt)
-  src/main/java/dev/aarso/
+  src/main/java/dev/fonebrew/
     domain/                 pure Kotlin, JVM-tested: tree, council, bpmn, loop (GraphRunner),
                             diff (ChangeSet/ReviewSession/LineDiff), device (ArduinoCli, usb/
                             IntelHex+Stk500), git (GitContentsApi/GitTreeApi), ide (RepoWorkLoop),
@@ -72,27 +77,27 @@ app/                        main module (Kotlin + Compose, manual DI — no Hilt
                             ThemePicker, Texture. The palette + every Hyle component moved
                             to the :hyle library; see below.)
     security/               KeystoreSecret (AES-GCM key encryption)
-  src/main/cpp/             llama_jni.cpp + CMake + llama.cpp submodule → libaarso_llama.so
+  src/main/cpp/             llama_jni.cpp + CMake + llama.cpp submodule → libfonebrew_llama.so
   src/test/                 400+ JVM unit tests (domain/ + data-layer) — keep green
-sdengine/                   stable-diffusion.cpp submodule + sd_jni.cpp → libaarso_sd.so
+sdengine/                   stable-diffusion.cpp submodule + sd_jni.cpp → libfonebrew_sd.so
 hyle-design-system/         git submodule (mbaliga/Hyle-Design-System) — the SINGLE source of
-                            dev.aarso:hyle:0.2.0, composited via includeBuild (settings.gradle.kts).
+                            com.asystemofcells:hyle:0.2.0, composited via includeBuild (settings.gradle.kts).
                             No vendored :hyle module here anymore. Hyle ships COMPONENTS, not just
-                            tokens: dev.aarso.hyle.cells (HyleField, HyleButton, HyleCard,
-                            HyleTabBar, HyleChip, HyleWellToggle, …), dev.aarso.hyle.theme
-                            (HyleColors/LocalHyleColors/accent ramp), and dev.aarso.hyle.component
+                            tokens: com.asystemofcells.hyle.cells (HyleField, HyleButton, HyleCard,
+                            HyleTabBar, HyleChip, HyleWellToggle, …), com.asystemofcells.hyle.theme
+                            (HyleColors/LocalHyleColors/accent ramp), and com.asystemofcells.hyle.component
                             (the desktop-class kit). Do not re-add app-local copies — 0.1.0
                             shipped from three divergent copies; single-sourcing exists to
                             prevent that. Change components in the submodule.
                             **Hyle now ships COMPONENTS, not just tokens** — it is a real
-                            dependency, not a mirror. `dev.aarso.hyle.cells` (HyleField,
+                            dependency, not a mirror. `com.asystemofcells.hyle.cells` (HyleField,
                             HyleButton, HyleCard, HyleTabBar, HyleChip, HyleWellToggle, …) and
-                            `dev.aarso.hyle.theme` (HyleColors, LocalHyleColors, the accent
+                            `com.asystemofcells.hyle.theme` (HyleColors, LocalHyleColors, the accent
                             ramp) live there and NOWHERE else. Do not re-add an app-local copy:
                             0.1.0 shipped from three divergent copies, which is what
                             single-sourcing exists to prevent. Change a component in the
                             submodule, not in app/.
-hyle-probe/                 on-device render harness app for Hyle (depends on dev.aarso:hyle)
+hyle-probe/                 on-device render harness app for Hyle (depends on com.asystemofcells:hyle)
 watch-bridge/               WatchBrew wire contract: pure Kotlin/JVM (no Android deps), versioned envelope +
                             org.json codecs + Data Layer paths + reply-stream framing. Both ends consume it.
 watchbrew/                  WatchBrew, the Wear OS app (Ask / Tasks / Loops / Tile / complication): a remote
@@ -131,8 +136,8 @@ watchbrew/                  WatchBrew, the Wear OS app (Ask / Tasks / Loops / Ti
 - **Set a UTF-8 locale before the JVM gate** (`export LANG=C.UTF-8 LC_ALL=C.UTF-8`). Under the
   container's default POSIX locale, Kotlin can't write test classes whose names contain non-ASCII
   (several tests use an em-dash), failing with `InvalidPathException: Malformed input`.
-- Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.aarso.full`, default) /
-  **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.aarso`).
+- Flavors (`dist` dimension): **`full`** (sideload; all tiers; appId `dev.fonebrew.full`, default) /
+  **`play`** (policy-safe; no overlay/screen-capture/USB-host; appId `dev.fonebrew`).
 - Gate: `./gradlew :core-engine:testFullDebugUnitTest :core-engine:testPlayDebugUnitTest
   :core-engine:checkLicense :watch-bridge:test :watchbrew:testFullDebugUnitTest
   :watchbrew:testPlayDebugUnitTest` (keep green — this is exactly what CI runs, `.github/workflows/
@@ -144,19 +149,19 @@ watchbrew/                  WatchBrew, the Wear OS app (Ask / Tasks / Loops / Ti
   frozen in this file — it goes stale the moment the suite grows; **`HANDOFF_STATE.md` is the
   live baseline** the next session should reproduce and keep green. Hyle's own
   `:hyle:test` now runs in the Hyle repo's CI; core consumes Hyle via the includeBuild'd submodule
-  (`git submodule update --init --recursive` first, so the composite build resolves `dev.aarso:hyle`).
+  (`git submodule update --init --recursive` first, so the composite build resolves `com.asystemofcells:hyle`).
 - `./gradlew :app:assembleFullDebug` → sideload APK (slow native cross-compile).
   `:app:bundlePlayRelease` → Play AAB.
 - `./gradlew :watchbrew:assembleFullDebug` → the WatchBrew watch APK (Wear OS; **no native code**, so
   it is fast — nothing like the phone cross-compile). **Pairing constraint (load-bearing):** the
   Wearable Data Layer delivers only between a phone app and a watch app with the *same applicationId
-  AND the same signing key* (`full` → `dev.aarso.full`, `play` → `dev.aarso`; a test pins the ids).
+  AND the same signing key* (`full` → `dev.fonebrew.full`, `play` → `dev.fonebrew`; a test pins the ids).
   A watch APK signed by a different keystore than the phone APK installs and runs fine, then (by the
   Data Layer's rules; predicted, never observed here) never hears the phone. Debug builds share the
   building machine's default debug keystore, so build both from one machine. Details: `watchbrew/README.md`, `docs/watch/OWNER_VERIFY.md`.
 - **Two SQL toolchains coexist in the main module (do not "unify"):** Room owns the append-only
   message tree (`AppDatabase`); **SQLDelight owns the FTS5 search index** (`SearchDatabase`, schema
-  at `src/main/sqldelight/dev/aarso/data/search/Search.sq`) as a *separate SQLite file*. This isn't
+  at `src/main/sqldelight/dev/fonebrew/data/search/Search.sq`) as a *separate SQLite file*. This isn't
   duplication — Room exposes no `@Fts5` (only `@Fts3`/`@Fts4`), so bundled SQLite via
   `androidx.sqlite:sqlite-bundled` is the entry ticket for FTS5. That artifact also ships JVM-host
   natives, which is why `src/test` runs **real** `MATCH`/`bm25()` queries with no device or
@@ -226,7 +231,7 @@ A family of cooperating apps, not a monolith.
 | Component | What | Source | Status |
 |---|---|---|---|
 | **Fonebrew** (this repo) | the computing environment | **open core** | shipping v0.13.0 |
-| **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `dev.aarso:hyle:0.2.0` (split done) |
+| **Hyle** | design system | **open** | **separate repo `mbaliga/Hyle-Design-System`** — consumed here via git submodule + includeBuild; the single source of `com.asystemofcells:hyle:0.2.0` (split done) |
 | **PM + authoring** | a companion project-management surface | not in this repo | code lives elsewhere |
 | **Sound & haptics** | companion authoring app | **open** | not started |
 | **Routing engine** | on-device + cloud LLM router (any app) | not in this repo | not started here |
@@ -251,7 +256,7 @@ detail in `docs/STATE.md`.
   Arduino-via-Pi / ESP-OTA / **This phone USB** with tested STK500+IntelHex core); **Loop editor**
   is now a **full free-form graph editor** (add/move/connect/delete, per-node model, GraphRunner
   execution, BPMN save/load).
-- **Reliability:** crash recovery via the shared `dev.aarso:crash-recovery` module (same
+- **Reliability:** crash recovery via the shared `com.asystemofcells:crash-recovery` module (same
   submodule as Hyle, separate coordinate — captures the trace, shows a recovery screen,
   never bricks; used across the constellation, not just here — see that repo's README);
   **fixed the launch/send crash** (Compose BoM → Foundation 1.8). **Preview the recovery
@@ -263,7 +268,7 @@ detail in `docs/STATE.md`.
   the phone Keystore. Pairing, voice, streaming feel, Tile/complication and battery are owner-only:
   `docs/watch/OWNER_VERIFY.md`; state in `docs/STATE.md` §12; design law `docs/design/watchbrew.md`.
 - **Design system:** Hyle single-sourced to its own repo `mbaliga/Hyle-Design-System`
-  (`dev.aarso:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
+  (`com.asystemofcells:hyle:0.2.0`), consumed here via git submodule + includeBuild; the vendored `:hyle`
   copy is deleted. (`0.1.0` retired — it had shipped from three divergent copies.)
 - Versions this stage: v0.9.0 IA → v0.13.0 (current). See STATE.md §3 for the per-version list.
 

@@ -74,7 +74,7 @@ import dev.fonebrew.data.DownloadCenter
 import dev.fonebrew.ui.ChatScreen
 import dev.fonebrew.ui.ChatViewModel
 import dev.fonebrew.ui.ModelsViewModel
-import dev.aarso.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleButton
 import dev.fonebrew.ui.rooms.ChatsRoom
 import dev.fonebrew.ui.rooms.ProductRoomFree
 import dev.fonebrew.ui.rooms.SettingsRoom
@@ -82,7 +82,7 @@ import dev.fonebrew.ui.rooms.TreeRoom
 import dev.fonebrew.ui.search.SearchOverlay
 import dev.fonebrew.ui.search.SearchViewModel
 import androidx.compose.foundation.border
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.abs
 import kotlin.math.max
@@ -240,7 +240,7 @@ fun SpatialRoot() {
     val searchViewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory)
     val container = (LocalContext.current.applicationContext as FonebrewApp).container
     val scope = rememberCoroutineScope()
-    val haptics = dev.aarso.hyle.cells.rememberHyleHaptics()
+    val haptics = com.asystemofcells.hyle.cells.rememberHyleHaptics()
     val controller = remember { SpatialController(scope, onSettle = haptics::settle) }
     var searchOpen by remember { mutableStateOf(false) }
     // S9 continuity: text handed from an opened search result to that chat's find bar, held

@@ -12,7 +12,7 @@ import kotlinx.coroutines.withContext
  * image). One model resident at a time; the LLM should be unloaded first since
  * the image model contends for RAM.
  *
- * Backed by libaarso_sd.so from the :sdengine module — sd.cpp with its OWN ggml,
+ * Backed by libfonebrew_sd.so from the :sdengine module — sd.cpp with its OWN ggml,
  * built separately so it never collides with llama.cpp's ggml in :app.
  */
 class SdImageEngine(
@@ -64,7 +64,7 @@ class SdImageEngine(
 
     companion object {
         init {
-            System.loadLibrary("aarso_sd")
+            System.loadLibrary("fonebrew_sd")
         }
     }
 }

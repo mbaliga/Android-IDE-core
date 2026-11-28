@@ -44,7 +44,7 @@ outlive its reason (e.g. when LX-3 inverts the dependency, the build tells you t
 |---|---|---|
 | `domain/authority/AuditedAuthorityEngine.kt` (+ its test) | → `data/ReceiptStore` | **yes** (§2, §6.1) |
 | `domain/execution/CiActionsExecutionProvider.kt` (+ its test) | → `data/GitTransport` | **yes** (§2, §6.1) |
-| `domain/mode/GestureModeDefaults.kt` (+ its test) | → shared-libraries `dev.aarso.interactionmode.InteractionMode` | **no — post-plan drift; finding for LX-3** |
+| `domain/mode/GestureModeDefaults.kt` (+ its test) | → shared-libraries `com.asystemofcells.interactionmode.InteractionMode` | **no — post-plan drift; finding for LX-3** |
 | `LoopTemplateCatalogTest.kt` (test only; its subject *is* mapped) | → Context-bound `data/LoopTemplateAssets` | no |
 
 ## One thing the lane adds: a labelled compile-time stand-in

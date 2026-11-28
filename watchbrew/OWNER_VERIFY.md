@@ -10,7 +10,7 @@ when phone-side changes reach the wrist (only when the watch next syncs).
 
 ## 0. Before anything: same applicationId, same key
 
-- [ ] Install **the same flavor of both**: `full` phone (`dev.aarso.full`) with `full` watch, or `play`
+- [ ] Install **the same flavor of both**: `full` phone (`dev.fonebrew.full`) with `full` watch, or `play`
       with `play`. A cross-flavor pair is a different applicationId and the Data Layer will deliver nothing.
 - [ ] Both APKs were signed by **the same keystore** (debug builds from one machine share its default
       debug keystore; a CI phone APK + a laptop watch APK do **not**). Symptom of a mismatch: both apps

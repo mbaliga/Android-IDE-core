@@ -42,17 +42,17 @@ fun signingValue(prop: String, env: String): String? =
 
 android {
     // The SOURCE package is dev.fonebrew.watch (post-rename register); the R/BuildConfig namespace
-    // stays dev.aarso.watch for continuity with :app's dev.aarso namespace (the Sprint-R rename is
+    // stays dev.fonebrew.watch for continuity with :app's dev.fonebrew namespace (the Sprint-R rename is
     // deferred; see the root build-rules doc). The manifest therefore references classes by fully-qualified name.
-    namespace = "dev.aarso.watch"
+    namespace = "dev.fonebrew.watch"
     compileSdk = 36
 
     defaultConfig {
-        // MUST equal the phone app's applicationId per flavor (full -> dev.aarso.full via the
-        // ".full" suffix below, play -> dev.aarso): the Data Layer routes by package name, so a
+        // MUST equal the phone app's applicationId per flavor (full -> dev.fonebrew.full via the
+        // ".full" suffix below, play -> dev.fonebrew): the Data Layer routes by package name, so a
         // mismatch silently breaks every message in both directions. WatchbrewModuleGuardTest
         // compares this block against app/build.gradle.kts.
-        applicationId = "dev.aarso"
+        applicationId = "dev.fonebrew"
         minSdk = 30          // Wear OS 3 floor
         targetSdk = 36
         // The watch version spine is its own fresh, independent monotonic line (design section 2).

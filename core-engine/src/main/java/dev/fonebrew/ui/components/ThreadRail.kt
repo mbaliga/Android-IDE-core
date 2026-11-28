@@ -43,11 +43,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.fonebrew.domain.provenance.ProvenanceState
 import dev.fonebrew.domain.tree.TreeFork
-import dev.aarso.hyle.Pulse
-import dev.aarso.hyle.cells.hylePulse
-import dev.aarso.hyle.cells.rememberHyleHaptics
+import com.asystemofcells.hyle.Pulse
+import com.asystemofcells.hyle.cells.hylePulse
+import com.asystemofcells.hyle.cells.rememberHyleHaptics
 import dev.fonebrew.ui.state.ThreadRailPresenter
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.theme.LocalHyleColors
 
 /**
  * THREAD_TOPOLOGY_PLAN.md's ThreadRail — the right-edge dash minimap, one [ThreadRailPresenter.Dash]
@@ -63,14 +63,14 @@ import dev.aarso.hyle.theme.LocalHyleColors
  *
  * **Gestures + parity (binding constraint 4).** Tap jumps to the nearest turn (reusing the
  * caller's own `findScrollPrefix`-aware scroll, not duplicated here — see [onJump]'s KDoc).
- * Vertical drag scrubs with one [dev.aarso.hyle.cells.HyleHaptics.tap] tick per turn crossed,
- * settling ([dev.aarso.hyle.cells.HyleHaptics.settle]) into a jump on release. Long-press — and,
+ * Vertical drag scrubs with one [com.asystemofcells.hyle.cells.HyleHaptics.tap] tick per turn crossed,
+ * settling ([com.asystemofcells.hyle.cells.HyleHaptics.settle]) into a jump on release. Long-press — and,
  * with no gesture at all, a [CustomAccessibilityAction] — opens the **"Jump to…" sheet**: the
  * tappable/TalkBack-reachable parity surface for the whole rail, listing every turn by its
  * [ThreadRailPresenter.Dash.label].
  *
  * **Motion (binding constraint 6).** Only [ThreadRailPresenter.Dash.pulseWatched] pulses
- * ([dev.aarso.hyle.cells.hylePulse] at [Pulse.WATCHED]) — every other dash, including a live but
+ * ([com.asystemofcells.hyle.cells.hylePulse] at [Pulse.WATCHED]) — every other dash, including a live but
  * on-device generation, is rendered still ([Pulse.STILL]/no modifier). Motion is reserved for the
  * one real state it means: a watched, off-device generation in flight.
  *

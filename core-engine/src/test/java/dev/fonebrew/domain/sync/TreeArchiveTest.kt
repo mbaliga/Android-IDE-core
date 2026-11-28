@@ -27,8 +27,8 @@ class TreeArchiveTest {
     @Test fun `writes a manifest and one file per node`() {
         val files = TreeArchive.write(nodes)
         assertTrue(files.containsKey(TreeArchive.MANIFEST_PATH))
-        assertTrue(files.containsKey("aarso/nodes/r1.json"))
-        assertTrue(files.containsKey("aarso/nodes/a1.json"))
+        assertTrue(files.containsKey("fonebrew/nodes/r1.json"))
+        assertTrue(files.containsKey("fonebrew/nodes/a1.json"))
         // manifest + 3 nodes
         assertEquals(4, files.size)
     }
@@ -41,9 +41,9 @@ class TreeArchiveTest {
     @Test fun `backup plan creates only the files missing on the remote`() {
         val files = TreeArchive.write(nodes)
         // Manifest + r1 already on the remote; a1 and r2 are new.
-        val existing = setOf(TreeArchive.MANIFEST_PATH, "aarso/nodes/r1.json")
+        val existing = setOf(TreeArchive.MANIFEST_PATH, "fonebrew/nodes/r1.json")
         val plan = TreeBackup.plan(files, existing)
-        assertEquals(setOf("aarso/nodes/a1.json", "aarso/nodes/r2.json"), plan.keys)
+        assertEquals(setOf("fonebrew/nodes/a1.json", "fonebrew/nodes/r2.json"), plan.keys)
         // A fully-synced tree plans nothing.
         assertTrue(TreeBackup.plan(files, files.keys).isEmpty())
     }
@@ -71,7 +71,7 @@ class TreeArchiveTest {
         )
         val archived = TreeArchive.writeObject3dFiles(files)
 
-        assertEquals(setOf("aarso/objects3d/ab12.glb", "aarso/objects3d/cd34.json"), archived.keys)
+        assertEquals(setOf("fonebrew/objects3d/ab12.glb", "fonebrew/objects3d/cd34.json"), archived.keys)
         val back = TreeArchive.readObject3dFiles(archived)
         assertEquals(files.keys, back.keys)
         assertTrue(files["ab12.glb"].contentEquals(back["ab12.glb"]))
@@ -82,5 +82,29 @@ class TreeArchiveTest {
         val nodeFiles = TreeArchive.write(nodes)
         val object3dFiles = TreeArchive.writeObject3dFiles(mapOf("x.glb" to byteArrayOf(9)))
         assertEquals(setOf("x.glb"), TreeArchive.readObject3dFiles(nodeFiles + object3dFiles).keys)
+    }
+
+    @Test fun `writes the fonebrew-tree format under fonebrew, never the legacy aarso layout`() {
+        val files = TreeArchive.write(nodes)
+        assertTrue(files.keys.none { it.startsWith("aarso/") })
+        assertTrue(files.getValue(TreeArchive.MANIFEST_PATH).contains("\"fonebrew-tree\""))
+    }
+
+    @Test fun `still reads a repo synced under the legacy aarso layout`() {
+        val legacy = TreeArchive.write(nodes).mapKeys { (k, _) -> k.replaceFirst("fonebrew/", "aarso/") }
+        assertTrue(legacy.keys.all { it.startsWith("aarso/") })
+        assertEquals(nodes.toSet(), TreeArchive.read(legacy).toSet())
+    }
+
+    @Test fun `a node present in both layouts is returned once`() {
+        val current = TreeArchive.write(nodes)
+        val both = current + current.mapKeys { (k, _) -> k.replaceFirst("fonebrew/", "aarso/") }
+        assertEquals(nodes.size, TreeArchive.read(both).size)
+    }
+
+    @Test fun `reads legacy object3d files`() {
+        val archived = TreeArchive.writeObject3dFiles(mapOf("ab12.glb" to byteArrayOf(1, 2, 3)))
+        val legacy = archived.mapKeys { (k, _) -> k.replaceFirst("fonebrew/", "aarso/") }
+        assertEquals(setOf("ab12.glb"), TreeArchive.readObject3dFiles(legacy).keys)
     }
 }

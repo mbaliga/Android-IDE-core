@@ -23,14 +23,14 @@ fun signingValue(prop: String, env: String): String? =
     keystoreProps.getProperty(prop) ?: System.getenv(env)
 
 android {
-    // Fonebrew. applicationId/namespace stay dev.aarso for installed-base continuity
+    // Fonebrew. applicationId/namespace stay dev.fonebrew for installed-base continuity
     // (an id change would install as a second app); the SOURCE package is dev.fonebrew
     // (post-rename), so android:name references in the manifest are fully qualified.
-    namespace = "dev.aarso"
+    namespace = "dev.fonebrew"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.aarso"
+        applicationId = "dev.fonebrew"
         minSdk = 31          // pragmatic floor; adjustable as system-integration lands
         targetSdk = 36       // recent Android (the target device)
         // Fonebrew launch build (2026-07-16): resets the version spine for this brand's first

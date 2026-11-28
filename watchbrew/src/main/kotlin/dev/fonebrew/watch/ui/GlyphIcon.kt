@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
-import dev.aarso.watch.R
+import dev.fonebrew.watch.R
 import dev.fonebrew.watch.core.Glyph
 
 /** The vector drawable that draws a [Glyph]. One shape per state; tinted at the use site, never hue-coded. */

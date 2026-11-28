@@ -28,12 +28,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import dev.aarso.hyle.cells.rememberHyleHaptics
-import dev.aarso.hyle.component.HyleTerminalField
-import dev.aarso.hyle.theme.DefaultAccent
-import dev.aarso.hyle.theme.HyleColors
-import dev.aarso.hyle.theme.darkHyleColors
-import dev.aarso.hyle.theme.parseHexColor
+import com.asystemofcells.hyle.cells.rememberHyleHaptics
+import com.asystemofcells.hyle.component.HyleTerminalField
+import com.asystemofcells.hyle.theme.DefaultAccent
+import com.asystemofcells.hyle.theme.HyleColors
+import com.asystemofcells.hyle.theme.darkHyleColors
+import com.asystemofcells.hyle.theme.parseHexColor
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.remote.TerminalSessionHolder
 import dev.fonebrew.ui.components.SlashCommand
@@ -309,7 +309,7 @@ fun TerminalFacet() {
 
 /** A small dim, monospace status line for the Terminal tab specifically — legible against the
  *  fixed-dark [TerminalBg] regardless of the app's own light/dark theme, unlike the shared
- *  [Hint] (which tints off the theme-following [dev.aarso.hyle.theme.LocalHyleColors] and would
+ *  [Hint] (which tints off the theme-following [com.asystemofcells.hyle.theme.LocalHyleColors] and would
  *  go low-contrast on a permanently-dark panel under a light app theme). */
 @Composable
 private fun TerminalHint(text: String) {

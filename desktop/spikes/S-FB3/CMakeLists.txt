@@ -1,7 +1,7 @@
 # S-FB3 -- Linux x86_64 CPU build of core-engine's llama JNI shim, out of tree.
 #
 # Mirrors core-engine/src/main/cpp/CMakeLists.txt (same llama.cpp options, same target name
-# `aarso_llama` so System.loadLibrary("aarso_llama") works unchanged) with exactly the deltas a
+# `fonebrew_llama` so System.loadLibrary("fonebrew_llama") works unchanged) with exactly the deltas a
 # Linux host needs. It adds_subdirectory() the existing sources READ-ONLY: nothing under
 # core-engine/ is edited and the Android build is not involved.
 cmake_minimum_required(VERSION 3.22)
@@ -41,12 +41,12 @@ add_subdirectory("${CORE_CPP}/llama.cpp" llama.cpp-build)
 find_package(JNI REQUIRED)
 
 # ---- the shim: the UNMODIFIED llama_jni.cpp + the compat android/log.h ------------------------
-add_library(aarso_llama SHARED "${CORE_CPP}/llama_jni.cpp")
-target_include_directories(aarso_llama PRIVATE "${JNI_INCLUDE_DIRS}" "${CMAKE_CURRENT_LIST_DIR}/compat")
-target_link_libraries(aarso_llama PRIVATE llama)  # DELTA 3: no `log` library on Linux (find_library(log) is Android-only)
+add_library(fonebrew_llama SHARED "${CORE_CPP}/llama_jni.cpp")
+target_include_directories(fonebrew_llama PRIVATE "${JNI_INCLUDE_DIRS}" "${CMAKE_CURRENT_LIST_DIR}/compat")
+target_link_libraries(fonebrew_llama PRIVATE llama)  # DELTA 3: no `log` library on Linux (find_library(log) is Android-only)
 if(SFB3_SHARED_GGML)
   # let the dynamic loader find libllama.so / libggml*.so next to the shim
-  set_target_properties(aarso_llama PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN")
+  set_target_properties(fonebrew_llama PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN")
 endif()
 
 # ---- negative control: the same unmodified source WITHOUT the compat header must NOT compile ----

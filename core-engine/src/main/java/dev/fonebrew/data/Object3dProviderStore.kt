@@ -32,7 +32,7 @@ data class Object3dProviderConfig(
 class Object3dProviderStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.object3d.providers", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.object3d.providers", Context.MODE_PRIVATE)
 
     private val _providers = MutableStateFlow(load())
     val providers: StateFlow<List<Object3dProviderConfig>> = _providers.asStateFlow()

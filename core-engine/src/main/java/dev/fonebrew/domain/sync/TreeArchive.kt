@@ -15,21 +15,32 @@ import org.json.JSONObject
  * history (the "discard the shell" promise). Bump [FORMAT_VERSION] only with a
  * migration. Pure domain (org.json) — no Android, JVM-testable.
  *
- *   aarso/manifest.json        { "format": "aarso-tree", "version": 1 }
- *   aarso/nodes/<id>.json       one node each
+ *   fonebrew/manifest.json     { "format": "fonebrew-tree", "version": 1 }
+ *   fonebrew/nodes/<id>.json    one node each
+ *
+ * **Legacy layout:** before the product was named Fonebrew the same files lived under
+ * `aarso/` with format `aarso-tree`. Writes always use `fonebrew/`; [read] and
+ * [readObject3dFiles] still accept the legacy `aarso/` paths so a repo synced by an older
+ * build restores unchanged (the v1 file contents are identical — only the directory moved).
  */
 object TreeArchive {
 
     const val FORMAT_VERSION = 1
-    const val MANIFEST_PATH = "aarso/manifest.json"
-    private const val NODES_DIR = "aarso/nodes/"
-    private const val OBJECT3D_DIR = "aarso/objects3d/"
+    const val MANIFEST_PATH = "fonebrew/manifest.json"
+    const val NODES_DIR_PATH = "fonebrew/nodes"
+    private const val NODES_DIR = "fonebrew/nodes/"
+    private const val OBJECT3D_DIR = "fonebrew/objects3d/"
+
+    /** Pre-rename layout — read-only, never written. */
+    const val LEGACY_NODES_DIR_PATH = "aarso/nodes"
+    private const val LEGACY_NODES_DIR = "aarso/nodes/"
+    private const val LEGACY_OBJECT3D_DIR = "aarso/objects3d/"
 
     /** Serialize [nodes] to a map of repo-relative path → file content. */
     fun write(nodes: List<MessageNode>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
         out[MANIFEST_PATH] = JSONObject()
-            .put("format", "aarso-tree")
+            .put("format", "fonebrew-tree")
             .put("version", FORMAT_VERSION)
             .toString(2)
         for (n in nodes) out["$NODES_DIR${n.id}.json"] = nodeToJson(n)
@@ -39,8 +50,9 @@ object TreeArchive {
     /** Read back every node file in [files] (ignores the manifest and anything else). */
     fun read(files: Map<String, String>): List<MessageNode> =
         files.entries
-            .filter { it.key.startsWith(NODES_DIR) && it.key.endsWith(".json") }
+            .filter { (it.key.startsWith(NODES_DIR) || it.key.startsWith(LEGACY_NODES_DIR)) && it.key.endsWith(".json") }
             .map { nodeFromJson(it.value) }
+            .distinctBy { it.id }
 
     /**
      * docs/design/objects-3d.md §8: "Export-everything includes the directory." Same
@@ -57,8 +69,10 @@ object TreeArchive {
 
     fun readObject3dFiles(files: Map<String, String>): Map<String, ByteArray> =
         files.entries
-            .filter { it.key.startsWith(OBJECT3D_DIR) }
-            .associate { it.key.removePrefix(OBJECT3D_DIR) to java.util.Base64.getDecoder().decode(it.value) }
+            .filter { it.key.startsWith(OBJECT3D_DIR) || it.key.startsWith(LEGACY_OBJECT3D_DIR) }
+            .associate {
+                it.key.removePrefix(OBJECT3D_DIR).removePrefix(LEGACY_OBJECT3D_DIR) to java.util.Base64.getDecoder().decode(it.value)
+            }
 
     private fun nodeToJson(n: MessageNode): String {
         val obj = JSONObject()

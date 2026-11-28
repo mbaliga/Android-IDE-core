@@ -1,6 +1,6 @@
 package dev.fonebrew.ui.rooms
 
-import dev.aarso.hyle.component.HyleTreeIconKind
+import com.asystemofcells.hyle.component.HyleTreeIconKind
 import dev.fonebrew.data.GitBrowse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

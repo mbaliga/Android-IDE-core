@@ -146,7 +146,7 @@ phone can load back and run — an external editor needs to:
    carries on its start event (`source`, `pattern`, `distilledBy`, `distilledOn`,
    `summary` — see `Distiller.provenance()`). Any other attribute name is not an
    error, but it's also not lost silently anymore in one specific way: since
-   [`LoopNode.provenanceExt`](../../app/src/main/java/dev/aarso/ui/loops/LoopRoom.kt)
+   [`LoopNode.provenanceExt`](../../app/src/main/java/dev/fonebrew/ui/loops/LoopRoom.kt)
    now preserves *unrecognised* `ext` keys through an edit-and-resave cycle, an
    external tool's own custom attributes on `<aarso:meta>` *would* survive a
    round-trip through Fonebrew's editor even though nothing in the UI reads them

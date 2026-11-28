@@ -46,7 +46,9 @@ class BpmnArchiveTest {
         assertTrue(xml.contains("<bpmn:userTask id=\"draft\""))
         assertTrue(xml.contains("<bpmn:exclusiveGateway id=\"gw\""))
         // Fonebrew data rides in an extension element, not a custom top-level tag.
-        assertTrue(xml.contains("<bpmn:extensionElements><aarso:meta"))
+        assertTrue(xml.contains("<bpmn:extensionElements><fonebrew:meta"))
+        assertTrue(xml.contains("xmlns:fonebrew=\"https://fonebrew.dev/bpmn\""))
+        assertTrue(!xml.contains("aarso"))
         assertTrue(xml.contains("model=\"Qwen2.5-7B\""))
         // layout travels in BPMN-DI
         assertTrue(xml.contains("<dc:Bounds"))
@@ -69,5 +71,13 @@ class BpmnArchiveTest {
         val r = BpmnArchive.read(BpmnArchive.write(g))
         assertEquals("A & B <loop>", r.name)
         assertEquals("quote\"& <here>", r.node("n")!!.name)
+    }
+
+    @Test fun `still reads the legacy aarso namespace written before the rename`() {
+        val legacy = BpmnArchive.write(graph)
+            .replace("xmlns:fonebrew=\"https://fonebrew.dev/bpmn\"", "xmlns:aarso=\"https://aarso.dev/bpmn\"")
+            .replace("fonebrew:meta", "aarso:meta")
+        assertTrue(legacy.contains("aarso:meta"))
+        assertEquals(graph, BpmnArchive.read(legacy))
     }
 }

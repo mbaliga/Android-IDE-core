@@ -6,7 +6,7 @@ package dev.fonebrew.watch.core
  * ## Where these values come from (and the single-source follow-up)
  *
  * They are a **copied constant set**, hand-mirrored from the phone design system's
- * `dev.aarso.hyle.theme` (`hyle-design-system/hyle/src/main/java/dev/aarso/hyle/theme/Color.kt`,
+ * `com.asystemofcells.hyle.theme` (`hyle-design-system/hyle/src/main/java/com/asystemofcells/hyle/theme/Color.kt`,
  * Hyle 0.2.x):
  *
  * | here          | Hyle            | role on the wrist                            |
@@ -24,7 +24,7 @@ package dev.fonebrew.watch.core
  * | [BREW_DIM]    | `VioletDim`     | accent selection tint                        |
  * | [ON_BREW]     | `OnViolet`      | text/ink on the accent                       |
  *
- * **Why copied and not depended on:** `dev.aarso:hyle` is *phone* Compose (Material 3 + a
+ * **Why copied and not depended on:** `com.asystemofcells:hyle` is *phone* Compose (Material 3 + a
  * desktop-class component kit); pulling it into a watch APK would drag in the wrong UI toolkit.
  * This module therefore carries the **colour tokens only** — no components, no type, no fonts — and
  * maps them through `ui/WatchTheme.kt` onto Wear Compose Material. Duplicated constants are exactly

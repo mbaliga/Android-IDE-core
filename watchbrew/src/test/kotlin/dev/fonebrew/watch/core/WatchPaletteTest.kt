@@ -13,8 +13,8 @@ class WatchPaletteTest {
 
     private fun hyleColorFile(): File {
         val candidates = listOf(
-            File("../hyle-design-system/hyle/src/main/java/dev/aarso/hyle/theme/Color.kt"),
-            File("hyle-design-system/hyle/src/main/java/dev/aarso/hyle/theme/Color.kt"),
+            File("../hyle-design-system/hyle/src/main/java/com/asystemofcells/hyle/theme/Color.kt"),
+            File("hyle-design-system/hyle/src/main/java/com/asystemofcells/hyle/theme/Color.kt"),
         )
         return candidates.firstOrNull { it.isFile }
             ?: throw AssertionError("Hyle's Color.kt not found — initialise the submodule (git submodule update --init --recursive); tried ${candidates.map { it.absolutePath }}")

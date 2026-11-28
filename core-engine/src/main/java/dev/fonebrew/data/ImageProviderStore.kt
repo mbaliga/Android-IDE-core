@@ -15,7 +15,7 @@ import java.util.UUID
 class ImageProviderStore(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences("aarso.image.providers", Context.MODE_PRIVATE)
+        .getSharedPreferences("fonebrew.image.providers", Context.MODE_PRIVATE)
 
     private val _providers = MutableStateFlow(load())
     val providers: StateFlow<List<ImageProvider>> = _providers.asStateFlow()

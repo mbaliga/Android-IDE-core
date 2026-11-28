@@ -10,7 +10,7 @@ runtime dependency whose license isn't on that allowlist. (Pre-de-fork this said
 `:app:checkLicense` — test + license tasks moved to `:core-engine`; see
 CLAUDE.md's Building section.)
 
-`dev.aarso:hyle`, `dev.aarso:crash-recovery` and `dev.aarso:interaction-mode`
+`com.asystemofcells:hyle`, `com.asystemofcells:crash-recovery` and `com.asystemofcells:interaction-mode`
 (consumed via the `hyle-design-system` / `shared-libraries` git submodules +
 `includeBuild`) are deliberately not itemized in the per-license lists below —
 they're first-party code from sibling repos in this constellation
@@ -32,7 +32,7 @@ resolves leniently, so an ambiguous project()/includeBuild variant selection
 was silently DROPPED rather than failing the build) — see the long comment on
 `licenseScanAttrs` in `core-engine/build.gradle.kts` for the empirical
 diagnosis. Fixed by pinning `BuildTypeAttr = "debug"`. This surfaced the three
-dev.aarso:* entries above, now correctly present and allow-listed; it did NOT
+com.asystemofcells:* entries above, now correctly present and allow-listed; it did NOT
 change resolution of any third-party (non-first-party) dependency — verified
 by diffing the regenerated report against this file's prior list, the only
 deltas beyond the three first-party entries are unrelated dependency drift

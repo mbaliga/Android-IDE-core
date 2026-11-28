@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * S-FB3 part B. libaarso_llama.so and libaarso_sd.so each carry THEIR OWN statically linked ggml
+ * S-FB3 part B. libfonebrew_llama.so and libfonebrew_sd.so each carry THEIR OWN statically linked ggml
  * (llama.cpp's and stable-diffusion.cpp's forks respectively). Both export default-visibility
  * `ggml_*` symbols, so the question the plan marks "unknown" is whether the dynamic linker keeps
  * each library bound to its own copy when both are loaded into one JVM. The JVM dlopen()s with
@@ -18,8 +18,8 @@ class TwoGgmlLibsTest {
 
     private val llamaDir = File(System.getProperty("spike.llamaDir"))
     private val sdDir = File(System.getProperty("spike.sdDir"))
-    private val llamaSo = File(llamaDir, "libaarso_llama.so")
-    private val sdSo = File(sdDir, "libaarso_sd.so")
+    private val llamaSo = File(llamaDir, "libfonebrew_llama.so")
+    private val sdSo = File(sdDir, "libfonebrew_sd.so")
 
     private fun run(vararg cmd: String): String {
         val p = ProcessBuilder(*cmd).redirectErrorStream(true).start()
@@ -80,8 +80,8 @@ class TwoGgmlLibsTest {
                 val relevant = sym.startsWith("ggml_") || sym.startsWith("llama_") || sym.startsWith("sd_") ||
                     sym.startsWith("gguf_") || sym.contains("generate_image") || sym.endsWith("_sd_ctx")
                 if (!relevant) return@forEachLine
-                if (fromName == "libaarso_llama.so") { llamaRefs++; if (toName != "libaarso_llama.so") cross += "$fromName -> $toName: $sym" }
-                if (fromName == "libaarso_sd.so") { sdRefs++; if (toName != "libaarso_sd.so") cross += "$fromName -> $toName: $sym" }
+                if (fromName == "libfonebrew_llama.so") { llamaRefs++; if (toName != "libfonebrew_llama.so") cross += "$fromName -> $toName: $sym" }
+                if (fromName == "libfonebrew_sd.so") { sdRefs++; if (toName != "libfonebrew_sd.so") cross += "$fromName -> $toName: $sym" }
             }
             f.delete()
         }

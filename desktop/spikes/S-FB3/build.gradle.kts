@@ -65,7 +65,7 @@ val llamaInputs = listOf("CMakeLists.txt", "compat/android/log.h", "proposed/lla
 
 // ---- part A: the llama shim, in the selected variant -------------------------------------------
 val llamaA = nativeTree(variant, ".", listOf("-DSFB3_SHARED_GGML=${variant == "shared"}"), llamaInputs)
-val buildShim = nativeBuild(llamaA, "buildShim", "aarso_llama")
+val buildShim = nativeBuild(llamaA, "buildShim", "fonebrew_llama")
 // Expected to FAIL (exit != 0): the unmodified source without the compat header. The failure is the evidence.
 val buildNegativeControl = nativeBuild(llamaA, "buildNegativeControl", "negative_control", ignoreFailure = true)
     .also { it.configure { mustRunAfter(buildShim) } }
@@ -74,13 +74,13 @@ val buildPatchedCopy = nativeBuild(llamaA, "buildPatchedCopy", "patched_copy")
 
 // ---- part B: llama (always static here) + sd shim, in their own CMake projects -------------------
 val llamaB = if (variant == "static") llamaA else nativeTree("static", ".", listOf("-DSFB3_SHARED_GGML=false"), llamaInputs)
-val buildShimStatic = if (variant == "static") buildShim else nativeBuild(llamaB, "buildShimStatic", "aarso_llama")
+val buildShimStatic = if (variant == "static") buildShim else nativeBuild(llamaB, "buildShimStatic", "fonebrew_llama")
 val sdTree = nativeTree("sd-static", "sd", emptyList(), listOf("sd/CMakeLists.txt", "compat/android/log.h"))
 // stable-diffusion.cpp's src/tokenizers/vocab/vocab.cpp #includes ~240 MB of vocabulary headers and its single
 // compile is memory-hungry (an unconstrained -j4 build in the container had cc1plus killed: README finding),
 // so this target defaults to 2 jobs. Override with -Pfb3.sdJobs=N.
 val sdJobs = providers.gradleProperty("fb3.sdJobs").map(String::toInt).getOrElse(2)
-val buildSd = nativeBuild(sdTree, "buildSd", "aarso_sd", parallel = sdJobs)
+val buildSd = nativeBuild(sdTree, "buildSd", "fonebrew_sd", parallel = sdJobs)
 
 fun Test.commonProps() {
     systemProperty("spike.logDir", layout.buildDirectory.dir("native-logs").get().asFile.path)
@@ -96,13 +96,13 @@ tasks.test {
     filter { excludeTestsMatching("*TwoGgmlLibsTest") }
     systemProperty("spike.variant", variant)
     systemProperty("spike.nativeDir", llamaA.dir.get().asFile.path)
-    systemProperty("java.library.path", llamaA.dir.get().asFile.path) // System.loadLibrary("aarso_llama") finds it, as on Android
+    systemProperty("java.library.path", llamaA.dir.get().asFile.path) // System.loadLibrary("fonebrew_llama") finds it, as on Android
     commonProps()
 }
 
 val testTwoLibs = tasks.register<Test>("testTwoLibs") {
     group = "verification"
-    description = "Part B: libaarso_llama.so and libaarso_sd.so (two independent ggml copies) in one JVM"
+    description = "Part B: libfonebrew_llama.so and libfonebrew_sd.so (two independent ggml copies) in one JVM"
     dependsOn(buildShimStatic, buildSd)
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath

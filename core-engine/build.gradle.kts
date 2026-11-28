@@ -8,7 +8,7 @@ import org.gradle.api.attributes.Usage
 // com.android.application module can't be depended on by anything else, which is what forced
 // the closed Studio build to fork :app line-for-line instead of consuming it. This library
 // carries everything that used to live directly in :app: domain/data/inference/service/ui,
-// the native llama.cpp JNI (libaarso_llama.so), and the full/play dist flavors. :app (this
+// the native llama.cpp JNI (libfonebrew_llama.so), and the full/play dist flavors. :app (this
 // repo's own open-core shell) and, eventually, Studio's own thin :app both depend on it.
 //
 // No applicationId/versionCode/versionName/signing here — those are consumer-module concerns
@@ -55,7 +55,7 @@ android {
     }
 
     // Native llama.cpp engine (CPU-only first cut). The submodule lives at
-    // src/main/cpp/llama.cpp; the JNI shim + CMake build it into libaarso_llama.so, which
+    // src/main/cpp/llama.cpp; the JNI shim + CMake build it into libfonebrew_llama.so, which
     // ships inside this module's AAR (jni/<abi>/) for the consuming app to package.
     ndkVersion = "28.2.13676358"
     externalNativeBuild {
@@ -170,19 +170,19 @@ sqldelight {
 dependencies {
     // Hyle single-sourced via the includeBuild'd submodule (see settings.gradle.kts);
     // Gradle substitutes this coordinate with hyle-design-system's :hyle project.
-    implementation("dev.aarso:hyle:0.2.0")
+    implementation("com.asystemofcells:hyle:0.2.0")
     // Shared crash-recovery utility — single-sourced from mbaliga/Shared-Libraries-asoc (its
     // own submodule, ./shared-libraries; see settings.gradle.kts for why this coordinate needs
     // an explicit dependencySubstitution now that hyle-design-system also carries a tombstone
-    // at the same `dev.aarso:crash-recovery` coordinate). 1.5.0 folds forward the fix that
+    // at the same `com.asystemofcells:crash-recovery` coordinate). 1.5.0 folds forward the fix that
     // makes "Continue" actually relaunch the app, plus the non-destructive quarantine/salvage
     // reset (see that repo's crash-recovery/build.gradle.kts changelog comment).
-    implementation("dev.aarso:crash-recovery:1.5.0")
+    implementation("com.asystemofcells:crash-recovery:1.5.0")
     // Shared Regular/asoc interaction-mode choice (2026-09-15 ruling) — composited exactly
     // like :crash-recovery above, same shared-libraries submodule, own coordinate/project.
     // InteractionMode enum + InteractionModeStore/PrefsInteractionModeStore + the pure
     // ModeDefaults policy; deliberately no UI (the picker is Hyle's HyleModePicker).
-    implementation("dev.aarso:interaction-mode:0.1.0")
+    implementation("com.asystemofcells:interaction-mode:0.1.0")
     // On-device Gemini Nano via Android's AICore system service — an experimental preview SDK
     // (0.0.1-exp01) that only runs on a narrow device set (Pixel 8+/9 class, a Galaxy S24
     // subset); AiCoreEngine/AiCoreAvailability gate and fail closed everywhere else.
@@ -222,7 +222,7 @@ dependencies {
     // full flavor only; the play build ships without screen capture.
     "fullImplementation"(libs.mlkit.text)
 
-    // On-device image generation native library (libaarso_sd.so).
+    // On-device image generation native library (libfonebrew_sd.so).
     implementation(project(":sdengine"))
 
     // WatchBrew phone-side relay (docs/design/watchbrew.md; data/watch/WearRelayService). The wire
@@ -258,7 +258,7 @@ dependencies {
 // swallows an ambiguous-variant failure instead of erroring (see, read-only reference — NOT this
 // repo — android-ide-studio/app/build.gradle.kts's own long comment on the same block). Checked
 // empirically here rather than assumed inherited: before this fix,
-// `:core-engine:generateLicenseReport` produced a 162-entry report with ZERO `dev.aarso:*` /
+// `:core-engine:generateLicenseReport` produced a 162-entry report with ZERO `com.asystemofcells:*` /
 // `dev.fonebrew:*` entries, and `:core-engine:dependencyInsight --dependency
 // <sdengine|hyle|crash-recovery|interaction-mode> --configuration fullLicenseScan` showed the
 // identical shape for all four of this module's project()/includeBuild edges: "FAILED — cannot
@@ -290,7 +290,7 @@ dependencies {
 // project-licenses-for-check-license-task.json (via `:core-engine:checkLicense --rerun`, which is
 // what actually drives that file — plain `generateLicenseReport` alone does not): raw dependency
 // count rose 162 -> 165, surfacing three real, previously-silently-dropped first-party deps —
-// dev.aarso:hyle:0.2.1, dev.aarso:crash-recovery:1.5.0, dev.aarso:interaction-mode:0.1.0 — which
+// com.asystemofcells:hyle:0.2.1, com.asystemofcells:crash-recovery:1.5.0, com.asystemofcells:interaction-mode:0.1.0 — which
 // then correctly FAILED checkLicense (empty moduleLicense: composite-substituted project modules
 // carry no POM for the plugin to read a license off of), so they're allow-listed by name below,
 // same as this file already does for other first-party/no-POM entries.

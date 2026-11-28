@@ -63,7 +63,7 @@ watchbrew/
 
 - Depends **only** on `:watch-bridge` (the wire contract) + `androidx.wear` / Wear Compose +
   `play-services-wearable` + `activity-compose`. **Never `:core-engine`** (~130 MB of native engine libs
-  and the whole substrate) and never `dev.aarso:hyle` (phone Compose).
+  and the whole substrate) and never `com.asystemofcells:hyle` (phone Compose).
 - **No network, no keys.** No `<uses-permission>` at all (so no INTERNET), no HTTP/analytics/crash
   library, no network or credential API in any source. The Wearable Data Layer is **device-local pair
   transport** (Bluetooth/Wi-Fi between the paired phone and watch) — it is not telemetry and nothing
@@ -88,8 +88,8 @@ The Wearable Data Layer only delivers between a phone app and a watch app that s
 
 | flavor | phone (`:app`) | watch (`:watchbrew`) |
 |---|---|---|
-| `full` (sideload) | `dev.aarso.full` | `dev.aarso.full` |
-| `play` | `dev.aarso` | `dev.aarso` |
+| `full` (sideload) | `dev.fonebrew.full` | `dev.fonebrew.full` |
+| `play` | `dev.fonebrew` | `dev.fonebrew` |
 
 (`WatchbrewModuleGuardTest` compares this module's `applicationId`/flavors against `app/build.gradle.kts`
 and fails on any mismatch — a mismatch silently breaks every message in both directions.)

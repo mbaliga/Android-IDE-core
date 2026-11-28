@@ -24,7 +24,7 @@ class FullAppDatabaseTest {
     private var db: FullAppDatabase? = null
     @AfterTest fun cleanup() { runCatching { db?.close() }; tmp.deleteRecursively() }
 
-    private fun open() = FullAppDatabase.open(File(tmp, "aarso.db").path).also { db = it }
+    private fun open() = FullAppDatabase.open(File(tmp, "fonebrew.db").path).also { db = it }
 
     // The 17 tables core's AppDatabase declares (names = the @Entity(tableName=...) values).
     private val expectedTables = setOf(

@@ -11,7 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import dev.aarso.interactionmode.InteractionMode
+import com.asystemofcells.interactionmode.InteractionMode
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.ui.regular.RegularShell
 import dev.fonebrew.ui.spatial.SpatialRoot

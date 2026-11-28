@@ -33,8 +33,8 @@ failure documented in PR #86's thread is resolved — treat Studio red as a real
 The native toolchain DOES work in this sandbox when installed explicitly (sdkmanager
 `ndk;28.2.13676358` + `cmake;3.31.6`): `:app:assembleFullDebug` has shipped real APKs from here
 (0.3.0, 0.3.1, 0.4.0). The JVM gate still needs none of it. `git submodule update --init
-hyle-design-system shared-libraries` is required before Gradle can resolve `dev.aarso:hyle` /
-`dev.aarso:crash-recovery` / `dev.aarso:interaction-mode`; the native llama.cpp/
+hyle-design-system shared-libraries` is required before Gradle can resolve `com.asystemofcells:hyle` /
+`com.asystemofcells:crash-recovery` / `com.asystemofcells:interaction-mode`; the native llama.cpp/
 stable-diffusion.cpp submodules are needed only for `assembleFullDebug`.
 
 ## PROGRESS — 2026-10-14: WatchBrew v1 + porting LX-1/LX-2 (all lanes adversarially verified)

@@ -1,6 +1,6 @@
 package dev.fonebrew.ui.theme
 
-import dev.aarso.hyle.theme.*
+import com.asystemofcells.hyle.theme.*
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Paint

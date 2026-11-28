@@ -54,10 +54,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import dev.aarso.hyle.cells.HyleButton
-import dev.aarso.hyle.cells.HyleField
-import dev.aarso.hyle.cells.HyleTitle
-import dev.aarso.hyle.theme.LocalHyleColors
+import com.asystemofcells.hyle.cells.HyleButton
+import com.asystemofcells.hyle.cells.HyleField
+import com.asystemofcells.hyle.cells.HyleTitle
+import com.asystemofcells.hyle.theme.LocalHyleColors
 import dev.fonebrew.FonebrewApp
 import dev.fonebrew.data.entity.TaskEntity
 import dev.fonebrew.domain.tasks.TaskDue
@@ -105,11 +105,11 @@ fun ProductRoomFree(
     // "To-do" plus whatever the paid Studio layer contributes; any Studio tab gets a neutral
     // glyph so this room never needs to know Studio's icon set (same shape as DevelopTabs).
     val tabSpecs = listOf(
-        dev.aarso.hyle.cells.HyleTabSpec("To-do") { tint -> todoTabGlyph(tint) },
-    ) + extraTabs.map { (label, _) -> dev.aarso.hyle.cells.HyleTabSpec(label) { tint -> genericTabGlyph(tint) } }
+        com.asystemofcells.hyle.cells.HyleTabSpec("To-do") { tint -> todoTabGlyph(tint) },
+    ) + extraTabs.map { (label, _) -> com.asystemofcells.hyle.cells.HyleTabSpec(label) { tint -> genericTabGlyph(tint) } }
 
     val tabBarBlock: @Composable () -> Unit = {
-        dev.aarso.hyle.cells.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
+        com.asystemofcells.hyle.cells.HyleTabBar(tabs = tabSpecs, selected = tab, onSelect = { tab = it }, position = tabBarPosition)
     }
     val contentBlock: @Composable () -> Unit = {
         when {

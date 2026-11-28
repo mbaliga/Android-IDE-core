@@ -1,6 +1,6 @@
 package dev.fonebrew.ui.theme
 
-import dev.aarso.hyle.theme.*
+import com.asystemofcells.hyle.theme.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box

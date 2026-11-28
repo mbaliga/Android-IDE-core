@@ -29,11 +29,11 @@ data class ModelSpec(
     /** A "watched object" (§5c) — every cloud model is one; on-device models are not. */
     val watched: Boolean = false,
     /** Can this spec take image input? Provider-generic (CLAUDE.md rule 2) — for
-     *  [Runtime.CLOUD] this threads from [dev.aarso.domain.cloud.CloudProvider.supportsVision]
+     *  [Runtime.CLOUD] this threads from [dev.fonebrew.domain.cloud.CloudProvider.supportsVision]
      *  (per-instance, user-set); local GGUF is false in this pass (mmproj out of scope). */
     val supportsVision: Boolean = false,
     /** Can this spec use server-side web search? Threads from
-     *  [dev.aarso.domain.cloud.ProviderKind.supportsSearch] for cloud specs; local
+     *  [dev.fonebrew.domain.cloud.ProviderKind.supportsSearch] for cloud specs; local
      *  GGUF is false in this pass (no app-side SearchProvider seam yet). */
     val supportsSearch: Boolean = false,
 ) {
@@ -49,7 +49,7 @@ enum class Runtime {
     LOCAL_GGUF,
 
     /** The phone's own on-device Gemini Nano via Android's AICore system service — only on a
-     *  narrow device set; [dev.aarso.ui.onboarding.AiCoreAvailability] gates before this is ever
+     *  narrow device set; [dev.fonebrew.ui.onboarding.AiCoreAvailability] gates before this is ever
      *  offered. On-device, never watched — same footing as [LOCAL_GGUF]. */
     AICORE_NANO,
 

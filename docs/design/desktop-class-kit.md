@@ -62,7 +62,7 @@ opens it where hardware exists; Escape/back dismisses.
 
 The **Hyle repo** (`hyle-design-system` submodule → `mbaliga/Hyle-Design-System`) is the
 single source of the design system — these are general components and belong there
-(`dev.aarso.hyle.component` / `cells` conventions of that repo), with previews in
+(`com.asystemofcells.hyle.component` / `cells` conventions of that repo), with previews in
 `hyle-probe`. Core adopts them; core-local `ui/hyle/` wrappers stay thin. Landing a Hyle
 change means: commit+push on the Hyle repo's `claude/fonebrew-development-clzu43` branch,
 then bump the submodule pin in core (`git add hyle-design-system`) in the same core commit
