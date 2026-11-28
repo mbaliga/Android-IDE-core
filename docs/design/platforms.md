@@ -128,7 +128,7 @@ Next, in order of value:
 | P-2 | `fonebrew serve` + `run` over stdio, JVM only, loop events end to end | JVM tests against an in-process pipe; real SSH to a real host owner-verified |
 | P-3 | Phone `RemoteProvider` speaking the protocol; run view on remote runs | Same view for local/remote proven by replaying one recorded log through both |
 | P-4 | Compose Desktop head on the host lane | Builds in CI; first run on a desktop is the owner's |
-| P-5 | iOS common-code move (IOS-1), then a head | Owner decisions OQ-2 / OQ-38 first |
+| P-5 | iOS common-code move (IOS-1), then a head | **Treated as ungated** (owner, 2026-11-28); toolchain pins from OQ-38 still apply; GitHub macOS runners are the fallback |
 | P-6 | Ubuntu Touch / HarmonyOS thin heads on the protocol | After P-3; evaluate demand first |
 
 ## 8. Owner decisions (2026-11-28)
@@ -142,6 +142,7 @@ Next, in order of value:
 | Run logs in git | **One dedicated `fonebrew-runs` repo** (private; Aarso data joins it only if opted in) |
 | Self-hosted runners | **Private repos only.** Public repos use GitHub-hosted runners |
 | Apple builds (iOS, Apple-silicon macOS) | **GitHub-hosted macOS runners only, for now.** No Mac purchase until the iOS head starts (P-5) |
+| IOS-1 gate (OQ-2 / OQ-38) | **Treated as ungated for now.** The owner will amend this if necessary; the fallback is GitHub-hosted runners |
 
 **Consequence of "host's own keys" — new work, not started.** Binding rule 5 is written for Android Keystore.
 A desktop host needs its own custody (the OS keyring: libsecret on Linux, Keychain on macOS, Credential
@@ -171,6 +172,6 @@ change** that makes it public. Not yet applied to any `ci.yml`.
 ## 10. Still open
 
 1. HP RAM, disk and CPU, to fix its isolation layout.
-2. Whether the OQ-2 / OQ-38 gate on IOS-1 is still live (the register is not in these repos).
+2. ~~Whether the OQ-2 / OQ-38 gate on IOS-1 is still live~~ — resolved 2026-11-28: treated as ungated, owner may amend (§8). The register itself is still not in these repos.
 3. Desktop secret custody design (§8).
-4. Function-word lists and language detection for Aarso (see `aarso-drift.md`).
+4. Language detection for Aarso (function-word lists are built, with Konkani and Odia gaps; see `aarso-drift.md`).

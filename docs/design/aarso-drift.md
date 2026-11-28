@@ -74,12 +74,48 @@ The owner asked for the embedder to be chosen now; the choice and its reasons, s
 
 ### Still open (and how it is handled)
 
-- **Minimum text per window** — the owner chose "widen until enough text" but has not named *how much*.
-  **Provisional default, mine, not the owner's:** 1,000 words per language per window, always displayed on
-  screen next to the series, and adjustable. Below it the lens says "not enough yet" instead of drawing a line.
-- **Per-language function-word lists** — measuring languages separately needs a function-word list for
-  each (English, Hindi, Urdu, Bengali, …). Word-level features are off for any language without one;
-  language-agnostic features (sentence/paragraph shape, punctuation) still run.
+- **Minimum text per window — derived from the owner's own writing (2026-11-28), replacing my 1,000-word
+  placeholder.** The rule is **per feature, not per window**: a series is drawn only once the window holds
+  enough text for that feature's relative standard error to be at most 20%; until then that one series says
+  "not enough yet" and shows the word count it is waiting for. The window still widens automatically (the
+  owner's choice); features simply switch on as it widens. Derived minimums (English, rounded up):
+
+  | Feature | Words per window | Basis |
+  |---|---|---|
+  | Function-word rate, word length, vocabulary range | 150 | converge almost at once; 150 is a floor set by the smallest draw tested, not a measured limit |
+  | Sentence length, mean | 400 | fitted 386 |
+  | Comma rate | 450 | fitted 423 |
+  | Sentence length, spread | 550 | fitted 513 |
+  | Dash rate | 1,200 | fitted 1,188 |
+  | Paragraph length | not used for chat turns | turns are single paragraphs (fitted ~1,800); long-form only |
+  | Question-mark rate | 7,000 | fitted 6,904 |
+  | Semicolon, exclamation, ellipsis | **count-gated: at least 25 occurrences in the window** | none appeared in the sample, so no word count can be fitted; a Poisson count of 25 is about 20% error |
+
+  **How it was derived.** Aggregates only; no text is committed. The owner's human-authored turns from the
+  13 most recent claude.ai chats plus this programme's session messages (38 turns, about 1,550 words) were
+  pooled; windows of 100–500 words were drawn by resampling whole turns, 1,500 draws per size; each feature's
+  relative standard error was measured and extrapolated with error ∝ 1/√words (fitted slopes −0.35 to −0.50).
+  The script is `scripts/baseline_bootstrap.py` in the Aarso repo.
+
+  **Read these numbers as lower bounds.** (1) 1,550 words is small, and I read only the opening turns of the
+  longer chats. (2) The sample is one register: short, imperative prompts to an assistant, not long-form
+  writing. (3) Resampling inside one pool leaves out topic drift between real windows, so true window-to-window
+  error is larger. (4) English only; Hindi, Urdu, Bengali, Konkani and Odia have no sample here and need
+  their own run once he has text in them. (5) At roughly 170 words a day (a low estimate, from partial reads)
+  the 550-word tier takes about three days, 1,200 about a week, 7,000 about six weeks. Re-run the script as
+  more chats are imported; the table should be replaced by the new fit, not patched.
+
+  **Seed values, not constants.** Pooled English point estimates, for sanity-checking the lens only (the real
+  baseline stays rolling self-vs-self): sentence length 15.5 words (spread 13.2), word length 4.26 characters,
+  commas 47.7 per 1,000 words, dashes 18.7, question marks 3.2, function-word share 0.65 (stop-word proxy).
+- **Per-language function-word lists — built (2026-11-28), with gaps.** Data lives in the Aarso repo
+  (`data/function-words/`; MANIFEST pins source commit and hashes), not in core, so `domain/mirror` stays
+  inert. Covered: the 12 most-spoken languages by total speakers (English, Mandarin, Hindi, Spanish, Arabic,
+  French, Bengali, Portuguese, Russian, Urdu, Indonesian, German) plus Japanese and Marathi. They are
+  **stop-word lists used as a proxy for function words**, not linguist-curated lists. **No list exists for
+  Konkani or Odia; none was invented**, so word-level features are off for both (Marathi is recorded as a
+  close relative, never as a stand-in label). Mandarin and Japanese are off until a word segmenter exists;
+  Arabic matching under-counts because of attached clitics.
 - **Language detection** — per-language windows need a detector; undecided (a small on-device one, or
   script-based for the Indic scripts and a model for the rest).
 
