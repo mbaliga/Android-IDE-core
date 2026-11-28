@@ -201,8 +201,10 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
 ### Engineering follow-ups (no owner action needed)
 - **Chat §B4 remainders**: per-member **files** (needs multimodal/file→context plumbing);
   optionally a unified model-per-member surface.
-- **Live per-step streaming in the graph Loop run** (`GraphRunner` needs a progress callback, like
-  the simple `WorkflowRunner` already has).
+- ~~**Live per-step streaming in the graph Loop run**~~ — **built 2026-11-28** on `claude/live-run-progress`
+  (JVM-tested; on-device feel owner-verified): `GraphRunner.run(onEvent)`, `RunViewReducer`,
+  `RunProgressCodec`, `RunLivePanel`; canvas nodes light up live. Still open: edge highlighting, parallel
+  branches, external-agent rows, compaction event — see `docs/design/platforms.md` §6.
 - **Video / 3D engines** (Settings tabs exist as honest "planned"; no engine wired).
 - **AI-assisted configuration** (fill/automate any config via a model) — parked at owner request.
 - **Drag-a-wire connect** for the Loop editor (current = tap-to-connect; layer this on after the
@@ -227,7 +229,10 @@ harness · v0.12.2 markdown/Compose fix · **v0.13.0 full Loop graph editor (cur
   app being closed.
 
 ### Owner-blocked product backlog (from `CLAUDE.md`)
-- §5c self-observation + §5b drift metric — **blocked on Issue #2** (binding rule 4).
+- §5c self-observation + §5b drift metric — **partly unblocked 2026-11-28**: the owner decided the *shape*
+  (rolling self-vs-self baseline; stylometric + LLM-register + edit-behaviour + absorbed-phrases; features
+  with no single score; opt-in sync to a private git repo) — see `docs/design/aarso-drift.md`. Window sizes,
+  feature list, LLM-register reference and phrase source are **still owner input** (binding rule 4). No metric code exists.
 - Real on-device embedder (replace `PlaceholderEmbedder`).
 - Acceleration (Vulkan/NPU) — an on-device empirical decision, benchmark on the target device.
 - Google Play publication mechanics (AAB, signing, data-safety, content rating, screenshots).
