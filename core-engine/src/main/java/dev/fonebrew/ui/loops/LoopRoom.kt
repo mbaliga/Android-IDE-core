@@ -35,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +67,11 @@ import dev.fonebrew.domain.loop.GraphRunLedger
 import dev.fonebrew.domain.loop.GraphRunLog
 import dev.fonebrew.domain.loop.GraphRunResult
 import dev.fonebrew.domain.loop.GraphRunner
+import dev.fonebrew.domain.loop.NodeRunStatus
+import dev.fonebrew.domain.loop.RunPhase
+import dev.fonebrew.domain.loop.RunProgress
+import dev.fonebrew.domain.loop.RunView
+import dev.fonebrew.domain.loop.RunViewReducer
 import dev.fonebrew.domain.loop.GraphStep
 import dev.fonebrew.domain.loop.Loop
 import dev.fonebrew.domain.loop.LoopBudget
@@ -291,6 +297,14 @@ fun LoopRoom(
     // P3: run sheet (params + budget) + live streaming step list + a cancellable run job.
     var showRunSheet by remember { mutableStateOf(false) }
     var liveSteps by remember { mutableStateOf<List<GraphStep>>(emptyList()) }
+    // Live run view: a pure fold over the GraphRunner event stream (RunViewReducer). `nowMs` only
+    // exists so elapsed times tick while a run is in flight.
+    var runView by remember { mutableStateOf(RunView.IDLE) }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(running) {
+        while (running) { nowMs = System.currentTimeMillis(); delay(200) }
+        nowMs = System.currentTimeMillis()
+    }
     var runBudget by remember { mutableStateOf<LoopBudget?>(null) }
     var runJob by remember { mutableStateOf<Job?>(null) }
     var loggedNote by remember { mutableStateOf<String?>(null) }
@@ -595,7 +609,28 @@ fun LoopRoom(
     fun startRun(params: Map<String, String>, budget: LoopBudget?) {
         running = true; runError = null; graphResult = null; ranNodeIds = emptySet()
         liveSteps = emptyList(); runBudget = budget; loggedNote = null
+        runView = RunView.IDLE
         forkedThisRun = false; runForkNote = null // §9: a fresh run gets its own fork-once gate
+        // Token deltas can arrive many times a second; folding each into Compose state would
+        // thrash recomposition. Coalesce consecutive deltas for the same step and flush at most
+        // every ~80ms — and always before any other event, so ordering is never disturbed.
+        var pendingDelta: RunProgress.StepDelta? = null
+        var lastFlush = 0L
+        fun flushDelta() {
+            pendingDelta?.let { runView = RunViewReducer.reduce(runView, it) }
+            pendingDelta = null
+            lastFlush = System.currentTimeMillis()
+        }
+        val onRunEvent: suspend (RunProgress) -> Unit = { ev ->
+            if (ev is RunProgress.StepDelta) {
+                val p = pendingDelta
+                pendingDelta = if (p != null && p.stepIndex == ev.stepIndex) p.copy(text = p.text + ev.text, t = ev.t) else { flushDelta(); ev }
+                if (System.currentTimeMillis() - lastFlush >= 80) flushDelta()
+            } else {
+                flushDelta()
+                runView = RunViewReducer.reduce(runView, ev)
+            }
+        }
         runJob = scope.launch {
             val jobId = container.backgroundJobs.start(loopName.ifBlank { "Loop" }, "loop")
             runCatching {
@@ -659,6 +694,7 @@ fun LoopRoom(
                     params = params,
                     budget = budget,
                     onStep = { step -> liveSteps = liveSteps + step },
+                    onEvent = onRunEvent,
                 ).let { Triple(it, recordingPolicy, fallback) }
             }.fold(
                 { (result, recordingPolicy, fallback) ->
@@ -850,7 +886,14 @@ fun LoopRoom(
                     }
                 } else {
                     val status: Map<String, NodeStatus> = when {
-                        running -> emptyMap()
+                        // Live: straight from the event fold — the node being worked on right now is ACTIVE.
+                        running -> runView.nodeStatus.mapNotNull { (id, st) ->
+                            when (st) {
+                                NodeRunStatus.ACTIVE -> id to NodeStatus.ACTIVE
+                                NodeRunStatus.DONE -> id to NodeStatus.DONE
+                                else -> null
+                            }
+                        }.toMap()
                         graphResult != null -> ranNodeIds.associateWith { NodeStatus.DONE }
                         else -> emptyMap()
                     }
@@ -871,7 +914,7 @@ fun LoopRoom(
                         )
                         val caption = when {
                             connectingFrom != null -> "tap a node to connect from “${nodeById(connectingFrom!!)?.label}” · tap empty to cancel"
-                            running -> "running… ${liveSteps.size} step(s)"
+                            running -> dev.fonebrew.ui.loops.RunLiveFormat.header(runView, nowMs)
                             graphResult != null -> "ran ${graphResult!!.steps.size} step(s) · ${stopLabel(graphResult!!.stoppedBecause).second}"
                             else -> "long-press canvas to add · tap a node to edit · long-press for menu"
                         }
@@ -1043,14 +1086,21 @@ fun LoopRoom(
                     }
                 }
 
-                if (liveSteps.isNotEmpty() || runError != null || graphResult != null) {
+                if (liveSteps.isNotEmpty() || runError != null || graphResult != null || runView.phase != RunPhase.IDLE) {
                     HorizontalDivider()
                     Column(
-                        Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                        Modifier.fillMaxWidth().heightIn(max = 340.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         runError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
-                        liveSteps.forEach { step ->
+                        RunLivePanel(
+                            view = runView, nowMs = nowMs,
+                            labelOf = { id -> nodeById(id)?.label?.ifBlank { null } },
+                            // UI edges become BpmnEdge("edge-<index>") in toBpmnGraph; map back to the label.
+                            edgeLabel = { eid -> eid.removePrefix("edge-").toIntOrNull()?.let { edges.getOrNull(it)?.label?.ifBlank { null } } },
+                        )
+                        // Fallback only: a run always has a live view now; this list is what showed before it.
+                        if (runView.phase == RunPhase.IDLE) liveSteps.forEach { step ->
                             HyleCard(modifier = Modifier.fillMaxWidth()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

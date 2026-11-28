@@ -7,6 +7,8 @@ import dev.fonebrew.domain.bpmn.BpmnNodeKind
 import dev.fonebrew.domain.council.Generator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -149,7 +151,10 @@ class GraphRunner(
      * prior outputs; both may reference `${key}` [params], substituted via [LoopParams]. A
      * `${key}` with no matching [params] entry anywhere in the graph is a **refusal to start**
      * (never a silent empty substitution) — [GraphRunResult.stoppedBecause] names every missing
-     * key. [onStep] fires once per completed step, in order.
+     * key. [onStep] fires once per completed step, in order. [onEvent] is the *live* stream
+     * ([RunProgress]): run started, every node entered, each step started / streaming / completed
+     * / failed, gateway decisions, edges taken, and always a final `RunFinished`. A throwing
+     * observer never breaks the run, and `RunFinished` is delivered even on cancellation.
      *
      * Cancellation is deliberately **graceful, not thrown**: like every other stop reason, it
      * comes back as a normal [GraphRunResult] (`stoppedBecause = "cancelled"`) carrying whatever
@@ -169,6 +174,7 @@ class GraphRunner(
         params: Map<String, String> = emptyMap(),
         budget: LoopBudget? = null,
         onStep: (suspend (GraphStep) -> Unit)? = null,
+        onEvent: (suspend (RunProgress) -> Unit)? = null,
     ): GraphRunResult {
         val missing = LoopParams.missing(graph, objective, params)
         if (missing.isNotEmpty()) {
@@ -179,8 +185,24 @@ class GraphRunner(
         val runStart = now()
         fun elapsed() = now() - runStart
 
+        suspend fun emit(e: RunProgress) {
+            if (onEvent == null) return
+            try { onEvent(e) } catch (c: CancellationException) { throw c } catch (_: Throwable) { /* observers never break a run */ }
+        }
+        /** Builds the terminal result AND delivers RunFinished (non-cancellable, so a cancelled
+         *  run still reports how it ended). */
+        suspend fun finish(steps: List<GraphStep>, reason: String, reachedEnd: Boolean): GraphRunResult {
+            val result = GraphRunResult.stop(steps, reason, reachedEnd, elapsed())
+            withContext(NonCancellable) {
+                emit(RunProgress.RunFinished(now(), reason, reachedEnd, steps.size, result.elapsedMs))
+            }
+            return result
+        }
+
+        emit(RunProgress.RunStarted(runStart, resolvedObjective, graph.nodes.size, hardCap))
         val start = graph.nodes.firstOrNull { it.kind == BpmnNodeKind.START_EVENT }
-            ?: return GraphRunResult.stop(emptyList(), "no start event", reachedEnd = false, elapsedMs = elapsed())
+            ?: return finish(emptyList(), "no start event", reachedEnd = false)
+        emit(RunProgress.NodeEntered(now(), start.id, start.kind))
 
         val steps = ArrayList<GraphStep>()
         val transcript = StringBuilder("Objective:\n").append(resolvedObjective).append('\n')
@@ -197,38 +219,69 @@ class GraphRunner(
 
         suspend fun isActive(): Boolean = coroutineContext[Job]?.isActive ?: true
 
-        var current: BpmnNode? = nextNode(graph, start, lastOutput = "", steps)
+        suspend fun advance(from: BpmnNode, lastOutput: String): BpmnNode? {
+            val out = graph.outgoing(from.id)
+            val edge = gatewayPolicy.choose(from, lastOutput, out) ?: return null
+            if (out.size > 1) {
+                emit(
+                    RunProgress.GatewayDecided(
+                        now(), from.id, edge.id, edge.name ?: edge.condition,
+                        out.filter { it.id != edge.id }.map { it.id },
+                    ),
+                )
+            }
+            emit(RunProgress.EdgeTaken(now(), edge.id, from.id, edge.targetId))
+            val target = graph.node(edge.targetId)
+            if (target != null) emit(RunProgress.NodeEntered(now(), target.id, target.kind, edge.id))
+            return target
+        }
+
+        var current: BpmnNode? = advance(start, "")
 
         while (current != null) {
-            if (!isActive()) return GraphRunResult.stop(steps, "cancelled", reachedEnd = false, elapsedMs = elapsed())
+            if (!isActive()) return finish(steps, "cancelled", reachedEnd = false)
 
             when (current.kind) {
                 BpmnNodeKind.END_EVENT ->
-                    return GraphRunResult.stop(steps, "reached end", reachedEnd = true, elapsedMs = elapsed())
+                    return finish(steps, "reached end", reachedEnd = true)
 
-                BpmnNodeKind.START_EVENT ->
-                    current = nextNode(graph, current, steps.lastOrNull()?.output ?: "", steps)
-
+                BpmnNodeKind.START_EVENT,
                 BpmnNodeKind.EXCLUSIVE_GATEWAY,
                 BpmnNodeKind.INCLUSIVE_GATEWAY,
                 BpmnNodeKind.PARALLEL_GATEWAY ->
-                    current = nextNode(graph, current, steps.lastOrNull()?.output ?: "", steps)
+                    current = advance(current, steps.lastOrNull()?.output ?: "")
 
                 else -> {
                     if (steps.size >= hardCap)
-                        return GraphRunResult.stop(steps, "hit step cap ($hardCap)", reachedEnd = false, elapsedMs = elapsed())
-                    budgetStop()?.let { return GraphRunResult.stop(steps, it, reachedEnd = false, elapsedMs = elapsed()) }
+                        return finish(steps, "hit step cap ($hardCap)", reachedEnd = false)
+                    budgetStop()?.let { return finish(steps, it, reachedEnd = false) }
 
                     val role = current.ext["role"]?.ifBlank { null } ?: current.name.ifBlank { current.id }
                     val systemRaw = current.ext["systemPrompt"]?.ifBlank { null } ?: current.name
                     val system = LoopParams.substitute(systemRaw, params)
                     val user = transcript.toString() + "\nProduce your contribution as $role."
+                    val stepIndex = steps.size
+                    val nodeModel = current.ext["model"]?.ifBlank { null }
 
+                    emit(RunProgress.StepStarted(now(), stepIndex, current.id, role, nodeModel))
                     val stepStart = now()
+                    val nodeId = current.id
                     val output = try {
-                        generatorFor(current).complete(system, user).trim()
+                        val gen = generatorFor(current)
+                        val raw = if (gen is StreamingGenerator && onEvent != null) {
+                            gen.stream(system, user) { delta ->
+                                if (delta.isNotEmpty()) emit(RunProgress.StepDelta(now(), stepIndex, nodeId, delta))
+                            }
+                        } else {
+                            gen.complete(system, user)
+                        }
+                        raw.trim()
                     } catch (c: CancellationException) {
-                        return GraphRunResult.stop(steps, "cancelled", reachedEnd = false, elapsedMs = elapsed())
+                        return finish(steps, "cancelled", reachedEnd = false)
+                    } catch (t: Throwable) {
+                        emit(RunProgress.StepFailed(now(), stepIndex, nodeId, t.message ?: t::class.java.simpleName))
+                        finish(steps, "error: ${t.message ?: t::class.java.simpleName}", reachedEnd = false)
+                        throw t
                     }
                     val duration = now() - stepStart
 
@@ -239,10 +292,10 @@ class GraphRunner(
                     }
 
                     val step = GraphStep(
-                        index = steps.size,
+                        index = stepIndex,
                         nodeId = current.id,
                         role = role,
-                        model = current.ext["model"]?.ifBlank { null },
+                        model = nodeModel,
                         output = output,
                         tokensIn = tokens?.inputTokens,
                         tokensOut = tokens?.outputTokens,
@@ -251,18 +304,12 @@ class GraphRunner(
                     )
                     steps += step
                     onStep?.invoke(step)
+                    emit(RunProgress.StepCompleted(now(), step))
                     transcript.append('\n').append(role).append(":\n").append(output).append('\n')
-                    current = nextNode(graph, current, output, steps)
+                    current = advance(current, output)
                 }
             }
         }
-        return GraphRunResult.stop(steps, "no outgoing edge", reachedEnd = false, elapsedMs = elapsed())
-    }
-
-    /** Follow the chosen outgoing edge from [from]; null when there is none (dead end). */
-    private fun nextNode(graph: BpmnGraph, from: BpmnNode, lastOutput: String, steps: List<GraphStep>): BpmnNode? {
-        val out = graph.outgoing(from.id)
-        val edge = gatewayPolicy.choose(from, lastOutput, out) ?: return null
-        return graph.node(edge.targetId)
+        return finish(steps, "no outgoing edge", reachedEnd = false)
     }
 }

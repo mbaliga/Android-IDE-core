@@ -277,7 +277,7 @@ detail in `docs/STATE.md`.
   (**Hyle is done** — its own repo `mbaliga/Hyle-Design-System`, consumed via submodule +
   includeBuild. PM/authoring and the routing engine are tracked outside this repo.)
 - *Engineering follow-ups:* Chat §B4 per-member **files** (needs file→context plumbing); **live
-  per-step streaming in the graph Loop run** (`GraphRunner` progress callback); **video/3D**
+  per-step streaming in the graph Loop run** (built 2026-11-28 on `claude/live-run-progress`; edge highlight / parallel branches remain); **video/3D**
   engines; **AI-assisted config** (parked); **drag-a-wire** Loop connect; **USB** on-device verify
   with a real CDC board (CH340/CP210x clones need a vendor driver).
 - *Owner-blocked backlog (`CLAUDE.md` history):* §5c/§5b drift (Issue #2); real on-device embedder
