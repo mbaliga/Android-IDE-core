@@ -3,7 +3,7 @@ package dev.fonebrew.inference
 import dev.fonebrew.domain.MessageNode
 import dev.fonebrew.domain.Role
 import dev.fonebrew.domain.SamplingParams
-import dev.fonebrew.domain.council.Generator
+import dev.fonebrew.domain.loop.StreamingGenerator
 import kotlinx.coroutines.flow.collect
 import java.util.UUID
 
@@ -19,16 +19,19 @@ import java.util.UUID
 class EngineGenerator(
     private val engine: InferenceEngine,
     private val modelPath: String?,
-) : Generator {
+) : StreamingGenerator {
 
-    override suspend fun complete(system: String, user: String): String {
+    override suspend fun stream(system: String, user: String, onDelta: suspend (String) -> Unit): String {
         if (!engine.isLoaded) engine.loadModel(modelPath ?: "")
         val messages = buildList {
             if (system.isNotBlank()) add(node(Role.SYSTEM, system))
             add(node(Role.USER, user))
         }
         val sb = StringBuilder()
-        engine.generate(messages, SamplingParams()).collect { sb.append(it.text) }
+        engine.generate(messages, SamplingParams()).collect {
+            sb.append(it.text)
+            onDelta(it.text)
+        }
         return sb.toString().trim()
     }
 

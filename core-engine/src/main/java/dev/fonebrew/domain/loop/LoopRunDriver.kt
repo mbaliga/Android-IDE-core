@@ -51,6 +51,7 @@ class LoopRunDriver(
         resolveBinding: suspend () -> Boolean = { true },
         resolveAuthority: suspend () -> Boolean = { true },
         onStep: (suspend (GraphStep) -> Unit)? = null,
+        onEvent: (suspend (RunProgress) -> Unit)? = null,
     ): LoopRun {
         val runId = idGenerator()
         val definitionDigest = "sha256:" + Digest.ofUtf8(graph.toString() + "|" + objective).digestHex
@@ -110,7 +111,7 @@ class LoopRunDriver(
         emit(RunState.READY, "Ready to run.")
         emit(RunState.RUNNING, "Execution started.")
 
-        val result = graphRunner.run(graph, objective, hardCap, params, budget, onStep)
+        val result = graphRunner.run(graph, objective, hardCap, params, budget, onStep, onEvent)
 
         val nodeAttempts = result.steps.map { step ->
             NodeAttempt(
