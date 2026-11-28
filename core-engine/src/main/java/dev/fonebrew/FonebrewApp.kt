@@ -16,6 +16,9 @@ open class FonebrewApp : Application() {
         // Install crash capture FIRST, so even a failure in container construction below (or a
         // later first-frame/Compose crash) lands a readable trace for the recovery screen.
         CrashRecovery.install(this, appLabel = "Fonebrew")
+        // Fonebrew holds user work (the message tree, repos): Reset sets data aside and offers restore
+        // rather than wiping it. crash-recovery's default stays the plain wipe for other hosts.
+        CrashRecovery.setResetMode(CrashRecovery.ResetMode.SET_ASIDE)
         super.onCreate()
         // Don't let an init failure brick the process silently — record it and let MainActivity recover.
         try {
