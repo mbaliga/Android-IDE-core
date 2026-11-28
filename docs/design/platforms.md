@@ -131,10 +131,46 @@ Next, in order of value:
 | P-5 | iOS common-code move (IOS-1), then a head | Owner decisions OQ-2 / OQ-38 first |
 | P-6 | Ubuntu Touch / HarmonyOS thin heads on the protocol | After P-3; evaluate demand first |
 
-## 8. Open owner decisions
+## 8. Owner decisions (2026-11-28)
 
-1. CLI packaging: a JVM jar (needs a JDK on the laptop, simplest) or a native binary (no JDK, more build work)?
-2. Windows: first-class from P-4, or after Linux and macOS prove the head?
-3. Is HarmonyOS worth a head before iOS, or after?
-4. Should a remote host be allowed to make cloud calls with *its own* keys (visible and marked), or only run local/offline work?
-5. Run logs in git: one repo per project, or a dedicated `fonebrew-runs` repo?
+| Question | Decision |
+|---|---|
+| CLI packaging | **JAR first**, bundled runtime (`jlink`/`jpackage`) later. Native binary not started |
+| Windows | **Joins at the same time as Linux** — the first desktop head is tested on both (Windows via dual-boot) |
+| Mobile order | **iOS first, then Ubuntu Touch, HarmonyOS last** |
+| Remote host and cloud calls | **Allowed, with the host's own keys, visibly marked** — keys are never copied from the phone (see below) |
+| Run logs in git | **One dedicated `fonebrew-runs` repo** (private; Aarso data joins it only if opted in) |
+| Self-hosted runners | **Private repos only.** Public repos use GitHub-hosted runners |
+| Apple builds (iOS, Apple-silicon macOS) | **GitHub-hosted macOS runners only, for now.** No Mac purchase until the iOS head starts (P-5) |
+
+**Consequence of "host's own keys" — new work, not started.** Binding rule 5 is written for Android Keystore.
+A desktop host needs its own custody (the OS keyring: libsecret on Linux, Keychain on macOS, Credential
+Manager on Windows), with the same guarantees: encrypted at rest, never logged, sent only to the provider it
+belongs to. The desktop lane has **no secret custody at all today** (`desktop/README.md`). A remote run that
+uses a cloud provider must say, in its event stream and on the phone, which host's key was used.
+
+## 9. The owner's machines and the roles decided for them
+
+| Machine | Role |
+|---|---|
+| Dell | Self-hosted **Linux runner** (already set up), private repos only |
+| Windows PC → **dual-boot Arch + Windows** | Arch as daily system; the Windows partition is where the Windows flavour is hand-tested |
+| HP, 8th-gen i5 | Wanted as: runner 2 + always-on `fonebrew serve` host + clean-room install target + personal server/cloud. **Isolation layout undecided** — depends on its RAM and disk. A CI job runs arbitrary code, a clean-room target is wiped, and a personal cloud holds data, so they should not share one OS: the recommendation is a minimal hypervisor with a VM per role |
+| 2015 MacBook Pro 15" (Intel; macOS 12 is the newest it can run) | macOS desktop-flavour **test box**, a daily-driver Fonebrew surface, and a self-hosted macOS runner for non-Xcode jobs. **Cannot run Xcode 26** (Apple's release notes require macOS Sequoia 15.6+), so it cannot build iOS or satisfy the OQ-38 Xcode pin |
+
+All five are x86_64. Nothing here tests **Apple-silicon macOS** or **arm64 Linux/Windows** by hand; those
+remain CI-only (GitHub's macOS runners are Apple-silicon). A JVM CLI is architecture-neutral, but the
+native model libraries are not: each OS/CPU pair is its own build.
+
+**Runner policy** (from GitHub's own guidance and OWASP's cheat sheet: never attach self-hosted runners to
+public repos, since a fork's pull request can run code on them): the Dell and the HP serve **private
+repos only**. Self-hosted minutes are free, which also removes the earlier private-repo Actions-minutes
+exhaustion. When a repo (core, Hyle) goes public, its workflows move to hosted runners **in the same
+change** that makes it public. Not yet applied to any `ci.yml`.
+
+## 10. Still open
+
+1. HP RAM, disk and CPU, to fix its isolation layout.
+2. Whether the OQ-2 / OQ-38 gate on IOS-1 is still live (the register is not in these repos).
+3. Desktop secret custody design (§8).
+4. Function-word lists and language detection for Aarso (see `aarso-drift.md`).

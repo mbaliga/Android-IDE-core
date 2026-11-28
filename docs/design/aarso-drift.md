@@ -36,23 +36,54 @@
   default stays *excluded*; the user may switch it on for a private repo, like the git-recorded logs.
   Never a public repo; never silently. (`docs/design/platforms.md` §5.)
 
-## Still owner input (not invented here)
+## Resolved in the second round (2026-11-28)
 
-These parameters change what the numbers mean, so they are the owner's to set:
+| Parameter | Owner's choice |
+|---|---|
+| Window definition | **Both:** time-based by default (recent vs the period before), widening automatically until a minimum amount of text is reached |
+| Stylometric feature list | **The starter set, accepted:** sentence length (mean and spread), vocabulary range, average word length, paragraph length, punctuation rates (commas, dashes, semicolons, exclamation marks, ellipses), function-word rates. Each is its own series; any can be dropped later |
+| "LLM register" reference | **Both:** (a) feature-space distance to the assistant turns in the user's own logs, and (b) a local embedder, chosen below |
+| Absorbed-phrases source | **Fonebrew conversations plus conversations the user chooses to import** |
+| Languages | **Each language measured separately** — a language switch must never read as a change of voice |
 
-1. **Window size and step** — e.g. "last 30 days vs the 30 before," or by number of turns.
-2. **The feature list** — which stylometric features count. A proposed starting set can be offered for
-   ratification; it is a proposal, not a decision.
-3. **The LLM-register reference** — which local embedder (or reference set) defines "LLM register."
-   Until chosen, measure 2 stays unbuilt and says so.
-4. **The absorbed-phrases source** — which model outputs count as the source (only the user's own
-   Fonebrew conversations? imported ones?).
-5. **Minimum evidence** — how few words before a window is "too thin to show" (the lens must say "not
-   enough yet" rather than draw a line from a handful of sentences).
-6. **Language handling** — the owner writes in more than one language; features are per-language or
-   language-agnostic?
+### Embedder: chosen — Qwen3-Embedding-0.6B (Apache-2.0), with EmbeddingGemma-300M as the light alternative
 
-## What can be built without those answers
+The owner asked for the embedder to be chosen now; the choice and its reasons, so it can be overturned:
+
+- **Qwen3-Embedding-0.6B** — Apache-2.0 (no gated download, no use-policy attached), 100+ languages,
+  a published MTEB-multilingual mean of ~64 (the figure reported on its model card — not re-run here),
+  1024-dim with Matryoshka truncation, GGUF builds that run under llama.cpp with `--pooling last`
+  (the model card lists a ~378 MB GGUF; exact size depends on the quantisation chosen).
+- **EmbeddingGemma-300M** — smaller (308M, under ~200 MB RAM quantised per Google), 100+ languages,
+  MTEB-multilingual ~61, runs under llama.cpp — but under the Gemma terms with a gated download.
+  Kept as the low-memory option for weak hosts (the HP / the 2015 MacBook).
+- **Reversible by construction:** `Embedder.id` is stored beside every vector, so changing the model
+  means re-embedding, not a migration.
+
+**Caveats, stated plainly.**
+1. *Neither model's quality on Konkani or Odia is known to me.* Hindi, Urdu and Bengali are well covered
+   by multilingual benchmarks; Konkani and Odia are thin in them. A small owner-run check on his own
+   text should precede trusting any semantic number in those languages.
+2. *A semantic embedder is a weak style measure.* Embedding models are trained to place paraphrases
+   together, i.e. to be **insensitive to style**. Distance to "LLM register" via an embedder will mostly
+   track topic and meaning; the feature-space measure (a) is the real register signal. Both are shown,
+   labelled, and neither is merged into a score.
+3. *The engine does not embed yet.* Neither `InferenceEngine` nor `LlamaCppEngine` has an embedding path
+   (core's only `Embedder` is `PlaceholderEmbedder`). It needs a JNI addition to `llama_jni.cpp`
+   (embedding mode, pooling) — real native work, not started.
+
+### Still open (and how it is handled)
+
+- **Minimum text per window** — the owner chose "widen until enough text" but has not named *how much*.
+  **Provisional default, mine, not the owner's:** 1,000 words per language per window, always displayed on
+  screen next to the series, and adjustable. Below it the lens says "not enough yet" instead of drawing a line.
+- **Per-language function-word lists** — measuring languages separately needs a function-word list for
+  each (English, Hindi, Urdu, Bengali, …). Word-level features are off for any language without one;
+  language-agnostic features (sentence/paragraph shape, punctuation) still run.
+- **Language detection** — per-language windows need a detector; undecided (a small on-device one, or
+  script-based for the Indic scripts and a model for the rest).
+
+## What can be built now
 
 Plumbing only, still inert by default: a windowed reader over the existing append-only event log; an
 edit-delta reader (measure 3), which needs no word lists; and the empty per-feature series container.
